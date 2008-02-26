@@ -1,5 +1,5 @@
 /*
- *	outgoing.c: handle outgoing packets
+ *	outgoing.c: handle outgoing packets in the worker thread
  */
 
 #include <string.h>

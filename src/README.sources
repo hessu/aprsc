@@ -42,6 +42,11 @@ config.c
 	provided by cfgfile.c. Validates configuration and takes
 	it into use. Contains global configuration variables.
 
+--- Libraries ---
+
+The following source code files have rather clean APIs, are not specific to
+to the aprsc project, and are usablein other projects as such.
+
 netlib.c
 	A few network socket utility functions.
 

@@ -1,0 +1,90 @@
+
+This file attempts to describe the contents of the aprsc
+source tree. When adding files, please describe them here. Thanks!
+
+aprsc.c
+	Contains a command line parser, the main signal handler, and
+	a small main loop, which only calls time() to update a global
+	"now" variable (to reduce the amount of system calls). At startup
+	it reads the configuration and starts up the accept thread,
+	which in turns starts worker threads. It can also trigger
+	reconfiguring and log reopening on when signals are received,
+	and start a graceful shutdown.
+
+accept.c
+	Contains the accept thread, which listens on the configured TCP
+	sockets, accepts (or denies) new connections, and passes them
+	to the worker thread with least existing connections. When
+	a lot of connections arrive quickly, multiple connections
+	are transferred to a worker in a single transaction to reduce
+	lock congestion.
+
+worker.c
+worker.h
+	Contains the body of the worker thread. worker.h defines most
+	of the interesting data structures and is a good place to
+	start digging.
+
+login.c
+	Contains a login_handler() function which is called by the
+	worker thread to process an incoming "user" command.
+
+incoming.c
+	Contains the incoming_handler() function which is called
+	by the worker thread to process incoming APRS-IS data.
+
+outgoing.c
+	Checks which outgoing packets should be sent each client by
+	calling filter functions, and does the actual sending.
+
+config.c
+	Code to read (and reread) configuration using the services
+	provided by cfgfile.c. Validates configuration and takes
+	it into use. Contains global configuration variables.
+
+netlib.c
+	A few network socket utility functions.
+
+xpoll.c
+	A wrapper for different select/poll/epoll implementations.
+	Currently only contains support for poll(). Should maybe
+	support select() for ancient systems. The following platform-
+	specific APIs would provide improved performance: epoll()
+	on Linux 2.6, kqueue on new *BSD, /dev/poll on new Solaris
+	releases. Written for the aprsc project by Heikki Hannikainen,
+	OH7LZB.
+
+passcode.c
+	aprs_passcode() function to calculate the checksum used as the
+	"password" int the APRS-IS login command. Released to the
+	open source APRS community by Steve Dimse, K4HG, on April 11,
+	2000. Obtained from the aprsd sources, which are GPL.
+
+hlog.c
+	A logging library written by Heikki Hannikainen, OH7LZB,
+	for some old project. Supports logging to syslog, stderr,
+	and a log file, with configurable log levels and rotation
+	(reopen on SIGHUP).
+	
+hmalloc.c
+	malloc/realloc/free/strdup wrappers with error checking.
+	Please use these in this project. Written by Hessu, OH7LZB.
+
+cfgfile.c
+	A configuration file parser written by Tomi Manninen, OH2BNS,
+	originally for the node(1) program in the ax25-utils package.
+
+splay.c
+spsymbol.c
+	splay tree functions written by David Brower, daveb@rtech.uucp 1/88,
+	obtained from the zmailer sources.
+
+crc32.c
+	CRC32 calculation routine by Rayan S. Zachariassen, originally
+	from the zmailer MTA software (maintained by Matti Aarnio,
+	OH2MQK). Used by spsymbol.c.
+
+rwlock.c
+	A schoolbook pthread rwlock implementation for systems
+	lacking one (Solaris 2.6 to name one).
+

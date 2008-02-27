@@ -23,6 +23,7 @@ distclean: clean
 
 BITS = aprsc.o accept.o worker.o \
 	login.o incoming.o dupecheck.o outgoing.o \
+	parse_aprs.o \
 	config.o netlib.o xpoll.o \
 	cfgfile.o passcode.o \
 	rwlock.o hmalloc.o hlog.o \
@@ -36,9 +37,11 @@ aprsc.o:	aprsc.c hmalloc.h hlog.h config.h splay.h accept.h
 accept.o:	accept.c accept.h hmalloc.h hlog.h config.h netlib.h worker.h dupecheck.h
 worker.o:	worker.c worker.h hmalloc.h hlog.h config.h xpoll.h incoming.h outgoing.h
 login.o:	login.c login.h hmalloc.h hlog.h worker.h passcode.h incoming.h config.h
-incoming.o:	incoming.c incoming.h hmalloc.h hlog.h worker.h
+incoming.o:	incoming.c incoming.h hmalloc.h hlog.h worker.h parse_aprs.h
 outgoing.o:	outgoing.c outgoing.h hlog.h worker.h
 dupecheck.o:	dupecheck.c dupecheck.h hmalloc.h hlog.h worker.h
+parse_aprs.o:	parse_aprs.c parse_aprs.h hlog.h
+parse_aprs.h:	worker.h
 passcode.o:	passcode.c passcode.h
 xpoll.o:	xpoll.c xpoll.h hmalloc.h hlog.h
 netlib.o:	netlib.c netlib.h worker.h

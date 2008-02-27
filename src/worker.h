@@ -17,6 +17,8 @@
 
 extern time_t now;	/* current time - updated by the main thread */
 
+#define CALLSIGNLEN_MAX 9
+
 /* packet length limiters and buffer sizes */
 #define PACKETLEN_MIN 4		/* minimum length for a valid APRS-IS packet: "A>B:" */
 #define PACKETLEN_MAX 600	/* max... arbitrary and not documented */
@@ -46,12 +48,16 @@ struct pbuf_t {
 	int packettype;		/* bitmask: one or more of T_* */
 	int flags;		/* bitmask: one or more of F_* */
 	
-	float lat; /* if the packet is PT_POSITION, latitude and longitude go here */
-	float lng;
-	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */
 	char *data;		/* contains the whole packet, including CRLF, ready to transmit */
+	
+	char *srccall_end;	/* source callsign with SSID */
+	char *dstcall_end;	/* end of dest callsign SSID */
+	char *info_start;	/* pointer to start of info field */
+	
+	float lat; /* if the packet is PT_POSITION, latitude and longitude go here */
+	float lng;
 	
 	struct sockaddr addr;	/* where did we get it from (don't send it back) */
 };

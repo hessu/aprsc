@@ -10,6 +10,7 @@
 #include "incoming.h"
 #include "hmalloc.h"
 #include "hlog.h"
+#include "parse_aprs.h"
 
 /*
  *	Get a buffer for a packet
@@ -125,9 +126,63 @@ void incoming_flush(struct worker_t *self)
 
 int incoming_parse(struct worker_t *self, struct pbuf_t *pb)
 {
-	/* TODO: get lat/lon out of position packets */
+	char *src_end; /* pointer to the > after srccall */
+	char *path_start; /* pointer to the start of the path */
+	char *path_end; /* pointer to the : after the path */
+	char *packet_end; /* pointer to the end of the packet */
+	char *info_start; /* pointer to the beginning of the info */
+	char *info_end; /* end of the info */
+	char *dstcall_end; /* end of dstcall ([:,]) */
 	
-	return 0;
+	/* a packet looks like:
+	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
+	 * (we have normalized the \r\n by now)
+	 */
+	
+	packet_end = pb->data + pb->packet_len; /* for easier overflow checking */
+	
+	/* look for the '>' */
+	src_end = memchr(pb->data, '>', pb->packet_len < CALLSIGNLEN_MAX+1 ? pb->packet_len : CALLSIGNLEN_MAX+1);
+	if (!src_end)
+		return -1;
+	
+	path_start = src_end+1;
+	if (path_start >= packet_end)
+		return -1;
+	
+	if (src_end - pb->data > CALLSIGNLEN_MAX)
+		return -1; /* too long source callsign */
+	
+	/* look for the : */
+	path_end = memchr(path_start, ':', packet_end - path_start);
+	if (!path_end)
+		return -1;
+	
+	info_start = path_end+1;
+	if (info_start >= packet_end)
+		return -1;
+	
+	/* see that there is at least some data in the packet */
+	info_end = packet_end - 2;
+	if (info_end <= info_start)
+		return -1;
+	
+	/* look up end of dstcall */
+	/* the logic behind this is slightly uncertain. */
+	dstcall_end = path_start;
+	while (dstcall_end < path_end && *dstcall_end != ',' && *dstcall_end != ',' && *dstcall_end != '-')
+		dstcall_end++;
+	
+	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
+		return -1; /* too long destination callsign */
+	
+	/* fill necessary info for parsing and dupe checking in the packet buffer */
+	pb->srccall_end = src_end;
+	pb->dstcall_end = dstcall_end;
+	pb->info_start = info_start;
+	
+	/* just try APRS parsing */
+	return parse_aprs(self, pb);
 }
 
 /*
@@ -137,6 +192,7 @@ int incoming_parse(struct worker_t *self, struct pbuf_t *pb)
 int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	struct pbuf_t *pb;
+	int e;
 	
 	/* note: len does not include CRLF, it's reconstructed here... we accept
 	 * CR, LF or CRLF on input but make sure to use CRLF on output.
@@ -171,7 +227,16 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	memcpy((void *)&pb->addr, (void *)&c->addr, c->addr_len);
 	
 	/* do some parsing */
-	incoming_parse(self, pb);
+	e = incoming_parse(self, pb);
+	if (e < 0) {
+		/* failed parsing */
+		fprintf(stderr, "Failed parsing (%d):\n", e);
+		fwrite(pb->data, len, 1, stderr);
+		fprintf(stderr, "\n");
+		
+		// TODO: return buffer pbuf_put(self, pb);
+		return 0;
+	}
 	
 	/* put the buffer in the thread's incoming queue */
 	pb->next = NULL;

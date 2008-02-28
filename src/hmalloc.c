@@ -23,7 +23,7 @@ void *hmalloc(size_t size)
 		if (mem_panic)
 			exit(1);	/* To prevent a deadlock */
 		mem_panic = 1;
-		fprintf(stderr, "hmalloc: Out of memory! Could not allocate %d bytes.", size);
+		fprintf(stderr, "hmalloc: Out of memory! Could not allocate %d bytes.", (int)size);
 		exit(1);
 	}
 	
@@ -38,7 +38,7 @@ void *hrealloc(void *ptr, size_t size)
 		if (mem_panic)
 			exit(1);
 		mem_panic = 1;
-		fprintf(stderr, "hrealloc: Out of memory! Could not reallocate %d bytes.", size);
+		fprintf(stderr, "hrealloc: Out of memory! Could not reallocate %d bytes.", (int)size);
 		exit(1);
 	}
 	

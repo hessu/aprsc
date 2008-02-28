@@ -37,6 +37,36 @@ struct pbuf_t *pbuf_global = NULL;
 struct pbuf_t *pbuf_global_last = NULL;
 struct pbuf_t **pbuf_global_prevp = &pbuf_global;
 
+/* object alloc/free */
+
+struct client_t *client_alloc(void)
+{
+	struct client_t *c = hmalloc(sizeof(*c));
+	memset((void *)c, 0, sizeof(*c));
+	c->fd = -1;
+
+	c->ibuf_size = ibuf_size;
+	c->ibuf = hmalloc(c->ibuf_size);
+	c->obuf_size = obuf_size;
+	c->obuf = hmalloc(c->obuf_size);
+
+
+	return c;
+}
+
+void client_free(struct client_t *c)
+{
+	if (c->fd >= 0)	close(c->fd);
+	if (c->ibuf)	hfree(c->ibuf);
+	if (c->obuf)	hfree(c->obuf);
+	if (c->addr_s)	hfree(c->addr_s);
+
+	filter_free(c->filterhead);
+
+	hfree(c);
+}
+
+
 /*
  *	signal handler
  */
@@ -74,12 +104,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 	*c->prevp = c->next;
 	
 	/* free it up */
-	hfree(c->addr_s);
-	hfree(c->username);
-	hfree(c->ibuf);
-	hfree(c->obuf);
-	filter_free(c->filterhead);
-	hfree(c);
+	client_free(c);
 	
 	/* reduce client counter */
 	self->client_count--;

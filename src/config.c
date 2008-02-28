@@ -92,12 +92,16 @@ static struct cfgcmd cfg_cmds[] = {
 void free_listen_config(struct listen_config_t **lc)
 {
 	struct listen_config_t *this;
-	
+	int i;
+
 	while (*lc) {
 		this = *lc;
 		*lc = this->next;
 		hfree(this->name);
 		hfree(this->host);
+		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
+			if (this->filters[i])
+				hfree(this->filters[i]);
 		hfree(this);
 	}
 }
@@ -155,11 +159,17 @@ int do_interval(time_t *dest, int argc, char **argv)
 
 /*
  *	Parse a Listen directive
+ *
+ *	listen <label> <?> tcp <hostname> <portnum> [<filter> [..<more_filters>]]
+ *
  */
 
 int do_listen(struct listen_config_t **lq, int argc, char **argv)
 {
-	if (argc != 6)
+	int i, port;
+	struct listen_config_t *l;
+
+	if (argc < 6)
 		return -1;
 	
 	if (strcasecmp(argv[3], "tcp") == 0) {
@@ -169,16 +179,23 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		return -2;
 	}
 	
-	int port = atoi(argv[5]);
+	port = atoi(argv[5]);
 	if (port < 1 || port > 65535) {
 		fprintf(stderr, "Listen: unsupported port number '%s'\n", argv[5]);
 		return -2;
 	}
 	
-	struct listen_config_t *l = hmalloc(sizeof(*l));
+	l = hmalloc(sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
 	l->port = port;
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		l->filters[i] = NULL;
+		if (argc - 6 >= i) {
+			l->filters[i] = hstrdup(argv[i+6]);
+		}
+	}
+
 	
 	/* put in the list */
 	l->next = *lq;

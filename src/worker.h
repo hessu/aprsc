@@ -103,7 +103,6 @@ struct client_t {
 	struct client_t **prevp;
 	
 	struct sockaddr addr;
-	socklen_t addr_len;
 	int fd;
 	int udp_port;
 	char *addr_s;
@@ -134,6 +133,9 @@ struct client_t {
 	/* outbound filter chain head */
 	struct filter_t *filterhead;
 };
+
+extern struct client_t *client_alloc(void);
+extern void client_free(struct client_t *c);
 
 
 /* worker thread structure */

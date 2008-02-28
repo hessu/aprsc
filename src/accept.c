@@ -25,6 +25,7 @@
 #include "netlib.h"
 #include "worker.h"
 #include "dupecheck.h"
+#include "filter.h"
 
 struct listen_t {
 	struct listen_t *next;
@@ -35,12 +36,40 @@ struct listen_t {
 	int fd;
 	
 	char *addr_s;
+	char *filters[10];
 } *listen_list = NULL;
 
 pthread_mutex_t mt_servercount = PTHREAD_MUTEX_INITIALIZER;
 
 int accept_reconfiguring = 0;
 int accept_shutting_down = 0;
+
+
+/* structure allocator/free */
+
+struct listen_t *listener_alloc(void)
+{
+	struct listen_t *l = hmalloc(sizeof(*l));
+	memset((void *)l, 0, sizeof(*l));
+	l->fd = -1;
+
+	return l;
+}
+
+void listener_free(struct listen_t *l)
+{
+	int i;
+
+	if (l->fd >= 0)	close(l->fd);
+	if (l->addr_s)	hfree(l->addr_s);
+
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i)
+		if (l->filters[i])
+			hfree(l->filters[i]);
+
+	hfree(l);
+}
+
 
 /*
  *	signal handler
@@ -101,11 +130,11 @@ int open_listeners(void)
 	struct listen_t *l;
 	struct hostent *he;
 	char eb[80];
-	int opened = 0;
+	int opened = 0, i;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
-		l = hmalloc(sizeof(*l));
-		l->fd = -1;
+		l = listener_alloc();
+
 		l->sin.sin_family = AF_INET;
 		l->sin.sin_port = htons(lc->port);
 		
@@ -113,7 +142,7 @@ int open_listeners(void)
 			if (!(he = gethostbyname(lc->host))) {
 				h_strerror(h_errno, eb, sizeof(eb));
 				hlog(LOG_CRIT, "Listen: Could not resolve \"%s\": %s - not listening on port %d\n", lc->host, eb, lc->port);
-				hfree(l);
+				listener_free(l);
 				continue;
 			}
 			memcpy(&l->sin.sin_addr.s_addr, he->h_addr_list[0], he->h_length);
@@ -129,11 +158,18 @@ int open_listeners(void)
 			hlog(LOG_DEBUG, "... ok, bound");
 		} else {
 			hlog(LOG_DEBUG, "... failed");
-			hfree(l->addr_s);
-			hfree(l);
+			listener_free(l);
 			continue;
 		}
-		
+
+		/* Copy filter definitions */
+		for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+			if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
+				l->filters[i] = lc->filters[i];
+			else
+				l->filters[i] = NULL;
+		}
+
 		hlog(LOG_DEBUG, "... adding to listened sockets");
 		// put (first) in the list of listening sockets
 		l->next = listen_list;
@@ -156,12 +192,11 @@ void close_listeners(void)
 	while (listen_list) {
 		l = listen_list;
 		listen_list = listen_list->next;
-		if (l->fd >= 0)
-			close(l->fd);
-		hfree(l->addr_s);
-		hfree(l);
+
+		listener_free(l);
 	}
 }
+
 
 /*
  *	Accept a single connection
@@ -170,11 +205,13 @@ void close_listeners(void)
 struct client_t *do_accept(struct listen_t *l)
 {
 	char eb[80];
-	struct client_t *c = hmalloc(sizeof(*c));
-	memset((void *)c, 0, sizeof(*c));
-	c->addr_len = sizeof(c->addr);
+	int fd, i;
+	struct client_t *c;
+	struct sockaddr_in *sin;
+	struct sockaddr     sa;
+	socklen_t addr_len = sizeof(sa);
 	
-	if ((c->fd = accept(l->fd, &c->addr, &c->addr_len)) < 0) {
+	if ((fd = accept(l->fd, &sa, &addr_len)) < 0) {
 		int e = errno;
 		switch (e) {
 			/* Errors reporting really bad internal (programming) bugs */
@@ -194,7 +231,6 @@ struct client_t *do_accept(struct listen_t *l)
 #endif
 
 				hlog(LOG_CRIT, "accept() failed: %s (giving up)", strerror(e));
-				hfree(c);
 				exit(1); // ABORT with core-dump ??
 
 				break;
@@ -202,20 +238,22 @@ struct client_t *do_accept(struct listen_t *l)
 			/* Errors reporting system internal/external glitches */
 			default:
 				hlog(LOG_ERR, "accept() failed: %s (continuing)", strerror(e));
-				hfree(c);
 				return NULL;
 		}
 	}
 	
-	struct sockaddr_in *sin = (struct sockaddr_in *)&c->addr;
+	c = client_alloc();
+	sin = (struct sockaddr_in *)&c->addr;
+
 	aptoa(sin->sin_addr, ntohs(sin->sin_port), eb, sizeof(eb));
 	c->addr_s = hstrdup(eb);
-	c->ibuf_size = ibuf_size;
-	c->ibuf = hmalloc(c->ibuf_size);
-	c->obuf_size = obuf_size;
-	c->obuf = hmalloc(c->obuf_size);
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		if (l->filters[i])
+			filter_parse(c, l->filters[i]);
+	}
+
 	/* set non-blocking mode */
 	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
 		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
@@ -259,9 +297,7 @@ struct client_t *do_accept(struct listen_t *l)
 	return c;
 	
 err:
-	close(c->fd);
-	hfree(c->ibuf);
-	hfree(c);
+	client_free(c);
 	return 0;
 }
 

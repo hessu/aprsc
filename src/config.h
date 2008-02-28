@@ -47,6 +47,8 @@ struct listen_config_t {
 	char *name;			/* name of socket */
 	char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	int port;			/* port to bind */
+
+	char *filters[10];		/* up to 10 filters, NULL when not defined */
 };
 
 extern struct listen_config_t *listen_config;

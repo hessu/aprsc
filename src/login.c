@@ -1,4 +1,3 @@
-
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
@@ -9,6 +8,7 @@
 #include "passcode.h"
 #include "incoming.h"
 #include "config.h"
+#include "filter.h"
 
 /*
  *	Parse a command line to argv, not honoring quotes or such
@@ -105,6 +105,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 		} else if (strcasecmp(argv[i], "filter") == 0) {
 			while (++i < argc) {
 				/* TODO: parse filter in argv[i] */
+				filter_parse(c, argv[i]);
 			}
 		}
 	}

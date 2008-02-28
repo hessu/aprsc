@@ -11,8 +11,6 @@
 void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c;
-	struct sockaddr_in *c_in;
-	struct sockaddr_in *pb_in;
 	
 	for (c = self->clients; (c); c = c->next) {
 

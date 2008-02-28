@@ -177,28 +177,33 @@ struct client_t *do_accept(struct listen_t *l)
 	if ((c->fd = accept(l->fd, &c->addr, &c->addr_len)) < 0) {
 		int e = errno;
 		switch (e) {
-			case EAGAIN:
-			case ENETDOWN:
-			case EPROTO:
-			case ENOPROTOOPT:
-			case EHOSTDOWN:
-			case ENONET:
-			case EHOSTUNREACH:
-			case EOPNOTSUPP:
-			case ENETUNREACH:
-			case ECONNABORTED:
-			case ECONNRESET:
-			case ENOBUFS:
-			case ETIMEDOUT:
-			case EISCONN:
-			case ENOTCONN:
+			/* Errors reporting really bad internal (programming) bugs */
+			case EBADF:
+			case EINVAL:
+#ifdef ENOTSOCK
+			case ENOTSOCK: /* Not a socket */
+#endif
+#ifdef EOPNOTSUPP
+			case EOPNOTSUPP: /* Not a SOCK_STREAM */
+#endif
+#ifdef ESOCKTNOSUPPORT
+			case ESOCKTNOSUPPORT: /* Linux errors ? */
+#endif
+#ifdef EPROTONOSUPPORT
+			case EPROTONOSUPPORT: /* Linux errors ? */
+#endif
+
+				hlog(LOG_CRIT, "accept() failed: %s (giving up)", strerror(e));
+				hfree(c);
+				exit(1); // ABORT with core-dump ??
+
+				break;
+
+			/* Errors reporting system internal/external glitches */
+			default:
 				hlog(LOG_ERR, "accept() failed: %s (continuing)", strerror(e));
 				hfree(c);
 				return NULL;
-			default:
-				hlog(LOG_CRIT, "accept() failed: %s (giving up)", strerror(e));
-				hfree(c);
-				exit(1);
 		}
 	}
 	

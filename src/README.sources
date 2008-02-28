@@ -37,6 +37,10 @@ outgoing.c
 	Checks which outgoing packets should be sent each client by
 	calling filter functions, and does the actual sending.
 
+filter.c
+	Filter used by the outgoing packet processing.
+	It tells if the packet should be sent out on given client socket.
+
 config.c
 	Code to read (and reread) configuration using the services
 	provided by cfgfile.c. Validates configuration and takes
@@ -93,3 +97,8 @@ rwlock.c
 	A schoolbook pthread rwlock implementation for systems
 	lacking one (Solaris 2.6 to name one).
 
+
+inet_ntop.c, inet_pton.c, getnameinfo.c, gai_strerror.c:
+	Backup instances of IPv4/IPv6 agnostic resolver library just
+	in case the operating system does not have it.
+	(From ZMailer by Matti Aarnio, OH2MQK)

@@ -6,6 +6,7 @@
 
 #include "outgoing.h"
 #include "hlog.h"
+#include "filter.h"
 
 void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
@@ -14,21 +15,29 @@ void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	struct sockaddr_in *pb_in;
 	
 	for (c = self->clients; (c); c = c->next) {
-		/* do not send to the same client */
-		if (c->addr.sa_family == AF_INET && pb->addr.sa_family == AF_INET) {
-			c_in = (struct sockaddr_in *)&c->addr;
-			pb_in = (struct sockaddr_in *)&pb->addr;
-			if (c_in->sin_port == pb_in->sin_port
-				&& c_in->sin_addr.s_addr == pb_in->sin_addr.s_addr)
-					continue;
-		}
-		/* do not send to clients which are not logged in */
+
+		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED)
 			continue;
 		
-		/* TODO: process filters - check if this packet should be sent to this client */
-		
-		client_write(self, c, pb->data, pb->packet_len);
+
+		/* Do not send to the same client.
+		   This may reject a packet that came from a socket that got
+		   closed a few milliseconds previously and its client_t got
+		   recycled on a newly connected client, but if the new client
+		   is a long living one, all further packets will be accepted
+		   just fine.
+		   For packet history dumps this test shall be ignored!
+		 */
+		if (c == pb->origin)
+			continue;
+
+		/*  Process filters - check if this packet should be
+		    sent to this client.   */
+
+		if (filter_process(c, pb)) {
+			client_write(self, c, pb->data, pb->packet_len);
+		}
 	}
 }
 

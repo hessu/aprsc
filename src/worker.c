@@ -16,6 +16,7 @@
 #include "login.h"
 #include "incoming.h"
 #include "outgoing.h"
+#include "filter.h"
 
 time_t now;	/* current time, updated by the main thread */
 
@@ -77,6 +78,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 	hfree(c->username);
 	hfree(c->ibuf);
 	hfree(c->obuf);
+	filter_free(c->filterhead);
 	hfree(c);
 	
 	/* reduce client counter */

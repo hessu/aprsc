@@ -41,9 +41,23 @@ extern time_t now;	/* current time - updated by the main thread */
 
 #define F_DUPE 1	/* duplicate of a previously seen packet */
 
+struct client_t; /* forward declarator */
+
 struct pbuf_t {
 	struct pbuf_t *next;
-	
+	struct client_t *origin; /* where did we get it from (don't send it back)
+				    NOTE: This pointer is NOT guaranteed to be valid!
+				    It does get invalidated by originating connection close,
+				    but it is only used as read-only comparison reference
+				    against output client connection pointer.  It may
+				    point to reused connection entry, but even that does
+				    not matter much -- a few packets may be left unrelayed
+				    to the a client in some situations, but packets sent
+				    a few minutes latter will go through just fine. 
+				    In case of "dump history" (if we ever do) this pointer
+				    is ignored while history dumping is being done.
+				 */
+
 	time_t t;		/* when the packet was received */
 	int packettype;		/* bitmask: one or more of T_* */
 	int flags;		/* bitmask: one or more of F_* */
@@ -79,7 +93,9 @@ extern struct pbuf_t **pbuf_global_prevp;
 /* a network client */
 #define CSTATE_LOGIN 0
 #define CSTATE_CONNECTED 1
+
 struct worker_t; /* used in client_t, but introduced later */
+struct filter_t; /* used in client_t, but introduced later */
 
 
 struct client_t {
@@ -114,6 +130,9 @@ struct client_t {
 	
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);
+
+	/* outbound filter chain head */
+	struct filter_t *filterhead;
 };
 
 

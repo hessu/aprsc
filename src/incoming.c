@@ -231,8 +231,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	memcpy(pb->data, s, len);
 	memcpy(pb->data + len, "\r\n", 2); /* append missing CRLF */
 	
-	/* store the source address */
-	memcpy((void *)&pb->addr, (void *)&c->addr, c->addr_len);
+	/* store the source reference */
+	pb->origin = c;
 	
 	/* do some parsing */
 	e = incoming_parse(self, pb);

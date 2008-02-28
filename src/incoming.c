@@ -74,6 +74,18 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, struct pbuf_t **global_pool,
 	/* ok, return the first buffer from the pool */
 	pb = *pool;
 	*pool = pb->next;
+	
+	/* zero some fields */
+	pb->next = NULL;
+	pb->flags = 0;
+	pb->packettype = 0;
+	pb->t = 0;
+	pb->packet_len = 0;
+	pb->srccall_end = NULL;
+	pb->dstcall_end = NULL;
+	pb->info_start = NULL;
+	pb->lat = pb->lng = 0;
+	
 	return pb;
 }
 
@@ -212,12 +224,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	if (!(pb = pbuf_get(self, len+2)))
 		return 0;
 	
-	/* fill the buffer */
+	/* fill the buffer (it's zeroed by pbuf_get) */
 	pb->t = now;
-	pb->packettype = 0;
-	pb->flags = 0;
-	pb->lat = 0;
-	pb->lng = 0;
 	
 	pb->packet_len = len+2;
 	memcpy(pb->data, s, len);

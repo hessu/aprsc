@@ -66,6 +66,8 @@ clean:
 
 distclean: clean
 	rm -f aprsc
+	rm -f autom4te.cache config.log config.status
+	rm -f ac-hdrs.h Makefile
 
 aprsc: $(OBJS)
 	$(LD) $(LDFLAGS) -o aprsc $(OBJS) $(LIBS)

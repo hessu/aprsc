@@ -1,0 +1,160 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT
+AC_CONFIG_SRCDIR([aprsc.c])
+
+dnl For automake
+VERSION="`cat VERSION`"
+PACKAGE=aprsc
+dnl AM_INIT_AUTOMAKE($PACKAGE, $VERSION)
+
+AC_PROG_MAKE_SET
+
+AC_CONFIG_HEADERS([ac-hdrs.h])
+
+dnl Checks for programs.
+AC_PROG_CC
+AC_PROG_GCC_TRADITIONAL
+
+
+dnl AC_PATH_PROG(LD, ld, ld)dnl
+if test -z "$LD" ; then
+  LD="$CC"
+fi
+AC_SUBST(LD,"$LD")
+
+
+dnl Check for headers.
+dnl AC_CHECK_HEADERS(pty.h)
+
+dnl Checks for libraries.
+
+
+dnl Checks for library functions.
+AC_CHECK_FUNCS(openpty,,
+	       AC_CHECK_LIB(util, openpty,
+			    [AC_DEFINE(HAVE_OPENPTY)] [LIBS="$LIBS -lutil"]))
+
+AC_CHECK_FUNCS(pthread_exit,,
+	       AC_CHECK_LIB(pthread, pthead_exit,
+			    [AC_DEFINE([HAVE_PTHREAD],[1],[pthread library])] [LIBS="$LIBS -lpthread"]))
+
+AC_CHECK_FUNCS(getnameinfo,,
+	       AC_CHECK_LIB(nsl, getnameinfo,
+			    [AC_DEFINE([HAVE_GETNAMEINFO],[1],[getnameinfo function])] [LIBS="$LIBS -lnsl"]))
+
+
+#
+#  We check for various libraries
+#  - SysVr4 style of "-lsocket" at first (unless in libc)
+#    The hallmark is  connect()  routine (we presume)
+#
+AC_SUBST(LIBSOCKET)dnl
+ac_cv_libsocket_both=1
+AC_CHECK_FUNC(connect, ac_cv_libsocket_both=0)
+AC_CHECK_FUNC(gethostbyname, ac_cv_libsocket_both=0)
+if test "$ac_cv_libsocket_both" = 1 ; then
+  # Check cache
+  if test "$ac_cv_func_socket_lxnet" = yes ; then
+    AC_MSG_RESULT([need -lxnet library (cached)])
+    LIBSOCKET="-lnsl -lsocket -lxnet"
+  else
+  if test "$ac_cv_func_socket_lsocket" = yes ; then
+    AC_MSG_RESULT([need -lsocket library (cached)])
+    LIBSOCKET="-lsocket"
+    if test "$ac_cv_func_gethostbyname_lnsl" = yes ; then
+        LIBSOCKET="-lnsl -lsocket"
+    fi
+  else
+    # Well, will this work ?  SysVR4, but not Sun Solaris ?
+    AC_CHECK_LIB(xnet, connect, [LIBSOCKET="-lnsl -lsocket -lxnet"
+                                 ac_cv_func_socket_lsocket=no
+                                 ac_cv_func_socket_lxnet=yes],[
+      AC_CHECK_LIB(socket, connect, [LIBSOCKET="-lsocket"
+                                     ac_cv_func_socket_lsocket=yes],
+                                     ac_cv_func_socket_lsocket=no)
+      if test "$ac_cv_func_socket_lsocket" = yes ; then
+        t_oldLibs="$LIBS"
+        LIBS="$LIBS -lsocket"
+        AC_TRY_LINK([],[gethostbyname();], ,[
+          LIBS="$LIBS -lnsl" # Add this Solaris library..
+          AC_TRY_LINK([],[gethostbyname();],[
+                        LIBSOCKET="-lsocket -lnsl"
+                        ac_cv_func_gethostbyname_lnsl=yes
+                ], [
+                   AC_MSG_ERROR([Weird, '$LIBS' not enough to find  gethostnyname() ?!])
+                ])
+          ])
+        LIBS="$t_oldLibs"
+      fi
+    ])
+  fi
+  fi
+fi
+
+# See about the routines that possibly exist at the libraries..
+LIBS="$t_oldLibs $LIBSOCKET"
+AC_CHECK_FUNCS(socket socketpair)
+LIBS="$t_oldLibs"
+
+if test "$ac_cv_func_socket" = no -a "$LIBSOCKET" != ""; then
+  LIBS="$LIBS $LIBSOCKET"
+  AC_TRY_LINK([],[socket();], ac_cv_func_socket=yes)
+  if test $ac_cv_func_socket = yes; then
+    AC_DEFINE(HAVE_SOCKET)
+    AC_MSG_RESULT([Has  socket()  when using  $LIBSOCKET])
+  fi
+  LIBS="$t_oldLibs"
+fi
+if test "$ac_cv_func_socketpair" = no -a "$LIBSOCKET" != ""; then
+  LIBS="$LIBS $LIBSOCKET"
+  AC_TRY_LINK([],[socketpair();], ac_cv_func_socketpair=yes)
+  if test $ac_cv_func_socketpair = yes; then
+    AC_DEFINE(HAVE_SOCKETPAIR)
+    AC_MSG_RESULT([Has  socketpair()  when using  $LIBSOCKET])
+  fi
+  LIBS="$t_oldLibs"
+fi
+
+ac_with_ipv6_replacement_libc=0
+AC_ARG_WITH(ipv6-replacement-libc, [  --with-ipv6-replacement-libc If system has broken  getaddrinfo() and friends],
+        ac_with_ipv6_replacement_libc=1)
+
+LIBS="$LIBSOCKET $LIBS"
+AC_CHECK_FUNCS(getnameinfo gai_strerror inet_ntop inet_pton)
+LIBS="$t_oldLibs"
+
+
+t_oldLibs="$LIBS"
+LIBS="$LIBS $LIBSOCKET"
+
+#  Following stuff may exist in our LIBC, or in separate -linet6
+# AC_CHECK_FUNCS(inet_ntop inet_pton getaddrinfo getnameinfo gai_strerror)
+#  If not found in LIBC, try to use  -linet6,  if it fails too,
+#  THEN call the AC_REPLACE_FUNCS()
+if test "$ac_cv_func_gai_strerror" = no ; then
+    LIBS="$LIBS -linet6"
+    AC_TRY_LINK([],[gai_strerror();], ac_cv_func_gai_strerror=yes)
+    LIBS="$t_oldLibs"
+    if test "$ac_cv_func_gai_strerror" = yes; then
+        LIBSOCKET="$LIBSOCKET -linet6"
+        AC_MSG_RESULT([Has IPv6 API  gai_strerror()  when using  $LIBSOCKET])
+    else
+      AC_LIBOBJ([inet_ntop])
+      AC_LIBOBJ([inet_pton])
+      AC_LIBOBJ([getnameinfo])
+      AC_LIBOBJ([gai_strerror])
+    fi
+fi
+
+LIBS="$t_oldLibs"
+
+
+
+AC_CHECK_FUNC(res_init)  # Can be found without any libs ?  Or needs BIND libresolv ?
+AC_CHECK_FUNC(res_mkquery)
+
+
+
+dnl Output files
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT

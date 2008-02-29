@@ -22,7 +22,6 @@ if test -z "$LD" ; then
 fi
 AC_SUBST(LD,"$LD")
 
-
 dnl Check for headers.
 dnl AC_CHECK_HEADERS(pty.h)
 
@@ -30,24 +29,28 @@ dnl Checks for libraries.
 
 
 dnl Checks for library functions.
-AC_CHECK_FUNCS(openpty,,
-	       AC_CHECK_LIB(util, openpty,
-			    [AC_DEFINE(HAVE_OPENPTY)] [LIBS="$LIBS -lutil"]))
+AC_SUBST(LIBM)
+AC_CHECK_FUNCS(atan2f,,
+	       AC_CHECK_LIB(m, atan2f,
+			    [LIBM="-lm"]))
 
-AC_CHECK_FUNCS(pthread_exit,,
-	       AC_CHECK_LIB(pthread, pthead_exit,
-			    [AC_DEFINE([HAVE_PTHREAD],[1],[pthread library])] [LIBS="$LIBS -lpthread"]))
+AC_SUBST(LIBPTHREAD)
+dnl AC_CHECK_FUNCS(pthread_exit,,
+	       AC_CHECK_LIB(pthread, pthread_exit,
+			    [LIBPTHREAD="-lpthread"])
+dnl)
 
+dnl Solaris resolver solution:
+AC_SUBST(LIBGETNAMEINFO)
 AC_CHECK_FUNCS(getnameinfo,,
 	       AC_CHECK_LIB(nsl, getnameinfo,
-			    [AC_DEFINE([HAVE_GETNAMEINFO],[1],[getnameinfo function])] [LIBS="$LIBS -lnsl"]))
+			    [LIBGETNAMEINFO="-lnsl"]))
 
-
-#
-#  We check for various libraries
-#  - SysVr4 style of "-lsocket" at first (unless in libc)
-#    The hallmark is  connect()  routine (we presume)
-#
+dnl
+dnl We check for various libraries
+dnl  - SysVr4 style of "-lsocket" at first (unless in libc)
+dnl    The hallmark is  connect()  routine (we presume)
+dnl
 AC_SUBST(LIBSOCKET)dnl
 ac_cv_libsocket_both=1
 AC_CHECK_FUNC(connect, ac_cv_libsocket_both=0)
@@ -154,6 +157,7 @@ AC_CHECK_FUNC(res_init)  # Can be found without any libs ?  Or needs BIND libres
 AC_CHECK_FUNC(res_mkquery)
 
 
+AC_SUBST(LIBS,"$LIBS")
 
 dnl Output files
 AC_CONFIG_FILES([Makefile])

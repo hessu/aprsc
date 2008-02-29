@@ -29,7 +29,7 @@ INSTALL=	$(srcdir)/install-sh
 INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
 
-LIBS=		@LIBS@ -lpthread @LIBSOCKET@
+LIBS=		@LIBM@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@
 
 # Linux:
 # -lpthread
@@ -70,7 +70,7 @@ distclean: clean
 	rm -rf autom4te.cache
 
 aprsc: $(OBJS)
-	$(LD) $(LDFLAGS) -o aprsc $(OBJS) $(LIBS)
+	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)
 
 %.o: %.c VERSION Makefile
 	$(CC) $(CFLAGS) -c $<

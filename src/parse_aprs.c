@@ -1,4 +1,3 @@
-
 /*
  *	A simple APRS parser for aprsc. Translated from Ham::APRS::FAP
  *	perl module (by OH2KKU).
@@ -10,9 +9,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 #include "parse_aprs.h"
 #include "hlog.h"
+#include "filter.h"
 
 int parse_aprs_mice(struct pbuf_t *pb)
 {
@@ -95,10 +96,18 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, char *body, const char *body_end)
 	fprintf(stderr, "\tlat %u %u.%u %c (%.3f) lng %u %u.%u %c (%.3f)\n",
 		lat_deg, lat_min, lat_min_frag, (int)lat_hemi, lat,
 		lng_deg, lng_min, lng_min_frag, (int)lng_hemi, lng);
+
+
+	/* Pre-calculations for A/R/F/M-filter tests */
 	
-	pb->lat = lat;
-	pb->lng = lng;
+	pb->lat = filter_lat2rad(lat); /* deg-to-radians */
+	pb->cos_lat = 0.0;
+	/* pb->cos_lat = cosf(pb->lat);   /* pre-calc for R/F/M-filters */
+
+	pb->lng = filter_lon2rad(lng); /* deg-to-radians */
 	
+	pb->packettype |= T_POSITION;  /* the packet has positional data */
+
 	return 1;
 }
 
@@ -133,6 +142,9 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	
 	if (!pb->info_start)
 		return 0;
+
+	pb->packettype = 0;
+	pb->flags      = 0;
 	
 	/* the following parsing logic has been translated from Ham::APRS::FAP
 	 * Perl module to C

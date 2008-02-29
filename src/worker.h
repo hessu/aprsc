@@ -70,8 +70,9 @@ struct pbuf_t {
 	char *dstcall_end;	/* end of dest callsign SSID */
 	char *info_start;	/* pointer to start of info field */
 	
-	float lat; /* if the packet is PT_POSITION, latitude and longitude go here */
-	float lng;
+	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */
+	float lng;	/* .. in RADIAN */
+	float cos_lat;	/* pre-calculated COS of LATitude for radial distance filter    */
 	
 	struct sockaddr addr;	/* where did we get it from (don't send it back) */
 };

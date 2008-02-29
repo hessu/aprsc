@@ -417,6 +417,7 @@ void worker_thread(struct worker_t *self)
 void workers_stop(int stop_all)
 {
 	struct worker_t *w;
+	struct pbuf_t *p, *pn;
 	int e;
 	
 	while (workers_running > workers_configured || (stop_all && workers_running > 0)) {
@@ -440,7 +441,18 @@ void workers_stop(int stop_all)
 		else
 			hlog(LOG_INFO, "Worker %d has terminated.", w->id);
 
-		/* FIXME: Free the pbuf_t buffer chains of the thread! */
+		for (p = w->pbuf_free_small; p; p = pn) {
+			pn = p->next;
+			pbuf_free(p);
+		}
+		for (p = w->pbuf_free_large; p; p = pn) {
+			pn = p->next;
+			pbuf_free(p);
+		}
+		for (p = w->pbuf_free_huge; p; p = pn) {
+			pn = p->next;
+			pbuf_free(p);
+		}
 
 		*(w->prevp) = NULL;
 		hfree(w);
@@ -487,12 +499,12 @@ void workers_start(void)
 		
 		w->pbuf_free_small = NULL;
 		w->pbuf_free_large = NULL;
-		w->pbuf_free_huge = NULL;
+		w->pbuf_free_huge  = NULL;
 		
 		w->pbuf_incoming_local = NULL;
 		w->pbuf_incoming_local_last = &w->pbuf_incoming_local;
 		
-		w->pbuf_incoming = NULL;
+		w->pbuf_incoming      = NULL;
 		w->pbuf_incoming_last = &w->pbuf_incoming;
 		pthread_mutex_init(&w->pbuf_incoming_mutex, NULL);
 		

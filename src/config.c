@@ -191,7 +191,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	l->port = port;
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
-		if (argc - 6 >= i) {
+		if (argc - 6 > i) {
 			l->filters[i] = hstrdup(argv[i+6]);
 		}
 	}

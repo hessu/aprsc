@@ -1,3 +1,23 @@
+/*
+ *	aprsc
+ *
+ *	(c) Heikki Hannikainen, OH7LZB <hessu@hes.iki.fi>
+ *
+ *    This program is free software; you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation; either version 2 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program; if not, write to the Free Software
+ *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *	
+ */
 
 /*
  *	incoming.c: processes incoming data within the worker thread
@@ -6,22 +26,65 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <alloca.h>
 
 #include "incoming.h"
-#include "hmalloc.h"
 #include "hlog.h"
 #include "parse_aprs.h"
 
+#include "cellmalloc.h"
+
+/* global packet buffer freelists */
+
+cellarena_t *pbuf_cells_small;
+cellarena_t *pbuf_cells_large;
+cellarena_t *pbuf_cells_huge;
+
+
 /*
  *	Get a buffer for a packet
+ *
+ *	pbuf_t buffers are accumulated into each worker local buffer in small sets,
+ *	and then used from there.  The buffers are returned into global pools.
  */
 
-struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, struct pbuf_t **global_pool,
-	pthread_mutex_t *global_mutex, int len, int bunchlen)
+void pbuf_init(void)
+{
+	pbuf_cells_small = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
+				    __alignof__(struct pbuf_t), 0 /* FIFO! */,
+				    256 /* 256 kB at the time */);
+	pbuf_cells_large = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
+				    __alignof__(struct pbuf_t), 0 /* FIFO! */,
+				    256 /* 256 kB at the time */);
+	pbuf_cells_huge  = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_HUGE,
+				    __alignof__(struct pbuf_t), 0 /* FIFO! */,
+				    256 /* 256 kB at the time */);
+}
+
+void pbuf_free(struct pbuf_t *p)
+{
+	switch (p->buf_len) {
+	case PACKETLEN_MAX_SMALL:
+		cellfree(pbuf_cells_small, p);
+		break;
+	case PACKETLEN_MAX_LARGE:
+		cellfree(pbuf_cells_large, p);
+		break;
+	case PACKETLEN_MAX_HUGE:
+		cellfree(pbuf_cells_huge, p);
+		break;
+	default:
+		hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", p, p->buf_len);
+		break;
+	}
+}
+
+struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
+			     int len, int bunchlen)
 {
 	struct pbuf_t *pb;
-	struct pbuf_t *last;
 	int i;
+	struct pbuf_t **allocarray = alloca(bunchlen * sizeof(void*));
 	
 	if (*pool) {
 		/* fine, just get the first buffer from the pool...
@@ -33,58 +96,37 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, struct pbuf_t **global_pool,
 	}
 	
 	/* The local list is empty... get buffers from the global list. */
-	i = 0;
-	if (*global_pool) {
-		pthread_mutex_lock(global_mutex);
-		last = *global_pool;
-		
-		/* find the last buffer to get from the global pool */
-		while (i < bunchlen && (last->next)) {
-			last = last->next;
-			i++;
-		}
-		
-		/* grab the bunch */
-		*pool = *global_pool;
-		*global_pool = last->next;
-		last->next = NULL;
-		
-		pthread_mutex_unlock(global_mutex);
+
+	bunchlen = cellmallocmany( global_pool, (void**)allocarray, bunchlen );
+
+	for ( i = 0;  i < bunchlen; ++i ) {
+		if (i > 0)
+		  (*pool)->next = allocarray[i];
+		*pool = allocarray[i];
 	}
+	if (*pool)
+		(*pool)->next = NULL;
+
+	hlog(LOG_DEBUG, "pbuf_get_real(%d): got %d bufs from global pool",
+	     len, bunchlen);
 	
-	hlog(LOG_DEBUG, "pbuf_get_real(%d): got %d bufs from global pool - allocating %d more",
-		len, i, bunchlen);
-	
-	if (i < bunchlen) {
-		/* We got too few buffers... allocate a new bunch in the thread-local pool.
-		 * We allocate a complete new set of PBUF_ALLOCATE_BUNCH to avoid frequent
-		 * grabbing of just a couple of buffers from the global pool.
-		 */
-		i = 0;
-		while (i < bunchlen) {
-			pb = hmalloc(sizeof(*pb));
-			pb->buf_len = len;
-			pb->data = hmalloc(len);
-			pb->next = *pool;
-			*pool = pb;
-			i++;
-		}
-	}
 	
 	/* ok, return the first buffer from the pool */
 	pb = *pool;
+	if (!pb) return NULL;
 	*pool = pb->next;
+
+	pb->buf_len = len;
 	
 	/* zero some fields */
-	pb->next = NULL;
-	pb->flags = 0;
-	pb->packettype = 0;
-	pb->t = 0;
-	pb->packet_len = 0;
+	pb->next        = NULL;
+	pb->flags       = 0;
+	pb->packettype  = 0;
+	pb->t           = 0;
+	pb->packet_len  = 0;
 	pb->srccall_end = NULL;
 	pb->dstcall_end = NULL;
-	pb->info_start = NULL;
-	pb->lat = pb->lng = 0;
+	pb->info_start  = NULL;
 	
 	return pb;
 }
@@ -94,16 +136,16 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	/* select which thread-local freelist to use */
 	if (len <= PACKETLEN_MAX_SMALL) {
 		//hlog(LOG_DEBUG, "pbuf_get: Allocating small buffer for a packet of %d bytes", len);
-		return pbuf_get_real(&self->pbuf_free_small, &pbuf_free_small, &pbuf_free_small_mutex,
-			PACKETLEN_MAX_SMALL, PBUF_ALLOCATE_BUNCH_SMALL);
+		return pbuf_get_real(&self->pbuf_free_small, pbuf_cells_small,
+				     PACKETLEN_MAX_SMALL, PBUF_ALLOCATE_BUNCH_SMALL);
 	} else if (len <= PACKETLEN_MAX_LARGE) {
 		//hlog(LOG_DEBUG, "pbuf_get: Allocating large buffer for a packet of %d bytes", len);
-		return pbuf_get_real(&self->pbuf_free_large, &pbuf_free_large, &pbuf_free_large_mutex,
-			PACKETLEN_MAX_LARGE, PBUF_ALLOCATE_BUNCH_LARGE);
+		return pbuf_get_real(&self->pbuf_free_large, pbuf_cells_large,
+				     PACKETLEN_MAX_LARGE, PBUF_ALLOCATE_BUNCH_LARGE);
 	} else if (len <= PACKETLEN_MAX_HUGE) {
 		//hlog(LOG_DEBUG, "pbuf_get: Allocating huge buffer for a packet of %d bytes", len);
-		return pbuf_get_real(&self->pbuf_free_huge, &pbuf_free_huge, &pbuf_free_huge_mutex,
-			PACKETLEN_MAX_HUGE, PBUF_ALLOCATE_BUNCH_HUGE);
+		return pbuf_get_real(&self->pbuf_free_huge, pbuf_cells_huge,
+				     PACKETLEN_MAX_HUGE, PBUF_ALLOCATE_BUNCH_HUGE);
 	} else { /* too large! */
 		hlog(LOG_ERR, "pbuf_get: Not allocating a buffer for a packet of %d bytes!", len);
 		return NULL;

@@ -1,3 +1,23 @@
+/*
+ *	aprsc
+ *
+ *	(c) Heikki Hannikainen, OH7LZB <hessu@hes.iki.fi>
+ *
+ *    This program is free software; you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation; either version 2 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program; if not, write to the Free Software
+ *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *	
+ */
 
 #ifndef WORKER_H
 #define WORKER_H
@@ -45,18 +65,19 @@ struct client_t; /* forward declarator */
 
 struct pbuf_t {
 	struct pbuf_t *next;
-	struct client_t *origin; /* where did we get it from (don't send it back)
-				    NOTE: This pointer is NOT guaranteed to be valid!
-				    It does get invalidated by originating connection close,
-				    but it is only used as read-only comparison reference
-				    against output client connection pointer.  It may
-				    point to reused connection entry, but even that does
-				    not matter much -- a few packets may be left unrelayed
-				    to the a client in some situations, but packets sent
-				    a few minutes latter will go through just fine. 
-				    In case of "dump history" (if we ever do) this pointer
-				    is ignored while history dumping is being done.
-				 */
+	struct client_t *origin;
+		/* where did we get it from (don't send it back)
+		   NOTE: This pointer is NOT guaranteed to be valid!
+		   It does get invalidated by originating connection close,
+		   but it is only used as read-only comparison reference
+		   against output client connection pointer.  It may
+		   point to reused connection entry, but even that does
+		   not matter much -- a few packets may be left unrelayed
+		   to the a client in some situations, but packets sent
+		   a few minutes latter will go through just fine. 
+		   In case of "dump history" (if we ever do) this pointer
+		   is ignored while history dumping is being done.
+		*/
 
 	time_t t;		/* when the packet was received */
 	int packettype;		/* bitmask: one or more of T_* */
@@ -64,7 +85,6 @@ struct pbuf_t {
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */
-	char *data;		/* contains the whole packet, including CRLF, ready to transmit */
 	
 	char *srccall_end;	/* source callsign with SSID */
 	char *dstcall_end;	/* end of dest callsign SSID */
@@ -73,17 +93,12 @@ struct pbuf_t {
 	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */
 	float lng;	/* .. in RADIAN */
 	float cos_lat;	/* cache of COS of LATitude for radial distance filter    */
-	
-	struct sockaddr addr;	/* where did we get it from (don't send it back) */
+
+	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };
 
-/* global packet buffer freelists */
-extern pthread_mutex_t pbuf_free_small_mutex;
-extern struct pbuf_t *pbuf_free_small;
-extern pthread_mutex_t pbuf_free_large_mutex;
-extern struct pbuf_t *pbuf_free_large;
-extern pthread_mutex_t pbuf_free_huge_mutex;
-extern struct pbuf_t *pbuf_free_huge;
+extern void pbuf_init(void);
+extern void pbuf_free(struct pbuf_t *p);
 
 /* global packet buffer */
 extern rwlock_t pbuf_global_rwlock;

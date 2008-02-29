@@ -1,4 +1,3 @@
-
 /*
  *	Configuration file parsing
  *

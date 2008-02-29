@@ -1,3 +1,24 @@
+/*
+ *	aprsc
+ *
+ *	(c) Matti Aarnio, OH2MQK, <oh2mqk@sral.fi>
+ *
+ *    This program is free software; you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation; either version 2 of the License, or
+ *    (at your option) any later version.
+ *
+ *    This program is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with this program; if not, write to the Free Software
+ *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *	
+ */
+
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
@@ -68,14 +89,12 @@ float filter_lon2rad(float lon)
 
 
 
-int filter_init(void)
+void filter_init(void)
 {
 	filter_cells = cellinit(sizeof(struct filter_t), __alignof__(struct filter_t),
 				1 /* LIFO ! */, 128 /* 128 kB at the time */);
 
 	/* printf("filter: sizeof=%d alignof=%d\n",sizeof(struct filter_t),__alignof__(struct filter_t)); */
-
-	return (!filter_cells);
 }
 
 
@@ -165,12 +184,13 @@ void filter_free(struct filter_t *f)
 	struct filter_t *fnext;
 
 	for ( ; f ; f = fnext ) {
-	  fnext = f->h.next;
-	  if (f->h.text) {
-	    if (f->h.text != f->textbuf)
-	      hfree((void*)(f->h.text));
-	  }
-	  cellfree(filter_cells, f);
+		fnext = f->h.next;
+		if (f->h.text) {
+			/* If not pointer to internal string, free it.. */
+			if (f->h.text != f->textbuf)
+				hfree((void*)(f->h.text));
+		}
+		cellfree(filter_cells, f);
 	}
 }
 

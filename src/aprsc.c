@@ -1,4 +1,3 @@
-
 /*
  *	aprsc
  *
@@ -35,9 +34,11 @@
 #include "hmalloc.h"
 #include "hlog.h"
 #include "config.h"
-#include "splay.h"
 #include "accept.h"
 #include "worker.h"
+
+#include "dupecheck.h"
+#include "filter.h"
 
 int shutting_down = 0;		// are we shutting down now?
 int reopen_logs = 0;		// should we reopen log files now?
@@ -207,8 +208,8 @@ int main(int argc, char **argv)
 
 	/* Early inits in single-thread mode */
 	filter_init();
-
-
+	pbuf_init();
+	dupecheck_init();
 
 
 	/* start the accept thread, which will start server threads */
@@ -252,8 +253,8 @@ int main(int argc, char **argv)
 	else
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
-	sp_free_freelist();
-	//free_config();
+	// sp_free_freelist();
+	// free_config();
 	
 	hlog(LOG_CRIT, "Shut down.");
 	close_log(0);

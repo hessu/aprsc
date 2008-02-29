@@ -160,6 +160,7 @@ int main(int argc, char **argv)
 	/* close stdin */
 	close(0);
 	time(&now);
+
 	
 	/* command line */
 	parse_cmdline(argc, argv);
@@ -202,6 +203,14 @@ int main(int argc, char **argv)
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGURG, SIG_IGN);
 	
+
+
+	/* Early inits in single-thread mode */
+	filter_init();
+
+
+
+
 	/* start the accept thread, which will start server threads */
 	if (pthread_create(&accept_th, NULL, (void *)accept_thread, NULL))
 		perror("pthread_create failed for accept_thread");

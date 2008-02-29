@@ -1,5 +1,3 @@
-
-
 #ifndef RWLOCK_H
 #define RWLOCK_H
 

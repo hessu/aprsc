@@ -442,7 +442,7 @@ void workers_stop(int stop_all)
 
 		/* FIXME: Free the pbuf_t buffer chains of the thread! */
 
-		*w->prevp = NULL;
+		*(w->prevp) = NULL;
 		hfree(w);
 		
 		workers_running--;
@@ -456,7 +456,8 @@ void workers_stop(int stop_all)
 void workers_start(void)
 {
 	int i;
-	struct worker_t *w, **prevp;
+	struct worker_t * volatile w;
+ 	struct worker_t **prevp;
 	
 	workers_stop(0);
 	
@@ -473,6 +474,9 @@ void workers_start(void)
 		
 		w = hmalloc(sizeof(*w));
 		*prevp = w;
+
+		w->prevp = prevp;
+
 		w->next = NULL;
 		w->id = i;
 		w->shutting_down = 0;

@@ -106,7 +106,7 @@ cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb
 
 	ca->cellsize  = cellsize;
 	ca->alignment = alignment;
-	ca->increment = alignment;
+	ca->increment = cellsize;
 	if ((cellsize % alignment) != 0) {
 		ca->increment +=  alignment - cellsize % alignment;
 	}

@@ -72,7 +72,7 @@ struct pbuf_t {
 	
 	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */
 	float lng;	/* .. in RADIAN */
-	float cos_lat;	/* pre-calculated COS of LATitude for radial distance filter    */
+	float cos_lat;	/* cache of COS of LATitude for radial distance filter    */
 	
 	struct sockaddr addr;	/* where did we get it from (don't send it back) */
 };

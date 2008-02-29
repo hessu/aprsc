@@ -100,13 +100,12 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, char *body, const char *body_end)
 
 	/* Pre-calculations for A/R/F/M-filter tests */
 	
-	pb->lat = filter_lat2rad(lat); /* deg-to-radians */
-	pb->cos_lat = 0.0;
-	/* pb->cos_lat = cosf(pb->lat);   /* pre-calc for R/F/M-filters */
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = 0.0;		/* prefill the cache */
 
-	pb->lng = filter_lon2rad(lng); /* deg-to-radians */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
 	
-	pb->packettype |= T_POSITION;  /* the packet has positional data */
+	pb->packettype |= T_POSITION;	/* the packet has positional data */
 
 	return 1;
 }

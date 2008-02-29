@@ -151,12 +151,6 @@ fi
 
 LIBS="$t_oldLibs"
 
-
-
-AC_CHECK_FUNC(res_init)  # Can be found without any libs ?  Or needs BIND libresolv ?
-AC_CHECK_FUNC(res_mkquery)
-
-
 AC_SUBST(LIBS,"$LIBS")
 
 dnl Output files

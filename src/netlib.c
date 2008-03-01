@@ -27,6 +27,7 @@
 
 #include "netlib.h"
 
+#if 0
 /*
  *	Convert address & port to string
  */
@@ -47,7 +48,6 @@ int aptoa(struct in_addr sin_addr, int sin_port, char *s, int len)
 	}
 }
 
-
 /*
  *	Convert return values of gethostbyname() to a string
  */
@@ -67,4 +67,5 @@ int h_strerror(int i, char *s, int len)
 			return snprintf(s, len, "%d", i);
 	}
 }
+#endif
 

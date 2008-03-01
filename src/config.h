@@ -34,6 +34,11 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
+#include <netdb.h>
+
+#ifndef AI_PASSIVE
+#include "netdb6.h"
+#endif
 
 extern int fork_a_daemon;	/* fork a daemon */
 
@@ -67,7 +72,8 @@ struct listen_config_t {
 	
 	char *name;			/* name of socket */
 	char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
-	int port;			/* port to bind */
+
+	struct addrinfo *ai;
 
 	char *filters[10];		/* up to 10 filters, NULL when not defined */
 };

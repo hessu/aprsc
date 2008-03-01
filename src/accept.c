@@ -51,8 +51,7 @@ struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
 	
-	union sockaddr_u sa;
-	socklen_t addr_len;
+	struct addrinfo *ai;
 	int fd;
 	
 	char *addr_s;
@@ -119,7 +118,7 @@ int open_tcp_listener(struct listen_t *l)
 	
 	hlog(LOG_INFO, "Binding listening TCP socket: %s", l->addr_s);
 	
-	if ((f = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+	if ((f = socket(l->ai->ai_family, l->ai->ai_socktype, l->ai->ai_protocol)) < 0) {
 		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
 		return -1;
 	}
@@ -127,7 +126,7 @@ int open_tcp_listener(struct listen_t *l)
 	arg = 1;
 	setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
 	
-	if (bind(f, (struct sockaddr *)&l->sa, l->addr_len)) {
+	if (bind(f, l->ai->ai_addr, l->ai->ai_addrlen)) {
 		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
 		close(f);
 		return -1;
@@ -148,33 +147,25 @@ int open_listeners(void)
 {
 	struct listen_config_t *lc;
 	struct listen_t *l;
-	struct hostent *he;
-	char eb[80], *s;
+	char eb[120], *s;
+	char sbuf[20];
 	int opened = 0, i;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
 		l = listener_alloc();
 
-		l->sa.si.sin_family = AF_INET;
-		l->sa.si.sin_port = htons(lc->port);
-		l->addr_len = sizeof(l->sa.si);
-
-		if (lc->host) {
-			if (!(he = gethostbyname(lc->host))) {
-				h_strerror(h_errno, eb, sizeof(eb));
-				hlog(LOG_CRIT, "Listen: Could not resolve \"%s\": %s - not listening on port %d\n", lc->host, eb, lc->port);
-				listener_free(l);
-				continue;
-			}
-			memcpy(&l->sa.si.sin_addr.s_addr, he->h_addr_list[0], he->h_length);
-		} else {
-			l->sa.si.sin_addr.s_addr = INADDR_ANY;
-		}
+		/* Pick first of the AIs for this listen definition */
 		
 		eb[0] = '[';
-		inet_ntop(l->sa.sa.sa_family, &l->sa.si.sin_addr, eb+1, sizeof(eb)-1);
+		eb[1] = 0;
+		*sbuf = 0;
+
+		l->ai = lc->ai;
+
+		getnameinfo(l->ai->ai_addr, l->ai->ai_addrlen,
+			    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
 		s = eb + strlen(eb);
-		sprintf(s, "]:%d", ntohs(((l->sa.sa.sa_family == AF_INET) ? l->sa.si.sin_port : l->sa.si6.sin6_port)));
+		sprintf(s, "]:%s", sbuf);
 
 		l->addr_s = hstrdup(eb);
 		
@@ -195,7 +186,7 @@ int open_listeners(void)
 				l->filters[i] = NULL;
 		}
 
-		hlog(LOG_DEBUG, "... adding to listened sockets");
+		hlog(LOG_DEBUG, "... adding %s to listened sockets", eb);
 		// put (first) in the list of listening sockets
 		l->next = listen_list;
 		l->prevp = &listen_list;
@@ -231,9 +222,10 @@ struct client_t *do_accept(struct listen_t *l)
 {
 	int fd, i;
 	struct client_t *c;
-	union sockaddr_u    sa;
+	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len = sizeof(sa);
 	char eb[200];
+	char sbuf[20];
 	char *s;
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
@@ -267,17 +259,21 @@ struct client_t *do_accept(struct listen_t *l)
 		}
 	}
 	
+	eb[0] = '[';
+	eb[1] = 0;
+	*sbuf = 0;
+
+	getnameinfo((struct sockaddr *)&sa, addr_len,
+		    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
+	s = eb + strlen(eb);
+	sprintf(s, "]:%s", sbuf);
+
 	c = client_alloc();
 	c->fd    = fd;
 	c->addr  = sa;
 	c->state = CSTATE_LOGIN;
-
-	eb[0] = '[';
-	inet_ntop(sa.sa.sa_family, &sa.si.sin_addr, eb+1, sizeof(eb)-1);
-	s = eb + strlen(eb);
-	sprintf(s, "]:%d", ntohs((sa.sa.sa_family == AF_INET) ? sa.si.sin_port : sa.si6.sin6_port));
-
 	c->addr_s = hstrdup(eb);
+
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {

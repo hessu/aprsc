@@ -40,26 +40,26 @@
 char def_cfgfile[] = "aprsc.conf";
 
 char *cfgfile = def_cfgfile;
-char *pidfile = NULL;
-char *new_rundir = NULL;
-char *rundir = NULL;
-char *new_logdir = NULL;
-char *logdir = NULL;	/* access logs go here */
+char *pidfile;
+char *new_rundir;
+char *rundir;
+char *new_logdir;
+char *logdir;	/* access logs go here */
 
 char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */
 
-char *mycall = NULL;
-char *myemail = NULL;
-char *myadmin = NULL;
-char *myhostname = "undefined-hostname";
-char *new_mycall = NULL;
-char *new_myemail = NULL;
-char *new_myadmin = NULL;
+char *mycall;
+char *myemail;
+char *myadmin;
+char *myhostname;
+char *new_mycall;
+char *new_myemail;
+char *new_myadmin;
 
-int fork_a_daemon = 0;	/* fork a daemon */
+int fork_a_daemon;	/* fork a daemon */
 
-int dump_splay = 0;	/* print splay tree information */
+int dump_splay;	/* print splay tree information */
 
 int workers_configured = 2;	/* number of workers to run */
 
@@ -75,7 +75,7 @@ int client_timeout = 60*60;		/* after N seconds of no input from a client, disco
 int ibuf_size = 1500;			/* size of input buffer for clients */
 int obuf_size = 32*1024;		/* size of output buffer for clients */
 
-int verbose = 0;
+int verbose;
 
 /* address:port pairs being listened */
 struct listen_config_t *listen_config = NULL, *listen_config_new = NULL;
@@ -124,6 +124,7 @@ void free_listen_config(struct listen_config_t **lc)
 		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
 			if (this->filters[i])
 				hfree(this->filters[i]);
+		freeaddrinfo(this->ai);
 		hfree(this);
 	}
 }
@@ -190,6 +191,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 {
 	int i, port;
 	struct listen_config_t *l;
+	struct addrinfo req, *ai;
 
 	if (argc < 6)
 		return -1;
@@ -206,11 +208,25 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		fprintf(stderr, "Listen: unsupported port number '%s'\n", argv[5]);
 		return -2;
 	}
-	
+
+	memset(&req, 0, sizeof(req));
+	req.ai_family   = 0;
+	req.ai_socktype = SOCK_STREAM;
+	req.ai_protocol = IPPROTO_TCP;
+	req.ai_flags    = 0;
+	ai = NULL;
+
+	i = getaddrinfo(argv[4], argv[5], &req, &ai);
+	if (i != 0) {
+	  fprintf(stderr,"Listen: address parse failure of '%s' '%s'",argv[4],argv[5]);
+	  return i;
+	}
+
+
 	l = hmalloc(sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
-	l->port = port;
+	l->ai = ai;
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
 		if (argc - 6 > i) {
@@ -264,6 +280,10 @@ int read_config(void)
 {
 	int failed = 0;
 	char *s;
+
+	myhostname = hstrdup("undefined-hostname");
+	myadmin    = hstrdup("undefined-myadmin");
+	myemail    = hstrdup("undefined-myemail");
 	
 	if (read_cfgfile(cfgfile, cfg_cmds))
 		return -1;
@@ -382,5 +402,6 @@ void free_config(void)
 	hfree(myadmin);
 	mycall = myemail = myadmin = NULL;
 	logname = NULL;
+	free_listen_config(&listen_config);
 }
 

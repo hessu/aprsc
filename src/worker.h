@@ -60,6 +60,8 @@ extern time_t now;	/* current time - updated by the main thread */
 #define T_TELEMETRY 16
 
 #define F_DUPE 1	/* duplicate of a previously seen packet */
+#define F_DUPEKEY 2	/* first of the unique keys.. */
+#define F_FASTPOS 4	/* last position packet of given object/source id */
 
 struct client_t; /* forward declarator */
 
@@ -113,12 +115,19 @@ extern struct pbuf_t **pbuf_global_prevp;
 struct worker_t; /* used in client_t, but introduced later */
 struct filter_t; /* used in client_t, but introduced later */
 
+union sockaddr_u {
+	struct sockaddr     sa;
+	struct sockaddr_in  si;
+	struct sockaddr_in6 si6;
+};
+
+
 
 struct client_t {
 	struct client_t *next;
 	struct client_t **prevp;
 	
-	struct sockaddr addr;
+	union sockaddr_u addr;
 	int fd;
 	int udp_port;
 	char *addr_s;
@@ -127,15 +136,17 @@ struct client_t {
 	
 	/* first stage read buffer - used to crunch out lines to packet buffers */
 	char *ibuf;
-	int ibuf_size; /* size of buffer */
-	int ibuf_end; /* where data in buffer ends */
+	int ibuf_size;      /* size of buffer */
+	int ibuf_end;       /* where data in buffer ends */
 	
 	/* output buffer */
 	char *obuf;
-	int obuf_size; /* size of buffer */
-	int obuf_start; /* where data in buffer starts */
-	int obuf_end; /* where data in buffer ends */
-	
+	int obuf_size;      /* size of buffer */
+	int obuf_start;     /* where data in buffer starts */
+	int obuf_end;       /* where data in buffer ends */
+	int obuf_flushsize; /* how much data in buf before forced write() at adding ? */
+	int obuf_writes;    /* how many times (since last check) the socket has been written ? */
+
 	/* state of the client... one of CSTATE_* */
 	int state;
 	char *username;

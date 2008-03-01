@@ -53,6 +53,7 @@ extern int verbose;
 extern char *mycall;
 extern char *myemail;
 extern char *myadmin;
+extern char *myhostname;
 
 extern char *cfgfile;
 extern char *pidfile;

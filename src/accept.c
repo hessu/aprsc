@@ -51,7 +51,7 @@ struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
 	
-	struct sockaddr_in sin;
+	union sockaddr_u sa;
 	socklen_t addr_len;
 	int fd;
 	
@@ -127,7 +127,7 @@ int open_tcp_listener(struct listen_t *l)
 	arg = 1;
 	setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
 	
-	if (bind(f, (struct sockaddr *)&l->sin, sizeof(l->sin))) {
+	if (bind(f, (struct sockaddr *)&l->sa, l->addr_len)) {
 		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
 		close(f);
 		return -1;
@@ -149,15 +149,16 @@ int open_listeners(void)
 	struct listen_config_t *lc;
 	struct listen_t *l;
 	struct hostent *he;
-	char eb[80];
+	char eb[80], *s;
 	int opened = 0, i;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
 		l = listener_alloc();
 
-		l->sin.sin_family = AF_INET;
-		l->sin.sin_port = htons(lc->port);
-		
+		l->sa.si.sin_family = AF_INET;
+		l->sa.si.sin_port = htons(lc->port);
+		l->addr_len = sizeof(l->sa.si);
+
 		if (lc->host) {
 			if (!(he = gethostbyname(lc->host))) {
 				h_strerror(h_errno, eb, sizeof(eb));
@@ -165,12 +166,16 @@ int open_listeners(void)
 				listener_free(l);
 				continue;
 			}
-			memcpy(&l->sin.sin_addr.s_addr, he->h_addr_list[0], he->h_length);
+			memcpy(&l->sa.si.sin_addr.s_addr, he->h_addr_list[0], he->h_length);
 		} else {
-			l->sin.sin_addr.s_addr = INADDR_ANY;
+			l->sa.si.sin_addr.s_addr = INADDR_ANY;
 		}
 		
-		aptoa(l->sin.sin_addr, ntohs(l->sin.sin_port), eb, sizeof(eb));
+		eb[0] = '[';
+		inet_ntop(l->sa.sa.sa_family, &l->sa.si.sin_addr, eb+1, sizeof(eb)-1);
+		s = eb + strlen(eb);
+		sprintf(s, "]:%d", ntohs(((l->sa.sa.sa_family == AF_INET) ? l->sa.si.sin_port : l->sa.si6.sin6_port)));
+
 		l->addr_s = hstrdup(eb);
 		
 		if (open_tcp_listener(l) >= 0) {
@@ -185,7 +190,7 @@ int open_listeners(void)
 		/* Copy filter definitions */
 		for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 			if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
-				l->filters[i] = lc->filters[i];
+				l->filters[i] = (lc->filters[i]) ? hstrdup(lc->filters[i]) : NULL;
 			else
 				l->filters[i] = NULL;
 		}
@@ -224,14 +229,14 @@ void close_listeners(void)
 
 struct client_t *do_accept(struct listen_t *l)
 {
-	char eb[80];
 	int fd, i;
 	struct client_t *c;
-	struct sockaddr_in *sin;
-	struct sockaddr     sa;
+	union sockaddr_u    sa;
 	socklen_t addr_len = sizeof(sa);
+	char eb[200];
+	char *s;
 	
-	if ((fd = accept(l->fd, &sa, &addr_len)) < 0) {
+	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
 		int e = errno;
 		switch (e) {
 			/* Errors reporting really bad internal (programming) bugs */
@@ -263,9 +268,15 @@ struct client_t *do_accept(struct listen_t *l)
 	}
 	
 	c = client_alloc();
-	sin = (struct sockaddr_in *)&c->addr;
+	c->fd    = fd;
+	c->addr  = sa;
+	c->state = CSTATE_LOGIN;
 
-	aptoa(sin->sin_addr, ntohs(sin->sin_port), eb, sizeof(eb));
+	eb[0] = '[';
+	inet_ntop(sa.sa.sa_family, &sa.si.sin_addr, eb+1, sizeof(eb)-1);
+	s = eb + strlen(eb);
+	sprintf(s, "]:%d", ntohs((sa.sa.sa_family == AF_INET) ? sa.si.sin_port : sa.si6.sin6_port));
+
 	c->addr_s = hstrdup(eb);
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	
@@ -353,8 +364,10 @@ void accept_thread(void *asdf)
 				close_listeners();
 			
 			/* start listening on the sockets */
-			if ((listen_n = open_listeners()) <= 0)
+			if ((listen_n = open_listeners()) <= 0) {
 				hlog(LOG_CRIT, "Failed to listen on any ports.");
+				exit(2);
+			}
 			
 			hlog(LOG_DEBUG, "Generating polling list...");
 			acceptpfd = hmalloc(listen_n * sizeof(*acceptpfd));

@@ -131,22 +131,22 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 		}
 	}
 	
-	client_printf(self, c, "# logresp %s %s, server %s\r\n",
-		username,
-		(c->validated) ? "verified" : "unverified",
-		mycall
-	);
+	client_printf(self, c, "# logresp %s %s, server %s hostname %s\r\n",
+		      username,
+		      (c->validated) ? "verified" : "unverified",
+		      mycall, myhostname
+		      );
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",
-		c->addr_s, username,
-		(c->validated) ? " pass_ok" : "",
-		(!c->validated && given_passcode >= 0) ? " pass_invalid" : "",
-		(given_passcode < 0) ? " pass_none" : "",
-		(c->udp_port) ? " UDP" : "",
-		(c->app_name) ? " app " : "",
-		(c->app_name) ? c->app_name : "",
-		(c->app_version) ? " ver " : "",
-		(c->app_version) ? c->app_version : ""
+	     c->addr_s, username,
+	     (c->validated) ? " pass_ok" : "",
+	     (!c->validated && given_passcode >= 0) ? " pass_invalid" : "",
+	     (given_passcode < 0) ? " pass_none" : "",
+	     (c->udp_port) ? " UDP" : "",
+	     (c->app_name) ? " app " : "",
+	     (c->app_name) ? c->app_name : "",
+	     (c->app_version) ? " ver " : "",
+	     (c->app_version) ? c->app_version : ""
 	);
 	
 	return 0;

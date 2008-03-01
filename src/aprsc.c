@@ -234,16 +234,19 @@ int main(int argc, char **argv)
 				accept_reconfiguring = 1;
 			}
 		}
-		/*
+
+		/* 
 		if (now >= next_expiry) {
 			next_expiry = now + expiry_interval;
 			// expire
+			// pbuf_expire();
 		}
 		if (now >= next_stats) {
 			next_stats = now + stats_interval;
 			// log stats
 		}
 		*/
+
 	}
 	
 	hlog(LOG_INFO, "Signalling accept_thread to shut down...");

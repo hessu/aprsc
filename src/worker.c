@@ -39,9 +39,14 @@
 #include "filter.h"
 
 time_t now;	/* current time, updated by the main thread */
+time_t next_keepalive;
+
+extern int ibuf_size;
 
 struct worker_t *worker_threads = NULL;
 int workers_running = 0;
+
+int keepalive_interval = 20;    /* 20 seconds by default */
 
 /* global packet buffer */
 rwlock_t pbuf_global_rwlock = RWL_INITIALIZER;
@@ -57,11 +62,11 @@ struct client_t *client_alloc(void)
 	memset((void *)c, 0, sizeof(*c));
 	c->fd = -1;
 
-	c->ibuf_size = ibuf_size;
-	c->ibuf = hmalloc(c->ibuf_size);
-	c->obuf_size = obuf_size;
-	c->obuf = hmalloc(c->obuf_size);
+	c->ibuf_size = 1500;
+	c->ibuf      = hmalloc(c->ibuf_size);
 
+	c->obuf_size = obuf_size;
+	c->obuf      = hmalloc(c->obuf_size);
 
 	return c;
 }
@@ -108,7 +113,8 @@ void close_client(struct worker_t *self, struct client_t *c)
 		close(c->fd);
 	
 	/* remove from polling list */
-	xpoll_remove(self->xp, c->xfd);
+	if (self->xp)
+		xpoll_remove(self->xp, c->xfd);
 	
 	/* link the list together over this node */
 	if (c->next)
@@ -135,9 +141,17 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		 */
 		if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 			/* Oh crap, the data will not fit even if we move stuff.
-			 * We'd overflow in any case, so we bail out.
-			 */
-			return -1;
+			   Lets try writing.. */
+			int i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+			if (i > 0) {
+				c->obuf_start += i;
+				c->obuf_writes++;
+			}
+			/* Is it still out of space ? */
+			if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
+				/* Oh crap, the data will still not fit! */
+				return -1;
+			}
 		}
 		/* okay, move stuff to the beginning to make space in the end */
 		memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
@@ -149,10 +163,22 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	memcpy((void *)c->obuf + c->obuf_end, p, len);
 	c->obuf_end += len;
 	
+	/* Is it over the flush size ? */
+	if (c->obuf_end > c->obuf_flushsize) {
+		int i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+		if (i > 0) {
+			c->obuf_start += i;
+			c->obuf_writes++;
+		}
+	}
+	/* All done ? */
+	if (c->obuf_start >= c->obuf_end) {
+		c->obuf_start = 0;
+		c->obuf_end   = 0;
+		return len;
+	}
+
 	/* tell the poller that we have outgoing data */
-	/* TODO: should try writing right away, if there is a sufficient amount of
-	 * data in obuf!
-	 */
 	xpoll_outgoing(self->xp, c->xfd, 1);
 	
 	return len; 
@@ -187,6 +213,9 @@ int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ..
 int handle_client_readable(struct worker_t *self, struct client_t *c)
 {
 	int r;
+	char *s;
+	char *ibuf_end;
+	char *row_start;
 	
 	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 	if (r == 0) {
@@ -195,7 +224,11 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 	if (r < 0) {
+		if (errno == EINTR || errno == EAGAIN)
+			return 0; /* D'oh..  return again latter */
+
 		hlog(LOG_DEBUG, "read: Error from client fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
+		hlog(LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d", c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
 		close_client(self, c);
 		return -1;
 	}
@@ -206,9 +239,9 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	 * without the CRLF (we accept either CR or LF or both, but make sure
 	 * to always output CRLF
 	 */
-	char *s;
-	char *ibuf_end = c->ibuf + c->ibuf_end;
-	char *row_start = c->ibuf;
+	ibuf_end = c->ibuf + c->ibuf_end;
+	row_start = c->ibuf;
+
 	for (s = c->ibuf; s < ibuf_end; s++) {
 		if (*s == '\r' || *s == '\n') {
 			/* found EOL */
@@ -246,6 +279,9 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	
 	r = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 	if (r < 0) {
+		if (errno == EINTR || errno == EAGAIN)
+			return 0;
+
 		hlog(LOG_DEBUG, "write: Error from client fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
 		close_client(self, c);
 		return -1;
@@ -325,10 +361,44 @@ void collect_new_clients(struct worker_t *self)
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(self->xp, c->fd, (void *)c);
-		client_printf(self, c, "# %s\r\n", SERVERID);
+		client_printf(self, c, "# Hello %s -- %s - %s - %s\r\n", c->addr_s, SERVERID, mycall, myhostname);
 	}
 	
 }
+
+/* 
+ *	Send keepalives to client sockets
+ */
+void send_keepalives(struct worker_t *self)
+{
+	struct client_t *c;
+	struct tm t;
+	char buf[130], *s;
+	int len;
+
+	sprintf(buf, "# %.40s %.40s  ",SERVERID, myhostname);
+	s = buf + strlen(buf);
+
+	gmtime_r(&now, &t);
+	s += strftime(s, 40, "%Y-%m-%d %T UTC\r\n", &t);
+
+	len = (s - buf);
+
+	for (c = self->clients; (c); c = c->next) {
+		int flushlevel = c->obuf_flushsize;
+
+		/* Send keepalives only to sockets AFTER
+		   they have completed their login.. */
+		if (c->state != CSTATE_CONNECTED)
+			continue;
+
+		c->obuf_flushsize = 0;
+		/* Write out immediately */
+		client_write(self, c, buf, len);
+		c->obuf_flushsize = flushlevel;
+	}
+}
+
 
 /*
  *	Process outgoing packets, write them to clients
@@ -360,6 +430,7 @@ void process_outgoing(struct worker_t *self)
 void worker_thread(struct worker_t *self)
 {
 	sigset_t sigs_to_block;
+	time_t next_keepalive = now + keepalive_interval;
 	
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);
@@ -392,6 +463,12 @@ void worker_thread(struct worker_t *self)
 		/* if we have new stuff in the global packet buffer, process it */
 		if (*self->pbuf_global_prevp)
 			process_outgoing(self);
+
+		/* time of next keepalive broadcast ? */
+		if (next_keepalive < now) {
+			send_keepalives(self);
+			next_keepalive += keepalive_interval;
+		}
 	}
 	
 	/* stop polling */
@@ -402,10 +479,7 @@ void worker_thread(struct worker_t *self)
 	while (self->clients)
 		close_client(self, self->clients);
 	
-	/* FIXME: should move thread-local pbuf_free_* and 
-	 * pbuf_incoming entries to the global pool to avoid
-	 * leaking!
-	 */
+	/* workers_stop() will clean up thread-local pbuf pools */
 	
 	hlog(LOG_DEBUG, "Worker %d shut down.", self->id);
 }
@@ -441,6 +515,8 @@ void workers_stop(int stop_all)
 		else
 			hlog(LOG_INFO, "Worker %d has terminated.", w->id);
 
+
+
 		for (p = w->pbuf_free_small; p; p = pn) {
 			pn = p->next;
 			pbuf_free(p);
@@ -472,7 +548,7 @@ void workers_start(void)
  	struct worker_t **prevp;
 	
 	workers_stop(0);
-	
+
 	while (workers_running < workers_configured) {
 		hlog(LOG_DEBUG, "Starting a worker thread...");
 		i = 0;

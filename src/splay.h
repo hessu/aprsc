@@ -41,6 +41,7 @@
 #endif
 
 #include <inttypes.h>
+#include "worker.h"
 
 typedef uint32_t	spkey_t;
 
@@ -48,8 +49,8 @@ struct spblk {
 	struct spblk	*leftlink;
 	struct spblk	*rightlink;
 	struct spblk	*uplink;
-	spkey_t		key;
 	void		*data;
+	spkey_t		key;
 };
 
 struct sptree {

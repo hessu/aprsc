@@ -52,6 +52,7 @@ char *logname = def_logname;	/* syslog entries use this program name */
 char *mycall = NULL;
 char *myemail = NULL;
 char *myadmin = NULL;
+char *myhostname = "undefined-hostname";
 char *new_mycall = NULL;
 char *new_myemail = NULL;
 char *new_myadmin = NULL;
@@ -93,6 +94,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "logdir",		_CFUNC_ do_string,		&new_logdir		},
 	{ "mycall",		_CFUNC_ do_string,		&new_mycall		},
 	{ "myemail",		_CFUNC_ do_string,		&new_myemail		},
+	{ "myhostname",		_CFUNC_ do_string,		&myhostname		},
 	{ "myadmin",		_CFUNC_ do_string,		&new_myadmin		},
 	{ "workerthreads",	_CFUNC_ do_int,			&workers_configured	},
 	{ "statsinterval",	_CFUNC_ do_interval,		&stats_interval		},
@@ -180,7 +182,7 @@ int do_interval(time_t *dest, int argc, char **argv)
 /*
  *	Parse a Listen directive
  *
- *	listen <label> <?> tcp <hostname> <portnum> [<filter> [..<more_filters>]]
+ *	listen <label> <typelabel> tcp <hostname> <portnum> [<filter> [..<more_filters>]]
  *
  */
 
@@ -215,7 +217,6 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 			l->filters[i] = hstrdup(argv[i+6]);
 		}
 	}
-
 	
 	/* put in the list */
 	l->next = *lq;

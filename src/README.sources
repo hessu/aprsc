@@ -96,7 +96,9 @@ crc32.c
 rwlock.c
 	A schoolbook pthread rwlock implementation for systems
 	lacking one (Solaris 2.6 to name one).
-
+	From the book "Programming with POSIX Threads", by
+	David R. Butenhof. Appears in modified and GPL'ed form in at
+	least the Bacula sources.
 
 inet_ntop.c, inet_pton.c, getnameinfo.c, gai_strerror.c:
 	Backup instances of IPv4/IPv6 agnostic resolver library just

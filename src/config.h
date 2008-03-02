@@ -66,6 +66,7 @@ extern char *rundir;
 extern char *logdir;
 extern char *logname;
 
+
 struct listen_config_t {
 	struct listen_config_t *next;
 	struct listen_config_t **prevp; /* pointer to the *next pointer in the previous node */
@@ -78,7 +79,21 @@ struct listen_config_t {
 	char *filters[10];		/* up to 10 filters, NULL when not defined */
 };
 
+struct peerip_config_t {
+	struct peerip_config_t *next;
+	struct peerip_config_t **prevp; /* pointer to the *next pointer in the previous node */
+	
+	char *name;			/* name of socket */
+	char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
+
+	struct addrinfo *ai;
+
+	char *filters[10];		/* up to 10 filters, NULL when not defined */
+};
+
 extern struct listen_config_t *listen_config;
+
+extern struct peerip_config_t *aprsis_uplink_ai;
 
 extern int read_config(void);
 extern void free_config(void);

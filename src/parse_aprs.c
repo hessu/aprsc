@@ -108,9 +108,19 @@ int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
+	char *dstcall_start;
+	char dstcall[CALLSIGNLEN_MAX+1];
 	
 	fprintf(stderr, "parse_aprs_mice\n");
 
+	/* check that the destination call exists and isn't too large */
+	dstcall_start = pb->srccall_end+1;
+	if (dstcall_start < pb->dstcall_end || pb->dstcall_end - dstcall_start > CALLSIGNLEN_MAX)
+		return 0; /* eh...? */
+	
+	/* make a local copy, we're going to modify it */
+	memcpy(dstcall, dstcall_start, pb->dstcall_end - dstcall_start);
+	
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
 }
@@ -137,7 +147,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	
 	/* base-91 check */
 	for (i = 1; i <= 8; i++)
-		if (body[i] < 0x21 || body[i] >= 0x7b)
+		if (body[i] < 0x21 || body[i] > 0x7b)
 			return 0;
 	
 	fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);

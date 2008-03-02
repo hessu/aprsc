@@ -37,6 +37,32 @@
 #include "hlog.h"
 #include "filter.h"
 
+/*
+ *	Check if the given character is a valid symbol table identifier
+ *	or an overlay character
+ */
+
+int valid_sym_table(char c)
+{
+	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
+		    || (c >= 0x61 && c <= 0x6A)); /* [\/\\A-Za-j] */
+}
+
+void pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
+{
+	/* Pre-calculations for A/R/F/M-filter tests */
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+	
+	/* symbol table and code */
+	pb->symbol[0] = sym_table;
+	pb->symbol[1] = sym_code;
+	pb->symbol[2] = 0;
+	
+	pb->packettype |= T_POSITION;	/* the packet has positional data */
+}
+
 int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	float lat = 0.0, lng = 0.0;
@@ -59,61 +85,97 @@ int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 	   VTG  Velocity and track -- no position here!
 	   WPT  Way Point Location
 	 */
-
-
-	/* Pre-calculations for A/R/F/M-filter tests */
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-
-	pb->packettype |= T_POSITION;	/* the packet has positional data */
+	 
+	pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
 }
 
 int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	float lat = 0.0, lng = 0.0;
-
+	
 	fprintf(stderr, "parse_aprs_telem\n");
 
 	/* Pre-calculations for A/R/F/M-filter tests */
-	
 	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
 	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
 	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-
+	
 	pb->packettype |= T_POSITION;	/* the packet has positional data */
 	return 0;
 }
 
 int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
+	//float lat = 0.0, lng = 0.0;
+	
 	fprintf(stderr, "parse_aprs_mice\n");
 
-	/* Pre-calculations for A/R/F/M-filter tests */
-	
-	float lat = 0.0, lng = 0.0;
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-
-	pb->packettype |= T_POSITION;	/* the packet has positional data */
+	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
 }
 
 int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	float lat = 0.0, lng = 0.0;
-
-	fprintf(stderr, "parse_aprs_compressed\n");
-
-	/* Pre-calculations for A/R/F/M-filter tests */
+	char sym_table, sym_code;
+	int i;
+	int lat1, lat2, lat3, lat4, lng1, lng2, lng3, lng4;
+	double lat = 0.0, lng = 0.0;
 	
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-
-	pb->packettype |= T_POSITION;	/* the packet has positional data */
+	fprintf(stderr, "parse_aprs_compressed\n");
+	
+	/* A compressed position is always 13 characters long.
+	 * Make sure we get at least 13 characters and that they are ok.
+	 * Also check the allowed base-91 characters at the same time.
+	 */ 
+	
+	if (body_end - body < 13)
+		return 0; /* too short. */
+	
+	sym_table = body[0]; /* has been validated before entering this function */
+	sym_code = body[9];
+	/* We intentionally ignore invalid symbol codes. We don't care, let's
+	 * leave it to the displaying application. */
+	/*
+	if (!vaid_sym_code(sym_code))
+		return 0;
+	*/
+	
+	/* base-91 check */
+	for (i = 1; i <= 8; i++)
+		if (body[i] < 0x21 || body[i] >= 0x7b)
+			return 0;
+	for (i = 10; i <= 12; i++)
+		if (body[i] < 0x21 || body[i] >= 0x7b)
+			return 0;
+	
+	fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);
+	
+	/* decode */
+	lat1 = body[1] - 33;
+	lat2 = body[2] - 33;
+	lat3 = body[3] - 33;
+	lat4 = body[4] - 33;
+	lng1 = body[5] - 33;
+	lng2 = body[6] - 33;
+	lng3 = body[7] - 33;
+	lng4 = body[8] - 33;
+	/* course+speed (or altitude) is ignored by this application
+	c1 = body[10] - 33;
+	s1 = body[11] - 33;
+	comptype = body[12] - 33;
+	*/
+	
+	/* calculate latitude and longitude */
+	lat = 90.0 - ((double)(lat1 * 91 * 91 * 91 + lat2 * 91 * 91 + lat3 * 91 + lat4) / (double)380926.0);
+	lng = -180.0 + ((double)(lng1 * 91 * 91 * 91 + lng2 * 91 * 91 + lng3 * 91 + lng4) / (double)190463.0);
+	
+	fprintf(stderr, "\tlat %.3f lng %.3f\n", lat, lng);
+	
+	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
+		return 0; /* out of range */
+	
+	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 	return 0;
 }
 
@@ -161,6 +223,9 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 		return 0;
 	}
 	
+	if (!valid_sym_table(sym_table))
+		sym_table = 0;
+	
 	if (lat_hemi == 'S' || lat_hemi == 's')
 		issouth = 1;
 	else if (lat_hemi != 'N' && lat_hemi != 'n')
@@ -187,46 +252,30 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 		lat_deg, lat_min, lat_min_frag, (int)lat_hemi, lat,
 		lng_deg, lng_min, lng_min_frag, (int)lng_hemi, lng);
 
-
-	/* Pre-calculations for A/R/F/M-filter tests */
+	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
+		return 0; /* out of range */
 	
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-	pb->packettype |= T_POSITION;	/* the packet has positional data */
-
+	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 	return 1;
 }
 
 int parse_aprs_object(struct pbuf_t *pb, char *body, const char *body_end)
 {
-	float lat = 0.0, lng = 0.0;
+	//float lat = 0.0, lng = 0.0;
 
 	fprintf(stderr, "parse_aprs_object\n");
 	
-	/* Pre-calculations for A/R/F/M-filter tests */
-	
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-
-	pb->packettype |= T_OBJECT;	/* the packet has positional data */
+	//pbuf_fill_pos(pb, lat, lng);
 	return 0;
 }
 
 int parse_aprs_item(struct pbuf_t *pb, char *body, const char *body_end)
 {
-	float lat = 0.0, lng = 0.0;
+	//float lat = 0.0, lng = 0.0;
 
 	fprintf(stderr, "parse_aprs_item\n");
 	
-	/* Pre-calculations for A/R/F/M-filter tests */
-	
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-
-	pb->packettype |= T_ITEM;	/* the packet has positional data */
+	//pbuf_fill_pos(pb, lat, lng);
 	return 0;
 }
 
@@ -293,8 +342,10 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	body_end = pb->data + pb->packet_len - 2;
 	
 	switch (packettype) {
-	case 0x1c:
-	case 0x1d:
+	/* the following are obsolete mic-e types: 0x1c 0x1d 
+	 * case 0x1c:
+	 * case 0x1d:
+	 */
 	case 0x27: /* ' */
 	case 0x60: /* ` */
 		/* could be mic-e, minimum body length 9 chars */
@@ -326,8 +377,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			body += 7;
 		}
 		poschar = *body;
-		if (poschar == '/' || poschar == '\\' || (poschar >= 0x41 && poschar <= 0x5A)
-		    || (poschar >= 0x61 && poschar <= 0x6A)) { /* [\/\\A-Za-j] */
+		if (valid_sym_table(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
 			if (body_end - body >= 13) {
 				rc = parse_aprs_compressed(pb, body, body_end);
@@ -413,8 +463,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	pos_start = memchr(body, '!', body_end - body);
 	if ((pos_start) && pos_start - body <= 39) {
 		poschar = *pos_start;
-		if (poschar == '/' || poschar == '\\' || (poschar >= 0x41 && poschar <= 0x5A)
-		    || (poschar >= 0x61 && poschar <= 0x6A)) { /* [\/\\A-Za-j] */
+		if (valid_sym_table(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
 		    	if (body_end - pos_start >= 13) {
 		    		return parse_aprs_compressed(pb, pos_start, body_end);

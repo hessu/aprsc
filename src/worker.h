@@ -104,7 +104,7 @@ struct pbuf_t {
 	float lng;	/* .. in RADIAN */
 	float cos_lat;	/* cache of COS of LATitude for radial distance filter    */
 
-	char symbol[4]; /* 3(+1) chars of symbol, if any */
+	char symbol[3]; /* 2(+1) chars of symbol, if any */
 
 	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };

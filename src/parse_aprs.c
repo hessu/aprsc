@@ -145,9 +145,11 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	for (i = 1; i <= 8; i++)
 		if (body[i] < 0x21 || body[i] >= 0x7b)
 			return 0;
+	/* we ignore course+speed and altitude, so let's ignore errors in there, too
 	for (i = 10; i <= 12; i++)
 		if (body[i] < 0x21 || body[i] >= 0x7b)
 			return 0;
+	*/
 	
 	fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);
 	

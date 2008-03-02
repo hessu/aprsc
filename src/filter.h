@@ -26,7 +26,7 @@
 
 
 extern void filter_init(void);
-extern int  filter_parse(struct client_t *c, char *filt);
+extern int  filter_parse(struct client_t *c, const char *filt);
 extern void filter_free(struct filter_t *c);
 extern int  filter_process(struct client_t *c, struct pbuf_t *pb);
 

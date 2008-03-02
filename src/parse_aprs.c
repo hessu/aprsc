@@ -134,22 +134,11 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	
 	sym_table = body[0]; /* has been validated before entering this function */
 	sym_code = body[9];
-	/* We intentionally ignore invalid symbol codes. We don't care, let's
-	 * leave it to the displaying application. */
-	/*
-	if (!vaid_sym_code(sym_code))
-		return 0;
-	*/
 	
 	/* base-91 check */
 	for (i = 1; i <= 8; i++)
 		if (body[i] < 0x21 || body[i] >= 0x7b)
 			return 0;
-	/* we ignore course+speed and altitude, so let's ignore errors in there, too
-	for (i = 10; i <= 12; i++)
-		if (body[i] < 0x21 || body[i] >= 0x7b)
-			return 0;
-	*/
 	
 	fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);
 	
@@ -162,11 +151,6 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	lng2 = body[6] - 33;
 	lng3 = body[7] - 33;
 	lng4 = body[8] - 33;
-	/* course+speed (or altitude) is ignored by this application
-	c1 = body[10] - 33;
-	s1 = body[11] - 33;
-	comptype = body[12] - 33;
-	*/
 	
 	/* calculate latitude and longitude */
 	lat = 90.0 - ((double)(lat1 * 91 * 91 * 91 + lat2 * 91 * 91 + lat3 * 91 + lat4) / (double)380926.0);

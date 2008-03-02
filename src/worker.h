@@ -130,8 +130,9 @@ struct client_t {
 	union sockaddr_u addr;
 	int fd;
 	int udp_port;
-	char *addr_s;
-	
+	char *addr_s;	    /* client IP address in text format */
+	time_t keepalive;
+
 	struct xpoll_fd_t *xfd;
 	
 	/* first stage read buffer - used to crunch out lines to packet buffers */
@@ -209,5 +210,7 @@ extern int client_write(struct worker_t *self, struct client_t *c, char *p, int 
 extern struct worker_t *worker_threads;
 extern void workers_stop(int stop_all);
 extern void workers_start(void);
+
+extern int keepalive_interval;
 
 #endif

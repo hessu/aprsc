@@ -273,6 +273,7 @@ struct client_t *do_accept(struct listen_t *l)
 	c->addr  = sa;
 	c->state = CSTATE_LOGIN;
 	c->addr_s = hstrdup(eb);
+	c->keepalive = now;
 
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	

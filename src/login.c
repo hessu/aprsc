@@ -126,16 +126,20 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 		} else if (strcasecmp(argv[i], "filter") == 0) {
 			while (++i < argc) {
 				/* TODO: parse filter in argv[i] */
-				filter_parse(c, argv[i]);
+				int rc = filter_parse(c, argv[i]);
+				if (rc)
+					client_printf( self, c, "# Parse errors on filter spec: '%s'\r\n", argv[i]);
 			}
 		}
 	}
 	
-	client_printf(self, c, "# logresp %s %s, server %s hostname %s\r\n",
-		      username,
-		      (c->validated) ? "verified" : "unverified",
-		      mycall, myhostname
-		      );
+	client_printf( self, c, "# logresp %s %s, server %s\r\n",
+		       username,
+		       (c->validated) ? "verified" : "unverified",
+		       mycall );
+
+	c->keepalive = now + keepalive_interval;
+
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",
 	     c->addr_s, username,

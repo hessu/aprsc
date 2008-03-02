@@ -39,7 +39,6 @@
 #include "filter.h"
 
 time_t now;	/* current time, updated by the main thread */
-time_t next_keepalive;
 
 extern int ibuf_size;
 
@@ -130,6 +129,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 
 /*
  *	write data to a client (well, at least put it in the output buffer)
+ *	(this is also used with len=0 to flush current buffer)
  */
 
 int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
@@ -160,11 +160,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	}
 	
 	/* copy data to the output buffer */
-	memcpy((void *)c->obuf + c->obuf_end, p, len);
+	if (len > 0)
+		memcpy((void *)c->obuf + c->obuf_end, p, len);
 	c->obuf_end += len;
 	
 	/* Is it over the flush size ? */
-	if (c->obuf_end > c->obuf_flushsize) {
+	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
 		int i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 		if (i > 0) {
 			c->obuf_start += i;
@@ -361,13 +362,13 @@ void collect_new_clients(struct worker_t *self)
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(self->xp, c->fd, (void *)c);
-		client_printf(self, c, "# Hello %s -- %s - %s - %s\r\n", c->addr_s, SERVERID, mycall, myhostname);
+		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
 	}
 	
 }
 
 /* 
- *	Send keepalives to client sockets
+ *	Send keepalives to client sockets, run this once a second
  */
 void send_keepalives(struct worker_t *self)
 {
@@ -375,27 +376,40 @@ void send_keepalives(struct worker_t *self)
 	struct tm t;
 	char buf[130], *s;
 	int len;
+	static const char *monthname[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 
-	sprintf(buf, "# %.40s %.40s  ",SERVERID, myhostname);
+	// Example message:
+	// # javAPRSSrvr 3.12b12 1 Mar 2008 15:11:20 GMT T2FINLAND 85.188.1.32:14580
+
+	sprintf(buf, "# %.40s ",SERVERID);
 	s = buf + strlen(buf);
 
 	gmtime_r(&now, &t);
-	s += strftime(s, 40, "%Y-%m-%d %T UTC\r\n", &t);
+	// s += strftime(s, 40, "%d %b %Y %T GMT", &t);
+	// However that depends upon LOCALE, thus following:
+	s += sprintf(s, "%d %s %d %02d:%02d:%02d GMT",
+		     t.tm_mday, monthname[t.tm_mon], t.tm_year + 1900,
+		     t.tm_hour, t.tm_min, t.tm_sec);
+
+	s += sprintf(s, "%s serverIP:serverPORT\r\n", mycall);
 
 	len = (s - buf);
 
 	for (c = self->clients; (c); c = c->next) {
-		int flushlevel = c->obuf_flushsize;
 
-		/* Send keepalives only to sockets AFTER
-		   they have completed their login.. */
-		if (c->state != CSTATE_CONNECTED)
-			continue;
+		/* Is it time for keepalive ? */
+		if (c->keepalive <= now) {
+			int flushlevel = c->obuf_flushsize;
+			c->keepalive += keepalive_interval;
 
-		c->obuf_flushsize = 0;
-		/* Write out immediately */
-		client_write(self, c, buf, len);
-		c->obuf_flushsize = flushlevel;
+			c->obuf_flushsize = 0;
+			/* Write out immediately */
+			client_write(self, c, buf, len);
+			c->obuf_flushsize = flushlevel;
+		} else {
+			/* just fush if there was anything to write */
+			client_write(self, c, buf, 0);
+		}
 	}
 }
 
@@ -430,7 +444,6 @@ void process_outgoing(struct worker_t *self)
 void worker_thread(struct worker_t *self)
 {
 	sigset_t sigs_to_block;
-	time_t next_keepalive = now + keepalive_interval;
 	
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);
@@ -465,10 +478,7 @@ void worker_thread(struct worker_t *self)
 			process_outgoing(self);
 
 		/* time of next keepalive broadcast ? */
-		if (next_keepalive < now) {
-			send_keepalives(self);
-			next_keepalive += keepalive_interval;
-		}
+		send_keepalives(self);
 	}
 	
 	/* stop polling */

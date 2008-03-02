@@ -357,6 +357,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		// So it failed, do send it out anyway....
 		// pbuf_free(self, pb);
 		// return 0;
+		// FIXME: if it's COMPLETELY garbled, ie. not SRC>DST:DATA, do not send it out
+		// - successful APRS parsing is not required.
 	}
 	
 	/* put the buffer in the thread's incoming queue */

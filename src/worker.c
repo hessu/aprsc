@@ -404,7 +404,7 @@ void send_keepalives(struct worker_t *self)
 		     t.tm_mday, monthname[t.tm_mon], t.tm_year + 1900,
 		     t.tm_hour, t.tm_min, t.tm_sec);
 
-	s += sprintf(s, "%s serverIP:serverPORT\r\n", mycall);
+	s += sprintf(s, " %s serverIP:serverPORT\r\n", mycall);
 
 	len = (s - buf);
 

@@ -61,8 +61,35 @@ void pbuf_init(void)
 				    256 /* 256 kB at the time */);
 }
 
-void pbuf_free(struct pbuf_t *p)
+/*
+ *	pbuf_free  sends buffer back to worker local pool, or when invoked
+ *	without 'self' pointer, like in final history buffer cleanup,
+ *	to the global pool.
+ */
+
+void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 {
+	if (self) { /* Return to worker local pool */
+		switch (p->buf_len) {
+		case PACKETLEN_MAX_SMALL:
+			p->next = self->pbuf_free_small;
+			self->pbuf_free_small = p;
+			return;
+		case PACKETLEN_MAX_LARGE:
+			p->next = self->pbuf_free_large;
+			self->pbuf_free_large = p;
+			return;
+		case PACKETLEN_MAX_HUGE:
+			p->next = self->pbuf_free_huge;
+			self->pbuf_free_huge = p;
+			return;
+		default:
+			break;
+		}
+	}
+
+	/* Not worker local processing then, return to global pools. */
+
 	switch (p->buf_len) {
 	case PACKETLEN_MAX_SMALL:
 		cellfree(pbuf_cells_small, p);
@@ -77,6 +104,44 @@ void pbuf_free(struct pbuf_t *p)
 		hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", p, p->buf_len);
 		break;
 	}
+}
+
+/*
+ *	pbuf_free_many  sends buffers back to the global pool in groups
+ *                      after size sorting them...  
+ *			Multiple cells are returned with single mutex.
+ */
+
+void pbuf_free_many(struct pbuf_t **array, int numbufs)
+{
+	void **arraysmall  = alloca(sizeof(void*)*numbufs);
+	void **arraylarge  = alloca(sizeof(void*)*numbufs);
+	void **arrayhuge   = alloca(sizeof(void*)*numbufs);
+	int i;
+	int smallcnt = 0, largecnt = 0, hugecnt = 0;
+
+	for (i = 0; i < numbufs; ++i) {
+		switch (array[i]->buf_len) {
+		case PACKETLEN_MAX_SMALL:
+			arraysmall[smallcnt++] = array[i];
+			break;
+		case PACKETLEN_MAX_LARGE:
+			arraylarge[largecnt++] = array[i];
+			break;
+		case PACKETLEN_MAX_HUGE:
+			arrayhuge[hugecnt++]   = array[i];
+			break;
+		default:
+			hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", array[i], array[i]->buf_len);
+			break;
+		}
+	}
+	if (smallcnt > 0)
+		cellfreemany(pbuf_cells_small, arraysmall, smallcnt);
+	if (largecnt > 0)
+		cellfreemany(pbuf_cells_large, arraylarge, largecnt);
+	if (hugecnt > 0)
+		cellfreemany(pbuf_cells_huge,  arrayhuge,   hugecnt);
 }
 
 struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
@@ -116,17 +181,11 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
 	if (!pb) return NULL;
 	*pool = pb->next;
 
+	/* zero all header fields */
+	memset(pb, 0, sizeof(*pb));
+
+	/* we know the length in this sub-pool, set it */
 	pb->buf_len = len;
-	
-	/* zero some fields */
-	pb->next        = NULL;
-	pb->flags       = 0;
-	pb->packettype  = 0;
-	pb->t           = 0;
-	pb->packet_len  = 0;
-	pb->srccall_end = NULL;
-	pb->dstcall_end = NULL;
-	pb->info_start  = NULL;
 	
 	return pb;
 }
@@ -178,7 +237,7 @@ void incoming_flush(struct worker_t *self)
  *	Parse an incoming packet
  */
 
-int incoming_parse(struct worker_t *self, struct pbuf_t *pb)
+int incoming_parse(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	char *src_end; /* pointer to the > after srccall */
 	char *path_start; /* pointer to the start of the path */
@@ -187,6 +246,7 @@ int incoming_parse(struct worker_t *self, struct pbuf_t *pb)
 	char *info_start; /* pointer to the beginning of the info */
 	char *info_end; /* end of the info */
 	char *dstcall_end; /* end of dstcall ([:,]) */
+	int rc;
 	
 	/* a packet looks like:
 	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
@@ -236,7 +296,14 @@ int incoming_parse(struct worker_t *self, struct pbuf_t *pb)
 	pb->info_start = info_start;
 	
 	/* just try APRS parsing */
-	return parse_aprs(self, pb);
+	rc = parse_aprs(self, pb);
+	if ((pb->packettype & (T_POSITION|T_OBJECT)) && // FIXME: all packets with position data..
+	    memcmp(pb->data, c->username,  src_end - pb->data) == 0) {
+		// FIXME: If packet source call matches client login callsign,
+		// fill in  c->my_lat/my_lon/my_coslat
+		// NOTE: ITEMs are usually for other identities than their sender..
+	}
+	return rc;
 }
 
 /*
@@ -261,31 +328,35 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	 /* starts with # => a comment packet, timestamp or something */
 	if (*s == '#')
 		return 0;
-	
+
 	/* get a packet buffer */
 	if (!(pb = pbuf_get(self, len+2)))
 		return 0;
 	
-	/* fill the buffer (it's zeroed by pbuf_get) */
-	pb->t = now;
-	
-	pb->packet_len = len+2;
-	memcpy(pb->data, s, len);
-	memcpy(pb->data + len, "\r\n", 2); /* append missing CRLF */
-	
 	/* store the source reference */
 	pb->origin = c;
 	
+	/* when it was received ? */
+	pb->t = now;
+	
+	/* How much there really is data ? */
+	pb->packet_len = len+2;
+
+	/* Actual data */
+	memcpy(pb->data, s, len);
+	memcpy(pb->data + len, "\r\n", 2); /* append missing CRLF */
+
 	/* do some parsing */
-	e = incoming_parse(self, pb);
+	e = incoming_parse(self, c, pb);
 	if (e < 0) {
 		/* failed parsing */
 		fprintf(stderr, "Failed parsing (%d):\n", e);
 		fwrite(pb->data, len, 1, stderr);
 		fprintf(stderr, "\n");
 		
-		// TODO: return buffer pbuf_put(self, pb);
-		return 0;
+		// So it failed, do send it out anyway....
+		// pbuf_free(self, pb);
+		// return 0;
 	}
 	
 	/* put the buffer in the thread's incoming queue */

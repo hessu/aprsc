@@ -28,7 +28,7 @@
 extern void filter_init(void);
 extern int  filter_parse(struct client_t *c, const char *filt);
 extern void filter_free(struct filter_t *c);
-extern int  filter_process(struct client_t *c, struct pbuf_t *pb);
+extern int  filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
 
 extern float filter_lat2rad(float lat);
 extern float filter_lon2rad(float lon);

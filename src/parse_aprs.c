@@ -25,6 +25,7 @@
  *
  *	Only needs to get lat/lng out of the packet, other features would
  *	be unnecessary in this application, and slow down the parser.
+ *      ... but lets still classify the packet, output filter needs that.
  *	
  */
 
@@ -36,19 +37,87 @@
 #include "hlog.h"
 #include "filter.h"
 
-int parse_aprs_mice(struct pbuf_t *pb)
+int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
+{
+	float lat = 0.0, lng = 0.0;
+
+	fprintf(stderr, "parse_aprs_nmea\n");
+
+	if (memcmp(body,"ULT",3) == 0) {
+		/* Ah..  "$ULT..." - that is, Ultimeter 2000 weather instrument */
+		pb->packettype |= T_WX;
+		return 1;
+	}
+	if (memcmp(body,"GP",2) != 0)
+		return 0; /* Well..  Not NMEA frame */
+	body += 2;
+
+	/* NMEA sentences to understand:
+	   GGA  Global Positioning System Fix Data
+	   GLL  Geographic Position, Latitude/Longitude Data
+	   RMC  Remommended Minimum Specific GPS/Transit Data
+	   VTG  Velocity and track -- no position here!
+	   WPT  Way Point Location
+	 */
+
+
+	/* Pre-calculations for A/R/F/M-filter tests */
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+
+	pb->packettype |= T_POSITION;	/* the packet has positional data */
+	return 0;
+}
+
+int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
+{
+	float lat = 0.0, lng = 0.0;
+
+	fprintf(stderr, "parse_aprs_telem\n");
+
+	/* Pre-calculations for A/R/F/M-filter tests */
+	
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+
+	pb->packettype |= T_POSITION;	/* the packet has positional data */
+	return 0;
+}
+
+int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	fprintf(stderr, "parse_aprs_mice\n");
+
+	/* Pre-calculations for A/R/F/M-filter tests */
+	
+	float lat = 0.0, lng = 0.0;
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+
+	pb->packettype |= T_POSITION;	/* the packet has positional data */
 	return 0;
 }
 
-int parse_aprs_compressed(struct pbuf_t *pb, char *body, const char *body_end)
+int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
+	float lat = 0.0, lng = 0.0;
+
 	fprintf(stderr, "parse_aprs_compressed\n");
+
+	/* Pre-calculations for A/R/F/M-filter tests */
+	
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+
+	pb->packettype |= T_POSITION;	/* the packet has positional data */
 	return 0;
 }
 
-int parse_aprs_uncompressed(struct pbuf_t *pb, char *body, const char *body_end)
+int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	char posbuf[20];
 	unsigned int lat_deg = 0, lat_min = 0, lat_min_frag = 0, lng_deg = 0, lng_min = 0, lng_min_frag = 0;
@@ -110,9 +179,9 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, char *body, const char *body_end)
 	
 	/* Finally apply south/west indicators */
 	if (issouth)
-		lat = 0 - lat;
+		lat = 0.0 - lat;
 	if (iswest)
-		lng = 0 - lng;
+		lng = 0.0 - lng;
 	
 	fprintf(stderr, "\tlat %u %u.%u %c (%.3f) lng %u %u.%u %c (%.3f)\n",
 		lat_deg, lat_min, lat_min_frag, (int)lat_hemi, lat,
@@ -122,10 +191,8 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, char *body, const char *body_end)
 	/* Pre-calculations for A/R/F/M-filter tests */
 	
 	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = 0.0;		/* prefill the cache */
-
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
 	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-	
 	pb->packettype |= T_POSITION;	/* the packet has positional data */
 
 	return 1;
@@ -133,15 +200,33 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, char *body, const char *body_end)
 
 int parse_aprs_object(struct pbuf_t *pb, char *body, const char *body_end)
 {
+	float lat = 0.0, lng = 0.0;
+
 	fprintf(stderr, "parse_aprs_object\n");
 	
+	/* Pre-calculations for A/R/F/M-filter tests */
+	
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+
+	pb->packettype |= T_OBJECT;	/* the packet has positional data */
 	return 0;
 }
 
 int parse_aprs_item(struct pbuf_t *pb, char *body, const char *body_end)
 {
+	float lat = 0.0, lng = 0.0;
+
 	fprintf(stderr, "parse_aprs_item\n");
 	
+	/* Pre-calculations for A/R/F/M-filter tests */
+	
+	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
+	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
+	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+
+	pb->packettype |= T_ITEM;	/* the packet has positional data */
 	return 0;
 }
 
@@ -150,12 +235,21 @@ int parse_aprs_item(struct pbuf_t *pb, char *body, const char *body_end)
  *	Try to parse an APRS packet.
  *	Returns 1 if position was parsed successfully,
  *	0 if parsing failed.
+ *
+ *	Does also front-end part of the output filter's
+ *	packet type classification job.
+ *
+ * TODO: Parse also symbols where applicable!
+ *       .. pick defaults from source SSID value
+ *       (maybe my caller can do destSSID/sourceSSID default digging?)
+ * TODO: Recognize WX and TELEM packets in !/=@ packets too!
+ *
  */
 
 int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 {
 	char packettype, poschar;
-	int paclen;
+	int paclen, rc;
 	char *body;
 	char *body_end;
 	char *pos_start;
@@ -165,7 +259,20 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 
 	pb->packettype = 0;
 	pb->flags      = 0;
-	
+
+	if (pb->data[0] == 'C' && /* Perhaps CWOP ? */
+	    pb->data[1] == 'W') {
+		const char *s  = pb->data + 2;
+		const char *pe = pb->data + pb->packet_len;
+		for ( ; *s && s < pe ; ++s ) {
+			int c = *s;
+			if (c < '0' || c > '9')
+				break;
+		}
+		if (*s == '>')
+			pb->flags |= T_CWOP;
+	}
+
 	/* the following parsing logic has been translated from Ham::APRS::FAP
 	 * Perl module to C
 	 */
@@ -185,12 +292,27 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	/* ignore the CRLF in the end of the body */
 	body_end = pb->data + pb->packet_len - 2;
 	
-	if (packettype == 0x27 || packettype == 0x60) {
+	switch (packettype) {
+	case 0x1c:
+	case 0x1d:
+	case 0x27: /* ' */
+	case 0x60: /* ` */
 		/* could be mic-e, minimum body length 9 chars */
-		if (paclen >= 9)
-			return parse_aprs_mice(pb);
-	} else if (packettype == '!' || packettype == '=' || packettype == '/'
-		|| packettype == '@') {
+		if (paclen >= 9) {
+			rc = parse_aprs_mice(pb, body, body_end);
+			if (rc)
+				return rc;
+		}
+		break;
+
+	case '!':
+		if (pb->info_start[1] == '!') { /* Ultimeter 2000 */
+			pb->packettype |= T_WX;
+			return 1;
+		}
+	case '=':
+	case '/':
+	case '@':
 		/* check that we won't run over right away */
 		if (body_end - body < 10)
 			return -1;
@@ -208,50 +330,102 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		    || (poschar >= 0x61 && poschar <= 0x6A)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
 			if (body_end - body >= 13) {
-				return parse_aprs_compressed(pb, body, body_end);
+				rc = parse_aprs_compressed(pb, body, body_end);
+				if (rc)
+					return rc;
 			}
-			return 0;
 			
 		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
 			/* normal uncompressed position */
 			if (body_end - body >= 19) {
-				return parse_aprs_uncompressed(pb, body, body_end);
+				rc = parse_aprs_uncompressed(pb, body, body_end);
+				if (rc)
+					return rc;
+			}
+		}
+		break;
+
+	case '$':
+		if (body_end - body > 10) {
+			rc = parse_aprs_nmea(pb, body, body_end);
+			if (rc)
+				return rc;
+		}
+		break;
+
+	case ':':
+		pb->packettype |= T_MESSAGE;
+		if (memcmp(body,"NWS-",4) == 0)
+			pb->packettype |= T_NWS;
+		return 1;
+
+	case ';':
+		if (body_end - body > 18) {
+			rc = parse_aprs_object(pb, body, body_end);
+			if (rc)
+				return rc;
+		}
+		break;
+
+	case '>':
+		pb->packettype |= T_STATUS;
+		return 1;
+
+	case '?':
+		pb->packettype |= T_QUERY;
+		return 1;
+
+	case ')':
+		if (body_end - body > 18) {
+			rc = parse_aprs_item(pb, body, body_end);
+			if (rc)
+				return rc;
+		}
+		break;
+
+	case 'T':
+		pb->packettype |= T_TELEMETRY;
+		if (body_end - body > 18) {
+			rc = parse_aprs_telem(pb, body, body_end);
+			if (rc)
+				return rc;
+		}
+		return 1;
+
+	case '#': /* Peet Bros U-II Weather Station */
+	case '*': /* Peet Bros U-I  Weather Station */
+	case '_': /* Weather report without position */
+		pb->packettype |= T_WX;
+		return 1;
+
+	case '{':
+		pb->packettype |= T_USERDEF;
+		return 1;
+
+	default:
+		break;
+	}
+
+	/* When all else fails, try to look for a !-position that can
+	 * occur anywhere within the 40 first characters according
+	 * to the spec.  (X1J TNC digipeater bugs...)
+	 */
+	pos_start = memchr(body, '!', body_end - body);
+	if ((pos_start) && pos_start - body <= 39) {
+		poschar = *pos_start;
+		if (poschar == '/' || poschar == '\\' || (poschar >= 0x41 && poschar <= 0x5A)
+		    || (poschar >= 0x61 && poschar <= 0x6A)) { /* [\/\\A-Za-j] */
+		    	/* compressed position packet */
+		    	if (body_end - pos_start >= 13) {
+		    		return parse_aprs_compressed(pb, pos_start, body_end);
 			}
 			return 0;
-		}
-		
-	} else if (packettype == ';') {
-		if (body_end - body > 18) {
-			return parse_aprs_object(pb, body, body_end);
-		}
-		
-	} else if (packettype == ')') {
-		if (body_end - body > 18) {
-			return parse_aprs_item(pb, body, body_end);
-		}
-		
-	} else {
-		/* When all else fails, try to look for a !-position that can
-		 * occur anywhere within the 40 first characters according
-		 * to the spec.
-		 */
-		pos_start = memchr(body, '!', body_end - body);
-		if ((pos_start) && pos_start - body <= 39) {
-			poschar = *pos_start;
-			if (poschar == '/' || poschar == '\\' || (poschar >= 0x41 && poschar <= 0x5A)
-			    || (poschar >= 0x61 && poschar <= 0x6A)) { /* [\/\\A-Za-j] */
-			    	/* compressed position packet */
-			    	if (body_end - pos_start >= 13) {
-			    		return parse_aprs_compressed(pb, pos_start, body_end);
-				}
-				return 0;
-			} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
-				/* normal uncompressed position */
-				if (body_end - pos_start >= 19) {
-					return parse_aprs_uncompressed(pb, pos_start, body_end);
-				}
-				return 0;
+		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
+			/* normal uncompressed position */
+			if (body_end - pos_start >= 19) {
+				return parse_aprs_uncompressed(pb, pos_start, body_end);
 			}
+			return 0;
 		}
 	}
 	

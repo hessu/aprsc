@@ -208,6 +208,19 @@ int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ..
 }
 
 /*
+ *	tell the client once that it has bad filter definition
+ */
+void client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt)
+{
+	if (!c->warned) {
+		c->warned = 1;
+		client_printf(self, c, "# WARNING: BAD FILTER: %s\r\n", filt);
+	}
+}
+
+
+
+/*
  *	handle an event on an fd
  */
 
@@ -529,15 +542,15 @@ void workers_stop(int stop_all)
 
 		for (p = w->pbuf_free_small; p; p = pn) {
 			pn = p->next;
-			pbuf_free(p);
+			pbuf_free(NULL, p);
 		}
 		for (p = w->pbuf_free_large; p; p = pn) {
 			pn = p->next;
-			pbuf_free(p);
+			pbuf_free(NULL, p);
 		}
 		for (p = w->pbuf_free_huge; p; p = pn) {
 			pn = p->next;
-			pbuf_free(p);
+			pbuf_free(NULL, p);
 		}
 
 		*(w->prevp) = NULL;

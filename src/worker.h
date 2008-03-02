@@ -53,15 +53,23 @@ extern time_t now;	/* current time - updated by the main thread */
 #define PBUF_ALLOCATE_BUNCH_HUGE 5 /* grow to 50 in production use - it's now small for debugging */
 
 /* a packet buffer */
-#define T_POSITION 1
-#define T_MESSAGE 2
-#define T_WX 4
-#define T_BULLETIN 8
-#define T_TELEMETRY 16
+#define T_POSITION  (1 << 0) /* Every time the packet coordinates are determined, this is also set! */
+#define T_OBJECT    (1 << 1)
+#define T_ITEM      (1 << 2)
+#define T_MESSAGE   (1 << 3)
+#define T_NWS       (1 << 4)
+#define T_WX        (1 << 5)
+#define T_TELEMETRY (1 << 6)
+#define T_QUERY     (1 << 7)
+#define T_STATUS    (1 << 8)
+#define T_USERDEF   (1 << 9)
+#define T_CWOP      (1 << 10)
 
-#define F_DUPE 1	/* duplicate of a previously seen packet */
-#define F_DUPEKEY 2	/* first of the unique keys.. */
-#define F_FASTPOS 4	/* last position packet of given object/source id */
+#define F_DUPE    1	/* Duplicate of a previously seen packet */
+#define F_DUPEKEY 2	/* First of the unique keys..
+			   Tells also that it is in dupe database search tree */
+#define F_LASTPOS 4	/* Last position packet of given object/source id.
+			   Tells also that it is in history DB position keys */
 
 struct client_t; /* forward declarator */
 
@@ -96,11 +104,10 @@ struct pbuf_t {
 	float lng;	/* .. in RADIAN */
 	float cos_lat;	/* cache of COS of LATitude for radial distance filter    */
 
+	char symbol[4]; /* 3(+1) chars of symbol, if any */
+
 	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };
-
-extern void pbuf_init(void);
-extern void pbuf_free(struct pbuf_t *p);
 
 /* global packet buffer */
 extern rwlock_t pbuf_global_rwlock;
@@ -131,7 +138,7 @@ struct client_t {
 	int fd;
 	int udp_port;
 	char *addr_s;	    /* client IP address in text format */
-	time_t keepalive;
+	time_t keepalive;   /* Time of next keepalive chime */
 
 	struct xpoll_fd_t *xfd;
 	
@@ -149,17 +156,20 @@ struct client_t {
 	int obuf_writes;    /* how many times (since last check) the socket has been written ? */
 
 	/* state of the client... one of CSTATE_* */
-	int state;
-	char *username;
+	char state;
+	char warned;
+	char *username;     /* The callsign */
 	char *app_name;
 	char *app_version;
-	int validated;		/* did the client provide a valid passcode */
+	int validated;	    /* did the client provide a valid passcode */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);
 
 	/* outbound filter chain head */
 	struct filter_t *filterhead;
+	float my_lat, my_lon, my_coslat; /* Cache of my last known coordinates */
+
 };
 
 extern struct client_t *client_alloc(void);
@@ -204,8 +214,13 @@ struct worker_t {
 	struct pbuf_t **pbuf_global_prevp;
 };
 
+extern void pbuf_init(void);
+extern void pbuf_free(struct worker_t *self, struct pbuf_t *p);
+extern void pbuf_free_many(struct pbuf_t **array, int numbufs);
+
 extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
+extern void client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
 
 extern struct worker_t *worker_threads;
 extern void workers_stop(int stop_all);

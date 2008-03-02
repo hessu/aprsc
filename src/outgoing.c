@@ -61,7 +61,7 @@ void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		/*  Process filters - check if this packet should be
 		    sent to this client.   */
 
-		if (filter_process(c, pb)) {
+		if (filter_process(self, c, pb) > 0) {
 			client_write(self, c, pb->data, pb->packet_len);
 		}
 	}

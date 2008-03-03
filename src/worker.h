@@ -116,8 +116,9 @@ extern struct pbuf_t *pbuf_global_last;
 extern struct pbuf_t **pbuf_global_prevp;
 
 /* a network client */
-#define CSTATE_LOGIN 0
+#define CSTATE_LOGIN     0
 #define CSTATE_CONNECTED 1
+#define CSTATE_UPLINK    2
 
 struct worker_t; /* used in client_t, but introduced later */
 struct filter_t; /* used in client_t, but introduced later */
@@ -138,7 +139,9 @@ struct client_t {
 	int fd;
 	int udp_port;
 	char *addr_s;	    /* client IP address in text format */
+	int   portnum;
 	time_t keepalive;   /* Time of next keepalive chime */
+	time_t logintimeout; /* when the login wait times out */
 
 	struct xpoll_fd_t *xfd;
 	

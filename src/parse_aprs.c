@@ -448,7 +448,14 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 
 	case ':':
 		pb->packettype |= T_MESSAGE;
-		if (memcmp(body,"NWS-",4) == 0)
+		// quick and loose way to identify NWS and SKYWARN messages
+		// they do apparently originate from "WXSRV", but that is not
+		// guaranteed thing...
+		if (memcmp(body,"NWS-",4) == 0) // as seen on specification
+			pb->packettype |= T_NWS;
+		if (memcmp(body,"NWS_",4) == 0) // as seen on data
+			pb->packettype |= T_NWS;
+		if (memcmp(body,"SKY",3) == 0)  // as seen on specification
 			pb->packettype |= T_NWS;
 		return 1;
 

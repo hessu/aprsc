@@ -116,6 +116,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	//float lat = 0.0, lng = 0.0;
 	char *d_start;
 	char dstcall[CALLSIGNLEN_MAX+1];
+	char *p;
 	int i;
 	
 	fprintf(stderr, "parse_aprs_mice\n");
@@ -167,6 +168,23 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	
 	/* make a local copy, we're going to modify it */
 	strncpy(dstcall, d_start, 6);
+	
+	/* First do the destination callsign
+	 * (latitude, message bits, N/S and W/E indicators and long. offset)
+	 *
+	 * Translate the characters to get the latitude
+	 */
+	 
+	 for (p = dstcall; *p; p++) {
+	 	if (*p >= 'A' && *p <= 'J')
+	 		*p -= 'A' - '0';
+		else if (*p >= 'P' && *p <= 'Y')
+			*p -= 'P' - '0';
+		else if (*p == 'K' || *p == 'L' || *p == 'Z')
+			*p = '_';
+	 }
+	 fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
+	
 	
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;

@@ -42,10 +42,16 @@
  *	or an overlay character
  */
 
-int valid_sym_table(char c)
+int valid_sym_table_compressed(char c)
 {
 	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
 		    || (c >= 0x61 && c <= 0x6A)); /* [\/\\A-Za-j] */
+}
+
+int valid_sym_table_uncompressed(char c)
+{
+	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
+		    || (c >= 0x48 && c <= 0x57)); /* [\/\\A-Z0-9] */
 }
 
 void pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
@@ -108,18 +114,59 @@ int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
-	char *dstcall_start;
+	char *d_start;
 	char dstcall[CALLSIGNLEN_MAX+1];
+	int i;
 	
 	fprintf(stderr, "parse_aprs_mice\n");
-
-	/* check that the destination call exists and isn't too large */
-	dstcall_start = pb->srccall_end+1;
-	if (dstcall_start < pb->dstcall_end || pb->dstcall_end - dstcall_start > CALLSIGNLEN_MAX)
+	
+	/* check packet length */
+	if (body_end - body < 8)
+		return 0;
+	
+	/* check that the destination call exists and is of the right size for mic-e */
+	d_start = pb->srccall_end+1;
+	if (pb->dstcall_end - d_start != 6)
 		return 0; /* eh...? */
 	
+	/* validate destination call:
+	 * A-K characters are not used in the last 3 characters
+	 * and MNO are never used
+	 */
+	
+	for (i = 0; i < 3; i++)
+		if (!((d_start[i] >= '0' && d_start[i] <= '9')
+			|| (d_start[i] >= 'A' && d_start[i] <= 'L')
+			|| (d_start[i] >= 'P' && d_start[i] <= 'Z')))
+				return 0;
+	
+	for (i = 3; i < 6; i++)
+		if (!((d_start[i] >= '0' && d_start[i] <= '9')
+			|| (d_start[i] == 'L')
+			|| (d_start[i] >= 'P' && d_start[i] <= 'Z')))
+				return 0;
+	
+	fprintf(stderr, "\tpassed dstcall format check\n");
+	
+	/* validate information field (longitude, course, speed and
+	 * symbol table and code are checked). Not bullet proof..
+	 *
+	 *   0          1          23            4          5          6              7
+	 * /^[\x26-\x7f][\x26-\x61][\x1c-\x7f]{2}[\x1c-\x7d][\x1c-\x7f][\x21-\x7b\x7d][\/\\A-Z0-9]/
+	 */
+	if (body[0] < 0x26 || (unsigned char)body[0] > 0x7f) return 0;
+	if (body[1] < 0x26 || (unsigned char)body[1] > 0x61) return 0;
+	if (body[2] < 0x1c || (unsigned char)body[2] > 0x7f) return 0;
+	if (body[3] < 0x1c || (unsigned char)body[3] > 0x7f) return 0;
+	if (body[4] < 0x1c || (unsigned char)body[4] > 0x7d) return 0;
+	if (body[5] < 0x1c || (unsigned char)body[5] > 0x7f) return 0;
+	if ((body[6] < 0x21 || body[6] > 0x7b) && body[6] != 0x7d) return 0;
+	if (!valid_sym_table_uncompressed(body[7])) return 0;
+	
+	fprintf(stderr, "\tpassed info format check\n");
+	
 	/* make a local copy, we're going to modify it */
-	memcpy(dstcall, dstcall_start, pb->dstcall_end - dstcall_start);
+	strncpy(dstcall, d_start, 6);
 	
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
@@ -219,7 +266,7 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 		return 0;
 	}
 	
-	if (!valid_sym_table(sym_table))
+	if (!valid_sym_table_uncompressed(sym_table))
 		sym_table = 0;
 	
 	if (lat_hemi == 'S' || lat_hemi == 's')
@@ -373,7 +420,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			body += 7;
 		}
 		poschar = *body;
-		if (valid_sym_table(poschar)) { /* [\/\\A-Za-j] */
+		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
 			if (body_end - body >= 13) {
 				rc = parse_aprs_compressed(pb, body, body_end);
@@ -459,7 +506,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	pos_start = memchr(body, '!', body_end - body);
 	if ((pos_start) && pos_start - body <= 39) {
 		poschar = *pos_start;
-		if (valid_sym_table(poschar)) { /* [\/\\A-Za-j] */
+		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
 		    	if (body_end - pos_start >= 13) {
 		    		return parse_aprs_compressed(pb, pos_start, body_end);

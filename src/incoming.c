@@ -281,10 +281,11 @@ int incoming_parse(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	if (info_end <= info_start)
 		return -1;
 	
-	/* look up end of dstcall */
-	/* the logic behind this is slightly uncertain. */
+	/* look up end of dstcall (excluding SSID - this is the way dupecheck and
+	 * mic-e parser wants it)
+	 */
 	dstcall_end = path_start;
-	while (dstcall_end < path_end && *dstcall_end != ',' && *dstcall_end != ',' && *dstcall_end != '-')
+	while (dstcall_end < path_end && *dstcall_end != '-' && *dstcall_end != ',' && *dstcall_end != ':')
 		dstcall_end++;
 	
 	if (dstcall_end - path_start > CALLSIGNLEN_MAX)

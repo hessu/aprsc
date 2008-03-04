@@ -58,7 +58,7 @@ OBJS = aprsc.o accept.o worker.o \
 	cfgfile.o passcode.o \
 	rwlock.o hmalloc.o hlog.o \
 	splay.o spsymbol.o crc32.o \
-	filter.o cellmalloc.o \
+	filter.o cellmalloc.o historydb.o \
 	@LIBOBJS@
 
 clean:

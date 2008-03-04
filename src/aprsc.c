@@ -39,6 +39,7 @@
 
 #include "dupecheck.h"
 #include "filter.h"
+#include "historydb.h"
 
 int shutting_down = 0;		// are we shutting down now?
 int reopen_logs = 0;		// should we reopen log files now?
@@ -210,6 +211,7 @@ int main(int argc, char **argv)
 	filter_init();
 	pbuf_init();
 	dupecheck_init();
+	historydb_init();
 
 
 	/* start the accept thread, which will start server threads */

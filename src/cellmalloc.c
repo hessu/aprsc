@@ -45,6 +45,8 @@ struct cellarena_t {
 	int	alignment;
 	int	increment; /* alignment overhead applied.. */
 	int	lifo_policy;
+	int	minfree;
+
 	pthread_mutex_t mutex;
 
   	struct cellhead *free_head;
@@ -99,13 +101,14 @@ int new_cellblock(cellarena_t *ca)
  */
 
 
-cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb)
+cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb, int minfree)
 {
 	cellarena_t *ca = hmalloc(sizeof(*ca));
 	memset(ca, 0, sizeof(*ca));
 
 	ca->cellsize  = cellsize;
 	ca->alignment = alignment;
+	ca->minfree   = minfree;
 	ca->increment = cellsize;
 	if ((cellsize % alignment) != 0) {
 		ca->increment +=  alignment - cellsize % alignment;
@@ -118,6 +121,8 @@ cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb
 	pthread_mutex_init(&ca->mutex, NULL);
 
 	new_cellblock(ca); /* First block of cells, not yet need to be mutex protected */
+	while (ca->freecount < ca->minfree)
+		new_cellblock(ca); /* more until minfree is full */
 
 	return ca;
 }
@@ -132,11 +137,11 @@ void *cellmalloc(cellarena_t *ca)
 
 	pthread_mutex_lock(&ca->mutex);
 
-	if (!ca->free_head)
-	  if (new_cellblock(ca)) {
-	    pthread_mutex_unlock(&ca->mutex);
-	    return NULL;
-	  }
+	if (!ca->free_head  || (ca->freecount < ca->minfree))
+		if (new_cellblock(ca)) {
+			pthread_mutex_unlock(&ca->mutex);
+			return NULL;
+		}
 
 	/* Pick new one off the free-head ! */
 	ch = ca->free_head;
@@ -164,23 +169,26 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 
 	for (count = 0; count < numcells; ++count) {
 
-	  if (!ca->free_head) {
-	    /* Out of free cells ? alloc new set */
-	    if (new_cellblock(ca)) {
-	      /* Failed ! */
-	      break;
-	    }
-	  }
+		if (!ca->free_head ||
+		    ca->freecount < ca->minfree) {
+			/* Out of free cells ? alloc new set */
+			if (new_cellblock(ca)) {
+			  /* Failed ! */
+			  break;
+			}
+		}
 
-	  /* Pick new one off the free-head ! */
-	  ch = ca->free_head;
-	  ca->free_head = ch->next;
+		/* Pick new one off the free-head ! */
+		ch = ca->free_head;
+		if (ch)
+			ca->free_head = ch->next;
 
-	  array[count] = ch;
+		array[count] = ch;
 
-	  ca->freecount -= 1;
+		ca->freecount -= 1;
 
 	}
+
 	pthread_mutex_unlock(&ca->mutex);
 
 	return count;

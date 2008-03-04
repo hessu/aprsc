@@ -90,7 +90,8 @@ float filter_lon2rad(float lon)
 void filter_init(void)
 {
 	filter_cells = cellinit( sizeof(struct filter_t), __alignof__(struct filter_t),
-				 1 /* LIFO ! */, 128 /* 128 kB at the time */ );
+				 1 /* LIFO ! */, 128 /* 128 kB at the time */,
+				 0 );
 
 	/* printf("filter: sizeof=%d alignof=%d\n",sizeof(struct filter_t),__alignof__(struct filter_t)); */
 }

@@ -75,7 +75,7 @@ int dupefilter_storetime   = 24*60*60;	/* how long to store information required
 int upstream_timeout =  5*60;		/* after N seconds of no input from an upstream, disconnect */
 int client_timeout   = 60*60;		/* after N seconds of no input from a client, disconnect */
 
-int ibuf_size = 1500;			/* size of input buffer for clients */
+int ibuf_size = 8100;			/* size of input buffer for clients */
 int obuf_size = 32*1024;		/* size of output buffer for clients */
 
 int verbose;

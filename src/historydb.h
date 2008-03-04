@@ -19,22 +19,13 @@
  *	
  */
 
-#ifndef _SLABMALLOC_H_
-#define _SLABMALLOC_H_
 
-/*
- *   cellmalloc() -- manages arrays of cells of data 
- *
- */
+extern void historydb_init(void);
 
-typedef struct cellarena_t cellarena_t;
+extern int historydb_dump(FILE *fp);
+extern int historydb_load(FILE *fp);
 
-extern cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb, int minfree);
+/* insert and lookup... interface yet unspecified */
+extern int historydb_insert(struct pbuf_t*);
+extern int historydb_lookup(void*);
 
-extern void *cellmalloc(cellarena_t *cellarena);
-extern int   cellmallocmany(cellarena_t *cellarena, void **array, int numcells);
-extern void  cellfree(cellarena_t *cellarena, void *p);
-extern void  cellfreemany(cellarena_t *cellarena, void **array, int numcells);
-
-
-#endif

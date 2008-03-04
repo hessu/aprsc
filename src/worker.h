@@ -53,23 +53,21 @@ extern time_t now;	/* current time - updated by the main thread */
 #define PBUF_ALLOCATE_BUNCH_HUGE 5 /* grow to 50 in production use - it's now small for debugging */
 
 /* a packet buffer */
-#define T_POSITION  (1 << 0) /* Every time the packet coordinates are determined, this is also set! */
-#define T_OBJECT    (1 << 1)
-#define T_ITEM      (1 << 2)
-#define T_MESSAGE   (1 << 3)
-#define T_NWS       (1 << 4)
-#define T_WX        (1 << 5)
-#define T_TELEMETRY (1 << 6)
-#define T_QUERY     (1 << 7)
-#define T_STATUS    (1 << 8)
-#define T_USERDEF   (1 << 9)
-#define T_CWOP      (1 << 10)
+/* Type flags   */
+#define T_POSITION  (1 << 0) // Packet is of position type
+#define T_OBJECT    (1 << 1) // packet is an object
+#define T_ITEM      (1 << 2) // packet is an item
+#define T_MESSAGE   (1 << 3) // packet is a message
+#define T_NWS       (1 << 4) // packet is a NWS message
+#define T_WX        (1 << 5) // packet is WX data
+#define T_TELEMETRY (1 << 6) // packet is telemetry
+#define T_QUERY     (1 << 7) // packet is a query
+#define T_STATUS    (1 << 8) // packet is status 
+#define T_USERDEF   (1 << 9) // packet is userdefined
+#define T_CWOP      (1 << 10) // packet is recognized as CWOP
 
 #define F_DUPE    1	/* Duplicate of a previously seen packet */
-#define F_DUPEKEY 2	/* First of the unique keys..
-			   Tells also that it is in dupe database search tree */
-#define F_LASTPOS 4	/* Last position packet of given object/source id.
-			   Tells also that it is in history DB position keys */
+#define F_HASPOS  2	/* This packet has valid parsed position */
 
 struct client_t; /* forward declarator */
 

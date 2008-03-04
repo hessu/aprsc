@@ -61,7 +61,10 @@ struct client_t *client_alloc(void)
 	memset((void *)c, 0, sizeof(*c));
 	c->fd = -1;
 
-	c->ibuf_size = 1500;
+	// Sometimes the ibuf_size initializes as zero..
+	if (!ibuf_size) ibuf_size = 8100;
+
+	c->ibuf_size = ibuf_size;
 	c->ibuf      = hmalloc(c->ibuf_size);
 
 	c->obuf_size = obuf_size;

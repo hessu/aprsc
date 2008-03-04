@@ -40,6 +40,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "historydb.h"
+#include "crc32.h"
 
 int shutting_down = 0;		// are we shutting down now?
 int reopen_logs = 0;		// should we reopen log files now?
@@ -208,6 +209,7 @@ int main(int argc, char **argv)
 
 
 	/* Early inits in single-thread mode */
+	crcinit();
 	filter_init();
 	pbuf_init();
 	dupecheck_init();

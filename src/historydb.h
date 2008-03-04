@@ -27,5 +27,5 @@ extern int historydb_load(FILE *fp);
 
 /* insert and lookup... interface yet unspecified */
 extern int historydb_insert(struct pbuf_t*);
-extern int historydb_lookup(void*);
+extern int historydb_lookup(const char *keybuf, void*result);
 

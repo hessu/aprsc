@@ -27,6 +27,7 @@
 #include "worker.h"
 #include "cellmalloc.h"
 #include "historydb.h"
+#include "hmalloc.h"
 
 
 
@@ -35,7 +36,13 @@
  *	  - position packet
  *	  - objects
  *	  - items
- *	Keying varies, 
+ *	Keying varies, origination callsign of positions, name
+ *	for object/item.
+ *
+ *	Uses RW-locking, W for inserts/cleanups, R for lookups.
+ *
+ *	Inserting does incidential cleanup scanning while traversing
+ *	hash chains.
  */
 
 cellarena_t *historydb_cells;
@@ -53,12 +60,16 @@ cellarena_t *historydb_cells;
 	int  flags;
 
 	int  length;
-	char packet[300];
+	char packet[200];
+	/* FIXME: is this enough, or should there be two different
+	   sizes of cells ?  See  pbuf_t cells... */
 };
 
 
 rwlock_t historydb_rwlock = RWL_INITIALIZER;
 
+struct history_cell_t *historydb_hash;
+int historydb_hash_modulo;
 
 void historydb_init(void)
 {
@@ -66,28 +77,37 @@ void historydb_init(void)
 
 	historydb_cells = cellinit( sizeof(struct history_cell_t),
 				    __alignof__(struct history_cell_t), 
-				    1 /* LIFO! */, 2048 /* 2 MB */,
-				    1 );
+				    0 /* FIFO! */, 2048 /* 2 MB */,
+				    0 );
+
+	historydb_hash_modulo = 8192 ; // FIXME: is this acceptable or not ?
+
+	i = sizeof(struct history_cell_t *) * historydb_hash_modulo;
+	historydb_hash = hmalloc(i);
+	memset(historydb_hash, 0, i);
 }
 
 int historydb_dump(FILE *fp)
 {
+  // Dump the historydb out on text format for possible latter reload
   return -1;
 }
 
 int historydb_load(FILE *fp)
 {
+  // load the historydb in text format, ignore too old positions
   return -1;
 }
 
 
-/* insert and lookup... interface yet in state of flux.. */
+/* insert... interface yet in state of flux.. */
 
 int historydb_insert(struct pbuf_t *pb)
 {
   return -1;
 }
 
+/* lookup... interface yet in state of flux.. */
 
 int historydb_lookup(void*p)
 {

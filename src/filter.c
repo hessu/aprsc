@@ -30,6 +30,7 @@
 #include "worker.h"
 #include "filter.h"
 #include "cellmalloc.h"
+#include "historydb.h"
 
 /*
   See:  http://www.aprs-is.net/javaprssrvr/javaprsfilter.htm
@@ -53,6 +54,10 @@
 
  */
 
+
+// FIXME:  What exactly is the meaning of negation on the pattern ?
+//         Match as a failure to match, and stop searching ?
+//         Something filter dependent ?
 
 struct filter_head_t {
 	struct filter_t *next;
@@ -258,6 +263,16 @@ void filter_free(struct filter_t *f)
 }
 
 
+int wildpatternmatch(const char *keybuf, const char *p, int negation)
+{
+	/* Implements:   b/call1/call2...  	Budlist filter, et.al.
+	   Pass all traffic FROM exact call: call1, call2, ...
+	   (* wild card allowed)
+	*/
+
+	int i;
+	
+}
 
 
 
@@ -348,7 +363,40 @@ int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 			return 1;  /* Range is greater than given limit */
 	}
 	if (pb->packettype & T_MESSAGE) {
-	  // FIXME: messages to stations within range...
+		// FIXME: messages to stations within range...
+		int i;
+		char keybuf[CALLSIGNLEN_MAX+1];
+		char *s;
+		struct history_cell_t *history;
+		float r;
+		float lat1, lon1, coslat1;
+		float lat2, lon2, coslat2;
+
+
+		keybuf[CALLSIGNLEN_MAX] = 0;
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		s = strchr(keybuf, ':'); // per specs should not be found, but...
+		if (s) *s = 0;
+		s = keybuf + strlen(keybuf);
+		for ( ; s > keybuf; --s ) {  // tail space padded..
+			if (*s == ' ') *s = ' ';
+			else break;
+		}
+
+		i = historydb_lookup( keybuf, &history );
+
+		lat1    = f->h.f_latN;
+		lon1    = f->h.f_lonE;
+		coslat1 = f->h.f_coslat;
+
+		lat2    = history->lat;
+		lon2    = history->lon;
+		coslat2 = history->coslat;
+
+		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
+
+		if (r < f->h.f_dist)  /* Range is less than given limit */
+			return (f->h.negation) ? 2 : 1;
 	}
 	return 0;
 }
@@ -370,7 +418,7 @@ int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 		    (pb->lng < f->h.f_lonW)) {
 			/* Outside the box */
 			if (f->h.negation)
-				return 1;
+				return 2;
 		} else {
 			/* Inside the box */
 			if (!f->h.negation)
@@ -378,7 +426,48 @@ int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 		}
 	}
 	if (pb->packettype & T_MESSAGE) {
-	  // FIXME: messages to stations within range...
+		// FIXME: messages to stations within range...
+		int i;
+		char keybuf[CALLSIGNLEN_MAX+1];
+		char *s;
+		struct history_cell_t *history;
+
+		float lat1, lon1, coslat1;
+		float lat2, lon2, coslat2;
+
+
+		keybuf[CALLSIGNLEN_MAX] = 0;
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		s = strchr(keybuf, ':'); // per specs should not be found, but...
+		if (s) *s = 0;
+		s = keybuf + strlen(keybuf);
+		for ( ; s > keybuf; --s ) {  // tail space padded..
+			if (*s == ' ') *s = ' ';
+			else break;
+		}
+
+		i = historydb_lookup( keybuf, &history );
+
+		lat1    = f->h.f_latN;
+		lon1    = f->h.f_lonE;
+		coslat1 = f->h.f_coslat;
+
+		lat2    = history->lat;
+		lon2    = history->lon;
+		coslat2 = history->coslat;
+
+		if ((pb->lat > f->h.f_latN) ||
+		    (pb->lat < f->h.f_latS) ||
+		    (pb->lng > f->h.f_lonE) || /* East POSITIVE ! */
+		    (pb->lng < f->h.f_lonW)) {
+			/* Outside the box */
+			if (f->h.negation) // FIXME ???
+				return 2;
+		} else {
+			/* Inside the box */
+			if (!f->h.negation)
+				return 1;
+		}
 	}
 	return 0;
 }
@@ -419,6 +508,32 @@ int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Pass all objects with the exact name of obj1, obj2, ...
 	   (* wild card allowed)
 	*/
+	const char *p = f->h.text + 2;
+	char keybuf[CALLSIGNLEN_MAX+1];
+	char *s;
+	int isdead = 0;
+
+	if (pb->packettype & T_OBJECT) {
+		// Pick object name  ";item  *"
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		s = strchr(keybuf, '*');
+		if (s) *s = 0;
+		else {
+			s = strchr(keybuf, '_');
+			if (s) {
+				*s = 0;
+			}
+			// Will also pass object-kill messages
+		}
+		s = keybuf + strlen(keybuf);
+		for ( ; s > keybuf; --s ) {  // tail space padded..
+			if (*s == ' ') *s = ' '; // trunc..
+			else break;
+		}
+
+		return wildpatternmatch(keybuf, p, f->h.negation);
+
+	}
 	return 0;
 }
 

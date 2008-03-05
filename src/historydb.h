@@ -20,12 +20,52 @@
  */
 
 
+
+/*
+ *	The historydb contains positional packet data in form of:
+ *	  - position packet
+ *	  - objects
+ *	  - items
+ *	Keying varies, origination callsign of positions, name
+ *	for object/item.
+ *
+ *	Uses RW-locking, W for inserts/cleanups, R for lookups.
+ *
+ *	Inserting does incidential cleanup scanning while traversing
+ *	hash chains.
+ *
+ *	In APRS-IS there are about 25 000 distinct callsigns or
+ *	item or object names with position information PER WEEK.
+ *	DB lifetime of 48 hours cuts that down a bit more.
+ *	With 300 byte packet buffer in the entry (most of which is
+ *	never used), the history-db size is around 8-9 MB in memory.
+ */
+
+struct history_cell_t {
+	struct history_cell_t *next;
+
+	time_t   arrivaltime;
+	char     key[CALLSIGNLEN_MAX+1];
+	uint32_t hash1;
+
+	float	lat, coslat, lon;
+
+	int  packettype;
+	int  flags;
+
+	int  packetlen;
+	char packet[300];
+	/* FIXME: is this enough, or should there be two different
+	   sizes of cells ?  See  pbuf_t cells... */
+};
+
+
 extern void historydb_init(void);
 
-extern int historydb_dump(FILE *fp);
+extern void historydb_dump(FILE *fp);
 extern int historydb_load(FILE *fp);
 
 /* insert and lookup... interface yet unspecified */
 extern int historydb_insert(struct pbuf_t*);
-extern int historydb_lookup(const char *keybuf, void*result);
+extern int historydb_lookup(const char *keybuf, struct history_cell_t **result);
 

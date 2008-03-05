@@ -22,6 +22,7 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <math.h>
 
 #include "hlog.h"
 #include "worker.h"
@@ -30,51 +31,12 @@
 #include "hmalloc.h"
 #include "crc32.h"
 
-
-
-/*
- *	The historydb contains positional packet data in form of:
- *	  - position packet
- *	  - objects
- *	  - items
- *	Keying varies, origination callsign of positions, name
- *	for object/item.
- *
- *	Uses RW-locking, W for inserts/cleanups, R for lookups.
- *
- *	Inserting does incidential cleanup scanning while traversing
- *	hash chains.
- *
- *	In APRS-IS there are about 25 000 distinct callsigns or
- *	item or object names with position information PER WEEK.
- *	DB lifetime of 48 hours cuts that down a bit more.
- *	With 300 byte packet buffer in the entry (most of which is
- *	never used), the history-db size is around 8-9 MB in memory.
- */
-
 cellarena_t *historydb_cells;
-
-      struct history_cell_t {
-	struct history_cell_t *next;
-
-	time_t   arrivaltime;
-	char     key[CALLSIGNLEN_MAX+1];
-	uint32_t hash1, hash2;
-
-	float	lat, coslat, lon;
-
-	int  packettype;
-	int  flags;
-
-	int  packetlen;
-	char packet[300];
-	/* FIXME: is this enough, or should there be two different
-	   sizes of cells ?  See  pbuf_t cells... */
-};
 
 
 // FIXME: Possibly multiple parallel locks (like 1000 ?) that keep
 // control on a subset of historydb hash bucket chains ???
+// Note: mutex lock size is about 1/4 of rwlock size...
 
 rwlock_t historydb_rwlock;
 
@@ -87,6 +49,9 @@ void historydb_init(void)
 	int i;
 
 	rwl_init(&historydb_rwlock);
+
+	// printf("historydb_init() sizeof(mutex)=%d sizeof(rwlock)=%d\n",
+	//       sizeof(pthread_mutex_t), sizeof(rwlock_t));
 
 	historydb_cells = cellinit( sizeof(struct history_cell_t),
 				    __alignof__(struct history_cell_t), 
@@ -124,21 +89,149 @@ uint32_t historydb_hash1(const char *s)
 }
 
 
-
-int historydb_dump(FILE *fp)
+void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
-  // Dump the historydb out on text format for possible latter reload
-  return -1;
+	fprintf(fp, "%ld\t", hp->arrivaltime);
+	fprintf(fp, "%s\t", hp->key);
+	fprintf(fp, "%d\t%d\t", hp->packettype, hp->flags);
+	fprintf(fp, "%f\t%f\t", hp->lat, hp->lon);
+	fprintf(fp, "%d\t", hp->packetlen);
+	fwrite(hp->packet, hp->packetlen, 1, fp); // with terminating CRLF
+}
+
+void historydb_dump(FILE *fp)
+{
+	// Dump the historydb out on text format for possible latter reload
+	int i;
+	struct history_cell_t *hp;
+	time_t expirytime   = now - historydb_maxage;
+
+	// multiple locks ? one for each bucket, or for a subset of buckets ?
+	rwl_rdlock(&historydb_rwlock);
+
+	for ( i = 0; i < historydb_hash_modulo; ++i ) {
+		hp = historydb_hash[i];
+		for ( ; hp ; hp = hp->next )
+			if (hp->arrivaltime > expirytime)
+				historydb_dump_entry(fp, hp);
+	}
+
+	// Free the lock
+	rwl_rdunlock(&historydb_rwlock);
 }
 
 int historydb_load(FILE *fp)
 {
-  // load the historydb in text format, ignore too old positions
-  return -1;
+	// load the historydb in text format, ignore too old positions
+	int i;
+	time_t expirytime   = now - historydb_maxage;
+	char bufline[2000]; // should be enough...
+	time_t t;
+	char keybuf[20];
+	int packettype, flags;
+	float lat, lon;
+	int packetlen = 0;
+	int h1;
+	struct history_cell_t **hpp;
+	struct history_cell_t *hp, *hp1;
+	int linecount = 0;
+
+
+	// multiple locks ? one for each bucket, or for a subset of buckets ?
+	rwl_wrlock(&historydb_rwlock);
+
+	// discard previous content
+	for ( i = 0; i < historydb_hash_modulo; ++i ) {
+		struct history_cell_t *hp, *nhp;
+
+		hp = historydb_hash[i];
+		nhp = NULL;
+		for ( ; hp ; hp = nhp ) {
+			// the 'next' will get freed from underneath of us..
+			nhp = hp->next;
+			historycell_free(hp);
+		}
+		historydb_hash[i] = NULL;
+	}
+
+	// now the loading...
+	while (!feof(fp)) {
+
+		*bufline = 0;
+
+		i = fscanf(fp, "%ld\t%9[^\t]\t%d\t%d\t%f\t%f\t%d\t",
+			   &t,    keybuf, &packettype, &flags,
+			   &lat, &lon,    &packetlen );
+
+		if (i != 7) {  // verify correct scan
+			hlog(LOG_ERR, "historybuf load, wrong parse on line %d", linecount);
+			break;
+		}
+		// FIXME: now several parameters may be invalid for us, like:
+		//   if packetlen >= sizeof(bufline)  ??
+
+		i = fread( bufline, packetlen, 1, fp);
+
+		// i == packetlen ??
+
+		if (t <= expirytime)
+			continue;	// Too old, forget it.
+		
+		h1 = historydb_hash1(keybuf);
+		i = h1 % historydb_hash_modulo;
+
+		hp1 = NULL;
+		hpp = &historydb_hash[i];
+
+		// scan the hash-bucket chain
+		while (( hp = *hpp )) {
+			if ( (hp->hash1 == h1) &&
+			       // Hash match, compare the key
+			       (strcmp(hp->key, keybuf) == 0) ) {
+			  	// Key match! -- should not happen while loading..
+				// Update the data content
+				hp1 = hp;
+				hp->lat         = lat;
+				hp->coslat      = cosf(lat);
+				hp->lon         = lon;
+				hp->arrivaltime = t;
+				hp->packettype  = packettype;
+				hp->flags       = flags;
+				hp->packetlen   = packetlen;
+				memcpy(hp->packet, bufline,
+				       packetlen > 300 ? 300 : packetlen);
+				break;
+			}
+			// advance hpp..
+			hpp = &(hp -> next);
+		}
+		if (!hp1) {
+			// Not found on this chain, insert it!
+			hp = historycell_alloc(packetlen);
+			hp->next = NULL;
+			hp->hash1 = h1;
+			strcpy(hp->key, keybuf);
+			hp->lat         = lat;
+			hp->coslat      = cosf(lat);
+			hp->lon         = lon;
+			hp->arrivaltime = t;
+			hp->packettype  = packettype;
+			hp->flags       = flags;
+			hp->packetlen   = packetlen;
+			memcpy(hp->packet, bufline, packetlen);
+
+			*hpp = hp;
+		}
+	} // .. while !feof ..
+
+	// Free the lock
+	rwl_wrunlock(&historydb_rwlock);
+
+	return 0;
 }
 
 
-/* insert... interface yet in state of flux.. */
+/* insert... */
 
 int historydb_insert(struct pbuf_t *pb)
 {
@@ -146,87 +239,111 @@ int historydb_insert(struct pbuf_t *pb)
 	uint32_t h1;
 	int isdead = 0;
 	struct history_cell_t **hp, *cp, *cp1;
-	time_t expirytime = now - historydb_maxage;
+
+	time_t expirytime   = now - historydb_maxage;
 
 	char keybuf[CALLSIGNLEN_MAX+1];
 	char *s;
 
+	if (!(pb->flags & F_HASPOS))
+		return -1; // No positional data...
 
 	// FIXME: if (pb->packet_len > 300)  ???
 
 
 	keybuf[CALLSIGNLEN_MAX] = 0;
 	if (pb->packettype & T_OBJECT) {
-	  // Pick object name  ";item  *"
-	  memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
-	  s = strchr(keybuf, '*');
-	  if (s) *s = 0;
-	  else {
-	    s = strchr(keybuf, '_');
-	    if (s) {
-	      *s = 0;
-	      isdead = 1;
-	    }
-	  }
-	  s = keybuf + strlen(keybuf);
-	  for ( ; s > keybuf; --s ) {  // tail space padded..
-	    if (*s == ' ') *s = ' ';
-	    else break;
-	  }
+		// Pick object name  ";item  *"
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		s = strchr(keybuf, '*');
+		if (s) *s = 0;
+		else {
+			s = strchr(keybuf, '_');
+			if (s) {
+				*s = 0;
+				isdead = 1;
+			}
+		}
+		s = keybuf + strlen(keybuf);
+		for ( ; s > keybuf; --s ) {  // tail space padded..
+			if (*s == ' ') *s = ' ';
+			else break;
+		}
 
 	} else if (pb->packettype & T_ITEM) {
-	  // Pick item name  ") . . . !"  or ") . . . _"
-	  memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
-	  s = strchr(keybuf, '!');
-	  if (s) *s = 0;
-	  else {
-	    s = strchr(keybuf, '_');
-	    if (s) {
-	      *s = 0;
-	      isdead = 1;
-	    }
-	  }
+		// Pick item name  ") . . . !"  or ") . . . _"
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		s = strchr(keybuf, '!');
+		if (s) *s = 0;
+		else {
+			s = strchr(keybuf, '_');
+			if (s) {
+				*s = 0;
+				isdead = 1;
+			}
+		}
 	} else if (pb->packettype & T_POSITION) {
-	  // Pick originator callsign
-	  memcpy( keybuf, pb->data, CALLSIGNLEN_MAX) ;
-	  s = strchr(keybuf, '>');
-	  if (s) *s = 0;
+		// Pick originator callsign
+		memcpy( keybuf, pb->data, CALLSIGNLEN_MAX) ;
+		s = strchr(keybuf, '>');
+		if (s) *s = 0;
 	} else {
-	  return -1; // Not a packet with positional data, not interested in...
+		return -1; // Not a packet with positional data, not interested in...
 	}
 
 	h1 = historydb_hash1(keybuf);
 	i = h1 % historydb_hash_modulo;
 
-	cp1 = NULL;
+	cp = cp1 = NULL;
 	hp = &historydb_hash[i];
 
 	// multiple locks ? one for each bucket, or for a subset of buckets ?
 	rwl_wrlock(&historydb_rwlock);
 
-	if (*hp) {
-	  while (( cp = *hp )) {
-	    if (cp->arrivaltime < expirytime) {
-	      // OLD...
-	      *hp = cp->next;
-	      cp->next = NULL;
-	      historycell_free(cp);
-	      continue;
-	    }
-	    if ( (cp->hash1 == h1) &&
-		 // Hash match, compare the key
-		 (strcmp(cp->key, keybuf) == 0) ) {
-	      // Key match!
-	      if (isdead) {
-		// Remove this key..
-		*hp = cp->next;
-		cp->next = NULL;
-		historycell_free(cp);
-		continue;
+	// scan the hash-bucket chain, and do incidential obsolete data discard
+	while (( cp = *hp )) {
+		if (cp->arrivaltime < expirytime) {
+			// OLD...
+			*hp = cp->next;
+			cp->next = NULL;
+			historycell_free(cp);
+			continue;
+		}
+		if ( (cp->hash1 == h1) &&
+		       // Hash match, compare the key
+		       (strcmp(cp->key, keybuf) == 0) ) {
+		  	// Key match!
+			if (isdead) {
+				// Remove this key..
+				*hp = cp->next;
+				cp->next = NULL;
+				historycell_free(cp);
+				continue;
+			} else {
+				// Update the data content
+				cp1 = cp;
+				cp->lat         = pb->lat;
+				cp->coslat      = pb->cos_lat;
+				cp->lon         = pb->lng;
+				cp->arrivaltime = pb->t;
+				cp->packettype  = pb->packettype;
+				cp->flags       = pb->flags;
+				cp->packetlen   = pb->packet_len;
+				memcpy(cp->packet, pb->data,
+				       cp->packetlen > 300 ? 300 : cp->packetlen);
+				// Continue scanning whole chain for possible obsolete items
+			}
+		} // .. else no match, advance hp..
+		hp = &(cp -> next);
+	}
 
-	      } else {
-		// Update the data content
-		cp1 = cp;
+	if (!cp1 && !isdead) {
+		// Not found on this chain, append it!
+		cp = historycell_alloc(pb->packet_len);
+		cp->next = NULL;
+		cp->hash1 = h1;
+		strcpy(cp->key, keybuf);
+
 		cp->lat         = pb->lat;
 		cp->coslat      = pb->cos_lat;
 		cp->lon         = pb->lng;
@@ -234,46 +351,9 @@ int historydb_insert(struct pbuf_t *pb)
 		cp->packettype  = pb->packettype;
 		cp->flags       = pb->flags;
 		cp->packetlen   = pb->packet_len;
-		memcpy(cp->packet, pb->data, cp->packetlen > 300 ? 300 : cp->packetlen);
-		// Continue scanning whole chain for possible obsolete items
-	      }
-	    }
-
-	    hp = &(cp -> next);
-	  }
-	  if (!cp && !cp1) {
-	    // Not found on this chain, insert it!
-	    cp = historycell_alloc(pb->packet_len);
-	    cp->next = NULL;
-	    cp->hash1 = h1;
-	    strcpy(cp->key, keybuf);
-
-	    cp->lat         = pb->lat;
-	    cp->coslat      = pb->cos_lat;
-	    cp->lon         = pb->lng;
-	    cp->arrivaltime = pb->t;
-	    cp->packettype  = pb->packettype;
-	    cp->flags       = pb->flags;
-	    cp->packetlen   = pb->packet_len;
-	    memcpy(cp->packet, pb->data, cp->packetlen);
-	  }
-	} else if (!isdead) {
-	  // Empty hash chain root, insert first item..
-	  cp = historycell_alloc(pb->packet_len);
-	  cp->next = NULL;
-	  cp->hash1 = h1;
-	  strcpy(cp->key, keybuf);
-
-	  cp->lat         = pb->lat;
-	  cp->coslat      = pb->cos_lat;
-	  cp->lon         = pb->lng;
-	  cp->arrivaltime = pb->t;
-	  cp->packettype  = pb->packettype;
-	  cp->flags       = pb->flags;
-	  cp->packetlen   = pb->packet_len;
-	  memcpy(cp->packet, pb->data, cp->packetlen);
+		memcpy(cp->packet, pb->data, cp->packetlen);
+		*hp = cp; 
 	}
-
 
 	// Free the lock
 	rwl_wrunlock(&historydb_rwlock);
@@ -281,14 +361,16 @@ int historydb_insert(struct pbuf_t *pb)
 	return 1;
 }
 
-/* lookup... interface yet in state of flux.. */
+/* lookup... */
 
-int historydb_lookup(const char *keybuf, void *p)
+int historydb_lookup(const char *keybuf, struct history_cell_t **result)
 {
 	int i;
 	uint32_t h1;
 	struct history_cell_t **hp, *cp, *cp1;
-	time_t expirytime = now - historydb_maxage;
+
+	// validity is 5 minutes shorter than expiration time..
+	time_t validitytime   = now - historydb_maxage - 5*60;
 
 	h1 = historydb_hash1(keybuf);
 	i = h1 % historydb_hash_modulo;
@@ -300,20 +382,20 @@ int historydb_lookup(const char *keybuf, void *p)
 	rwl_rdlock(&historydb_rwlock);
 
 	if (*hp) {
-	  while (( cp = *hp )) {
-	    if ( (cp->hash1 == h1) &&
-		 // Hash match, compare the key
-		 (strcmp(cp->key, keybuf) == 0)  &&
-		 // Key match!
-		 (cp->arrivaltime > expirytime)
-		 // NOT too old..
-		 ) {
-	      cp1 = cp;
-	      break;
-	    }
-	    // Pick next possible item in hash chain
-	    hp = &(cp -> next);
-	  }
+		while (( cp = *hp )) {
+			if ( (cp->hash1 == h1) &&
+			     // Hash match, compare the key
+			     (strcmp(cp->key, keybuf) == 0)  &&
+			     // Key match!
+			     (cp->arrivaltime > validitytime)
+			     // NOT too old..
+			     ) {
+				cp1 = cp;
+				break;
+			}
+			// Pick next possible item in hash chain
+			hp = &(cp -> next);
+		}
 	}
 
 
@@ -321,9 +403,9 @@ int historydb_lookup(const char *keybuf, void *p)
 	rwl_rdunlock(&historydb_rwlock);
 
 	// cp1 variable has the result
-	if (!cp1) return -1;  // Not found anything
+	*result = cp1;
 
-	// FIXME: return the data somehow...
+	if (!cp1) return -1;  // Not found anything
 
 	return 1;
 }

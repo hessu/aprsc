@@ -237,8 +237,9 @@ void incoming_flush(struct worker_t *self)
  *	Parse an incoming packet
  */
 
-int incoming_parse(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 {
+	struct pbuf_t *pb;
 	char *src_end; /* pointer to the > after srccall */
 	char *path_start; /* pointer to the start of the path */
 	char *path_end; /* pointer to the : after the path */
@@ -252,8 +253,31 @@ int incoming_parse(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
 	 * (we have normalized the \r\n by now)
 	 */
+
+
+	// FIXME: add qConstruct production (if needed)!
+	// FIXME: this may alter packet length, and address header!
+
+	/* get a packet buffer */
+	pb = pbuf_get(self, len+2);
+	if (!pb)
+		return 0;
 	
-	packet_end = pb->data + pb->packet_len; /* for easier overflow checking */
+	/* store the source reference */
+	pb->origin = c;
+	
+	/* when it was received ? */
+	pb->t = now;
+	
+	/* How much there really is data ? */
+	pb->packet_len = len+2;
+
+	/* Actual data */
+	memcpy(pb->data, s, len);
+	memcpy(pb->data + len, "\r\n", 2); /* append missing CRLF */
+
+
+	packet_end = pb->data + pb->packet_len; /* for easier overflow checking expressions */
 	
 	/* look for the '>' */
 	src_end = memchr(pb->data, '>', pb->packet_len < CALLSIGNLEN_MAX+1 ? pb->packet_len : CALLSIGNLEN_MAX+1);
@@ -298,12 +322,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
-	if ((pb->packettype & (T_POSITION|T_OBJECT)) && // FIXME: all packets with position data..
-	    memcmp(pb->data, c->username,  src_end - pb->data) == 0) {
-		// FIXME: If packet source call matches client login callsign,
-		// fill in  c->my_lat/my_lon/my_coslat
-		// NOTE: ITEMs are usually for other identities than their sender..
-	}
+
+	/* put the buffer in the thread's incoming queue */
+	pb->next = NULL;
+	*self->pbuf_incoming_local_last = pb;
+	self->pbuf_incoming_local_last = &pb->next;
+
 	return rc;
 }
 
@@ -313,7 +337,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 
 int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 {
-	struct pbuf_t *pb;
 	int e;
 	
 	/* note: len does not include CRLF, it's reconstructed here... we accept
@@ -330,29 +353,12 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	if (*s == '#')
 		return 0;
 
-	/* get a packet buffer */
-	if (!(pb = pbuf_get(self, len+2)))
-		return 0;
-	
-	/* store the source reference */
-	pb->origin = c;
-	
-	/* when it was received ? */
-	pb->t = now;
-	
-	/* How much there really is data ? */
-	pb->packet_len = len+2;
-
-	/* Actual data */
-	memcpy(pb->data, s, len);
-	memcpy(pb->data + len, "\r\n", 2); /* append missing CRLF */
-
 	/* do some parsing */
-	e = incoming_parse(self, c, pb);
+	e = incoming_parse(self, c, s, len);
 	if (e < 0) {
 		/* failed parsing */
 		fprintf(stderr, "Failed parsing (%d):\n", e);
-		fwrite(pb->data, len, 1, stderr);
+		fwrite(s, len, 1, stderr);
 		fprintf(stderr, "\n");
 		
 		// So it failed, do send it out anyway....
@@ -361,11 +367,6 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		// FIXME: if it's COMPLETELY garbled, ie. not SRC>DST:DATA, do not send it out
 		// - successful APRS parsing is not required.
 	}
-	
-	/* put the buffer in the thread's incoming queue */
-	pb->next = NULL;
-	*self->pbuf_incoming_local_last = pb;
-	self->pbuf_incoming_local_last = &pb->next;
 	
 	return 0;
 }

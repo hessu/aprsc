@@ -102,16 +102,20 @@ struct pbuf_t {
 	float lng;	/* .. in RADIAN */
 	float cos_lat;	/* cache of COS of LATitude for radial distance filter    */
 
-	char symbol[3]; /* 2(+1) chars of symbol, if any */
+	char symbol[3]; /* 2(+1) chars of symbol, if any, NUL for not found */
+	char qcon;      /* 1 char of q-construct for filters, NUL for not found  */
 
 	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };
 
 /* global packet buffer */
 extern rwlock_t pbuf_global_rwlock;
-extern struct pbuf_t *pbuf_global;
-extern struct pbuf_t *pbuf_global_last;
+extern struct pbuf_t  *pbuf_global;
+extern struct pbuf_t  *pbuf_global_last;
 extern struct pbuf_t **pbuf_global_prevp;
+extern struct pbuf_t  *pbuf_global_dupe;
+extern struct pbuf_t  *pbuf_global_dupe_last;
+extern struct pbuf_t **pbuf_global_dupe_prevp;
 
 /* a network client */
 #define CSTATE_LOGIN     0
@@ -134,10 +138,10 @@ struct client_t {
 	struct client_t **prevp;
 	
 	union sockaddr_u addr;
-	int fd;
-	int udp_port;
-	char *addr_s;	    /* client IP address in text format */
-	int   portnum;
+	int    fd;
+	int    udp_port;
+	char  *addr_s;	    /* client IP address in text format */
+	int    portnum;
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t logintimeout; /* when the login wait times out */
 
@@ -145,31 +149,33 @@ struct client_t {
 	
 	/* first stage read buffer - used to crunch out lines to packet buffers */
 	char *ibuf;
-	int ibuf_size;      /* size of buffer */
-	int ibuf_end;       /* where data in buffer ends */
+	int   ibuf_size;      /* size of buffer */
+	int   ibuf_end;       /* where data in buffer ends */
 	
 	/* output buffer */
 	char *obuf;
-	int obuf_size;      /* size of buffer */
-	int obuf_start;     /* where data in buffer starts */
-	int obuf_end;       /* where data in buffer ends */
-	int obuf_flushsize; /* how much data in buf before forced write() at adding ? */
-	int obuf_writes;    /* how many times (since last check) the socket has been written ? */
+	int   obuf_size;      /* size of buffer */
+	int   obuf_start;     /* where data in buffer starts */
+	int   obuf_end;       /* where data in buffer ends */
+	int   obuf_flushsize; /* how much data in buf before forced write() at adding ? */
+	int   obuf_writes;    /* how many times (since last check) the socket has been written ? */
 
 	/* state of the client... one of CSTATE_* */
-	char state;
-	char warned;
+	char  state;
+	char  warned;
 	char *username;     /* The callsign */
 	char *app_name;
 	char *app_version;
-	int validated;	    /* did the client provide a valid passcode */
+
+	char  validated;    /* did the client provide a valid passcode */
+	char  want_dupes;
 	
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);
 
 	/* outbound filter chain head */
-	struct filter_t *filterhead;
-	float my_lat, my_lon, my_coslat; /* Cache of my last known coordinates */
+	struct filter_t *defaultfilters;
+	struct filter_t *userfilters;
 
 };
 
@@ -211,8 +217,9 @@ struct worker_t {
 	struct pbuf_t **pbuf_incoming_last;
 	pthread_mutex_t pbuf_incoming_mutex;
 	
-	/* Pointer to last pointer in pbuf_global */
+	/* Pointer to last pointer in pbuf_global(_dupe) */
 	struct pbuf_t **pbuf_global_prevp;
+	struct pbuf_t **pbuf_global_dupe_prevp;
 };
 
 extern void pbuf_init(void);

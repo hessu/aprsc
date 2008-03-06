@@ -52,7 +52,28 @@
 
   (*) = wild-card supported
 
- */
+  Undocumented at above web-page, but apparent behaviour is:
+
+  - Everything not explicitely stated to be case sensitive is
+    case INSENSITIVE
+
+  - Minus-prefixes on filters behave as is there are two sets of
+    filters:
+
+       - filters without minus-prefixes add on approved set, and all
+         those without are evaluated at first
+       - filters with minus-prefixes are evaluated afterwards to drop
+         selections after the additive filter has been evaluated
+
+
+  - Our current behaviour is: "evaluate everything in entry order,
+    stop at first match",  which enables filters like:
+               p/OH2R -p/OH2 p/OH
+    while javAPRSSrvr filter adjunct behaves like the request is:
+               -p/OH2  p/OH
+    that is, OH2R** stations are not passed thru.
+
+*/
 
 
 // FIXME:  What exactly is the meaning of negation on the pattern ?
@@ -102,14 +123,18 @@ void filter_init(void)
 }
 
 
-int filter_parse(struct client_t *c, const char *filt)
+int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 {
 	struct filter_t *f, f0;
-	struct filter_t **ff = & c->filterhead;
 	int i;
 	const char *filt0 = filt;
-	const char *s;
 	char dummyc;
+	struct filter_t **ff;
+
+	if (is_user_filter)
+		ff = & c->userfilters;
+	else
+		ff = & c->defaultfilters;
 
 	memset(&f0, 0, sizeof(f0));
 	if (*filt == '-') {
@@ -126,6 +151,7 @@ int filter_parse(struct client_t *c, const char *filt)
 
 	switch (f0.h.type) {
 	case 'a':
+	case 'A':
 		/*  a/latN/lonW/latS/lonE     Area filter  */
 
 		i = sscanf(filt, "a/%f/%f/%f/%f%c",
@@ -173,6 +199,7 @@ int filter_parse(struct client_t *c, const char *filt)
 
 		break;
 	case 'r':
+	case 'R':
 		/*  r/lat/lon/dist            Range filter  */
 
 		i = sscanf(filt, "r/%f/%f/%f",
@@ -201,10 +228,11 @@ int filter_parse(struct client_t *c, const char *filt)
 
 #if 0
 	case 't':
+	case 'T':
 		/* t/..............
 		   t/............../call/km
 		*/
-		s = filt+1;
+		char *s = filt+1;
 		if (*s++ != '/') {
 			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
 			return -1;
@@ -223,6 +251,7 @@ int filter_parse(struct client_t *c, const char *filt)
 #endif
 
 	default:;
+		// No pre-parsers for other types
 		hlog(LOG_DEBUG, "Filter: %s", filt0);
 		break;
 	}
@@ -268,10 +297,29 @@ int wildpatternmatch(const char *keybuf, const char *p, int negation)
 	/* Implements:   b/call1/call2...  	Budlist filter, et.al.
 	   Pass all traffic FROM exact call: call1, call2, ...
 	   (* wild card allowed)
+
+	   p points to first char of "call1" above.
 	*/
 
-	int i;
-	
+	const char *k;
+	while (*p)  {
+	  k = keybuf;
+	  while (*p == *k && *k != 0) {
+	    ++p; ++k;
+	  }
+	  if (*k != 0 && *p == '*')
+	    return negation ? 2 : 1; // WILD MATCH!
+	  if (*k == 0 && (*p == '/' || *p == 0))
+	    return negation ? 2 : 1; // Exact match
+
+	  // No match, scan for next pattern
+	  while (*p && *p != '/')
+	    ++p;
+	  if (*p == '/')
+	    ++p;
+	  // If there is more of patterns, the loop continues..
+	}
+	return 0;
 }
 
 
@@ -341,15 +389,15 @@ int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 
 	   Pass posits and objects within dist km from lat/lon.
 	   lat and lon are signed degrees, i.e. negative for West/South
-	   and positive for East/North. Multiple range filters can be
-	   defined at the same time to allow better coverage.
+	   and positive for East/North.
 
-	   Messages addressed to stations within the range are also
-	   passed.
+	   Multiple range filters can be defined at the same time to allow better coverage.
+
+	   Messages addressed to stations within the range are also passed.
 	*/
 
 	;
-	if (pb->packettype & T_POSITION) {
+	if (pb->flags & F_HASPOS) {
 		float lat1    = f->h.f_latN, lon1 = f->h.f_lonE;
 		float coslat1 = f->h.f_coslat;
 		float lat2    = pb->lat,     lon2 = pb->lng;
@@ -357,13 +405,11 @@ int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 		float r;
 
 		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-		if ((!f->h.negation) && (r < f->h.f_dist))
-			return 1;  /* Range is less than given limit */
-		if ((f->h.negation)  && (r > f->h.f_dist))
-			return 1;  /* Range is greater than given limit */
+		if (r < f->h.f_dist) /* Range is less than given limit */
+			return f->h.negation ? 2 : 1; 
 	}
 	if (pb->packettype & T_MESSAGE) {
-		// FIXME: messages to stations within range...
+		// Messages to stations within range...
 		int i;
 		char keybuf[CALLSIGNLEN_MAX+1];
 		char *s;
@@ -408,25 +454,23 @@ int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   is defined as a box of coordinates. The coordinates can also
 	   been seen as upper left coordinate and lower right. Lat/lon
 	   are decimal degrees.   South and west are negative.
+
 	   Multiple area filters can be defined at the same time.
+
+	   Messages addressed to stations within the area are also passed.
 	*/
 	;
-	if (pb->packettype & T_POSITION) {
-		if ((pb->lat > f->h.f_latN) ||
-		    (pb->lat < f->h.f_latS) ||
-		    (pb->lng > f->h.f_lonE) || /* East POSITIVE ! */
-		    (pb->lng < f->h.f_lonW)) {
-			/* Outside the box */
-			if (f->h.negation)
-				return 2;
-		} else {
+	if (pb->flags & F_HASPOS) {
+		if ((pb->lat <= f->h.f_latN) &&
+		    (pb->lat >= f->h.f_latS) &&
+		    (pb->lng <= f->h.f_lonE) && /* East POSITIVE ! */
+		    (pb->lng >= f->h.f_lonW)) {
 			/* Inside the box */
-			if (!f->h.negation)
-				return 1;
+			return f->h.negation ? 2 : 1;
 		}
 	}
 	if (pb->packettype & T_MESSAGE) {
-		// FIXME: messages to stations within range...
+		// Messages to stations within area...
 		int i;
 		char keybuf[CALLSIGNLEN_MAX+1];
 		char *s;
@@ -456,17 +500,12 @@ int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 		lon2    = history->lon;
 		coslat2 = history->coslat;
 
-		if ((pb->lat > f->h.f_latN) ||
-		    (pb->lat < f->h.f_latS) ||
-		    (pb->lng > f->h.f_lonE) || /* East POSITIVE ! */
-		    (pb->lng < f->h.f_lonW)) {
-			/* Outside the box */
-			if (f->h.negation) // FIXME ???
-				return 2;
-		} else {
+		if ((pb->lat <= f->h.f_latN) ||
+		    (pb->lat >= f->h.f_latS) ||
+		    (pb->lng <= f->h.f_lonE) || /* East POSITIVE ! */
+		    (pb->lng >= f->h.f_lonW)) {
 			/* Inside the box */
-			if (!f->h.negation)
-				return 1;
+			return f->h.negation ? 2 : 1;
 		}
 	}
 	return 0;
@@ -511,7 +550,6 @@ int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	const char *p = f->h.text + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	char *s;
-	int isdead = 0;
 
 	if (pb->packettype & T_OBJECT) {
 		// Pick object name  ";item  *"
@@ -585,7 +623,7 @@ int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 
 	   This filter passes all packets with the specified destination
 	   callsign-SSID(s) (also known as the To call or unproto call).
-	   Supports * wildcard.
+	   Supports * wild card.
 	*/
 	return 0;
 }
@@ -622,9 +660,9 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 
 	   Usage examples:
 
-	   -t/c            Everything except CWOP
-	    t/*./OH2RDY/50  Everything within 50 km of OH2RDY's last known position
-	                   ("." is dummy addition for C comments..)
+	   -t/c              Everything except CWOP
+	    t/.*./OH2RDY/50  Everything within 50 km of OH2RDY's last known position
+	                     ("." is dummy addition for C comments..)
 	*/
 	const char *t = f->h.text+2;
 	int rc = 0;
@@ -635,56 +673,67 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 			break;
 
 		case 'c':
+		case 'C':
 			if (pb->packettype & T_CWOP)
 				rc = 1;
 			break;
 
 		case 'p':
+		case 'P':
 			if (pb->packettype & T_POSITION)
 				rc = 1;
 			break;
 
 		case 'o':
+		case 'O':
 			if (pb->packettype & T_OBJECT)
 				rc = 1;
 			break;
 
 		case 'i':
+		case 'I':
 			if (pb->packettype & T_ITEM)
 				rc = 1;
 			break;
 
 		case 'm':
+		case 'M':
 			if (pb->packettype & T_MESSAGE)
 				rc = 1;
 			break;
 
 		case 'n':
+		case 'N':
 			if (pb->packettype & T_NWS)
 				rc = 1;
 			break;
 
 		case 'w':
+		case 'W':
 			if (pb->packettype & T_WX)
 				rc = 1;
 			break;
 
 		case 't':
+		case 'T':
 			if (pb->packettype & T_TELEMETRY)
 				rc = 1;
 			break;
 
 		case 'q':
+		case 'Q':
 			if (pb->packettype & T_QUERY)
 				rc = 1;
 			break;
 
 		case 's':
+		case 'S':
 			if (pb->packettype & T_STATUS)
 				rc = 1;
 			break;
 
 		case 'u':
+		case 'U':
 			if (pb->packettype & T_USERDEF)
 				rc = 1;
 			break;
@@ -729,7 +778,10 @@ int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	/* f/call/dist  	Friend Range filter
 	   This is the same as the range filter except that the center is
 	   defined as the last known position of call.
+
 	   Multiple friend filters can be defined at the same time.
+
+	   Messages addressed to stations within the range are also passed.
 	*/
 
 	return 0;
@@ -740,29 +792,74 @@ int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	/* m/dist  	My Range filter
 	   This is the same as the range filter except that the center is
 	   defined as the last known position of the logged in client.
-	*/
-	;
-	if (c->my_lat == c->my_lon && c->my_lat == 0.0)
-		return 0; /* No my own coordinates known!
-			     Incoming parser fills them, when getting data.
-			  */
 
-	if (pb->packettype & T_POSITION) {
-		float lat1    = c->my_lat, lon1 = c->my_lon;
-		float coslat1 = c->my_coslat;
-		float lat2    = pb->lat,     lon2 = pb->lng;
-		float coslat2 = pb->cos_lat;
+	   Messages addressed to stations within the range are also
+	   passed.
+	*/
+
+	if (!c->username) // Should not happen...
+		return 0;
+
+	if (pb->flags & F_HASPOS) {
+		int i;
+		struct history_cell_t *history;
 		float r;
+		float lat1, lon1, coslat1;
+		float lat2, lon2, coslat2;
+
+		i = historydb_lookup( c->username, &history );
+
+		lat1    = f->h.f_latN;
+		lon1    = f->h.f_lonE;
+		coslat1 = f->h.f_coslat;
+
+		lat2    = history->lat;
+		lon2    = history->lon;
+		coslat2 = history->coslat;
 
 		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-		if ((!f->h.negation) && (r < f->h.f_dist))
-			return 1;  /* Range is less than given limit */
-		if ((f->h.negation)  && (r > f->h.f_dist))
-			return 1;  /* Range is greater than given limit */
-	} else {
-	  // Perhaps ... find coordinates for source callsign, if that is in range,
-	  //             then relay ?
+		if (r < f->h.f_dist)  /* Range is less than given limit */
+			return f->h.negation ? 2 : 1;
 	}
+	if (pb->packettype & T_MESSAGE) {
+		// Messages to stations within range...
+		int i;
+		char keybuf[CALLSIGNLEN_MAX+1];
+		char *s;
+		struct history_cell_t *history;
+		float r;
+		float lat1, lon1, coslat1;
+		float lat2, lon2, coslat2;
+
+
+		keybuf[CALLSIGNLEN_MAX] = 0;
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		s = strchr(keybuf, ':'); // per specs should not be found, but...
+		if (s) *s = 0;
+		s = keybuf + strlen(keybuf);
+		for ( ; s > keybuf; --s ) {  // tail space padded..
+			if (*s == ' ') *s = ' ';
+			else break;
+		}
+
+		i = historydb_lookup( keybuf, &history );
+
+		lat2    = history->lat;
+		lon2    = history->lon;
+		coslat2 = history->coslat;
+
+		i = historydb_lookup( c->username, &history );
+
+		lat1    = history->lat;
+		lon1    = history->lon;
+		coslat1 = history->coslat;
+
+		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
+
+		if (r < f->h.f_dist)  /* Range is less than given limit */
+			return (f->h.negation) ? 2 : 1;
+	}
+
 	return 0;
 }
 
@@ -773,54 +870,67 @@ int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f
 	switch (f->h.type) {
 
 	case 'a':
+	case 'A':
 		rc = filter_process_one_a(c, pb, f);
 		break;
 
 	case 'b':
+	case 'B':
 		rc = filter_process_one_b(c, pb, f);
 		break;
 
 	case 'd':
+	case 'D':
 		rc = filter_process_one_d(c, pb, f);
 		break;
 
 	case 'e':
+	case 'E':
 		rc = filter_process_one_e(c, pb, f);
 		break;
 
 	case 'f':
+	case 'F':
 		rc = filter_process_one_f(c, pb, f);
 		break;
 
 	case 'm':
+	case 'M':
 		rc = filter_process_one_m(c, pb, f);
 		break;
 
 	case 'o':
+	case 'O':
 		rc = filter_process_one_o(c, pb, f);
 		break;
 
 	case 'p':
+	case 'P':
 		rc = filter_process_one_p(c, pb, f);
 		break;
 
 	case 'q':
+	case 'Q':
 		rc = filter_process_one_q(c, pb, f);
 		break;
 
 	case 'r':
+	case 'R':
 		rc = filter_process_one_r(c, pb, f);
 		break;
 
 	case 's':
+	case 'S':
 		rc = filter_process_one_s(c, pb, f);
 		break;
 
 	case 't':
+	case 'T':
 		rc = filter_process_one_t(c, pb, f);
 		break;
 
 	case 'u':
+	case 'U':
 		rc = filter_process_one_u(c, pb, f);
 		break;
 
@@ -834,14 +944,24 @@ int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f
 
 int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	struct filter_t *f = c->filterhead;
+	struct filter_t *f = c->defaultfilters;
 
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
 		if (rc < 0)
 			client_bad_filter_notify(self, c, f->h.text);
-		if (rc)
-			return rc;
+		if (rc > 0)
+			return (rc == 1); // "2" reply means: "match, but don't pass.."
+	}
+
+	f = c->userfilters;
+
+	for ( ; f; f = f->h.next ) {
+		int rc = filter_process_one(c, pb, f);
+		if (rc < 0)
+			client_bad_filter_notify(self, c, f->h.text);
+		if (rc > 0)
+			return (rc == 1); // "2" reply means: "match, but don't pass.."
 	}
 	return 0;
 }

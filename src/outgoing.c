@@ -51,10 +51,9 @@ void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		if (c == pb->origin)
 			continue;
 
-		if (pb->flags & F_DUPE) {
+		if ((pb->flags & F_DUPE) && !c->want_dupes) {
 		  /* Duplicate packet.
 		     Don't send, unless client especially wants! */
-		  /* TODO: When the client really wants this ? */
 		  continue;
 		}
 
@@ -66,4 +65,3 @@ void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		}
 	}
 }
-

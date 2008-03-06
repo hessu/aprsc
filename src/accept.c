@@ -55,7 +55,7 @@ struct listen_t {
 	int fd;
 	
 	char *addr_s;
-	char *filters[10];
+	char *filters[10]; // up to 10 filter definitions
 } *listen_list = NULL;
 
 pthread_mutex_t mt_servercount = PTHREAD_MUTEX_INITIALIZER;
@@ -279,7 +279,7 @@ struct client_t *do_accept(struct listen_t *l)
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i])
-			filter_parse(c, l->filters[i]);
+			filter_parse(c, l->filters[i], 0); /* system filters */
 	}
 
 	/* set non-blocking mode */

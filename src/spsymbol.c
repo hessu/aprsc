@@ -65,7 +65,7 @@ spkey_t symbol_lookup_db_mem(const void *s, const int slen, struct sptree *spt)
 	if (s == NULL)
 		return 0;
 
-	key = crc32n(s, slen);
+	key = crc32n(s, slen, 0);
 
 	/* Ok, time for the hard work.  Lets see if we have this key
 	   in the symtab splay tree */
@@ -99,7 +99,7 @@ spkey_t symbol_db_mem(const void *s, int slen, struct sptree *spt)
 	if (s == NULL)
 		return 0;
 
-	key = crc32n(s,slen);
+	key = crc32n(s,slen, 0);
 
 	/* Ok, time for the hard work.  Lets see if we have this key
 	   in the symtab splay tree */
@@ -173,7 +173,7 @@ void symbol_free_db_mem(const void *s, int slen, struct sptree *spt)
 	if (s == NULL || spt == NULL)
 		return;
 	
-	key = crc32n(s, slen);
+	key = crc32n(s, slen, 0);
 	
 	/* Ok, time for the hard work.  Lets see if we have this key
 	   in the symtab splay tree (we can't use cache here!) */

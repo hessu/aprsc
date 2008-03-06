@@ -49,14 +49,19 @@ int keepalive_interval = 20;    /* 20 seconds by default */
 
 /* global packet buffer */
 rwlock_t pbuf_global_rwlock = RWL_INITIALIZER;
-struct pbuf_t *pbuf_global = NULL;
-struct pbuf_t *pbuf_global_last = NULL;
+struct pbuf_t  *pbuf_global = NULL;
+struct pbuf_t  *pbuf_global_last = NULL;
 struct pbuf_t **pbuf_global_prevp = &pbuf_global;
+struct pbuf_t  *pbuf_global_dupe = NULL;
+struct pbuf_t  *pbuf_global_dupe_last = NULL;
+struct pbuf_t **pbuf_global_dupe_prevp = &pbuf_global_dupe;
 
 /* object alloc/free */
 
 struct client_t *client_alloc(void)
 {
+	// TODO:  use cellmalloc ?
+
 	struct client_t *c = hmalloc(sizeof(*c));
 	memset((void *)c, 0, sizeof(*c));
 	c->fd = -1;
@@ -80,7 +85,8 @@ void client_free(struct client_t *c)
 	if (c->obuf)	hfree(c->obuf);
 	if (c->addr_s)	hfree(c->addr_s);
 
-	filter_free(c->filterhead);
+	filter_free(c->defaultfilters);
+	filter_free(c->userfilters);
 
 	hfree(c);
 }
@@ -444,6 +450,10 @@ void process_outgoing(struct worker_t *self)
 		exit(1);
 	}
 	while ((pb = *self->pbuf_global_prevp)) {
+		process_outgoing_single(self, pb); /* in outgoing.c */
+		self->pbuf_global_prevp = &pb->next;
+	}
+	while ((pb = *self->pbuf_global_dupe_prevp)) {
 		process_outgoing_single(self, pb); /* in outgoing.c */
 		self->pbuf_global_prevp = &pb->next;
 	}

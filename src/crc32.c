@@ -81,16 +81,16 @@ void crcinit(void)
 	crcinit_done = 1;
 }
 
-/* Arbitary octet sequence of "slen" bytes */
-unsigned long crc32n(const unsigned char *s, int slen)
+/*	Arbitary octet sequence of "slen" bytes.
+ *	The scan result is added on value at "key", which
+ *	user is expected to initialize as 0.
+ */
+unsigned long crc32n(const unsigned char *s, int slen, unsigned long key)
 {
-	unsigned long key;
-
 	if (!crcinit_done)
 	  crcinit();
 
 	/* Input string is to be CRCed to form a new key-id */
-	key = 0;
 	for (; slen > 0; ++s, --slen)
 	  key = (key >> 7) ^ CrcTable[(key ^ *s) & 0x7f];
 

@@ -546,7 +546,7 @@ int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
-	// source address  ">addr,"
+	// destination address  ">addr,"
 	memcpy( keybuf, pb->srccall_end+1, i);
 	keybuf[i] = 0;
 
@@ -973,8 +973,6 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
-		if (rc < 0)
-			client_bad_filter_notify(self, c, f->h.text);
 		if (rc > 0)
 			return (rc == 1); // "2" reply means: "match, but don't pass.."
 	}

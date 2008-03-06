@@ -36,6 +36,7 @@
 #include "parse_aprs.h"
 #include "hlog.h"
 #include "filter.h"
+#include "historydb.h"
 
 /*
  *	Check if the given character is a valid symbol table identifier
@@ -475,6 +476,35 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			pb->packettype |= T_NWS;
 		if (memcmp(body,"SKY",3) == 0)  // as seen on specification
 			pb->packettype |= T_NWS;
+
+		// Now find out if the message RECIPIENT address is known
+		// to have some location data ?  Because then we can treat
+		// them the same way in filters as we do those with real
+		// positions..
+		{
+			char keybuf[CALLSIGNLEN_MAX+1];
+			const char *p;
+			int i;
+			struct history_cell_t *history;
+
+			p = body+1;
+			for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
+				keybuf[i] = *p;
+				// the recipient address is space padded
+				// to 9 chars, while our historydb is not.
+				if (*p == 0 || *p == ' ' || *p == ':')
+					break;
+			}
+			keybuf[i] = 0;
+
+			i = historydb_lookup( keybuf, &history );
+			if (i > 0) {
+				pb->lat     = history->lat;
+				pb->lng     = history->lon;
+				pb->cos_lat = history->coslat;
+				pb->flags |= F_HASPOS;
+			}
+		}
 		return 1;
 
 	case ';':

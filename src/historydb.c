@@ -405,7 +405,7 @@ int historydb_lookup(const char *keybuf, struct history_cell_t **result)
 	// cp1 variable has the result
 	*result = cp1;
 
-	if (!cp1) return -1;  // Not found anything
+	if (!cp1) return 0;  // Not found anything
 
 	return 1;
 }

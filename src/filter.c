@@ -517,7 +517,40 @@ int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Pass all traffic FROM exact call: call1, call2, ...
 	   (* wild card allowed)
 	*/
-	return 0;
+
+	const char *p = f->h.text + 2;
+	char keybuf[CALLSIGNLEN_MAX+1];
+	int i = pb->srccall_end - pb->data;
+
+	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+
+	// source address  "addr>"
+	memcpy( keybuf, pb->data, i);
+	keybuf[i] = 0;
+
+	return wildpatternmatch(keybuf, p, f->h.negation);
+}
+
+int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+{
+	/* u/unproto1/unproto2/...  	Unproto filter
+
+	   This filter passes all packets with the specified destination
+	   callsign-SSID(s) (also known as the To call or unproto call).
+	   Supports * wild card.
+	*/
+
+	const char *p = f->h.text + 2;
+	char keybuf[CALLSIGNLEN_MAX+1];
+	int i = pb->dstcall_end - (pb->srccall_end+1);
+
+	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+
+	// source address  ">addr,"
+	memcpy( keybuf, pb->srccall_end+1, i);
+	keybuf[i] = 0;
+
+	return wildpatternmatch(keybuf, p, f->h.negation);
 }
 
 int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
@@ -527,6 +560,8 @@ int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   digipeated by a particular station(s) (the station's call
 	   is in the path).   This filter allows the * wildcard.
 	*/
+
+
 	return 0;
 }
 
@@ -614,16 +649,6 @@ int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   s/->   This will pass all House and Car symbols (primary table)
 	   s//#   This will pass all Digi with or without overlay
 	   s//#/T This will pass all Digi with overlay of capital T
-	*/
-	return 0;
-}
-int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
-{
-	/* u/unproto1/unproto2/...  	Unproto filter
-
-	   This filter passes all packets with the specified destination
-	   callsign-SSID(s) (also known as the To call or unproto call).
-	   Supports * wild card.
 	*/
 	return 0;
 }

@@ -96,6 +96,7 @@ struct pbuf_t {
 	
 	char *srccall_end;	/* source callsign with SSID */
 	char *dstcall_end;	/* end of dest callsign SSID */
+	char *qconstruct;
 	char *info_start;	/* pointer to start of info field */
 	
 	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */

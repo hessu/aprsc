@@ -45,7 +45,8 @@ struct cellarena_t {
 	int	alignment;
 	int	increment; /* alignment overhead applied.. */
 	int	lifo_policy;
-	int	minfree;
+  	int	minfree;
+	int	use_mutex;
 
 	pthread_mutex_t mutex;
 
@@ -101,7 +102,7 @@ int new_cellblock(cellarena_t *ca)
  */
 
 
-cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb, int minfree)
+cellarena_t *cellinit(int cellsize, int alignment, int policy, int createkb, int minfree)
 {
 	cellarena_t *ca = hmalloc(sizeof(*ca));
 	memset(ca, 0, sizeof(*ca));
@@ -113,7 +114,8 @@ cellarena_t *cellinit(int cellsize, int alignment, int lifo_policy, int createkb
 	if ((cellsize % alignment) != 0) {
 		ca->increment +=  alignment - cellsize % alignment;
 	}
-	ca->lifo_policy = lifo_policy;
+	ca->lifo_policy =  policy & CELLMALLOC_POLICY_LIFO;
+	ca->use_mutex   = (policy & CELLMALLOC_POLICY_NOMUTEX) ? 0 : 1;
 
 	ca->createsize = createkb * 1024;
 
@@ -135,7 +137,8 @@ void *cellmalloc(cellarena_t *ca)
 	void *cp;
 	struct cellhead *ch;
 
-	pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_lock(&ca->mutex);
 
 	if (!ca->free_head  || (ca->freecount < ca->minfree))
 		if (new_cellblock(ca)) {
@@ -150,7 +153,8 @@ void *cellmalloc(cellarena_t *ca)
 
 	ca->freecount -= 1;
 
-	pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_unlock(&ca->mutex);
 
 	return cp;
 }
@@ -165,7 +169,8 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 	int count;
 	struct cellhead *ch;
 
-	pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_lock(&ca->mutex);
 
 	for (count = 0; count < numcells; ++count) {
 
@@ -189,7 +194,8 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 
 	}
 
-	pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_unlock(&ca->mutex);
 
 	return count;
 }
@@ -201,7 +207,8 @@ void  cellfree(cellarena_t *ca, void *p)
 	struct cellhead *ch = (struct cellhead *)p;
 	ch->next = NULL;
 
-	pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_lock(&ca->mutex);
 
 	if (ca->lifo_policy) {
 	  /* Put the cell on free-head */
@@ -217,7 +224,8 @@ void  cellfree(cellarena_t *ca, void *p)
 
 	ca->freecount += 1;
 
-	pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_unlock(&ca->mutex);
 }
 
 /*
@@ -229,7 +237,8 @@ void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 {
 	int count;
 
-	pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_lock(&ca->mutex);
 
 	for (count = 0; count < numcells; ++count) {
 
@@ -252,5 +261,6 @@ void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 
 	}
 
-	pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex)
+		pthread_mutex_unlock(&ca->mutex);
 }

@@ -118,8 +118,8 @@ float filter_lon2rad(float lon)
 void filter_init(void)
 {
 	filter_cells = cellinit( sizeof(struct filter_t), __alignof__(struct filter_t),
-				 1 /* LIFO ! */, 128 /* 128 kB at the time */,
-				 0 );
+				 CELLMALLOC_POLICY_LIFO, 128 /* 128 kB at the time */,
+				 0 /* minfree */ );
 
 	/* printf("filter: sizeof=%d alignof=%d\n",sizeof(struct filter_t),__alignof__(struct filter_t)); */
 }
@@ -517,7 +517,14 @@ int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 
 	const char *p = f->h.text + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
-	int i = pb->dstcall_end - (pb->srccall_end+1);
+	int i;
+
+	// dstcall_end DOES NOT initially include SSID!  Must scan it!
+	// We can advance the destcall_end and leave it at the real end..
+	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
+	  pb->dstcall_end += 1;
+
+	i = pb->dstcall_end - (pb->srccall_end+1); // *srccall_end == '>'
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
@@ -535,6 +542,14 @@ int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   digipeated by a particular station(s) (the station's call
 	   is in the path).   This filter allows the * wildcard.
 	*/
+	const char *p = f->h.text + 2;
+	char keybuf[CALLSIGNLEN_MAX+1];
+	int i;
+
+	// dstcall_end DOES NOT initially include SSID!  Must scan it!
+	// We can advance the destcall_end and leave it at the real end..
+	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
+	  pb->dstcall_end += 1;
 
 
 	return 0;

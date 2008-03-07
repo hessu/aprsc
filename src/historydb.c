@@ -26,6 +26,7 @@
 
 #include "hlog.h"
 #include "worker.h"
+#include "config.h"
 #include "cellmalloc.h"
 #include "historydb.h"
 #include "hmalloc.h"
@@ -42,7 +43,6 @@ rwlock_t historydb_rwlock;
 
 struct history_cell_t **historydb_hash;
 int historydb_hash_modulo;
-int historydb_maxage = 48*3600; // 48 hours
 
 // monitor counters and gauges
 long historydb_inserts;
@@ -110,7 +110,7 @@ void historydb_dump(FILE *fp)
 	// Dump the historydb out on text format for possible latter reload
 	int i;
 	struct history_cell_t *hp;
-	time_t expirytime   = now - historydb_maxage;
+	time_t expirytime   = now - lastposition_storetime;
 
 	// multiple locks ? one for each bucket, or for a subset of buckets ?
 	rwl_rdlock(&historydb_rwlock);
@@ -130,7 +130,7 @@ int historydb_load(FILE *fp)
 {
 	// load the historydb in text format, ignore too old positions
 	int i;
-	time_t expirytime   = now - historydb_maxage;
+	time_t expirytime   = now - lastposition_storetime;
 	char bufline[2000]; // should be enough...
 	time_t t;
 	char keybuf[20];
@@ -246,7 +246,7 @@ int historydb_insert(struct pbuf_t *pb)
 	int isdead = 0;
 	struct history_cell_t **hp, *cp, *cp1;
 
-	time_t expirytime   = now - historydb_maxage;
+	time_t expirytime   = now - lastposition_storetime;
 
 	char keybuf[CALLSIGNLEN_MAX+1];
 	char *s;
@@ -382,7 +382,7 @@ int historydb_lookup(const char *keybuf, struct history_cell_t **result)
 	struct history_cell_t **hp, *cp, *cp1;
 
 	// validity is 5 minutes shorter than expiration time..
-	time_t validitytime   = now - historydb_maxage - 5*60;
+	time_t validitytime   = now - lastposition_storetime - 5*60;
 
 	++historydb_lookups;
 

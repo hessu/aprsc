@@ -53,6 +53,11 @@ extern int expiry_interval;
 extern int obuf_size;
 extern int ibuf_size;
 
+extern int lastposition_storetime;
+extern int dupefilter_storetime;
+extern int upstream_timeout;
+extern int client_timeout;
+
 extern int verbose;
 
 extern char *mycall;

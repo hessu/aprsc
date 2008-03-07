@@ -56,7 +56,7 @@ struct dupe_record_t {
 
 struct dupe_record_t **dupecheck_db;
 int dupecheck_db_size = 8192;
-int dupecheck_db_maxage = 60; // 60 seconds ?
+
 
 cellarena_t *dupecheck_cells;
 
@@ -129,7 +129,7 @@ int dupecheck(struct pbuf_t *pb)
 	const char *addr;
 	const char *data;
 	struct dupe_record_t **dpp, *dp;
-	time_t expiretime = now - dupecheck_db_maxage;
+	time_t expiretime = now -  dupefilter_storetime;
 
 	// 1) collect canonic rep of the packet
 	data    = pb->info_start;

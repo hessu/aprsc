@@ -70,7 +70,7 @@ int expiry_interval    = 10;
 int stats_interval     = 1 * 60;
 
 int lastposition_storetime = 24*60*60;	/* how long the last position packet of each station is stored */
-int dupefilter_storetime   = 24*60*60;	/* how long to store information required for dupe filtering */
+int dupefilter_storetime   =     3*60;	/* how long to store information required for dupe filtering */
 
 int upstream_timeout =  5*60;		/* after N seconds of no input from an upstream, disconnect */
 int client_timeout   = 60*60;		/* after N seconds of no input from a client, disconnect */

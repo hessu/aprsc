@@ -23,7 +23,7 @@
 #define CRC32_H
 
 extern void crcinit(void);
-extern unsigned long crc32n(const unsigned char *s, int slen, unsigned long key);
-extern unsigned long crc32(const unsigned char *s);
+extern uint32_t crc32n(const void *s, int slen, uint32_t key);
+extern uint32_t crc32(const void *s);
 
 #endif

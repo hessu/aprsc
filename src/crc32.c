@@ -30,6 +30,7 @@
  *
  */
 
+#include <stdint.h>
 #include <sys/types.h>
 
 /* crc table and hash algorithm from pathalias */
@@ -85,8 +86,10 @@ void crcinit(void)
  *	The scan result is added on value at "key", which
  *	user is expected to initialize as 0.
  */
-unsigned long crc32n(const unsigned char *s, int slen, unsigned long key)
+uint32_t crc32n(const void *p, int slen, uint32_t key)
 {
+	const unsigned char *s = p;
+
 	if (!crcinit_done)
 	  crcinit();
 
@@ -100,9 +103,11 @@ unsigned long crc32n(const unsigned char *s, int slen, unsigned long key)
 }
 
 /* Zero-terminated "string" */
-unsigned long crc32(const unsigned char *s)
+uint32_t crc32(const void *p)
 {
-	unsigned long key;
+	const unsigned char *s = p;
+
+	uint32_t key;
 
 	if (!crcinit_done)
 	  crcinit();

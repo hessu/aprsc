@@ -19,6 +19,8 @@
  *	
  */
 
+// TODO: filters: d e q s
+
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
@@ -130,7 +132,6 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	const char *filt0 = filt;
 	char dummyc;
 	struct filter_t **ff;
-	char dummyb[30];
 
 	if (is_user_filter)
 		ff = & c->userfilters;
@@ -265,7 +266,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		f0.h.f_coslat = cosf( f0.h.f_latN ); /* Store pre-calculated COS of LAT */
 		break;
 
-#if 0
+#if 0 // FIXME: Preparse range-form's KM distance..
 	case 't':
 	case 'T':
 		/* t/..............
@@ -342,21 +343,21 @@ int wildpatternmatch(const char *keybuf, const char *p, int negation)
 
 	const char *k;
 	while (*p)  {
-	  k = keybuf;
-	  while (*p == *k && *k != 0) {
-	    ++p; ++k;
-	  }
-	  if (*k != 0 && *p == '*')
-	    return negation ? 2 : 1; // WILD MATCH!
-	  if (*k == 0 && (*p == '/' || *p == 0))
-	    return negation ? 2 : 1; // Exact match
-
-	  // No match, scan for next pattern
-	  while (*p && *p != '/')
-	    ++p;
-	  if (*p == '/')
-	    ++p;
-	  // If there is more of patterns, the loop continues..
+		k = keybuf;
+		while (*p == *k && *k != 0) {
+			++p; ++k;
+		}
+		if (*k != 0 && *p == '*')
+			return negation ? 2 : 1; // WILD MATCH!
+		if (*k == 0 && (*p == '/' || *p == 0))
+			return negation ? 2 : 1; // Exact match
+		
+		// No match, scan for next pattern
+		while (*p && *p != '/')
+			++p;
+		if (*p == '/')
+			++p;
+		// If there is more of patterns, the loop continues..
 	}
 	return 0;
 }
@@ -430,53 +431,31 @@ int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   lat and lon are signed degrees, i.e. negative for West/South
 	   and positive for East/North.
 
-	   Multiple range filters can be defined at the same time to allow better coverage.
+	   Multiple range filters can be defined at the same time.
 
 	   Messages addressed to stations within the range are also passed.
+	   (by means of aprs packet parse finding out the location..)
 	*/
 
 	float lat1    = f->h.f_latN;
 	float lon1    = f->h.f_lonE;
 	float coslat1 = f->h.f_coslat;
-	float r       = 50000.0; // way too much km ...
+	float r;
 
 	float lat2, lon2, coslat2;
 
-	if (pb->flags & F_HASPOS) {
-		lat2    = pb->lat;
-		lon2    = pb->lng;
-		coslat2 = pb->cos_lat;
+	if (!(pb->flags & F_HASPOS))
+		return 0;
 
-		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-	}
-	if (pb->packettype & T_MESSAGE) {
-		// Messages to stations within range...
-		int i;
-		char keybuf[CALLSIGNLEN_MAX+1];
-		char *s;
-		struct history_cell_t *history;
+	lat2    = pb->lat;
+	lon2    = pb->lng;
+	coslat2 = pb->cos_lat;
 
-		keybuf[CALLSIGNLEN_MAX] = 0;
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
-		s = strchr(keybuf, ':'); // per specs should not be found, but...
-		if (s) *s = 0;
-		s = keybuf + strlen(keybuf);
-		for ( ; s > keybuf; --s ) {  // strip tail space padding..
-			if (*s == ' ') *s = 0;
-			else break;
-		}
+	r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
 
-		i = historydb_lookup( keybuf, &history );
-		if (!i) return 0; // no result
-
-		lat2    = history->lat;
-		lon2    = history->lon;
-		coslat2 = history->coslat;
-
-		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-	}
 	if (r < f->h.f_dist)  /* Range is less than given limit */
 		return (f->h.negation) ? 2 : 1;
+
 	return 0;
 }
 
@@ -491,57 +470,19 @@ int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Multiple area filters can be defined at the same time.
 
 	   Messages addressed to stations within the area are also passed.
+	   (by means of aprs packet parse finding out the location..)
 	*/
 	;
-	if (pb->flags & F_HASPOS) {
-		if ((pb->lat <= f->h.f_latN) &&
-		    (pb->lat >= f->h.f_latS) &&
-		    (pb->lng <= f->h.f_lonE) && /* East POSITIVE ! */
-		    (pb->lng >= f->h.f_lonW)) {
-			/* Inside the box */
-			return f->h.negation ? 2 : 1;
-		}
-	}
-	if (pb->packettype & T_MESSAGE) {
-		// Messages to stations within area...
-		int i;
-		char keybuf[CALLSIGNLEN_MAX+1];
-		char *s;
-		struct history_cell_t *history;
+	if (!(pb->flags & F_HASPOS))
+		return 0;
 
-		float lat1, lon1, coslat1;
-		float lat2, lon2, coslat2;
+	if ((pb->lat <= f->h.f_latN) &&
+	    (pb->lat >= f->h.f_latS) &&
+	    (pb->lng <= f->h.f_lonE) && /* East POSITIVE ! */
+	    (pb->lng >= f->h.f_lonW))
+		/* Inside the box */
+		return f->h.negation ? 2 : 1;
 
-
-		keybuf[CALLSIGNLEN_MAX] = 0;
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
-		s = strchr(keybuf, ':'); // per specs should not be found, but...
-		if (s) *s = 0;
-		s = keybuf + strlen(keybuf);
-		for ( ; s > keybuf; --s ) {  // strip tail space padding..
-			if (*s == ' ') *s = 0;
-			else break;
-		}
-
-		i = historydb_lookup( keybuf, &history );
-		if (!i) return 0; // no result
-
-		lat1    = f->h.f_latN;
-		lon1    = f->h.f_lonE;
-		coslat1 = f->h.f_coslat;
-
-		lat2    = history->lat;
-		lon2    = history->lon;
-		coslat2 = history->coslat;
-
-		if ((pb->lat <= f->h.f_latN) ||
-		    (pb->lat >= f->h.f_latS) ||
-		    (pb->lng <= f->h.f_lonE) || /* East POSITIVE ! */
-		    (pb->lng >= f->h.f_lonW)) {
-			/* Inside the box */
-			return f->h.negation ? 2 : 1;
-		}
-	}
 	return 0;
 }
 
@@ -651,13 +592,6 @@ int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Pass traffic with fromCall that start with aa or bb or cc...
 	*/
 
-	/* Implements:   b/call1/call2...  	Budlist filter, et.al.
-	   Pass all traffic FROM exact call: call1, call2, ...
-	   (* wild card allowed)
-
-	   p points to first char of "call1" above.
-	*/
-
 	const char *p = f->h.text + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	int i = pb->srccall_end+1 - pb->data;
@@ -670,21 +604,21 @@ int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	keybuf[i] = 0;
 
 	while (*p)  {
-	  k = keybuf;
-	  while (*p == *k && *k != 0 && *k != '/') {
-	    ++p; ++k;
-	  }
-	  if (*k != 0 && *p == '/')
-	    return f->h.negation ? 2 : 1; // PREFIX match
-	  if (*k == 0 && (*p == '/' || *p == 0))
-	    return f->h.negation ? 2 : 1; // Exact match
-
-	  // No match, scan for next pattern
-	  while (*p && *p != '/')
-	    ++p;
-	  if (*p == '/')
-	    ++p;
-	  // If there is more of patterns, the loop continues..
+		k = keybuf;
+		while (*p == *k && *k != 0 && *k != '/') {
+			++p; ++k;
+		}
+		if (*k != 0 && *p == '/')
+			return f->h.negation ? 2 : 1; // PREFIX match
+		if (*k == 0 && (*p == '/' || *p == 0))
+			return f->h.negation ? 2 : 1; // Exact match
+		
+		// No match, scan for next pattern
+		while (*p && *p != '/')
+			++p;
+		if (*p == '/')
+			++p;
+		// If there is more of patterns, the loop continues..
 	}
 
 	return 0;
@@ -841,19 +775,20 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 
 	/* Either it stops here, or it continues... */
 
-	if (*t == '/') { /* Within a range of callsign ? */
-		char callsign[20], *s;
-		float range;
-		++t;
-		s = memccpy(callsign, t, '/', 19);
-		if (s) *s = 0;
-		else /* BAD PARSE! */
-			return -2;
-		t = strchr(t, '/');
-		if (!t) /* BAD PARSE! */
-			return -2;
-		++t;
-		if (sscanf(t,"%f", &range) != 1)
+	if (rc && (*t == '/')) { /* Within a range of callsign ? */
+		char callsign[20];
+		float range, r;
+		float lat1, lon1, coslat1;
+		float lat2, lon2, coslat2;
+		struct history_cell_t *history;
+		int i;
+
+		hlog(LOG_DEBUG, "type filter with callsign range used! '%s'", f->h.text);
+
+		if (!(pb->flags & F_HASPOS))
+			return 0; // No positional data..
+
+		if (sscanf(t,"%10[^/]/%f", callsign, &range) != 2)
 			return -2;  /* BAD PARSE! */
 
 		if (callsign[0] == 0 || range < 0.0)
@@ -862,11 +797,26 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 		/* So..  Now we have a callsign, and we have range.
 		   Lets find callsign's location, and range to that item.. */
 
-		hlog(LOG_DEBUG, "type filter with callsign range used!");
+		i = historydb_lookup( callsign, &history );
+		if (!i) return 0; // no lookup result..
+
+		lat1    = history->lat;
+		lon1    = history->lon;
+		coslat1 = history->coslat;
+
+		lat2    = pb->lat;
+		lon2    = pb->lng;
+		coslat2 = pb->cos_lat;
+
+		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
+
+		if (r < range)  /* Range is less than given limit */
+			return (f->h.negation) ? 2 : 1;
+
 		return 0; /* unimplemented! */
 	}
 
-	return (f->h.negation ? -rc : 1);
+	return (f->h.negation ? (rc+rc) : rc);
 }
 
 int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
@@ -878,17 +828,20 @@ int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Multiple friend filters can be defined at the same time.
 
 	   Messages addressed to stations within the range are also passed.
+	   (by means of aprs packet parse finding out the location..)
 	*/
 
 	char keybuf[CALLSIGNLEN_MAX+1];
 	const char *p;
-	char *s;
 	int i;
 	struct history_cell_t *history;
 
 	float r;
 	float lat1, lon1, coslat1;
 	float lat2, lon2, coslat2;
+
+	if (!(pb->flags & F_HASPOS))
+		return 0; // No position data...
 
 	p = f->h.text +2;
 	for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
@@ -906,36 +859,11 @@ int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	lon1    = history->lon;
 	coslat1 = history->coslat;
 
-	if (pb->flags & F_HASPOS) {
+	lat2    = pb->lat;
+	lon2    = pb->lng;
+	coslat2 = pb->cos_lat;
 
-		lat2    = pb->lat;
-		lon2    = pb->lng;
-		coslat2 = pb->cos_lat;
-
-		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-	}
-	if (pb->packettype & T_MESSAGE) {
-		// Messages to stations within range...
-
-		keybuf[CALLSIGNLEN_MAX] = 0;
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
-		s = strchr(keybuf, ':'); // per specs should not be found, but...
-		if (s) *s = 0;
-		s = keybuf + strlen(keybuf);
-		for ( ; s > keybuf; --s ) {  // strip tail space padding..
-			if (*s == ' ') *s = 0;
-			else break;
-		}
-
-		i = historydb_lookup( keybuf, &history );
-		if (!i) return 0; // no result
-
-		lat2    = history->lat;
-		lon2    = history->lon;
-		coslat2 = history->coslat;
-
-		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-	}
+	r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
 
 	if (r < f->h.f_dist)  /* Range is less than given limit */
 		return (f->h.negation) ? 2 : 1;
@@ -949,13 +877,19 @@ int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   This is the same as the range filter except that the center is
 	   defined as the last known position of the logged in client.
 
-	   Messages addressed to stations within the range are also
-	   passed.
+	   Messages addressed to stations within the range are also passed.
+	   (by means of aprs packet parse finding out the location..)
 	*/
 
 	float lat1, lon1, coslat1;
+	float lat2, lon2, coslat2;
+	float r;
 	int i;
 	struct history_cell_t *history;
+
+
+	if (!(pb->flags & F_HASPOS))
+		return 0;
 
 	if (!c->username) // Should not happen...
 		return 0;
@@ -967,51 +901,14 @@ int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	lon1    = history->lon;
 	coslat1 = history->coslat;
 
-	if (pb->flags & F_HASPOS) {
-		float r;
-		float lat1, lon1, coslat1;
-		float lat2, lon2, coslat2;
 
-		lat2    = f->h.f_latN;
-		lon2    = f->h.f_lonE;
-		coslat2 = f->h.f_coslat;
+	lat2    = f->h.f_latN;
+	lon2    = f->h.f_lonE;
+	coslat2 = f->h.f_coslat;
 
-		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-		if (r < f->h.f_dist)  /* Range is less than given limit */
-			return f->h.negation ? 2 : 1;
-	}
-	if (pb->packettype & T_MESSAGE) {
-		// Messages to stations within range...
-		int i;
-		char keybuf[CALLSIGNLEN_MAX+1];
-		char *s;
-		struct history_cell_t *history;
-		float r;
-		float lat2, lon2, coslat2;
-
-
-		keybuf[CALLSIGNLEN_MAX] = 0;
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
-		s = strchr(keybuf, ':'); // per specs should not be found, but...
-		if (s) *s = 0;
-		s = keybuf + strlen(keybuf);
-		for ( ; s > keybuf; --s ) {  // strip tail space padding..
-			if (*s == ' ') *s = 0;
-			else break;
-		}
-
-		i = historydb_lookup( keybuf, &history );
-		if (!i) return 0; // no result
-
-		lat2    = history->lat;
-		lon2    = history->lon;
-		coslat2 = history->coslat;
-
-		r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
-
-		if (r < f->h.f_dist)  /* Range is less than given limit */
-			return (f->h.negation) ? 2 : 1;
-	}
+	r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
+	if (r < f->h.f_dist)  /* Range is less than given limit */
+		return f->h.negation ? 2 : 1;
 
 	return 0;
 }
@@ -1101,8 +998,10 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
+		// no reports to user about bad filters..
 		if (rc > 0)
-			return (rc == 1); // "2" reply means: "match, but don't pass.."
+			return (rc == 1);
+			// "2" reply means: "match, but don't pass.."
 	}
 
 	f = c->userfilters;
@@ -1112,7 +1011,8 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		if (rc < 0)
 			client_bad_filter_notify(self, c, f->h.text);
 		if (rc > 0)
-			return (rc == 1); // "2" reply means: "match, but don't pass.."
+			return (rc == 1);
+			// "2" reply means: "match, but don't pass.."
 	}
 	return 0;
 }

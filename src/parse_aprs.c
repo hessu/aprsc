@@ -114,7 +114,7 @@ int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
-	char *d_start;
+	const char *d_start;
 	char dstcall[CALLSIGNLEN_MAX+1];
 	char *p;
 	int i;
@@ -319,7 +319,7 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	return 1;
 }
 
-int parse_aprs_object(struct pbuf_t *pb, char *body, const char *body_end)
+int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
 	pb->packettype |= T_OBJECT;
@@ -330,7 +330,7 @@ int parse_aprs_object(struct pbuf_t *pb, char *body, const char *body_end)
 	return 0;
 }
 
-int parse_aprs_item(struct pbuf_t *pb, char *body, const char *body_end)
+int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
 	pb->packettype |= T_ITEM;
@@ -361,9 +361,9 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 {
 	char packettype, poschar;
 	int paclen, rc;
-	char *body;
-	char *body_end;
-	char *pos_start;
+	const char *body;
+	const char *body_end;
+	const char *pos_start;
 	
 	if (!pb->info_start)
 		return 0;

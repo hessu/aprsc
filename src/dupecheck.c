@@ -37,6 +37,7 @@
 #include "hmalloc.h"
 #include "cellmalloc.h"
 #include "worker.h"
+#include "crc32.h"
 
 int dupecheck_shutting_down = 0;
 int dupecheck_running = 0;
@@ -44,9 +45,10 @@ pthread_t dupecheck_th;
 
 struct dupe_record_t {
 	struct dupe_record_t *next;
-	uint32_t crc32;
-	int	 len;	// Total length
-	int	 alen;	// Length of address
+	uint32_t crc;
+	time_t	 t;
+	int	 alen;	// Address length
+	int	 plen;	// Payload length
 	char	 addresses[20];
 	char	*packet;
 	char	 packetbuf[200];
@@ -54,16 +56,20 @@ struct dupe_record_t {
 
 struct dupe_record_t **dupecheck_db;
 int dupecheck_db_size = 8192;
+int dupecheck_db_maxage = 60; // 60 seconds ?
 
 cellarena_t *dupecheck_cells;
 
+/*
+ *	The cellmalloc does not need internal MUTEX, it is being used in single thread..
+ */
 
 void dupecheck_init(void)
 {
 	dupecheck_db = hmalloc(sizeof(void*) * dupecheck_db_size);
 	dupecheck_cells = cellinit( sizeof(struct dupe_record_t), __alignof__(struct dupe_record_t),
-				    1 /* LIFO ! */, 512 /* 512 kB at the time */,
-				    0 );
+				    CELLMALLOC_POLICY_LIFO | CELLMALLOC_POLICY_NOMUTEX,
+				    512 /* 512 kB at the time */,  0 /* minfree */);
 }
 
 struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
@@ -71,8 +77,9 @@ struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 	struct dupe_record_t *dp = cellmalloc(dupecheck_cells);
 	if (!dp)
 	  return NULL;
-	dp->len  = alen + pktlen;
 	dp->alen = alen;
+	dp->plen = pktlen;
+	dp->next = NULL;
 	if (pktlen > sizeof(dp->packetbuf))
 	  dp->packet = hmalloc(pktlen+1);
 	else
@@ -116,22 +123,67 @@ int dupecheck(struct pbuf_t *pb)
 	// pb->flags |= F_DUPE; /* this is a duplicate! */
 
 	int i;
-	int addrlen;
-	int packlen;
-	const char *hdr;
+	int addrlen;  // length of the address part
+	int datalen;  // length of the payload
+	uint32_t crc;
+	const char *addr;
 	const char *data;
+	struct dupe_record_t **dpp, *dp;
+	time_t expiretime = now - dupecheck_db_maxage;
 
 	// 1) collect canonic rep of the packet
-	// 2) calculate checksum
+	data    = pb->info_start;
+	datalen = pb->packet_len - (data - pb->data);
+	addr    = pb->data;
+	addrlen = pb->dstcall_end - addr;
+
+	// there are no 3rd-party frames in APRS-IS ...
+
+	// 2) calculate checksum (from disjoint memory areas)
+
+	crc = crc32n(addr, addrlen, 0);
+	crc = crc32n(data, datalen, crc);
+
 	// 3) lookup if same checksum is in some hash bucket chain
 	//  3b) compare packet...
 	//    3b1) flag as F_DUPE if so
-	// 4) Add comparison copy of non-dupe into dupe-db
-	//
-	// Also:
-	// - remove old comparison copies out of the database
+	i = crc % dupecheck_db_size;
+	dpp = &dupecheck_db[i];
+	while (*dpp) {
+	  dp = *dpp;
+	  if (dp->t < expiretime) {
+	    // Too old, discard
+	    dpp = &dp->next;
+	    dupecheck_db_free(dp);
+	    continue;
+	  }
+	  if (dp->crc == crc) {
+	    // CRC match!
+	    if (dp->alen == addrlen &&
+		dp->plen == datalen &&
+		memcmp(addr, dp->addresses, addrlen) == 0 &&
+		memcmp(data, dp->packet,    datalen) == 0) {
+	      // PACKET MATCH!
+	      pb->flags |= F_DUPE;
+	      return F_DUPE;
+	    }
+	  }
+	  dpp = &dp->next;
+	}
+	// dpp points to pointer at the tail of the chain
 
-	return (pb->flags & F_DUPE);
+	// 4) Add comparison copy of non-dupe into dupe-db
+
+	dp = dupecheck_db_alloc(addrlen, datalen);
+	if (!dp) return -1; // alloc error!
+
+	*dpp = dp;
+	dp->crc = crc;
+	dp->t   = now;
+	memcpy(dp->addresses, addr, addrlen);
+	memcpy(dp->packet,    data, datalen);
+
+	return 0;
 }
 
 /*

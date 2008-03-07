@@ -51,14 +51,14 @@ cellarena_t *pbuf_cells_huge;
 void pbuf_init(void)
 {
 	pbuf_cells_small = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
-				    __alignof__(struct pbuf_t), 0 /* FIFO! */,
-				    256 /* 256 kB at the time */, 0);
+				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
+				    1024 /* 1 MB at the time */, 0 /* minfree */);
 	pbuf_cells_large = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
-				    __alignof__(struct pbuf_t), 0 /* FIFO! */,
-				    256 /* 256 kB at the time */, 0);
+				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
+				    1024 /* 1 MB at the time */, 0 /* minfree */);
 	pbuf_cells_huge  = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_HUGE,
-				    __alignof__(struct pbuf_t), 0 /* FIFO! */,
-				    256 /* 256 kB at the time */, 0);
+				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
+				    1024 /* 1 MB at the time */, 0 /* minfree */);
 }
 
 /*

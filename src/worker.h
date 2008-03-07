@@ -95,8 +95,8 @@ struct pbuf_t {
 	int buf_len;		/* the length of this buffer */
 	
 	char *srccall_end;	/* source callsign with SSID */
-	char *dstcall_end;	/* end of dest callsign SSID */
-	char *qconstruct;
+	char *dstcall_end;	/* end of dest callsign SSID, output filter MAY change this! */
+	char *qconstruct;	/* "qAX,incomingSSID:"	-- for q and e filters  */
 	char *info_start;	/* pointer to start of info field */
 	
 	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */

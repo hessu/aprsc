@@ -44,6 +44,13 @@ struct history_cell_t **historydb_hash;
 int historydb_hash_modulo;
 int historydb_maxage = 48*3600; // 48 hours
 
+// monitor counters and gauges
+long historydb_inserts;
+long historydb_lookups;
+long historydb_hashmatches;
+long historydb_keymatches;
+long historydb_cellgauge;
+
 void historydb_init(void)
 {
 	int i;
@@ -55,8 +62,8 @@ void historydb_init(void)
 
 	historydb_cells = cellinit( sizeof(struct history_cell_t),
 				    __alignof__(struct history_cell_t), 
-				    0 /* FIFO! */, 2048 /* 2 MB */,
-				    0 );
+				    CELLMALLOC_POLICY_FIFO, 2048 /* 2 MB */,
+				    0 /* minfree */ );
 
 	historydb_hash_modulo = 8192 ; // FIXME: is this acceptable or not ?
 
@@ -69,16 +76,15 @@ void historydb_init(void)
 void historycell_free(struct history_cell_t *p)
 {
 	cellfree( historydb_cells, p );
+	--historydb_cellgauge;
 }
 
 // Called only under WR-LOCK
 struct history_cell_t *historycell_alloc(int packet_len)
 {
-	struct history_cell_t *hp;
+	++historydb_cellgauge;
 
-	hp = cellmalloc( historydb_cells );
-
-	return hp;
+	return cellmalloc( historydb_cells );
 }
 
 
@@ -247,6 +253,7 @@ int historydb_insert(struct pbuf_t *pb)
 
 	if (!(pb->flags & F_HASPOS))
 		return -1; // No positional data...
+
 	// NOTE: Parser does set on MESSAGES the RECIPIENTS
 	//       location if such is known! We do not want them...
 
@@ -292,6 +299,8 @@ int historydb_insert(struct pbuf_t *pb)
 	} else {
 		return -1; // Not a packet with positional data, not interested in...
 	}
+
+	++historydb_inserts;
 
 	h1 = historydb_hash1(keybuf);
 	i = h1 % historydb_hash_modulo;
@@ -375,6 +384,8 @@ int historydb_lookup(const char *keybuf, struct history_cell_t **result)
 	// validity is 5 minutes shorter than expiration time..
 	time_t validitytime   = now - historydb_maxage - 5*60;
 
+	++historydb_lookups;
+
 	h1 = historydb_hash1(keybuf);
 	i = h1 % historydb_hash_modulo;
 
@@ -387,8 +398,10 @@ int historydb_lookup(const char *keybuf, struct history_cell_t **result)
 	if (*hp) {
 		while (( cp = *hp )) {
 			if ( (cp->hash1 == h1) &&
+			     ++historydb_hashmatches &&
 			     // Hash match, compare the key
 			     (strcmp(cp->key, keybuf) == 0)  &&
+			     ++historydb_keymatches &&
 			     // Key match!
 			     (cp->arrivaltime > validitytime)
 			     // NOT too old..

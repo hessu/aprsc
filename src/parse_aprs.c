@@ -58,21 +58,21 @@ int valid_sym_table_uncompressed(char c)
 void pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
 {
 	/* Pre-calculations for A/R/F/M-filter tests */
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
+	pb->lat     = filter_lat2rad(lat);  /* deg-to-radians */
+	pb->cos_lat = cosf(lat);            /* used in range filters */
+	pb->lng     = filter_lon2rad(lng);  /* deg-to-radians */
+
+	pb->flags |= F_HASPOS;	/* the packet has positional data */
 	
 	/* symbol table and code */
 	pb->symbol[0] = sym_table;
 	pb->symbol[1] = sym_code;
 	pb->symbol[2] = 0;
-	
-	pb->packettype |= T_POSITION;	/* the packet has positional data */
 }
 
 int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	float lat = 0.0, lng = 0.0;
+	// float lat = 0.0, lng = 0.0;
 
 	fprintf(stderr, "parse_aprs_nmea\n");
 
@@ -85,6 +85,8 @@ int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 		return 0; /* Well..  Not NMEA frame */
 	body += 2;
 
+	pb->packettype |= T_POSITION;
+
 	/* NMEA sentences to understand:
 	   GGA  Global Positioning System Fix Data
 	   GLL  Geographic Position, Latitude/Longitude Data
@@ -92,23 +94,20 @@ int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 	   VTG  Velocity and track -- no position here!
 	   WPT  Way Point Location
 	 */
-	 
-	pbuf_fill_pos(pb, lat, lng, 0, 0);
+
+	// FIXME: NMEA sensence parser!
+
+	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
 }
 
 int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	float lat = 0.0, lng = 0.0;
-	
+	// float lat = 0.0, lng = 0.0;
+
 	fprintf(stderr, "parse_aprs_telem\n");
 
-	/* Pre-calculations for A/R/F/M-filter tests */
-	pb->lat = filter_lat2rad(lat);	/* deg-to-radians */
-	pb->cos_lat = cosf(pb->lat);	/* used in range filters */
-	pb->lng = filter_lon2rad(lng);	/* deg-to-radians */
-	
-	pb->packettype |= T_POSITION;	/* the packet has positional data */
+	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
 }
 
@@ -176,16 +175,15 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	 * Translate the characters to get the latitude
 	 */
 	 
-	 for (p = dstcall; *p; p++) {
-	 	if (*p >= 'A' && *p <= 'J')
-	 		*p -= 'A' - '0';
+	for (p = dstcall; *p; p++) {
+		if (*p >= 'A' && *p <= 'J')
+			*p -= 'A' - '0';
 		else if (*p >= 'P' && *p <= 'Y')
 			*p -= 'P' - '0';
 		else if (*p == 'K' || *p == 'L' || *p == 'Z')
 			*p = '_';
-	 }
-	 fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
-	
+	}
+	fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
 	
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
@@ -324,9 +322,10 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 int parse_aprs_object(struct pbuf_t *pb, char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
+	pb->packettype |= T_OBJECT;
 
 	fprintf(stderr, "parse_aprs_object\n");
-	
+
 	//pbuf_fill_pos(pb, lat, lng);
 	return 0;
 }
@@ -334,6 +333,7 @@ int parse_aprs_object(struct pbuf_t *pb, char *body, const char *body_end)
 int parse_aprs_item(struct pbuf_t *pb, char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
+	pb->packettype |= T_ITEM;
 
 	fprintf(stderr, "parse_aprs_item\n");
 	
@@ -412,6 +412,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	case 0x60: /* ` */
 		/* could be mic-e, minimum body length 9 chars */
 		if (paclen >= 9) {
+			pb->packettype |= T_POSITION;
 			rc = parse_aprs_mice(pb, body, body_end);
 			if (rc)
 				return rc;
@@ -434,6 +435,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		 *
 		 * ! and / have messaging, / and @ have a prepended timestamp
 		 */
+		pb->packettype |= T_POSITION;
 		if (packettype == '/' || packettype == '@') {
 			/* With a prepended timestamp, jump over it. */
 			body += 7;
@@ -459,6 +461,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 
 	case '$':
 		if (body_end - body > 10) {
+			// Is it OK to declare it as position packet ?
 			rc = parse_aprs_nmea(pb, body, body_end);
 			if (rc)
 				return rc;
@@ -502,7 +505,8 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 				pb->lat     = history->lat;
 				pb->lng     = history->lon;
 				pb->cos_lat = history->coslat;
-				pb->flags |= F_HASPOS;
+
+				pb->flags  |= F_HASPOS;
 			}
 		}
 		return 1;
@@ -532,8 +536,8 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		break;
 
 	case 'T':
-		pb->packettype |= T_TELEMETRY;
 		if (body_end - body > 18) {
+			pb->packettype |= T_TELEMETRY;
 			rc = parse_aprs_telem(pb, body, body_end);
 			if (rc)
 				return rc;

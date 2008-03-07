@@ -247,6 +247,8 @@ int historydb_insert(struct pbuf_t *pb)
 
 	if (!(pb->flags & F_HASPOS))
 		return -1; // No positional data...
+	// NOTE: Parser does set on MESSAGES the RECIPIENTS
+	//       location if such is known! We do not want them...
 
 	// FIXME: if (pb->packet_len > 300)  ???
 
@@ -258,7 +260,7 @@ int historydb_insert(struct pbuf_t *pb)
 		s = strchr(keybuf, '*');
 		if (s) *s = 0;
 		else {
-			s = strchr(keybuf, '_');
+			s = strchr(keybuf, '_'); // kill an object!
 			if (s) {
 				*s = 0;
 				isdead = 1;
@@ -276,7 +278,7 @@ int historydb_insert(struct pbuf_t *pb)
 		s = strchr(keybuf, '!');
 		if (s) *s = 0;
 		else {
-			s = strchr(keybuf, '_');
+			s = strchr(keybuf, '_'); // kill an item!
 			if (s) {
 				*s = 0;
 				isdead = 1;
@@ -331,7 +333,8 @@ int historydb_insert(struct pbuf_t *pb)
 				cp->packetlen   = pb->packet_len;
 				memcpy(cp->packet, pb->data,
 				       cp->packetlen > 300 ? 300 : cp->packetlen);
-				// Continue scanning whole chain for possible obsolete items
+				// Continue scanning the whole chain for possibly
+				// obsolete items
 			}
 		} // .. else no match, advance hp..
 		hp = &(cp -> next);

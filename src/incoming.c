@@ -240,14 +240,21 @@ void incoming_flush(struct worker_t *self)
 int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	struct pbuf_t *pb;
-	char *src_end; /* pointer to the > after srccall */
-	char *path_start; /* pointer to the start of the path */
-	char *path_end; /* pointer to the : after the path */
-	char *packet_end; /* pointer to the end of the packet */
-	char *info_start; /* pointer to the beginning of the info */
-	char *info_end; /* end of the info */
-	char *dstcall_end; /* end of dstcall ([:,]) */
+	const char *src_end; /* pointer to the > after srccall */
+	const char *path_start; /* pointer to the start of the path */
+	const char *path_end; /* pointer to the : after the path */
+	const char *packet_end; /* pointer to the end of the packet */
+	const char *info_start; /* pointer to the beginning of the info */
+	const char *info_end; /* end of the info */
+	const char *dstcall_end; /* end of dstcall ([:,]) */
+	const char *via_start;
+	const char *qcons_start;
+	const char *data;	  /* points to original incoming path/payload separating ':' character */
+	int datalen;		  /* length of the data block excluding tail \r\n */
+	int pathlen;		  /* length of the path  ==  data-s  */
+	int qcons_len = 0;
 	int rc;
+	char qcons[20];
 	
 	/* a packet looks like:
 	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
@@ -255,71 +262,128 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 */
 
 
-	// FIXME: add qConstruct production (if needed)!
-	// FIXME: this may alter packet length, and address header!
+	path_end = memchr(s, ':', len);
+	if (!path_end)
+		return -1; // No ":" in the packet
+	pathlen = path_end - s;
 
-	/* get a packet buffer */
-	pb = pbuf_get(self, len+2);
-	if (!pb)
-		return 0;
-	
-	/* store the source reference */
-	pb->origin = c;
-	
-	/* when it was received ? */
-	pb->t = now;
-	
-	/* How much there really is data ? */
-	pb->packet_len = len+2;
+	data = path_end;            // Begins with ":"
+	datalen = len - pathlen;    // Not including line end \r\n
 
-	/* Actual data */
-	memcpy(pb->data, s, len);
-	memcpy(pb->data + len, "\r\n", 2); /* append missing CRLF */
+	packet_end = s + len;	    // Just to compare against far end..
 
-
-	packet_end = pb->data + pb->packet_len; /* for easier overflow checking expressions */
-	
 	/* look for the '>' */
-	src_end = memchr(pb->data, '>', pb->packet_len < CALLSIGNLEN_MAX+1 ? pb->packet_len : CALLSIGNLEN_MAX+1);
+	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
 	if (!src_end)
-		return -1;
+		return -1;	// No ">" in packet start..
 	
 	path_start = src_end+1;
 	if (path_start >= packet_end)
 		return -1;
 	
-	if (src_end - pb->data > CALLSIGNLEN_MAX)
+	if (src_end - s > CALLSIGNLEN_MAX)
 		return -1; /* too long source callsign */
 	
-	/* look for the : */
-	path_end = memchr(path_start, ':', packet_end - path_start);
-	if (!path_end)
-		return -1;
-	
-	info_start = path_end+1;
+	info_start = path_end+1;	// @":"+1 - first char of the payload
 	if (info_start >= packet_end)
 		return -1;
 	
 	/* see that there is at least some data in the packet */
-	info_end = packet_end - 2;
+	info_end = packet_end;
 	if (info_end <= info_start)
 		return -1;
 	
 	/* look up end of dstcall (excluding SSID - this is the way dupecheck and
 	 * mic-e parser wants it)
 	 */
+
 	dstcall_end = path_start;
 	while (dstcall_end < path_end && *dstcall_end != '-' && *dstcall_end != ',' && *dstcall_end != ':')
 		dstcall_end++;
 	
 	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
-		return -1; /* too long destination callsign */
+		return -1; /* too long for destination callsign */
 	
+
+	via_start = dstcall_end;
+	while (via_start < path_end && (*via_start != ',' && *via_start != ':'))
+		++via_start;
+	if (*via_start == ',')
+		++via_start;
+
+	// FIXME: add qConstruct production (if needed)!
+	// FIXME: this may alter packet length, and address header!
+
+	if (pathlen > 2 && path_end[-1] == 'I' && path_end[-2] == ',') {
+	  // Possibly  ... ",call,I:" type of injection
+		const char *p = path_end-3;
+		while (s < p && *p != ',')
+			--p;
+		if ((path_end - p) > (CALLSIGNLEN_MAX + 3))
+			return -1; // Bad form..
+		if (*p == ',') ++p; // should always happen
+		pathlen    = p - s; // Keep this much off the start
+
+		memcpy(qcons,"qA#,",4);        // FIXME
+		memcpy(qcons+4,p,path_end-p-2);
+		qcons_len   = path_end-p+2;
+		qcons_start = qcons;
+
+	} else {
+	  qcons_start = via_start;
+	  while (qcons_start < path_end) {
+	    if (qcons_start[0] == 'q' &&
+		qcons_start[1] == 'A') {
+	      break;
+	    }
+	    // Scan for next comma+1..
+	    while (qcons_start < path_end) {
+	      if (*qcons_start != ':' &&
+		  *qcons_start != ',')
+		++qcons_start;
+	    }
+	    if (*qcons_start == ',')
+	      ++qcons_start;
+	  }
+	  if (*qcons_start == ':' ||
+	      qcons_start >= path_end)
+	    ;  // No  ,qA#,callsign:  ??
+	  // qcons_start = NULL;
+
+	  // FIXME: FIXME!
+	}
+
+
+
+	/* get a packet buffer */
+	pb = pbuf_get(self, len+14); // reserve room for adding ",qA#,callsign"
+	if (!pb)
+		return -1; // No room :-(
+	
+	/* store the source reference */
+	pb->origin = c;
+	
+	/* when it was received ? */
+	pb->t = now;
+
+	/* Actual data - start with path prefix */
+	memcpy(pb->data, s, pathlen);
+	pb->data[pathlen] = 0;
+
+	/* Actual data */
+	memcpy(pb->data+pathlen, qcons, qcons_len);
+	memcpy(pb->data+pathlen+qcons_len, s, datalen);
+	memcpy(pb->data+pathlen+qcons_len+datalen, "\r\n", 2); /* append missing CRLF */
+
+	/* How much there really is data ? */
+	pb->packet_len = pathlen+qcons_len+datalen+2;
+
+	packet_end = pb->data + pb->packet_len; /* for easier overflow checking expressions */
 	/* fill necessary info for parsing and dupe checking in the packet buffer */
-	pb->srccall_end = src_end;
-	pb->dstcall_end = dstcall_end;
-	pb->info_start = info_start;
-	
+	pb->srccall_end = pb->data + (src_end - s);
+	pb->dstcall_end = pb->data + (dstcall_end - s);
+	pb->info_start  = pb->data + (info_start - s);
+
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
 

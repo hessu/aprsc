@@ -236,7 +236,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 		return 0; /* out of range */
 	
 	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
-	return 0;
+	return 1;
 }
 
 int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *body_end)
@@ -429,7 +429,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	case '@':
 		/* check that we won't run over right away */
 		if (body_end - body < 10)
-			return -1;
+			return 0;
 		/* Normal or compressed location packet, with or without
 		 * timestamp, with or without messaging capability
 		 *

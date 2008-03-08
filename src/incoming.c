@@ -234,7 +234,73 @@ void incoming_flush(struct worker_t *self)
 }
 
 /*
- *	Parse an incoming packet
+ *	Parse, and possibly generate a Q construct.
+ *	http://www.aprs-is.net/q.htm
+ *	http://www.aprs-is.net/qalgorithm.htm
+ *
+ *	We need to:
+ *	1) figure out where a (possibly) existing Q construct is
+ *	2) if it exists, we might need to modify it
+ *	3) we might have to append a new Q construct if one does not exist
+ *	4) we might have to append our server ID to the path
+ *	5) we might have to append the hexadecimal IP address of an UDP peer
+ */
+
+int process_q_construct(struct client_t *c, char *new_q, int new_q_size, const char *via_start, const char **path_end, int pathlen)
+{
+	const char *qcons_start;
+	int new_q_len = 0;
+	
+	/*
+	if (pathlen > 2 && path_end[-1] == 'I' && path_end[-2] == ',') {
+		// Possibly  ... ",call,I:" type of injection
+		const char *p = path_end-3;
+		while (s < p && *p != ',')
+			--p;
+		if ((path_end - p) > (CALLSIGNLEN_MAX + 3))
+			return -1; // Bad form..
+		if (*p == ',') ++p; // should always happen
+		pathlen    = p - s; // Keep this much off the start
+
+		memcpy(new_q,"qA#,",4);        // FIXME
+		memcpy(new_q+4,p,path_end-p-2);
+		new_q_len   = path_end-p+2;
+		qcons_start = new_q;
+
+	} else {
+		qcons_start = via_start;
+		while (qcons_start < path_end) {
+			if (qcons_start[0] == 'q' && qcons_start[1] == 'A') {
+				break;
+			}
+			
+			// Scan for next comma+1..
+			while (qcons_start < path_end) {
+				if (*qcons_start != ':' && *qcons_start != ',')
+					++qcons_start;
+			}
+			if (*qcons_start == ',')
+				++qcons_start;
+		}
+		if (*qcons_start == ':' || qcons_start >= path_end);  // No  ,qA#,callsign:  ??
+		// qcons_start = NULL;
+		
+		// FIXME: FIXME!
+	}
+	*/
+	
+	return new_q_len;
+}
+
+/*
+ *	Parse an incoming packet.
+ *
+ *	Returns -1 if the packet is pathologically invalid on APRS-IS
+ *	and can be discarded, 0 if it is correct for APRS-IS and will be
+ *	forwarded, 1 if it was successfully parsed by the APRS parser.
+ *
+ *	This function also allocates the pbuf structure for the new packet
+ *	and forwards it to the dupecheck thread.
  */
 
 int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
@@ -247,20 +313,19 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	const char *info_start; /* pointer to the beginning of the info */
 	const char *info_end; /* end of the info */
 	const char *dstcall_end; /* end of dstcall ([:,]) */
-	const char *via_start;
-	const char *qcons_start;
+	const char *via_start; /* start of the digipeater path (after dstcall,) */
 	const char *data;	  /* points to original incoming path/payload separating ':' character */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
-	int qcons_len = 0;
 	int rc;
-	char qcons[20];
+	char path_append[20]; /* data to be appended to the path (generated Q construct, etc) */
+	int path_append_len;
+	char *p;
 	
 	/* a packet looks like:
 	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
 	 * (we have normalized the \r\n by now)
 	 */
-
 
 	path_end = memchr(s, ':', len);
 	if (!path_end)
@@ -304,59 +369,22 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
 		return -1; /* too long for destination callsign */
 	
-
+	/* where does the digipeater path start? */
 	via_start = dstcall_end;
 	while (via_start < path_end && (*via_start != ',' && *via_start != ':'))
-		++via_start;
+		via_start++;
 	if (*via_start == ',')
-		++via_start;
-
-	// FIXME: add qConstruct production (if needed)!
-	// FIXME: this may alter packet length, and address header!
-
-	if (pathlen > 2 && path_end[-1] == 'I' && path_end[-2] == ',') {
-	  // Possibly  ... ",call,I:" type of injection
-		const char *p = path_end-3;
-		while (s < p && *p != ',')
-			--p;
-		if ((path_end - p) > (CALLSIGNLEN_MAX + 3))
-			return -1; // Bad form..
-		if (*p == ',') ++p; // should always happen
-		pathlen    = p - s; // Keep this much off the start
-
-		memcpy(qcons,"qA#,",4);        // FIXME
-		memcpy(qcons+4,p,path_end-p-2);
-		qcons_len   = path_end-p+2;
-		qcons_start = qcons;
-
-	} else {
-	  qcons_start = via_start;
-	  while (qcons_start < path_end) {
-	    if (qcons_start[0] == 'q' &&
-		qcons_start[1] == 'A') {
-	      break;
-	    }
-	    // Scan for next comma+1..
-	    while (qcons_start < path_end) {
-	      if (*qcons_start != ':' &&
-		  *qcons_start != ',')
-		++qcons_start;
-	    }
-	    if (*qcons_start == ',')
-	      ++qcons_start;
-	  }
-	  if (*qcons_start == ':' ||
-	      qcons_start >= path_end)
-	    ;  // No  ,qA#,callsign:  ??
-	  // qcons_start = NULL;
-
-	  // FIXME: FIXME!
-	}
-
-
-
+		via_start++;
+	
+	/* process Q construct, path_append_len of path_append will be copied
+	 * to the end of the path later
+	 */
+	path_append_len = process_q_construct(
+		c, path_append, sizeof(path_append_len), via_start, &path_end, pathlen
+	);
+	
 	/* get a packet buffer */
-	pb = pbuf_get(self, len+14); // reserve room for adding ",qA#,callsign"
+	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNULL */
 	if (!pb)
 		return -1; // No room :-(
 	
@@ -366,24 +394,30 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* when it was received ? */
 	pb->t = now;
 
-	/* Actual data - start with path prefix */
-	memcpy(pb->data, s, pathlen);
-	pb->data[pathlen] = 0;
-
-	/* Actual data */
-	memcpy(pb->data+pathlen, qcons, qcons_len);
-	memcpy(pb->data+pathlen+qcons_len, s, datalen);
-	memcpy(pb->data+pathlen+qcons_len+datalen, "\r\n", 2); /* append missing CRLF */
-
-	/* How much there really is data ? */
-	pb->packet_len = pathlen+qcons_len+datalen+2;
-
-	packet_end = pb->data + pb->packet_len; /* for easier overflow checking expressions */
+	/* Copy the unmodified part of the packet header */
+	memcpy(pb->data, s, path_end - s);
+	p = pb->data + (path_end - s);
+	
+	/* Copy the modified or appended part of the packet header */
+	memcpy(p, path_append, path_append_len);
+	p += path_append_len;
+	
+	/* Copy the unmodified end of the packet (including the :) */
+	memcpy(p, info_start - 1, datalen);
+	info_start = p + 1;
+	p += datalen;
+	memcpy(p, "\r\n\x00", 3); /* append missing CRLFNULL */
+	p += 2; /* We ignore the convenience NULL. */
+	
+	/* How much there really is data? */
+	pb->packet_len = p - pb->data; 
+	
+	packet_end = p; /* for easier overflow checking expressions */
 	/* fill necessary info for parsing and dupe checking in the packet buffer */
 	pb->srccall_end = pb->data + (src_end - s);
 	pb->dstcall_end = pb->data + (dstcall_end - s);
-	pb->info_start  = pb->data + (info_start - s);
-
+	pb->info_start  = info_start;
+	
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
 
@@ -424,12 +458,6 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		fprintf(stderr, "Failed parsing (%d):\n", e);
 		fwrite(s, len, 1, stderr);
 		fprintf(stderr, "\n");
-		
-		// So it failed, do send it out anyway....
-		// pbuf_free(self, pb);
-		// return 0;
-		// FIXME: if it's COMPLETELY garbled, ie. not SRC>DST:DATA, do not send it out
-		// - successful APRS parsing is not required.
 	}
 	
 	return 0;

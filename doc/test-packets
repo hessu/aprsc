@@ -1,0 +1,19 @@
+
+Some example packets for cut-n-paste testing:
+
+position without timestamp:
+JH6YLM>APRS,RELAY,TRACE5-5,qAo,JA6JMJ-3:!3210.70N/13132.15E#15 KAWA
+PY3KN-1>WIDE1-1,TCPIP*,qAC,T2BRAZIL:=3003.96SI05106.10W&iGate Viamao
+PD0TK-9>APERXQ,PA3GKF-2*,WIDE2-1,qAo,DB0SDA:!5057.18N/00549.40E>037/004/A=000353
+
+position with timestamp:
+N0YNC>APRS,TCPXX*,qAX,T2PSR:@271607z4028.82N/09657.64W_272/003g004t036r000P000p000h62b10206v31
+
+object position with timestamp:
+DB0XIP>APU25N,TCPIP*,qAC,THIRD:;DF0OV *181515z4915.09N/00725.45E-K35 www.k35-schwarzbachtal.de
+
+compressed position:
+OH7LZB-9>APZMDR,WIDE3-3,qAo,OH2RCH:!/0"acTjK">?S_ http://aprs.fi/
+
+mic-e:
+KG4PKR-1>SUSV9P,W4GGM-1,KA4BNI-2*,WIDE2,qAR,KB4YTM-1:'sZ&l!^K\]"6)}

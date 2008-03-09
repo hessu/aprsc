@@ -1,0 +1,198 @@
+#!/usr/bin/perl 
+
+$VERSION = 'APRS-IS-XMIT version-1.0';
+
+
+use POSIX;
+
+select STDOUT; $| = 1;    
+
+my $quit = 0;
+my $APRSIS;
+
+my $mycall = 'OH2MQK-RO';
+my $filter = 'p/OH2R -p/OH2 p/OH ';
+
+$APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter);
+
+if (!defined($APRSIS)) {
+    printf "aprsazel: Failed to open APRS-IS socket!\n";
+    exit 4;
+}
+
+@pkts = (
+    '# position w/o timestamp',
+    'JH6YLM>APRS,RELAY,TRACE5-5,qAo,JA6JMJ-3:!3210.70N/13132.15E#15 KAWA',
+    'PY3KN-1>WIDE1-1,TCPIP*,qAC,T2BRAZIL:=3003.96SI05106.10W&iGate Viamao',
+    'PD0TK-9>APERXQ,PA3GKF-2*,WIDE2-1,qAo,DB0SDA:!5057.18N/00549.40E>037/004/A=000353',
+    '# position timestamp and WEATHER telemetry',
+    'N0YNC>APRS,TCPXX*,qAX,T2PSR:@271607z4028.82N/09657.64W_272/003g004t036r000P000p000h62b10206v31',
+    '# OBJECT position with timestamp',
+    'DB0XIP>APU25N,TCPIP*,qAC,THIRD:;DF0OV *181515z4915.09N/00725.45E-K35 www.k35-schwarzbachtal.de',
+    '# compressed position',
+    'OH7LZB-9>APZMDR,WIDE3-3,qAo,OH2RCH:!/0"acTjK">?S_ http://aprs.fi/',
+    '# mic-e position',
+    "KG4PKR-1>SUSV9P,W4GGM-1,KA4BNI-2*,WIDE2,qAR,KB4YTM-1:'sZ&l!^K\]\"6)}",
+    '#                 ',
+    '#                 '
+    );
+    
+
+
+
+my $now = time;
+my $last = $now + 60*60;
+my $next = time + 5;
+
+while (! $quit && $now < $last) {
+
+    local $line;
+    local %aprs;
+
+    $now = time;
+    $line = $APRSIS->getline;
+
+    if ($now > $next) {
+	$now += 5;
+	last if ($#pkts < 0);
+
+	$APRSIS->sendline(pop @pkts);
+    }
+
+    next if (!defined $line);
+
+    chomp $line;
+
+    printf "%d\t%s\n", time, $line;
+}
+
+printf "\n";
+
+exit 0;
+
+# -------------------------------------------------------------------------
+
+package APRS::IS;
+
+use 5.006;
+use strict;
+use warnings;
+
+use IO::Socket::INET;
+use IO::Select;
+
+sub aprspass {
+    my ($a, $h) = (0, 0);
+    map($h ^= ord(uc) << ($a^=8),
+	pop =~ m/./g);
+    return ($h ^ 29666);
+}
+
+
+sub new {
+    my $that = shift;
+    my $class = ref($that) || $that;
+    # my %atts = @_;
+    my ($url, $mycall, $target_filter_re) = @_; # Just one arg: APRS-IS URL (host:port)
+
+    # Register the callers package.
+    my $self = { caller_pkg => (caller)[0] };
+
+    bless ($self, $class);
+
+    # parse attrs
+    $self->{sock} = IO::Socket::INET->new($url);
+
+    if (!defined($self->{sock})) {
+        die(__PACKAGE__.": APRS::IS->new(".$url.")  failure: ".$!."\n");
+    }
+
+
+    $self->{select} = IO::Select->new( $self->{sock} );
+
+    $self->{aprsmycall} = uc( $mycall );
+    $mycall =~ s/-.*//;
+    $self->{aprspass}   = aprspass( uc($mycall) );
+
+    $self->{filterre} = $target_filter_re;
+
+#   printf ( "APRS::IS->new()  mycall='%s'  aprspass=%d   filterre='%s'\n",
+#            $self->{aprsmycall}, $self->{aprspass}, $self->{filterre} );
+
+
+##
+##    *  Need to send on initial connect the following logon line:
+##      user callsign pass passcode vers appname versionnum rest_of_line
+##
+##      callsign = login callsign-SSID
+##      passcode = login passcode per APRS-IS algorithm, -1 = read-only
+##      appname = application name (1 word)
+##      versionnum = application version number (no spaces)
+##      rest_of_line = server command if connecting to a port that supports commands (see Server Commands)
+##
+##      (appname and versionnum should not exceed 15 characters)
+##
+##       
+##    * Need to recognize both TCPIP and TCPXX as TCP/IP stations
+##    * Need to provide a means to perform the user validation. This can either be a user entered password,
+##      or a client program can automatically figure out the password given the callsign.
+##      If the later is used, it is the client programmer's responsibility to be certain that non-amateurs
+##      are not given registrations that can validate themselves in APRS-IS.
+##    * Probably a good idea to perform some feedback about the limitations of TCPIP without a registration number.
+##
+
+    $self->{sock}->blocking(1);
+    $self->{sock}->printf( "user %s pass %s vers %s filter %s\r\n",
+			   $self->{aprsmycall},
+			   $self->{aprspass}, # -- but we are read-only !
+			   $main::VERSION, $self->{filterre}
+    );
+
+    printf( "user %s pass %s vers %s filter %s\n",
+	    $self->{aprsmycall},
+	    $self->{aprspass}, # -- but we are read-only !
+	    $main::VERSION, $self->{filterre} );
+    $self->{sock}->flush;
+
+    $self->{sock}->blocking(1);
+
+    # my $discard = $self->getline();
+
+    $self;
+}
+
+# -------------------------------------------------------------------------
+# Get a line, or wait 1 sec
+
+sub getline {
+    my $self = shift;
+
+    my @ready;
+
+    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
+
+	# We have only one socket...
+
+	return $self->{sock}->getline;
+
+    }
+
+    undef;
+}
+
+sub sendline {
+    my $self = shift;
+    my $line = shift;
+
+    my @ready;
+
+    $self->{sock}->blocking(1);
+    $self->{sock}->printf( "%s\r\n", $line);
+    $self->{sock}->flush;
+
+    $self->{sock}->blocking(1);
+
+    undef;
+}
+
+# -------------------------------------------------------------------------

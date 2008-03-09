@@ -53,10 +53,10 @@ while (! $quit && $now < $last) {
     $line = $APRSIS->getline;
 
     if ($now > $next) {
-	$now += 5;
+	$next += 5;
 	last if ($#pkts < 0);
 
-	$APRSIS->sendline(pop @pkts);
+	$APRSIS->sendline(shift @pkts);
     }
 
     next if (!defined $line);

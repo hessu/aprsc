@@ -157,6 +157,9 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
 		 */
 		pb = *pool;
 		*pool = pb->next;
+
+		// hlog(LOG_DEBUG, "pbuf_get_real(%d): got one buf from local pool", len);
+
 		return pb;
 	}
 	
@@ -164,22 +167,20 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
 
 	bunchlen = cellmallocmany( global_pool, (void**)allocarray, bunchlen );
 
-	for ( i = 0;  i < bunchlen; ++i ) {
-		if (i > 0)
-		  (*pool)->next = allocarray[i];
+	pb = allocarray[0];
+	pb->next = NULL;
+
+	for ( i = 1;  i < bunchlen; ++i ) {
+		if (*pool)
+			(*pool)->next = allocarray[i];
 		*pool = allocarray[i];
 	}
 	if (*pool)
 		(*pool)->next = NULL;
 
-	hlog(LOG_DEBUG, "pbuf_get_real(%d): got %d bufs from global pool",
-	     len, bunchlen);
-	
-	
+	// hlog(LOG_DEBUG, "pbuf_get_real(%d): got %d bufs from global pool", len, bunchlen);
+
 	/* ok, return the first buffer from the pool */
-	pb = *pool;
-	if (!pb) return NULL;
-	*pool = pb->next;
 
 	/* zero all header fields */
 	memset(pb, 0, sizeof(*pb));
@@ -278,6 +279,8 @@ int process_q_construct(struct client_t *c, char *new_q, int new_q_size, const c
 			while (qcons_start < path_end) {
 				if (*qcons_start != ':' && *qcons_start != ',')
 					++qcons_start;
+				else
+					break;
 			}
 			if (*qcons_start == ',')
 				++qcons_start;
@@ -379,9 +382,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
 	 */
-	path_append_len = process_q_construct(
-		c, path_append, sizeof(path_append_len), via_start, &path_end, pathlen
-	);
+	path_append_len = process_q_construct( c, path_append, sizeof(path_append_len),
+					       via_start, &path_end, pathlen );
 	
 	/* get a packet buffer */
 	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNULL */
@@ -446,9 +448,11 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		hlog(LOG_WARNING, "Packet size out of bounds (%d): %s", len, s);
 		return 0;
 	}
+
+	hlog(LOG_DEBUG, "Incoming: %.*s", len, s);
 	
 	 /* starts with # => a comment packet, timestamp or something */
-	if (*s == '#')
+	if (memcmp(s, "# ",2) == 0)
 		return 0;
 
 	/* do some parsing */

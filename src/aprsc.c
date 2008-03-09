@@ -163,6 +163,8 @@ int main(int argc, char **argv)
 	/* close stdin */
 	close(0);
 	time(&now);
+	setlinebuf(stdout);
+	setlinebuf(stderr);
 
 	
 	/* command line */

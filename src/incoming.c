@@ -448,7 +448,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 					p--;
 				if (*p == ',') {
 					const char *prevcall = p+1;
-					char *prevcall_end = *path_end - 2;
+					const char *prevcall_end = *path_end - 2;
 					fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 					/* if the path is terminated with ,login,I */
 					if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
@@ -460,13 +460,121 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 						*path_end = p;
 						new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
 					}
+				} else {
+					/* Undefined by the algorithm - there was no VIACALL */
+					return -1;
 				}
-				
 			} else {
 				/* Append ,qAO,login */
 				new_q_len = snprintf(new_q, new_q_size, ",qAO,%s", c->username);
 			}
 			/* FIXME: Skip to "All packets with q constructs" */
+		}
+		
+		/*
+		 * If a q construct exists in the header:
+		 *	Skip to "All packets with q constructs"
+		 */
+		if (q_proto) {
+			/* FIXME: Skip to "All packets with q constructs" */
+		}
+		
+		/* At this point we have packets which do not have Q constructs, and
+		 * are either (from validated clients && originated by client)
+		 * or (from unvalidated client && not originated by the client)
+		 */
+		 
+		/*
+		 * If header is terminated with ,I:
+		 * {
+		 *	If the VIACALL preceding the ,I matches the login:
+		 *		Change from ,VIACALL,I to ,qAR,VIACALL
+		 *	Else
+		 *		Change from ,VIACALL,I to ,qAr,VIACALL
+		 * }
+		 * Else If the FROMCALL matches the login:
+		 * {
+		 *	Append ,qAC,SERVERLOGIN
+		 *	Quit q processing
+		 * }
+		 * Else
+		 *	Append ,qAS,login
+		 * Skip to "All packets with q constructs"
+		 */
+		if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
+			fprintf(stderr, "\tpath has ,I in the end\n");
+			/* the path is terminated with ,I - lookup previous callsign in path */
+			char *p = *path_end - 3;
+			while (p > via_start && *p != ',')
+				p--;
+			if (*p == ',') {
+				const char *prevcall = p+1;
+				const char *prevcall_end = *path_end - 2;
+				fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+				/* if the path is terminated with ,login,I */
+				if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
+					/* Replace ,login,I with qAR,login */
+					*path_end = p;
+					new_q_len = snprintf(new_q, new_q_size, ",qAR,%s", c->username);
+				} else {
+					/* Replace ,VIACALL,I with qAr,VIACALL */
+					*path_end = p;
+					new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+				}
+			} else {
+				/* Undefined by the algorithm - there was no VIACALL */
+				return -1;
+			}
+		} else if (originated_by_client) {
+			/* FROMCALL matches the login */
+			return snprintf(new_q, new_q_size, ",qAC,%s", mycall);
+		} else {
+			/* Append ,qAS,login */
+			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->username);
+		}
+		/* FIXME: Skip to "All packets with q constructs" */
+	}
+	
+	/*
+	 * If packet entered the server from an outbound connection (to
+	 * another server's port 1313, for instance) and no q construct
+	 * exists in the header:
+	 * {
+	 *	If header is terminated with ,I:
+	 *		Change from ,VIACALL,I to ,qAr,VIACALL
+	 *	Else
+	 *		Append ,qAS,IPADDR (IPADDR is an 8 character hex
+	 *		representation of the IP address of the remote server)
+	 * }
+	 * Untested at the time of implementation (no uplink support yet)
+	 */
+	
+	if (c->state == CSTATE_UPLINK && !q_proto) {
+		if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
+			fprintf(stderr, "\tpath has ,I in the end\n");
+			/* the path is terminated with ,I - lookup previous callsign in path */
+			char *p = *path_end - 3;
+			while (p > via_start && *p != ',')
+				p--;
+			if (*p == ',') {
+				const char *prevcall = p+1;
+				const char *prevcall_end = *path_end - 2;
+				fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+				/* Replace ,VIACALL,I with qAr,VIACALL */
+				*path_end = p;
+				new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+			} else {
+				/* Undefined by the algorithm - there was no VIACALL */
+				return -1;
+			}
+		} else {
+			/* Append ,qAS,IPADDR (IPADDR is an 8 character hex representation 
+			 * of the IP address of the remote server)
+			 * ... what should we do with IPv6? TODO: check what the competition does.
+			 */
+			/* FIXME: generate the hex IP addr
+			 * new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", ...);
+			 */
 		}
 	}
 	

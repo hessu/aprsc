@@ -28,6 +28,7 @@
 #include <ctype.h>
 #include <alloca.h>
 
+#include "config.h"
 #include "incoming.h"
 #include "hlog.h"
 #include "parse_aprs.h"
@@ -235,11 +236,45 @@ void incoming_flush(struct worker_t *self)
 }
 
 /*
+ *	Find a string in a binary buffer
+ */
+
+char *memstr(char *needle, char *haystack, char *haystack_end)
+{
+	char *hp = haystack;
+	char *np = needle;
+	char *match_start = NULL;
+	
+	while (hp < haystack_end) {
+		if (*hp == *np) {
+			/* matching... is this the start of a new match? */
+			if (match_start == NULL)
+				match_start = hp;
+			/* increase needle pointer, so we'll check the next char */
+			np++;
+		} else {
+			/* not matching... clear state */
+			match_start = NULL;
+			np = needle;
+		}
+		
+		/* if we've reached the end of the needle, and we have found a match,
+		 * return a pointer to it
+		 */
+		if (*np == 0 && (match_start))
+			return match_start;
+		hp++;
+	}
+	
+	/* out of luck */
+	return NULL;
+}
+
+/*
  *	Parse, and possibly generate a Q construct.
  *	http://www.aprs-is.net/q.htm
  *	http://www.aprs-is.net/qalgorithm.htm
  *
- *	We need to:
  *	1) figure out where a (possibly) existing Q construct is
  *	2) if it exists, we might need to modify it
  *	3) we might have to append a new Q construct if one does not exist
@@ -247,50 +282,193 @@ void incoming_flush(struct worker_t *self)
  *	5) we might have to append the hexadecimal IP address of an UDP peer
  */
 
-int process_q_construct(struct client_t *c, char *new_q, int new_q_size, const char *via_start, const char **path_end, int pathlen)
+int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, char **path_end, int pathlen, int originated_by_client)
 {
-	const char *qcons_start;
-	int new_q_len = 0;
+	char *q_start = NULL; /* points to the , before the Q construct */
+	char *q_nextcall = NULL; /* points to the , after the Q construct */ 
+	char *q_nextcall_end = NULL; /* points to the , after the callsign right after the Q construct */
+	int new_q_len = 0; /* the length of a newly generated Q construct */
+	char q_proto = 0; /* parsed Q construct protocol character (A for APRS) */
+	char q_type = 0; /* parsed Q construct type character */
 	
 	/*
-	if (pathlen > 2 && path_end[-1] == 'I' && path_end[-2] == ',') {
-		// Possibly  ... ",call,I:" type of injection
-		const char *p = path_end-3;
-		while (s < p && *p != ',')
-			--p;
-		if ((path_end - p) > (CALLSIGNLEN_MAX + 3))
-			return -1; // Bad form..
-		if (*p == ',') ++p; // should always happen
-		pathlen    = p - s; // Keep this much off the start
-
-		memcpy(new_q,"qA#,",4);        // FIXME
-		memcpy(new_q+4,p,path_end-p-2);
-		new_q_len   = path_end-p+2;
-		qcons_start = new_q;
-
-	} else {
-		qcons_start = via_start;
-		while (qcons_start < path_end) {
-			if (qcons_start[0] == 'q' && qcons_start[1] == 'A') {
-				break;
-			}
-			
-			// Scan for next comma+1..
-			while (qcons_start < path_end) {
-				if (*qcons_start != ':' && *qcons_start != ',')
-					++qcons_start;
-				else
-					break;
-			}
-			if (*qcons_start == ',')
-				++qcons_start;
-		}
-		if (*qcons_start == ':' || qcons_start >= path_end);  // No  ,qA#,callsign:  ??
-		// qcons_start = NULL;
-		
-		// FIXME: FIXME!
+	All packets
+	{
+		Place into TNC-2 format
+		If a q construct is last in the path (no call following the qPT)
+			delete the qPT
 	}
 	*/
+	
+	fprintf(stderr, "q_process\n");
+	q_start = memstr(",q", via_start, *path_end);
+	if (q_start) {
+		fprintf(stderr, "\tfound existing q construct\n");
+		/* there is an existing Q construct, check for a callsign after it */
+		q_nextcall = memchr(q_start + 1, ',', *path_end - q_start - 1);
+		if (!q_nextcall) {
+			fprintf(stderr, "\tno comma after Q construct, ignoring and overwriting construct\n");
+			*path_end = q_start;
+		} else if (q_nextcall - q_start != 4) {
+			/* does not fit qPT */
+			fprintf(stderr, "\tlength of Q construct is not 3 characters\n");
+			*path_end = q_start;
+		} else {
+			/* parse the q construct itself */
+			q_proto = *(q_start + 2);
+			q_type = *(q_start + 3);
+			
+			/* check for callsign following qPT */
+			q_nextcall++; /* now points to the callsign */
+			q_nextcall_end = q_nextcall;
+			while (q_nextcall_end < *path_end && *q_nextcall_end != ',' && *q_nextcall_end != ':')
+				q_nextcall_end++;
+			if (q_nextcall == q_nextcall_end) {
+				fprintf(stderr, "\tno callsign after Q construct, ignoring and overwriting construct\n");
+				*path_end = q_start;
+				q_proto = q_type = 0; /* for the further code: we do not have a Qc */
+			}
+			/* it's OK to have more than one callsign after qPT */
+		}
+	}
+	
+	fprintf(stderr, "\tstep 2...\n");
+	/* ok, we now either have found an existing Q construct + the next callsign,
+	 * or have eliminated an outright invalid Q construct.
+	 */
+	
+	/*
+	 * All packets from an inbound connection that would normally be passed per current validation algorithm:
+	 */
+	
+	if (c->state == CSTATE_CONNECTED) {
+		/*
+		 * If the packet entered the server from an UDP port:
+		 * {
+		 *    if a q construct with a single call exists in the packet
+		 *        Replace the q construct with ,qAU,SERVERLOGIN
+		 *    else if more than a single call exists after the q construct
+		 *        Invalid header, drop packet as error
+		 *    else
+		 *        Append ,qAU,SERVERLOGIN
+		 *    Quit q processing
+		 * }
+		 */
+		if (c->udp_port) {
+			fprintf(stderr, "\tUDP packet\n");
+			if (q_proto && q_nextcall_end == *path_end) {
+				/* a q construct with a single call exists in the packet,
+				 * Replace the q construct with ,qAU,SERVERLOGIN
+				 */
+				*path_end = q_start;
+				return snprintf(new_q, new_q_size, ",qAU,%s", mycall);
+			} else if (q_proto && q_nextcall_end < *path_end) {
+				/* more than a single call exists after the q construct,
+				 * invalid header, drop the packet as error
+				 */
+				return -1;
+			} else {
+				/* Append ,qAU,SERVERLOGIN */
+				return snprintf(new_q, new_q_size, ",qAU,%s", mycall);
+			}
+		}
+		
+		/*
+		 * If the packet entered the server from an unverified connection AND
+		 * the FROMCALL equals the client login AND the header has been
+		 * successfully converted to TCPXX format (per current validation algorithm):
+		 * {
+		 *    (All packets not deemed "OK" from an unverified connection should be dropped.)
+		 *    if a q construct with a single call exists in the packet
+		 *        Replace the q construct with ,qAX,SERVERLOGIN
+		 *    else if more than a single call exists after the q construct
+		 *        Invalid header, drop packet as error
+		 *    else
+		 *        Append ,qAX,SERVERLOGIN
+		 *    Quit q processing
+		 * }
+		 */
+		if (!c->validated && originated_by_client) {
+			fprintf(stderr, "\tunvalidated client sends packet originated by itself\n");
+			// FIXME: how to check if TCPXX conversion is done? Just assume?
+			if (q_proto && q_nextcall_end == *path_end) {
+				/* a q construct with a single call exists in the packet,
+				 * Replace the q construct with ,qAX,SERVERLOGIN
+				 */
+				*path_end = q_start;
+				return snprintf(new_q, new_q_size, ",qAX,%s", mycall);
+			} else if (q_proto && q_nextcall_end < *path_end) {
+				/* more than a single call exists after the q construct,
+				 * invalid header, drop the packet as error
+				 */
+				return -1;
+			} else {
+				/* Append ,qAX,SERVERLOGIN */
+				return snprintf(new_q, new_q_size, ",qAX,%s", mycall);
+			}
+		}
+		
+		/*
+		 * If the packet entered the server from a verified client-only connection
+		 * AND the FROMCALL does not match the login:
+		 * {
+		 *	if a q construct exists in the packet
+		 *		if the q construct is at the end of the path AND it equals ,qAR,login
+		 *			Replace qAR with qAo
+		 *	else if the path is terminated with ,I
+		 *	{
+		 *		if the path is terminated with ,login,I
+		 *			Replace ,login,I with qAo,login
+		 *		else
+		 *			Replace ,VIACALL,I with qAr,VIACALL
+		 *	}
+		 *	else
+		 *		Append ,qAO,login
+		 *	Skip to "All packets with q constructs"
+		 * }
+		 */
+		if (c->validated && !originated_by_client) {
+			// FIXME: what is a "verified client-only connection?"
+			fprintf(stderr, "\tvalidated client sends sends packet originated by someone else\n");
+			/* if a q construct exists in the packet */
+			if (q_proto) {
+				fprintf(stderr, "\thas q construct\n");
+				/* if the q construct is at the end of the path AND it equals ,qAR,login */
+				if (q_proto == 'A' && q_type == 'R' && q_nextcall_end == *path_end) {
+					/* Replace qAR with qAo */
+					q_type = 'o';
+					*(q_start + 3) = 'o';
+					fprintf(stderr, "\treplaced qAR with qAo\n");
+				}
+			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
+				fprintf(stderr, "\tpath has ,I in the end\n");
+				/* the path is terminated with ,I - lookup previous callsign in path */
+				char *p = *path_end - 3;
+				while (p > via_start && *p != ',')
+					p--;
+				if (*p == ',') {
+					const char *prevcall = p+1;
+					char *prevcall_end = *path_end - 2;
+					fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+					/* if the path is terminated with ,login,I */
+					if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
+						/* Replace ,login,I with qAo,login */
+						*path_end = p;
+						new_q_len = snprintf(new_q, new_q_size, ",qAo,%s", c->username);
+					} else {
+						/* Replace ,VIACALL,I with qAr,VIACALL */
+						*path_end = p;
+						new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+					}
+				}
+				
+			} else {
+				/* Append ,qAO,login */
+				new_q_len = snprintf(new_q, new_q_size, ",qAO,%s", c->username);
+			}
+			/* FIXME: Skip to "All packets with q constructs" */
+		}
+	}
 	
 	return new_q_len;
 }
@@ -309,20 +487,21 @@ int process_q_construct(struct client_t *c, char *new_q, int new_q_size, const c
 int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	struct pbuf_t *pb;
-	const char *src_end; /* pointer to the > after srccall */
-	const char *path_start; /* pointer to the start of the path */
-	const char *path_end; /* pointer to the : after the path */
+	char *src_end; /* pointer to the > after srccall */
+	char *path_start; /* pointer to the start of the path */
+	char *path_end; /* pointer to the : after the path */
 	const char *packet_end; /* pointer to the end of the packet */
 	const char *info_start; /* pointer to the beginning of the info */
 	const char *info_end; /* end of the info */
-	const char *dstcall_end; /* end of dstcall ([:,]) */
-	const char *via_start; /* start of the digipeater path (after dstcall,) */
+	char *dstcall_end; /* end of dstcall ([:,]) */
+	char *via_start; /* start of the digipeater path (after dstcall,) */
 	const char *data;	  /* points to original incoming path/payload separating ':' character */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
 	int rc;
-	char path_append[20]; /* data to be appended to the path (generated Q construct, etc) */
+	char path_append[160]; /* data to be appended to the path (generated Q construct, etc), could be long */
 	int path_append_len;
+	int originated_by_client = 0;
 	char *p;
 	
 	/* a packet looks like:
@@ -376,14 +555,23 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	via_start = dstcall_end;
 	while (via_start < path_end && (*via_start != ',' && *via_start != ':'))
 		via_start++;
-	if (*via_start == ',')
-		via_start++;
+	
+	/* check if the srccall equals the client's login */
+	if (strlen(c->username) == src_end - s && strncasecmp(c->username, s, src_end - s) == 0)
+		originated_by_client = 1;
 	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
 	 */
-	path_append_len = process_q_construct( c, path_append, sizeof(path_append_len),
-					       via_start, &path_end, pathlen );
+	path_append_len = q_process( c, path_append, sizeof(path_append),
+					via_start, &path_end, pathlen,
+					originated_by_client );
+	
+	if (path_append_len < 0) {
+		/* the q construct algorithm decided to drop the packet */
+		fprintf(stderr, "q construct drop: %d\n", path_append_len);
+		return path_append_len;
+	}
 	
 	/* get a packet buffer */
 	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNULL */
@@ -420,6 +608,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->dstcall_end = pb->data + (dstcall_end - s);
 	pb->info_start  = info_start;
 	
+	hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
 

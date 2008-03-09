@@ -459,9 +459,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	e = incoming_parse(self, c, s, len);
 	if (e < 0) {
 		/* failed parsing */
-		fprintf(stderr, "Failed parsing (%d):\n", e);
-		fwrite(s, len, 1, stderr);
-		fprintf(stderr, "\n");
+		hlog(LOG_DEBUG,"Failed parsing (%d): %.*s",e,len,s);
 	}
 	
 	return 0;

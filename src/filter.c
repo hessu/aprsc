@@ -130,6 +130,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	struct filter_t *f, f0;
 	int i;
 	const char *filt0 = filt;
+	const char *s;
 	char dummyc;
 	struct filter_t **ff;
 
@@ -206,7 +207,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		i = sscanf(filt, "r/%f/%f/%f",
 			 &f0.h.f_latN, &f0.h.f_lonW, &f0.h.f_dist);
-		if (i != 3) {
+		if (i != 3 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
 			return -1;
 		}
@@ -232,9 +233,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'F':
 		/*  f/call/dist            Friend's range filter  */
 
-		i = sscanf(filt, "r/%*9[^/]/%f",
-			   &f0.h.f_dist);
-		if (i != 1) {
+		i = sscanf(filt, "r/%*9[^/]/%f", &f0.h.f_dist);
+		if (i != 1 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
 			return -1;
 		}
@@ -251,9 +251,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'M':
 		/*  m/dist            My range filter  */
 
-		i = sscanf(filt, "r/%f",
-			   &f0.h.f_dist);
-		if (i != 1) {
+		i = sscanf(filt, "r/%f", &f0.h.f_dist);
+		if (i != 1 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
 			return -1;
 		}
@@ -266,13 +265,12 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		f0.h.f_coslat = cosf( f0.h.f_latN ); /* Store pre-calculated COS of LAT */
 		break;
 
-#if 0 // FIXME: Preparse range-form's KM distance..
 	case 't':
 	case 'T':
 		/* t/..............
 		   t/............../call/km
 		*/
-		char *s = filt+1;
+		s = filt+1;
 		if (*s++ != '/') {
 			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
 			return -1;
@@ -284,11 +282,14 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			}
 		}
 		if (*s == '/') { /* second format */
-		  
+			i = sscanf(s, "/%*9[^/]/%f%c", &f0.h.f_dist, &dummyc);
+			if (i != 1 || f0.h.f_dist < 0.1) {
+				hlog(LOG_DEBUG, "Bad parse: %s", filt0);
+				return -1;
+			}
 		}
 
 		break;
-#endif
 
 	default:;
 		// No pre-parsers for other types
@@ -803,8 +804,10 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 		if (!(pb->flags & F_HASPOS))
 			return 0; // No positional data..
 
-		if (sscanf(t,"%10[^/]/%f", callsign, &range) != 2)
+		if (sscanf(t,"%10[^/]/", callsign) != 1)
 			return -2;  /* BAD PARSE! */
+
+		range = f->h.f_dist;
 
 		if (callsign[0] == 0 || range < 0.0)
 			return -2;  /* BAD PARSE! */

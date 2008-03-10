@@ -31,17 +31,33 @@
 #include "config.h"
 
 /*
+ *	Check if the given callsign (of given length) belongs to a verified
+ *	client.
+ */
+
+int is_verified_client_login(char *s, int len)
+{
+	// FIXME: does nothing.
+	return 0;
+}
+
+/*
  *	q_dropcheck contains the last big block of the Q construct algorithm
  *	(All packets with q constructs...) and does rejection and duplicate
  *	dropping.
  */
 
+#define MAX_Q_CALLS 64
+
 int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 		int new_q_len, char q_proto, char q_type, char *q_start,
 		char *path_end)
 {
-	char *p, *next, *next_end;
-	int len;
+	char *qcallv[MAX_Q_CALLS+1];
+	int qcallc;
+	char *p;
+	int mycall_len, username_len;
+	int i, j, l;
 	
 	/*
 	 * if ,qAZ, is the q construct:
@@ -57,6 +73,22 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 	}
 	
 	/*
+	 * Produce an array of pointers pointing to each callsign in the path
+	 */
+	qcallc = 0;
+	p = q_start + 4;
+	while (qcallc < MAX_Q_CALLS && p < path_end) {
+		while (p < path_end && *p == ',')
+			p++;
+		if (p == path_end)
+			break;
+		qcallv[qcallc++] = p;
+		while (p < path_end && *p != ',')
+			p++;
+	}
+	qcallv[qcallc] = p+1;
+	
+	/*
 	 * If ,SERVERLOGIN is found after the q construct:
 	 * {
 	 *	Dump to the loop log with the sender's IP address for identification
@@ -67,62 +99,22 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 	 * match against ,SERVERLOGIN, or ,SERVERLOGIN:)
 	 */
 	
-	len = strlen(mycall);
+	mycall_len = strlen(mycall);
 	p = memstr(mycall, q_start+4, path_end);
-	if (p && *(p-1) == ',' && ( *(p+len) == ',' || p+len == path_end || *(p+len) == ':' )) {
+	if (p && *(p-1) == ',' && ( *(p+mycall_len) == ',' || p+mycall_len == path_end || *(p+mycall_len) == ':' )) {
 		/* TODO: Should dump to a loop log... */
 		return -2; /* drop the packet */
 	}
 	
 	/*
+	 * 1)
 	 * If a callsign-SSID is found twice in the q construct:
 	 * {
 	 *	Dump to the loop log with the sender's IP address for identification
 	 *	Quit processing the packet
 	 * }
-	 */
-	p = q_start + 3;
-	while (p < path_end) {
-		/* find next ',' */
-		p = memchr(p, ',', path_end - p);
-		if (!p) /* no more... */
-			break;
-		
-		p++; /* p should now point to the callsign */
-		if (p >= path_end)
-			break;
-		
-		/* find next callsign */
-		next = memchr(p, ',', path_end - p);
-		if (!next) /* no more callsigns */
-			break;
-		len = next - p;
-		if (len == 0)
-			continue; /* whee, found a ",," */
-		
-		/* loop through the rest of the callsigns */
-		while ((next) && next < path_end) {
-			next++;
-			/* find end of the next callsign */
-			next_end = memchr(next, ',', path_end - next);
-			if (!next_end)
-				next_end = path_end;
-			
-			if (next_end - next == 0)
-				continue; /* whee, found a ",," */
-			
-			if (next_end - next == len && strncasecmp(p, next, len) == 0) {
-				/* TODO: should dump to a loop log */
-				return -2;
-			}
-			
-			next = next_end;
-		}
-		
-		p++;
-	}
-	
-	/*
+	 *
+	 * 2)
 	 * If a verified login other than this login is found in the q construct
 	 * and that login is not allowed to have multiple verified connects (the
 	 * IPADDR of an outbound connection is considered a verified login):
@@ -130,16 +122,41 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 	 *	Dump to the loop log with the sender's IP address for identification
 	 *	Quit processing the packet
 	 * }
-	 */
-	
-	/*
+	 *
+	 * 3)
 	 * If the packet is from an inbound port and the login is found after the q construct but is not the LAST VIACALL:
 	 * {
 	 *	Dump to the loop log with the sender's IP address for identification
 	 *	Quit processing the packet
 	 * }
+	 *
 	 */
-	
+	username_len = strlen(c->username);
+	for (i = 0; i < qcallc; i++) {
+		l = qcallv[i+1] - qcallv[i] - 1;
+		/* 1) */
+		for (j = i + 1; j < qcallc; j++) {
+			if (l == qcallv[j+1] - qcallv[j] - 1 && strncasecmp(qcallv[i], qcallv[j], l) == 0) {
+				/* TODO: should dump to a loop log */
+			    	return -2;
+			}
+		}
+		/* 2) */
+		if (l == username_len && strncasecmp(qcallv[i], c->username, username_len) == 0) {
+			/* ok, login is client's login, handle step 3) */
+			if (c->state == CSTATE_CONNECTED && i != qcallc - 1) {
+				/* 3) hits: from an inbound connection, client login found in path,
+				 * but is not the last viacall
+				 * TODO: should dump...
+				 */
+				return -2;
+			}
+		} else if (is_verified_client_login(qcallv[i], l)) {
+			/* 2) hits: TODO: should dump to a loop log */
+			return -2;
+		}
+	}
+		
 	/*
 	 * If trace is on, the q construct is qAI, or the FROMCALL is on the server's trace list:
 	 * {

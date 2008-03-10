@@ -1,6 +1,6 @@
 #!/usr/bin/perl 
 
-$VERSION = 'APRS-IS-XMIT version-1.0';
+$VERSION = 'APRS-IS-COPY version-1.0';
 
 
 use POSIX;

@@ -29,5 +29,7 @@ extern int uplink_shutting_down;
 
 extern void uplink_thread(void *asdf);
 extern void uplink_close(struct client_t *c);
+extern void uplink_start(void);
+extern void uplink_stop(void);
 
 #endif /* FILTER_H */

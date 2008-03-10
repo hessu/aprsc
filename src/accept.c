@@ -47,6 +47,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "login.h"
+#include "uplink.h"
 
 struct listen_t {
 	struct listen_t *next;
@@ -357,6 +358,9 @@ void accept_thread(void *asdf)
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
+	/* start the accept thread, which will start server threads */
+	hlog(LOG_INFO, "Accept_thread starting...");
+	
 	accept_reconfiguring = 1;
 	while (!accept_shutting_down) {
 		if (accept_reconfiguring) {
@@ -387,6 +391,7 @@ void accept_thread(void *asdf)
 			dupecheck_stop();
 			workers_start();
 			dupecheck_start();
+			uplink_start();
 		}
 		
 		/* check for new connections */
@@ -415,6 +420,7 @@ void accept_thread(void *asdf)
 	}
 	
 	hlog(LOG_DEBUG, "Accept thread shutting down listening sockets and worker threads...");
+	uplink_stop();
 	close_listeners();
 	dupecheck_stop();
 	workers_stop(1);

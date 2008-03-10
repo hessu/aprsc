@@ -19,11 +19,12 @@ VPATH = @srcdir@
 
 # Compiler and flags
 CC=		@CC@
-CFLAGS=		@CFLAGS@ $(DEFS)
+PROF=
+CFLAGS=		@CFLAGS@ $(PROF) $(DEFS)
 
 # Linker and flags
 LD=		@LD@
-LDFLAGS=	@LDFLAGS@
+LDFLAGS=	@LDFLAGS@ $(PROF)
 
 INSTALL=	$(srcdir)/install-sh
 INSTALL_PROGRAM=$(INSTALL)  -m 755

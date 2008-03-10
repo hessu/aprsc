@@ -50,6 +50,9 @@ int uplink_shutting_down;
 pthread_mutex_t uplink_client_mutex = PTHREAD_MUTEX_INITIALIZER;
 struct client_t *uplink_client;
 
+int uplink_running;
+pthread_t uplink_th;
+
 
 /*
  *	signal handler
@@ -305,6 +308,7 @@ err:
 	return -1;
 }
 
+
 /*
  *	Uplink thread
  */
@@ -327,6 +331,9 @@ void uplink_thread(void *asdf)
 	sigaddset(&sigs_to_block, SIGUSR1);
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
+
+	hlog(LOG_INFO, "Uplink_thread starting...");
+
 	
 	uplink_reconfiguring = 1;
 	while (!uplink_shutting_down) {
@@ -380,4 +387,37 @@ void uplink_thread(void *asdf)
 	close_uplinkers();
 	// dupecheck_stop();
 	// workers_stop(1);
+}
+
+
+/*
+ *	Start / stop dupecheck
+ */
+void uplink_start(void)
+{
+	if (uplink_running)
+		return;
+	
+	uplink_shutting_down = 0;
+	
+	if (pthread_create(&uplink_th, NULL, (void *)uplink_thread, NULL))
+		perror("pthread_create failed for uplink_thread");
+		
+	uplink_running = 1;
+}
+
+void uplink_stop(void)
+{
+	int e;
+	
+	if (!uplink_running)
+		return;
+	
+	hlog(LOG_INFO, "Signalling uplink_thread to shut down...");
+	uplink_shutting_down = 1;
+	
+	if ((e = pthread_join(uplink_th, NULL)))
+		hlog(LOG_ERR, "Could not pthread_join uplink_th: %s", strerror(e));
+	else
+		hlog(LOG_INFO, "Uplink thread has terminated.");
 }

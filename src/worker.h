@@ -147,7 +147,7 @@ struct client_t {
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t logintimeout; /* when the login wait times out */
 
-	struct xpoll_fd_t *xfd;
+	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 	
 	/* first stage read buffer - used to crunch out lines to packet buffers */
 	char *ibuf;
@@ -162,15 +162,14 @@ struct client_t {
 	int   obuf_flushsize; /* how much data in buf before forced write() at adding ? */
 	int   obuf_writes;    /* how many times (since last check) the socket has been written ? */
 
-	/* state of the client... one of CSTATE_* */
-	char  state;
-	char  warned;
+	char  state;        /* state of the client... one of CSTATE_* */
+	char  warned;       /* the client has been warned that it has bad filter definition */
 	char *username;     /* The callsign */
-	char *app_name;
-	char *app_version;
+	char *app_name;     /* application name, from 'user' command */
+	char *app_version;  /* application version, from 'user' command */
 
 	char  validated;    /* did the client provide a valid passcode */
-	char  want_dupes;
+	char  want_dupes;   /* does the client want duplicate packets, too */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);

@@ -78,7 +78,7 @@ int new_cellblock(cellarena_t *ca)
 
 	ca->cellblocks[ca->cellblocks_count++] = cb;
 
-	for (i = 0; i < ca->createsize; i += ca->increment) {
+	for (i = 0; i < ca->createsize-ca->increment; i += ca->increment) {
 		struct cellhead *ch = (struct cellhead *)(cb + i); /* pointer arithmentic! */
 		if (!ca->free_head) {
 		  ca->free_head = ch;

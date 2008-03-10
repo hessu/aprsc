@@ -36,7 +36,5 @@ extern void hfree(void *ptr);
 
 extern char *hstrdup(const char *s);
 
-extern void hmalloc_stats(FILE *f);
-
 #endif
 

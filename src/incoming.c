@@ -708,7 +708,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	p += 2; /* We ignore the convenience NULL. */
 	
 	/* How much there really is data? */
-	pb->packet_len = p - pb->data; 
+	pb->packet_len = p - pb->data;
 	
 	packet_end = p; /* for easier overflow checking expressions */
 	/* fill necessary info for parsing and dupe checking in the packet buffer */

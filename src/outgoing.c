@@ -38,7 +38,7 @@ void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED)
 			continue;
-		
+		// FIXME: on production also CSTATE_UPLINK is to be permitted
 
 		/* Do not send to the same client.
 		   This may reject a packet that came from a socket that got

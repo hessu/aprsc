@@ -57,8 +57,10 @@ char *new_mycall;
 char *new_myemail;
 char *new_myadmin;
 
-struct peerip_config_t *aprsis_uplink_config;
-struct peerip_config_t *new_aprsis_uplink_config;
+struct uplink_config_t *uplink_config;
+struct uplink_config_t *new_uplink_config;
+struct peerip_config_t *peerip_config;
+struct peerip_config_t *new_peerip_config;
 
 int fork_a_daemon;	/* fork a daemon */
 
@@ -86,6 +88,7 @@ struct listen_config_t *listen_config = NULL, *listen_config_new = NULL;
 int do_listen(struct listen_config_t **lq, int argc, char **argv);
 int do_interval(time_t *dest, int argc, char **argv);
 int do_peerip(struct peerip_config_t **lq, int argc, char **argv);
+int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 
 /*
  *	Configuration file commands
@@ -94,22 +97,23 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv);
 #define _CFUNC_ (int (*)(void *dest, int argc, char **argv))
 
 static struct cfgcmd cfg_cmds[] = {
-	{ "rundir",		_CFUNC_ do_string,	&new_rundir			},
-	{ "logdir",		_CFUNC_ do_string,	&new_logdir			},
-	{ "mycall",		_CFUNC_ do_string,	&new_mycall			},
-	{ "myemail",		_CFUNC_ do_string,	&new_myemail			},
-	{ "myhostname",		_CFUNC_ do_string,	&myhostname			},
-	{ "myadmin",		_CFUNC_ do_string,	&new_myadmin			},
-	{ "workerthreads",	_CFUNC_ do_int,		&workers_configured		},
-	{ "statsinterval",	_CFUNC_ do_interval,	&stats_interval			},
-	{ "expiryinterval",	_CFUNC_ do_interval,	&expiry_interval		},
-	{ "lastpositioncache",	_CFUNC_ do_interval,	&lastposition_storetime		},
-	{ "dupefiltercache",	_CFUNC_ do_interval,	&dupefilter_storetime		},
-	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout		},
-	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout			},
-	{ "listen",		_CFUNC_ do_listen,	&listen_config_new		},
-	{ "aprsis-uplink",	_CFUNC_ do_peerip,	&new_aprsis_uplink_config	},
-	{ NULL,			NULL,			NULL				}
+	{ "rundir",		_CFUNC_ do_string,	&new_rundir		},
+	{ "logdir",		_CFUNC_ do_string,	&new_logdir		},
+	{ "mycall",		_CFUNC_ do_string,	&new_mycall		},
+	{ "myemail",		_CFUNC_ do_string,	&new_myemail		},
+	{ "myhostname",		_CFUNC_ do_string,	&myhostname		},
+	{ "myadmin",		_CFUNC_ do_string,	&new_myadmin		},
+	{ "workerthreads",	_CFUNC_ do_int,		&workers_configured	},
+	{ "statsinterval",	_CFUNC_ do_interval,	&stats_interval		},
+	{ "expiryinterval",	_CFUNC_ do_interval,	&expiry_interval	},
+	{ "lastpositioncache",	_CFUNC_ do_interval,	&lastposition_storetime	},
+	{ "dupefiltercache",	_CFUNC_ do_interval,	&dupefilter_storetime	},
+	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout	},
+	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
+	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
+	{ "aprsis-uplink",	_CFUNC_ do_uplink,	&new_uplink_config	},
+	{ "aprsis-peerip",	_CFUNC_ do_peerip,	&new_peerip_config	},
+	{ NULL,			NULL,			NULL			}
 };
 
 /*
@@ -124,11 +128,11 @@ void free_listen_config(struct listen_config_t **lc)
 	while (*lc) {
 		this = *lc;
 		*lc = this->next;
-		hfree(this->name);
-		hfree(this->host);
+		hfree((void*)this->name);
+		hfree((void*)this->host);
 		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
 			if (this->filters[i])
-				hfree(this->filters[i]);
+				hfree((void*)this->filters[i]);
 		freeaddrinfo(this->ai);
 		hfree(this);
 	}
@@ -146,12 +150,34 @@ void free_peerip_config(struct peerip_config_t **lc)
 	while (*lc) {
 		this = *lc;
 		*lc = this->next;
-		hfree(this->name);
-		hfree(this->host);
+		hfree((void*)this->name);
+		hfree((void*)this->host);
 		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
 			if (this->filters[i])
-				hfree(this->filters[i]);
+				hfree((void*)this->filters[i]);
 		freeaddrinfo(this->ai);
+		hfree(this);
+	}
+}
+
+/*
+ *	Free a uplink config tree
+ */
+
+void free_uplink_config(struct uplink_config_t **lc)
+{
+	struct uplink_config_t *this;
+	int i;
+
+	while (*lc) {
+		this = *lc;
+		*lc = this->next;
+		hfree((void*)this->proto);
+		hfree((void*)this->host);
+		hfree((void*)this->port);
+		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
+			if (this->filters[i])
+				hfree((void*)this->filters[i]);
 		hfree(this);
 	}
 }
@@ -247,13 +273,13 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
 	
 	port = atoi(argv[3]);
 	if (port < 1 || port > 65535) {
-		fprintf(stderr, "Listen: unsupported port number '%s'\n", argv[3]);
+		fprintf(stderr, "Peer-ip: unsupported port number '%s'\n", argv[3]);
 		return -2;
 	}
 
 	i = getaddrinfo(argv[2], argv[3], &req, &ai);
 	if (i != 0) {
-		fprintf(stderr,"Listen: address parse failure of '%s' '%s'",argv[2],argv[3]);
+		fprintf(stderr,"Peer-ip: address parse failure of '%s' '%s'",argv[2],argv[3]);
 		return i;
 	}
 
@@ -262,6 +288,81 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
 	l->ai = ai;
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		l->filters[i] = NULL;
+		if (argc - 4 > i) {
+			l->filters[i] = hstrdup(argv[i+4]);
+		}
+	}
+	
+	/* put in the list */
+	l->next = *lq;
+	if (l->next)
+		l->next->prevp = &l->next;
+	*lq = l;
+	
+	return 0;
+}
+
+/*
+ *	Parse a uplink definition directive
+ *
+ *	"keyword" [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
+ *
+ */
+
+int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
+{
+	struct uplink_config_t *l;
+	int i, port;
+	struct addrinfo req, *ai;
+
+	if (argc < 4)
+		return -1;
+	
+	memset(&req, 0, sizeof(req));
+	req.ai_family   = 0;
+	req.ai_socktype = SOCK_STREAM;
+	req.ai_protocol = IPPROTO_TCP;
+	req.ai_flags    = 0;
+	ai = NULL;
+
+	if (strcasecmp(argv[1], "tcp") == 0) {
+		// well, do nothing for now.
+	} else if (strcasecmp(argv[1], "udp") == 0) {
+		req.ai_socktype = SOCK_DGRAM;
+		req.ai_protocol = IPPROTO_UDP;
+#if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
+	} else if (strcasecmp(argv[1], "sctp") == 0) {
+		req.ai_socktype = SOCK_SEQPACKET;
+		req.ai_protocol = IPPROTO_SCTP;
+#endif
+	} else {
+		fprintf(stderr, "Uplink: Unsupported protocol '%s'\n", argv[1]);
+		return -2;
+	}
+	
+	port = atoi(argv[3]);
+	if (port < 1 || port > 65535) {
+		fprintf(stderr, "Uplink: unsupported port number '%s'\n", argv[3]);
+		return -2;
+	}
+
+	i = getaddrinfo(argv[2], argv[3], &req, &ai);
+	if (i != 0) {
+		fprintf(stderr,"Uplink: address parse failure of '%s' '%s'",argv[2],argv[3]);
+		return i;
+	}
+	if (ai)
+		freeaddrinfo(ai);
+
+
+	l = hmalloc(sizeof(*l));
+
+	l->proto = hstrdup(argv[1]);
+	l->host  = hstrdup(argv[2]);
+	l->port  = hstrdup(argv[3]);
+
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
 		if (argc - 4 > i) {
@@ -471,11 +572,18 @@ int read_config(void)
 	listen_config_new = NULL;
 
 	/* put in the new aprsis-uplink  config */
-	free_peerip_config(&aprsis_uplink_config);
-	aprsis_uplink_config = new_aprsis_uplink_config;
-	if (aprsis_uplink_config)
-		aprsis_uplink_config->prevp = &aprsis_uplink_config;
-	new_aprsis_uplink_config = NULL;
+	free_uplink_config(&uplink_config);
+	uplink_config = new_uplink_config;
+	if (uplink_config)
+		uplink_config->prevp = &uplink_config;
+	new_uplink_config = NULL;
+
+	/* put in the new aprsis-peerip  config */
+	free_peerip_config(&peerip_config);
+	peerip_config = new_peerip_config;
+	if (peerip_config)
+		peerip_config->prevp = &peerip_config;
+	new_peerip_config = NULL;
 
 	
 	if (failed)

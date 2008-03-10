@@ -34,6 +34,7 @@
 #include "hmalloc.h"
 #include "worker.h"
 #include "login.h"
+#include "uplink.h"
 #include "incoming.h"
 #include "outgoing.h"
 #include "filter.h"
@@ -115,10 +116,13 @@ int worker_sighandler(int signum)
 
 void close_client(struct worker_t *self, struct client_t *c)
 {
-	hlog(LOG_DEBUG, "Worker %d disconnecting client fd %d: %s", self->id, c->fd, c->addr_s);
+	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
+	      self->id, c->state != CSTATE_UPLINK ? "client":"uplink", c->fd, c->addr_s);
+
 	/* close */
 	if (c->fd >= 0)
 		close(c->fd);
+	c->fd = -1;
 	
 	/* remove from polling list */
 	if (self->xp)
@@ -128,7 +132,11 @@ void close_client(struct worker_t *self, struct client_t *c)
 	if (c->next)
 		c->next->prevp = c->prevp;
 	*c->prevp = c->next;
-	
+
+
+	if (c->state == CSTATE_UPLINK)
+		uplink_close(c);
+
 	/* free it up */
 	client_free(c);
 	
@@ -379,9 +387,6 @@ void collect_new_clients(struct worker_t *self)
 		self->clients = c;
 		c->prevp = &self->clients;
 		
-		/* use the default login handler */
-		c->handler = &login_handler;
-		
 		/* add to polling list */
 		c->xfd = xpoll_add(self->xp, c->fd, (void *)c);
 		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
@@ -418,6 +423,11 @@ void send_keepalives(struct worker_t *self)
 	len = (s - buf);
 
 	for (c = self->clients; (c); c = c->next) {
+
+		if (// c->state == CSTATE_UPLINK ||
+		    c->state == CSTATE_COREPEER)
+			continue;
+		/* No keepalives on UPLINK or PEER links.. */
 
 		/* Is it time for keepalive ? */
 		if (c->keepalive <= now) {

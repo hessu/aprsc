@@ -46,6 +46,7 @@
 #include "worker.h"
 #include "dupecheck.h"
 #include "filter.h"
+#include "login.h"
 
 struct listen_t {
 	struct listen_t *next;
@@ -274,6 +275,9 @@ struct client_t *do_accept(struct listen_t *l)
 	c->state = CSTATE_LOGIN;
 	c->addr_s = hstrdup(eb);
 	c->keepalive = now;
+	/* use the default login handler */
+	c->handler = &login_handler;
+		
 
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	

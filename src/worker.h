@@ -122,6 +122,7 @@ extern struct pbuf_t **pbuf_global_dupe_prevp;
 #define CSTATE_LOGIN     0
 #define CSTATE_CONNECTED 1
 #define CSTATE_UPLINK    2
+#define CSTATE_COREPEER  3
 
 struct worker_t; /* used in client_t, but introduced later */
 struct filter_t; /* used in client_t, but introduced later */

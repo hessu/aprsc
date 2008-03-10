@@ -1,0 +1,19 @@
+TODO ITEMS LIST
+
+    - permit only one logged in socket from any given userid
+
+    - core-peer communication
+
+    - udp communication
+
+    - complete output filters
+
+    - timeout processing client vs. uplink vs. core..
+
+
+To Consider:
+
+    - multiple parallel uplink connections, but send data on only one
+      (resilient mesh)
+
+    - SCTP sockets

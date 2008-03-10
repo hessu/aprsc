@@ -10,6 +10,9 @@ TODO ITEMS LIST
 
     - timeout processing client vs. uplink vs. core..
 
+    - global packet queue expiration
+
+    - history dumps
 
 To Consider:
 

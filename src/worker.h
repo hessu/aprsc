@@ -88,6 +88,7 @@ struct pbuf_t {
 		*/
 
 	time_t t;		/* when the packet was received */
+	long seqnum;		/* ever increasing counter, dupecheck sets */
 	int packettype;		/* bitmask: one or more of T_* */
 	int flags;		/* bitmask: one or more of F_* */
 	
@@ -119,10 +120,11 @@ extern struct pbuf_t  *pbuf_global_dupe_last;
 extern struct pbuf_t **pbuf_global_dupe_prevp;
 
 /* a network client */
-#define CSTATE_LOGIN     0
-#define CSTATE_CONNECTED 1
-#define CSTATE_UPLINK    2
-#define CSTATE_COREPEER  3
+#define CSTATE_LOGIN      0
+#define CSTATE_CONNECTED  1
+#define CSTATE_COREPEER   2
+#define CSTATE_UPLINK     3
+#define CSTATE_UPLINKSIM  4
 
 struct worker_t; /* used in client_t, but introduced later */
 struct filter_t; /* used in client_t, but introduced later */

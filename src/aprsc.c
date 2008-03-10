@@ -46,6 +46,7 @@
 int shutting_down = 0;		// are we shutting down now?
 int reopen_logs = 0;		// should we reopen log files now?
 int reconfiguring = 0;		// should we reconfigure now?
+int uplink_simulator;
 
 /*
  *	Parse arguments
@@ -225,8 +226,9 @@ int main(int argc, char **argv)
 
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
-		sleep(1);
-		time(&now);
+		poll(NULL, 0, 300); // 0.300 sec -- or there abouts..
+		if (!uplink_simulator)
+			time(&now);
 		
 		if (reopen_logs) {
 			reopen_logs = 0;

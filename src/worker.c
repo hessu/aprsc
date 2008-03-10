@@ -117,7 +117,7 @@ int worker_sighandler(int signum)
 void close_client(struct worker_t *self, struct client_t *c)
 {
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
-	      self->id, c->state != CSTATE_UPLINK ? "client":"uplink", c->fd, c->addr_s);
+	      self->id, c->state == CSTATE_CONNECTED ? "client":"uplink", c->fd, c->addr_s);
 
 	/* close */
 	if (c->fd >= 0)
@@ -425,6 +425,7 @@ void send_keepalives(struct worker_t *self)
 	for (c = self->clients; (c); c = c->next) {
 
 		if (// c->state == CSTATE_UPLINK ||
+		    c->state == CSTATE_UPLINKSIM ||
 		    c->state == CSTATE_COREPEER)
 			continue;
 		/* No keepalives on UPLINK or PEER links.. */
@@ -539,6 +540,7 @@ void workers_stop(int stop_all)
 	struct worker_t *w;
 	struct pbuf_t *p, *pn;
 	int e;
+	extern long incoming_count;
 	
 	while (workers_running > workers_configured || (stop_all && workers_running > 0)) {
 		hlog(LOG_DEBUG, "Stopping a worker thread...");
@@ -581,6 +583,8 @@ void workers_stop(int stop_all)
 		
 		workers_running--;
 	}
+	hlog(LOG_INFO, "workers; incount=%ld", incoming_count);
+	
 }
 
 /*

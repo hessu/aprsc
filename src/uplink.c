@@ -120,7 +120,12 @@ void uplink_close(struct client_t *c)
 int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	char buf[1000];
-	int passcode = aprs_passcode(c->username);
+	int passcode;
+
+
+	if (!c->username) c->username = hstrdup("simulator");
+
+	passcode = aprs_passcode(c->username);
 
 	hlog(LOG_DEBUG, "%s: server string: '%.*s'", c->addr_s, len, s);
 

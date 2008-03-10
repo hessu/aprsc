@@ -459,7 +459,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 	 * Untested at the time of implementation (no uplink support yet)
 	 */
 	
-	if (c->state == CSTATE_UPLINK && !q_proto) {
+	if (!q_proto && (c->state == CSTATE_UPLINK || c->state == CSTATE_UPLINKSIM)) {
 		if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
 			// fprintf(stderr, "\tpath has ,I in the end\n");
 			/* the path is terminated with ,I - lookup previous callsign in path */

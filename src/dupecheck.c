@@ -60,6 +60,8 @@ int dupecheck_db_size = 8192;
 
 cellarena_t *dupecheck_cells;
 
+int dupecheck_incount;
+
 /*
  *	The cellmalloc does not need internal MUTEX, it is being used in single thread..
  */
@@ -131,11 +133,18 @@ int dupecheck(struct pbuf_t *pb)
 	struct dupe_record_t **dpp, *dp;
 	time_t expiretime = now -  dupefilter_storetime;
 
+	pb->seqnum = ++dupecheck_incount;
+
 	// 1) collect canonic rep of the packet
-	data    = pb->info_start;
-	datalen = pb->packet_len - (data - pb->data);
 	addr    = pb->data;
 	addrlen = pb->dstcall_end - addr;
+
+	data    = pb->info_start;
+	datalen = pb->packet_len - (data - pb->data);
+
+	// Canonic tail has no SPACEs in data portion!
+	while (datalen > 0 && data[datalen-1] == ' ')
+	  --datalen;
 
 	// there are no 3rd-party frames in APRS-IS ...
 
@@ -235,7 +244,8 @@ void dupecheck_thread(void)
 			w->pbuf_incoming_last = &w->pbuf_incoming;
 			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 
-			//hlog(LOG_DEBUG, "dupecheck got packets from worker %d", w->id);
+			hlog(LOG_INFO, "dupecheck got packets from worker %d;  n=%d",
+			     w->id, dupecheck_incount);
 
 			for (pb = pb_list; (pb); pb = pb->next) {
 				int rc = dupecheck(pb);
@@ -280,7 +290,7 @@ void dupecheck_thread(void)
 			usleep(100 * 1000);
 	}
 	
-	hlog(LOG_DEBUG, "Dupecheck thread shut down.");
+	hlog(LOG_INFO, "Dupecheck thread shut down; incount=%ld", dupecheck_incount);
 	dupecheck_running = 0;
 }
 

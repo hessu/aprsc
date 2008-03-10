@@ -49,6 +49,8 @@
 #include "login.h"
 #include "uplink.h"
 
+extern int uplink_simulator;
+
 struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
@@ -56,6 +58,7 @@ struct listen_t {
 	struct addrinfo *ai;
 	int fd;
 	
+	char *name;
 	char *addr_s;
 	char *filters[10]; // up to 10 filter definitions
 } *listen_list = NULL;
@@ -83,6 +86,7 @@ void listener_free(struct listen_t *l)
 
 	if (l->fd >= 0)	close(l->fd);
 	if (l->addr_s)	hfree(l->addr_s);
+	if (l->name)	hfree(l->name);
 
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i)
 		if (l->filters[i])
@@ -170,6 +174,7 @@ int open_listeners(void)
 		sprintf(s, "]:%s", sbuf);
 
 		l->addr_s = hstrdup(eb);
+		l->name   = hstrdup(lc->name);
 		
 		if (open_tcp_listener(l) >= 0) {
 			opened++;
@@ -278,7 +283,13 @@ struct client_t *do_accept(struct listen_t *l)
 	c->keepalive = now;
 	/* use the default login handler */
 	c->handler = &login_handler;
-		
+
+	if (strcmp(l->name,"uplinksim") == 0) {
+	  // uplink simulator
+	  c->state = CSTATE_UPLINKSIM;
+	  c->handler = uplink_login_handler;
+	  uplink_simulator = 1;
+	}
 
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	

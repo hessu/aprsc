@@ -36,11 +36,15 @@
 
 #include "cellmalloc.h"
 
+long incoming_count;
+
 /* global packet buffer freelists */
 
 cellarena_t *pbuf_cells_small;
 cellarena_t *pbuf_cells_large;
 cellarena_t *pbuf_cells_huge;
+
+int pbuf_cells_kb = 1024; // 1M bunches is faster for system than 16M !
 
 
 /*
@@ -54,13 +58,13 @@ void pbuf_init(void)
 {
 	pbuf_cells_small = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
 				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				    1024 /* 1 MB at the time */, 0 /* minfree */);
+				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
 	pbuf_cells_large = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
 				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				    1024 /* 1 MB at the time */, 0 /* minfree */);
+				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
 	pbuf_cells_huge  = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_HUGE,
 				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				    1024 /* 1 MB at the time */, 0 /* minfree */);
+				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
 }
 
 /*
@@ -373,8 +377,11 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	/* get a packet buffer */
 	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNULL */
-	if (!pb)
+	if (!pb) {
+		// This should never happen...
+		hlog(LOG_INFO, "pbuf_get failed to get a block");
 		return -1; // No room :-(
+	}
 	pb->next = NULL;
 	
 	/* store the source reference */
@@ -415,6 +422,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	*self->pbuf_incoming_local_last = pb;
 	self->pbuf_incoming_local_last = &pb->next;
 
+++incoming_count;
+
 	return rc;
 }
 
@@ -437,6 +446,18 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	}
 
 	hlog(LOG_DEBUG, "Incoming: %.*s", len, s);
+
+	if (c->state == CSTATE_UPLINKSIM) {
+	  long t;
+	  char *p = s;
+	  for (;*p != '\t' && p - s < len; ++p);
+	  if (*p == '\t') *p++ = 0;
+	  sscanf(s, "%ld", &t);
+	  now = t;
+	  len -= (p - s);
+	  s = p;
+	}
+
 	
 	 /* starts with # => a comment packet, timestamp or something */
 	if (memcmp(s, "# ",2) == 0)

@@ -31,6 +31,132 @@
 #include "config.h"
 
 /*
+ *	q_dropcheck contains the last big block of the Q construct algorithm
+ *	(All packets with q constructs...) and does rejection and duplicate
+ *	dropping.
+ */
+
+int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
+		int new_q_len, char q_proto, char q_type, char *q_start,
+		char *path_end)
+{
+	char *p, *next, *next_end;
+	int len;
+	
+	/*
+	 * if ,qAZ, is the q construct:
+	 * {
+	 *	Dump to the packet to the reject log
+	 *	Quit processing the packet
+	 * }
+	 */
+	
+	if (q_proto == 'A' && q_type == 'Z') {
+		/* TODO: We could have a reject log here... */
+		return -2; /* drop the packet */
+	}
+	
+	/*
+	 * If ,SERVERLOGIN is found after the q construct:
+	 * {
+	 *	Dump to the loop log with the sender's IP address for identification
+	 *	Quit processing the packet
+	 * }
+	 *
+	 * (note: if serverlogin is 'XYZ-1', it must not match XYZ-12, so we need to
+	 * match against ,SERVERLOGIN, or ,SERVERLOGIN:)
+	 */
+	
+	len = strlen(mycall);
+	p = memstr(mycall, q_start+4, path_end);
+	if (p && *(p-1) == ',' && ( *(p+len) == ',' || p+len == path_end || *(p+len) == ':' )) {
+		/* TODO: Should dump to a loop log... */
+		return -2; /* drop the packet */
+	}
+	
+	/*
+	 * If a callsign-SSID is found twice in the q construct:
+	 * {
+	 *	Dump to the loop log with the sender's IP address for identification
+	 *	Quit processing the packet
+	 * }
+	 */
+	p = q_start + 3;
+	while (p < path_end) {
+		/* find next ',' */
+		p = memchr(p, ',', path_end - p);
+		if (!p) /* no more... */
+			break;
+		
+		p++; /* p should now point to the callsign */
+		if (p >= path_end)
+			break;
+		
+		/* find next callsign */
+		next = memchr(p, ',', path_end - p);
+		if (!next) /* no more callsigns */
+			break;
+		len = next - p;
+		if (len == 0)
+			continue; /* whee, found a ",," */
+		
+		/* loop through the rest of the callsigns */
+		while ((next) && next < path_end) {
+			next++;
+			/* find end of the next callsign */
+			next_end = memchr(next, ',', path_end - next);
+			if (!next_end)
+				next_end = path_end;
+			
+			if (next_end - next == 0)
+				continue; /* whee, found a ",," */
+			
+			if (next_end - next == len && strncasecmp(p, next, len) == 0) {
+				/* TODO: should dump to a loop log */
+				return -2;
+			}
+			
+			next = next_end;
+		}
+		
+		p++;
+	}
+	
+	/*
+	 * If a verified login other than this login is found in the q construct
+	 * and that login is not allowed to have multiple verified connects (the
+	 * IPADDR of an outbound connection is considered a verified login):
+	 * {
+	 *	Dump to the loop log with the sender's IP address for identification
+	 *	Quit processing the packet
+	 * }
+	 */
+	
+	/*
+	 * If the packet is from an inbound port and the login is found after the q construct but is not the LAST VIACALL:
+	 * {
+	 *	Dump to the loop log with the sender's IP address for identification
+	 *	Quit processing the packet
+	 * }
+	 */
+	
+	/*
+	 * If trace is on, the q construct is qAI, or the FROMCALL is on the server's trace list:
+	 * {
+	 *	If the packet is from a verified port where the login is not found after the q construct:
+	 *		Append ,login
+	 *	else if the packet is from an outbound connection
+	 *		Append ,IPADDR
+	 *	
+	 *	Append ,SERVERLOGIN
+	 * }
+	 */
+	
+	return new_q_len;
+}
+
+
+/*
  *	Parse, and possibly generate a Q construct.
  *	http://www.aprs-is.net/q.htm
  *	http://www.aprs-is.net/qalgorithm.htm
@@ -205,6 +331,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 					/* Replace qAR with qAo */
 					q_type = 'o';
 					*(q_start + 3) = 'o';
+					q_type = 'o';
 					// fprintf(stderr, "\treplaced qAR with qAo\n");
 				}
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
@@ -222,10 +349,14 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 						/* Replace ,login,I with qAo,login */
 						*path_end = p;
 						new_q_len = snprintf(new_q, new_q_size, ",qAo,%s", c->username);
+						q_proto = 'A';
+						q_type = 'o';
 					} else {
 						/* Replace ,VIACALL,I with qAr,VIACALL */
 						*path_end = p;
 						new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+						q_proto = 'A';
+						q_type = 'r';
 					}
 				} else {
 					/* Undefined by the algorithm - there was no VIACALL */
@@ -234,8 +365,11 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 			} else {
 				/* Append ,qAO,login */
 				new_q_len = snprintf(new_q, new_q_size, ",qAO,%s", c->username);
+				q_proto = 'A';
+				q_type = 'O';
 			}
-			/* FIXME: Skip to "All packets with q constructs" */
+			/* Skip to "All packets with q constructs" */
+			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 		}
 		
 		/*
@@ -243,7 +377,9 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		 *	Skip to "All packets with q constructs"
 		 */
 		if (q_proto) {
-			/* FIXME: Skip to "All packets with q constructs" */
+			// fprintf(stderr, "\texisting q construct\n");
+			/* Skip to "All packets with q constructs" */
+			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 		}
 		
 		/* At this point we have packets which do not have Q constructs, and
@@ -283,10 +419,14 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 					/* Replace ,login,I with qAR,login */
 					*path_end = p;
 					new_q_len = snprintf(new_q, new_q_size, ",qAR,%s", c->username);
+					q_proto = 'A';
+					q_type = 'R';
 				} else {
 					/* Replace ,VIACALL,I with qAr,VIACALL */
 					*path_end = p;
 					new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+					q_proto = 'A';
+					q_type = 'r';
 				}
 			} else {
 				/* Undefined by the algorithm - there was no VIACALL */
@@ -298,8 +438,11 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		} else {
 			/* Append ,qAS,login */
 			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->username);
+			q_proto = 'A';
+			q_type = 'S';
 		}
-		/* FIXME: Skip to "All packets with q constructs" */
+		/* Skip to "All packets with q constructs" */
+		return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 	}
 	
 	/*
@@ -318,7 +461,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 	
 	if (c->state == CSTATE_UPLINK && !q_proto) {
 		if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
-			fprintf(stderr, "\tpath has ,I in the end\n");
+			// fprintf(stderr, "\tpath has ,I in the end\n");
 			/* the path is terminated with ,I - lookup previous callsign in path */
 			char *p = *path_end - 3;
 			while (p > via_start && *p != ',')
@@ -326,10 +469,12 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 			if (*p == ',') {
 				const char *prevcall = p+1;
 				const char *prevcall_end = *path_end - 2;
-				fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+				// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 				/* Replace ,VIACALL,I with qAr,VIACALL */
 				*path_end = p;
 				new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+				q_proto = 'A';
+				q_type = 'r';
 			} else {
 				/* Undefined by the algorithm - there was no VIACALL */
 				return -1;
@@ -342,9 +487,11 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 			/* FIXME: generate the hex IP addr
 			 * new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", ...);
 			 */
+			q_proto = 'A';
+			q_type = 'S';
 		}
 	}
 	
-	return new_q_len;
+	return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 }
 

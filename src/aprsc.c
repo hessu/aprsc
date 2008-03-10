@@ -221,13 +221,13 @@ int main(int argc, char **argv)
 
 
 	/* start the accept thread, which will start server threads */
-	if (pthread_create(&accept_th, NULL, (void *)accept_thread, NULL))
-		perror("pthread_create failed for accept_thread");
-
-	/* start the accept thread, which will start server threads */
 	if (pthread_create(&uplink_th, NULL, (void *)uplink_thread, NULL))
 		perror("pthread_create failed for uplink_thread");
 	
+	/* start the accept thread, which will start server threads */
+	if (pthread_create(&accept_th, NULL, (void *)accept_thread, NULL))
+		perror("pthread_create failed for accept_thread");
+
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
 		sleep(1);
@@ -261,13 +261,6 @@ int main(int argc, char **argv)
 
 	}
 	
-	hlog(LOG_INFO, "Signalling uplink_thread to shut down...");
-	uplink_shutting_down = 1;
-	if ((e = pthread_join(uplink_th, NULL)))
-		hlog(LOG_ERR, "Could not pthread_join uplink_th: %s", strerror(e));
-	else
-		hlog(LOG_INFO, "Uplink thread has terminated.");
-
 	hlog(LOG_INFO, "Signalling accept_thread to shut down...");
 	accept_shutting_down = 1;
 	if ((e = pthread_join(accept_th, NULL)))
@@ -275,6 +268,13 @@ int main(int argc, char **argv)
 	else
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
+	hlog(LOG_INFO, "Signalling uplink_thread to shut down...");
+	uplink_shutting_down = 1;
+	if ((e = pthread_join(uplink_th, NULL)))
+		hlog(LOG_ERR, "Could not pthread_join uplink_th: %s", strerror(e));
+	else
+		hlog(LOG_INFO, "Uplink thread has terminated.");
+
 	// sp_free_freelist();
 	// free_config();
 	

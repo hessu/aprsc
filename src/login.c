@@ -125,7 +125,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 			}
 		} else if (strcasecmp(argv[i], "filter") == 0) {
 			while (++i < argc) {
-				/* TODO: parse filter in argv[i] */
+				/* parse filters in argv[i] */
 				int rc = filter_parse(c, argv[i], 1);
 				if (rc)
 					client_printf( self, c, "# Parse errors on filter spec: '%s'\r\n", argv[i]);

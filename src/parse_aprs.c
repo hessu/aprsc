@@ -68,19 +68,28 @@ void pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const ch
 	pb->symbol[0] = sym_table;
 	pb->symbol[1] = sym_code;
 	pb->symbol[2] = 0;
+
+	/* Is it perhaps a weather report ? */
+	if (sym_code == '_' && (sym_table == '/' || sym_table == '\\')) 
+		pb->packettype |= T_WX;
+	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
+		pb->packettype |= T_WX;	/* Hurricane */
+
 }
 
 int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	// float lat = 0.0, lng = 0.0;
 
-	fprintf(stderr, "parse_aprs_nmea\n");
-
 	if (memcmp(body,"ULT",3) == 0) {
 		/* Ah..  "$ULT..." - that is, Ultimeter 2000 weather instrument */
 		pb->packettype |= T_WX;
 		return 1;
 	}
+
+	fprintf(stderr, "parse_aprs_nmea:   '%.*s'\n", (int)(body_end - body), body);
+
+
 	if (memcmp(body,"GP",2) != 0)
 		return 0; /* Well..  Not NMEA frame */
 	body += 2;
@@ -95,7 +104,7 @@ int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 	   WPT  Way Point Location
 	 */
 
-	// FIXME: NMEA sensence parser!
+	// FIXME: NMEA sentence parser!
 
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
@@ -105,7 +114,7 @@ int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	// float lat = 0.0, lng = 0.0;
 
-	fprintf(stderr, "parse_aprs_telem\n");
+	// fprintf(stderr, "parse_aprs_telem\n");
 
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
@@ -119,7 +128,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	char *p;
 	int i;
 	
-	fprintf(stderr, "parse_aprs_mice\n");
+	// fprintf(stderr, "parse_aprs_mice\n");
 	
 	/* check packet length */
 	if (body_end - body < 8)
@@ -147,7 +156,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 			|| (d_start[i] >= 'P' && d_start[i] <= 'Z')))
 				return 0;
 	
-	fprintf(stderr, "\tpassed dstcall format check\n");
+	// fprintf(stderr, "\tpassed dstcall format check\n");
 	
 	/* validate information field (longitude, course, speed and
 	 * symbol table and code are checked). Not bullet proof..
@@ -164,7 +173,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	if ((body[6] < 0x21 || body[6] > 0x7b) && body[6] != 0x7d) return 0;
 	if (!valid_sym_table_uncompressed(body[7])) return 0;
 	
-	fprintf(stderr, "\tpassed info format check\n");
+	// fprintf(stderr, "\tpassed info format check\n");
 	
 	/* make a local copy, we're going to modify it */
 	strncpy(dstcall, d_start, 6);
@@ -183,7 +192,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 		else if (*p == 'K' || *p == 'L' || *p == 'Z')
 			*p = '_';
 	}
-	fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
+	// fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
 	
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
@@ -196,7 +205,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	int lat1, lat2, lat3, lat4, lng1, lng2, lng3, lng4;
 	double lat = 0.0, lng = 0.0;
 	
-	fprintf(stderr, "parse_aprs_compressed\n");
+	// fprintf(stderr, "parse_aprs_compressed\n");
 	
 	/* A compressed position is always 13 characters long.
 	 * Make sure we get at least 13 characters and that they are ok.
@@ -214,7 +223,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 		if (body[i] < 0x21 || body[i] > 0x7b)
 			return 0;
 	
-	fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);
+	// fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);
 	
 	/* decode */
 	lat1 = body[1] - 33;
@@ -230,7 +239,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	lat = 90.0 - ((double)(lat1 * 91 * 91 * 91 + lat2 * 91 * 91 + lat3 * 91 + lat4) / (double)380926.0);
 	lng = -180.0 + ((double)(lng1 * 91 * 91 * 91 + lng2 * 91 * 91 + lng3 * 91 + lng4) / (double)190463.0);
 	
-	fprintf(stderr, "\tlat %.3f lng %.3f\n", lat, lng);
+	// fprintf(stderr, "\tlat %.3f lng %.3f\n", lat, lng);
 	
 	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
 		return 0; /* out of range */
@@ -249,17 +258,17 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	int issouth = 0;
 	int iswest = 0;
 	
-	fprintf(stderr, "parse_aprs_uncompressed\n");
+	// fprintf(stderr, "parse_aprs_uncompressed\n");
 	
 	if (body_end - body < 19) {
-		fprintf(stderr, "\ttoo short\n");
+		// fprintf(stderr, "\ttoo short\n");
 		return 0;
 	}
 	
 	/* make a local copy, so we can overwrite it at will. */
 	memcpy(posbuf, body, 19);
 	posbuf[19] = 0;
-	fprintf(stderr, "\tposbuf: %s\n", posbuf);
+	// fprintf(stderr, "\tposbuf: %s\n", posbuf);
 	
 	/* position ambiquity is going to get ignored now, it's not needed in this application. */
 	/* lat */
@@ -273,13 +282,13 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	if (posbuf[15] == ' ') posbuf[15] = '5';
 	if (posbuf[16] == ' ') posbuf[16] = '5';
 	
-	fprintf(stderr, "\tafter filling amb: %s\n", posbuf);
+	// fprintf(stderr, "\tafter filling amb: %s\n", posbuf);
 	/* 3210.70N/13132.15E# */
 	//if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	    &lat_deg, &lat_min, &lat_min_frag, &lat_hemi, &sym_table,
 	    &lng_deg, &lng_min, &lng_min_frag, &lng_hemi, &sym_code) != 10) {
-		fprintf(stderr, "\tsscanf failed\n");
+		// fprintf(stderr, "\tsscanf failed\n");
 		return 0;
 	}
 	
@@ -308,9 +317,10 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	if (iswest)
 		lng = 0.0 - lng;
 	
-	fprintf(stderr, "\tlat %u %u.%u %c (%.3f) lng %u %u.%u %c (%.3f)\n",
-		lat_deg, lat_min, lat_min_frag, (int)lat_hemi, lat,
-		lng_deg, lng_min, lng_min_frag, (int)lng_hemi, lng);
+	// fprintf(stderr, "\tlat %u %u.%u %c (%.3f) lng %u %u.%u %c (%.3f)\n",
+	// 	lat_deg, lat_min, lat_min_frag, (int)lat_hemi, lat,
+	// 	lng_deg, lng_min, lng_min_frag, (int)lng_hemi, lng);
+	// fprintf(stderr, "\tsym '%c' '%c'\n", sym_table, sym_code);
 
 	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
 		return 0; /* out of range */
@@ -324,7 +334,9 @@ int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
 	//float lat = 0.0, lng = 0.0;
 	pb->packettype |= T_OBJECT;
 
-	fprintf(stderr, "parse_aprs_object\n");
+	// FIXME: parse APRS object
+
+	// fprintf(stderr, "parse_aprs_object\n");
 
 	//pbuf_fill_pos(pb, lat, lng);
 	return 0;
@@ -335,7 +347,9 @@ int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
 	//float lat = 0.0, lng = 0.0;
 	pb->packettype |= T_ITEM;
 
-	fprintf(stderr, "parse_aprs_item\n");
+	// FIXME: parse APRS item
+
+	// fprintf(stderr, "parse_aprs_item\n");
 	
 	//pbuf_fill_pos(pb, lat, lng);
 	return 0;
@@ -353,7 +367,7 @@ int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
  * TODO: Parse also symbols where applicable!
  *       .. pick defaults from source SSID value
  *       (maybe my caller can do destSSID/sourceSSID default digging?)
- * TODO: Recognize WX and TELEM packets in !/=@ packets too!
+ * TODO: Recognize TELEM packets in !/=@ packets too!
  *
  */
 
@@ -394,9 +408,9 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	packettype = *pb->info_start;
 	
 	/* failed parsing */
-	fprintf(stderr, "parse_aprs (%d):\n", paclen);
-	fwrite(pb->info_start, paclen, 1, stderr);
-	fprintf(stderr, "\n");
+	// fprintf(stderr, "parse_aprs (%d):\n", paclen);
+	// fwrite(pb->info_start, paclen, 1, stderr);
+	// fprintf(stderr, "\n");
 	
 	/* body is right after the packet type character */
 	body = pb->info_start + 1;

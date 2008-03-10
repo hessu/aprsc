@@ -300,18 +300,18 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 	}
 	*/
 	
-	fprintf(stderr, "q_process\n");
+	// fprintf(stderr, "q_process\n");
 	q_start = memstr(",q", via_start, *path_end);
 	if (q_start) {
-		fprintf(stderr, "\tfound existing q construct\n");
+		// fprintf(stderr, "\tfound existing q construct\n");
 		/* there is an existing Q construct, check for a callsign after it */
 		q_nextcall = memchr(q_start + 1, ',', *path_end - q_start - 1);
 		if (!q_nextcall) {
-			fprintf(stderr, "\tno comma after Q construct, ignoring and overwriting construct\n");
+			// fprintf(stderr, "\tno comma after Q construct, ignoring and overwriting construct\n");
 			*path_end = q_start;
 		} else if (q_nextcall - q_start != 4) {
 			/* does not fit qPT */
-			fprintf(stderr, "\tlength of Q construct is not 3 characters\n");
+			// fprintf(stderr, "\tlength of Q construct is not 3 characters\n");
 			*path_end = q_start;
 		} else {
 			/* parse the q construct itself */
@@ -324,7 +324,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 			while (q_nextcall_end < *path_end && *q_nextcall_end != ',' && *q_nextcall_end != ':')
 				q_nextcall_end++;
 			if (q_nextcall == q_nextcall_end) {
-				fprintf(stderr, "\tno callsign after Q construct, ignoring and overwriting construct\n");
+				// fprintf(stderr, "\tno callsign after Q construct, ignoring and overwriting construct\n");
 				*path_end = q_start;
 				q_proto = q_type = 0; /* for the further code: we do not have a Qc */
 			}
@@ -332,7 +332,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		}
 	}
 	
-	fprintf(stderr, "\tstep 2...\n");
+	// fprintf(stderr, "\tstep 2...\n");
+
 	/* ok, we now either have found an existing Q construct + the next callsign,
 	 * or have eliminated an outright invalid Q construct.
 	 */
@@ -389,7 +390,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		 * }
 		 */
 		if (!c->validated && originated_by_client) {
-			fprintf(stderr, "\tunvalidated client sends packet originated by itself\n");
+			// fprintf(stderr, "\tunvalidated client sends packet originated by itself\n");
 			// FIXME: how to check if TCPXX conversion is done? Just assume?
 			if (q_proto && q_nextcall_end == *path_end) {
 				/* a q construct with a single call exists in the packet,
@@ -429,19 +430,19 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		 */
 		if (c->validated && !originated_by_client) {
 			// FIXME: what is a "verified client-only connection?"
-			fprintf(stderr, "\tvalidated client sends sends packet originated by someone else\n");
+			// fprintf(stderr, "\tvalidated client sends sends packet originated by someone else\n");
 			/* if a q construct exists in the packet */
 			if (q_proto) {
-				fprintf(stderr, "\thas q construct\n");
+				// fprintf(stderr, "\thas q construct\n");
 				/* if the q construct is at the end of the path AND it equals ,qAR,login */
 				if (q_proto == 'A' && q_type == 'R' && q_nextcall_end == *path_end) {
 					/* Replace qAR with qAo */
 					q_type = 'o';
 					*(q_start + 3) = 'o';
-					fprintf(stderr, "\treplaced qAR with qAo\n");
+					// fprintf(stderr, "\treplaced qAR with qAo\n");
 				}
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
-				fprintf(stderr, "\tpath has ,I in the end\n");
+				// fprintf(stderr, "\tpath has ,I in the end\n");
 				/* the path is terminated with ,I - lookup previous callsign in path */
 				char *p = *path_end - 3;
 				while (p > via_start && *p != ',')
@@ -449,7 +450,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 				if (*p == ',') {
 					const char *prevcall = p+1;
 					const char *prevcall_end = *path_end - 2;
-					fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+					// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 					/* if the path is terminated with ,login,I */
 					if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
 						/* Replace ,login,I with qAo,login */
@@ -502,7 +503,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		 * Skip to "All packets with q constructs"
 		 */
 		if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
-			fprintf(stderr, "\tpath has ,I in the end\n");
+			// fprintf(stderr, "\tpath has ,I in the end\n");
 			/* the path is terminated with ,I - lookup previous callsign in path */
 			char *p = *path_end - 3;
 			while (p > via_start && *p != ',')
@@ -510,7 +511,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 			if (*p == ',') {
 				const char *prevcall = p+1;
 				const char *prevcall_end = *path_end - 2;
-				fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+				// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 				/* if the path is terminated with ,login,I */
 				if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
 					/* Replace ,login,I with qAR,login */
@@ -685,6 +686,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNULL */
 	if (!pb)
 		return -1; // No room :-(
+	pb->next = NULL;
 	
 	/* store the source reference */
 	pb->origin = c;
@@ -721,7 +723,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	rc = parse_aprs(self, pb);
 
 	/* put the buffer in the thread's incoming queue */
-	pb->next = NULL;
 	*self->pbuf_incoming_local_last = pb;
 	self->pbuf_incoming_local_last = &pb->next;
 

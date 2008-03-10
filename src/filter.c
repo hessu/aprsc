@@ -19,7 +19,7 @@
  *	
  */
 
-// TODO: filters: d e q s
+// FIXME: filters: d e q s
 
 #include <string.h>
 #include <strings.h>
@@ -552,6 +552,7 @@ int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
 	  pb->dstcall_end += 1;
 
+	// FIXME: write d-filter
 
 	return 0;
 }
@@ -564,6 +565,9 @@ int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   This allows filtering based on receiving IGate, etc.
 	   Supports * wildcard.
 	*/
+
+	// FIXME: write e-filter
+
 	return 0;
 }
 
@@ -656,6 +660,9 @@ int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   q//I   Pass all position packets from IGATES identified
 	              in other packets by qAr or qAR
 	*/
+
+	// FIXME: write q-filter
+
 	return 0;
 }
 
@@ -671,6 +678,9 @@ int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   s//#   This will pass all Digi with or without overlay
 	   s//#/T This will pass all Digi with overlay of capital T
 	*/
+
+	// FIXME: write s-filter
+
 	return 0;
 }
 
@@ -935,6 +945,7 @@ int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	int rc = 0;
+
 	switch (f->h.type) {
 
 	case 'a':
@@ -1006,6 +1017,7 @@ int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f
 		rc = -1;
 		break;
 	}
+	hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
 
 	return rc;
 }

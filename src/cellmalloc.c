@@ -80,10 +80,10 @@ int new_cellblock(cellarena_t *ca)
 
 	for (i = 0; i < ca->createsize; i += ca->increment) {
 		struct cellhead *ch = (struct cellhead *)(cb + i); /* pointer arithmentic! */
-		if (ca->free_tail) {
-		  ca->free_tail->next = ch;
-		} else {
+		if (!ca->free_head) {
 		  ca->free_head = ch;
+		} else {
+		  ca->free_tail->next = ch;
 		}
 		ca->free_tail = ch;
 		ch->next = NULL;

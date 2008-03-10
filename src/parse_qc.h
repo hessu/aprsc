@@ -19,15 +19,11 @@
  *	
  */
 
-#ifndef INCOMING_H
-#define INCOMING_H
+#ifndef PARSE_QC_H
+#define PARSE_QC_H
 
-#include "worker.h"
+#include "worker.h" /* struct client_t */
 
-extern char *memstr(char *needle, char *haystack, char *haystack_end);
-
-extern void incoming_flush(struct worker_t *self);
-extern int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len);
+extern int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, char **path_end, int pathlen, int originated_by_client);
 
 #endif
-

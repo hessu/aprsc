@@ -53,7 +53,7 @@ all: aprsc
 
 OBJS = aprsc.o accept.o worker.o \
 	login.o incoming.o dupecheck.o outgoing.o \
-	parse_aprs.o \
+	parse_aprs.o parse_qc.o \
 	config.o netlib.o xpoll.o \
 	cfgfile.o passcode.o uplink.o \
 	rwlock.o hmalloc.o hlog.o \

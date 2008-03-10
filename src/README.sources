@@ -41,6 +41,17 @@ filter.c
 	Filter used by the outgoing packet processing.
 	It tells if the packet should be sent out on given client socket.
 
+parse_aprs.c
+	A simple APRS parser for aprsc. Translated from Ham::APRS::FAP
+	perl module (by OH2KKU). Only needs to get lat/lng out of the
+	packet, and classify the type of the packet, other features would
+	be unnecessary in this application, and slow down the parser.
+	Called by incoming.c.
+
+parse_qc.c
+	Parses and possibly generates a new Q construct, or modifies
+	an existing one. Called by incoming.c.
+
 config.c
 	Code to read (and reread) configuration using the services
 	provided by cfgfile.c. Validates configuration and takes

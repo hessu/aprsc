@@ -12,8 +12,9 @@ my $APRSIS;
 my $mycall = 'OH2MQK-RO';
 my $filter = 'p/OH2R -p/OH2 p/OH ';
 #my $filter = 'p/OH2R';
+$filter = undef;
 
-$APRSIS = APRS::IS->new('rotate.aprs.net:14580', $mycall, $filter);
+$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
 
 if (!defined($APRSIS)) {
     printf "aprsazel: Failed to open APRS-IS socket!\n";

@@ -35,15 +35,16 @@ while (! $quit && $now < $last) {
 
     $now = time;
     $line = $APRSIS->getline;
-    next if (!defined $line);
-    chomp $line;
-    printf "T> %s\n", $line;
+    if (defined $line) {
+        chomp $line;
+	printf "T> %s\n", $line;
+    }
     
     $line = $ISIN->getline;
-    next if (!defined $line);
-    chomp $line;
-    printf "A< %s\n", $line;
-    $APRSIS->sendline($line);
+    if (defined $line) {
+	printf "A< %s", $line;
+	$APRSIS->writeline($line);
+    }
 }
 
 printf "\n";
@@ -170,7 +171,21 @@ sub sendline {
     $self->{sock}->printf( "%s\r\n", $line);
     $self->{sock}->flush;
 
+    $self->{sock}->blocking(0);
+
+    undef;
+}
+
+sub writeline {
+    my $self = shift;
+    my $line = shift;
+
+    my @ready;
+
     $self->{sock}->blocking(1);
+    $self->{sock}->printf( "%s", $line);
+    $self->{sock}->flush;
+    $self->{sock}->blocking(0);
 
     undef;
 }

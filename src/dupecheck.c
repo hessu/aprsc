@@ -153,7 +153,7 @@ int dupecheck(struct pbuf_t *pb)
 	  dp = *dpp;
 	  if (dp->t < expiretime) {
 	    // Too old, discard
-	    dpp = &dp->next;
+	    *dpp = dp->next;
 	    dupecheck_db_free(dp);
 	    continue;
 	  }

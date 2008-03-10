@@ -1,5 +1,8 @@
 TODO ITEMS LIST
 
+    - remove the UPLINKSIM code (svn diff -r 99:100) before release and
+      final testing
+
     - permit only one logged in socket from any given userid
 
     - core-peer communication
@@ -17,6 +20,7 @@ TODO ITEMS LIST
 To Consider:
 
     - multiple parallel uplink connections, but send data on only one
-      (resilient mesh)
+      (resilient mesh) (CANNOT DO - will increase bandwidth on core servers
+      if used with full feeds)
 
     - SCTP sockets

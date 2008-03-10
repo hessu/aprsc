@@ -11,7 +11,7 @@ my $quit = 0;
 my $APRSIS;
 
 my $mycall = 'OH2MQK-RO';
-my $filter = 'p/OH2R -p/OH2 p/OH ';
+my $filter = ''; # 'p/OH2R -p/OH2 p/OH ';
 
 $APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter);
 $ISIN   = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
@@ -37,13 +37,13 @@ while (! $quit && $now < $last) {
     $line = $APRSIS->getline;
     if (defined $line) {
         chomp $line;
-	printf "T> %s\n", $line;
+	# printf "T> %s\n", $line;
     }
     
     $line = $ISIN->getline;
     if (defined $line) {
-	printf "A< %s", $line;
 	$APRSIS->writeline($line);
+	# printf "A< %s", $line;
     }
 }
 
@@ -150,13 +150,13 @@ sub getline {
 
     my @ready;
 
-    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
+#    if (@ready = $self->{select}->can_read(0.01)) { # Wait at most 1.0 seconds
 
 	# We have only one socket...
 
 	return $self->{sock}->getline;
 
-    }
+#    }
 
     undef;
 }

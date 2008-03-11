@@ -76,17 +76,19 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 	 * Produce an array of pointers pointing to each callsign in the path
 	 */
 	qcallc = 0;
-	p = q_start + 4;
-	while (qcallc < MAX_Q_CALLS && p < path_end) {
-		while (p < path_end && *p == ',')
-			p++;
-		if (p == path_end)
-			break;
-		qcallv[qcallc++] = p;
-		while (p < path_end && *p != ',')
-			p++;
+	if (q_start) {
+		p = q_start + 4;
+		while (qcallc < MAX_Q_CALLS && p < path_end) {
+			while (p < path_end && *p == ',')
+				p++;
+			if (p == path_end)
+				break;
+			qcallv[qcallc++] = p;
+			while (p < path_end && *p != ',')
+				p++;
+		}
+		qcallv[qcallc] = p+1;
 	}
-	qcallv[qcallc] = p+1;
 	
 	/*
 	 * If ,SERVERLOGIN is found after the q construct:
@@ -99,11 +101,13 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 	 * match against ,SERVERLOGIN, or ,SERVERLOGIN:)
 	 */
 	
-	mycall_len = strlen(mycall);
-	p = memstr(mycall, q_start+4, path_end);
-	if (p && *(p-1) == ',' && ( *(p+mycall_len) == ',' || p+mycall_len == path_end || *(p+mycall_len) == ':' )) {
-		/* TODO: Should dump to a loop log... */
-		return -2; /* drop the packet */
+	if (q_start) {
+		mycall_len = strlen(mycall);
+		p = memstr(mycall, q_start+4, path_end);
+		if (p && *(p-1) == ',' && ( *(p+mycall_len) == ',' || p+mycall_len == path_end || *(p+mycall_len) == ':' )) {
+			/* TODO: Should dump to a loop log... */
+			return -2; /* drop the packet */
+		}
 	}
 	
 	/*

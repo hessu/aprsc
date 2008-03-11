@@ -425,11 +425,10 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 
 	i = getaddrinfo(argv[4], argv[5], &req, &ai);
 	if (i != 0) {
-	  fprintf(stderr,"Listen: address parse failure of '%s' '%s'",argv[4],argv[5]);
-	  return i;
+		fprintf(stderr, "Listen: address parse failure of '%s' '%s'", argv[4], argv[5]);
+		return i;
 	}
-
-
+	
 	l = hmalloc(sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);

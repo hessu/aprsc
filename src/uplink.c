@@ -79,15 +79,15 @@ void close_uplinkers(void)
 {
 	int rc;
 
-	hlog(LOG_DEBUG, "Closing uplinking socket....");
-
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
 		return;
 	}
 
-	if (uplink_client && uplink_client->fd >= 0)
+	if (uplink_client && uplink_client->fd >= 0) {
+		hlog(LOG_DEBUG, "Closing uplinking socket....");
 		shutdown(uplink_client->fd, SHUT_RDWR);
+	}
 
 	if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc));
@@ -100,7 +100,7 @@ void uplink_close(struct client_t *c)
 {
 	int rc;
 
-	hlog(LOG_DEBUG, "Closing uplink socket....");
+	hlog(LOG_DEBUG, "Uplink socket has been closed.");
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -338,8 +338,7 @@ void uplink_thread(void *asdf)
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 
 	hlog(LOG_INFO, "Uplink_thread starting...");
-
-	
+		
 	uplink_reconfiguring = 1;
 	while (!uplink_shutting_down) {
 		if (uplink_reconfiguring) {
@@ -347,20 +346,11 @@ void uplink_thread(void *asdf)
 			close_uplinkers();
 
 			hlog(LOG_INFO, "Uplink thread ready.");
-			
-			// /* stop the dupechecking thread (if it runs) while adjusting
-			//  * the amount of workers... it walks the worker list.
-			//  */
-			// dupecheck_stop();
-			// workers_start();
-			// dupecheck_start();
 		}
 		
 		/* sleep for 1 second */
 		poll(NULL, 0, 1000);
-
-
-
+		
 		if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 			hlog(LOG_ERR, "uplink_thread(): could not lock uplink_client_mutex: %s", strerror(rc));
 			continue;
@@ -390,8 +380,6 @@ void uplink_thread(void *asdf)
 	
 	hlog(LOG_DEBUG, "Uplinker thread shutting down uplinking sockets...");
 	close_uplinkers();
-	// dupecheck_stop();
-	// workers_stop(1);
 }
 
 
@@ -421,8 +409,10 @@ void uplink_stop(void)
 	hlog(LOG_INFO, "Signalling uplink_thread to shut down...");
 	uplink_shutting_down = 1;
 	
-	if ((e = pthread_join(uplink_th, NULL)))
+	if ((e = pthread_join(uplink_th, NULL))) { 
 		hlog(LOG_ERR, "Could not pthread_join uplink_th: %s", strerror(e));
-	else
+	} else {
 		hlog(LOG_INFO, "Uplink thread has terminated.");
+		uplink_running = 0;
+	}
 }

@@ -297,7 +297,7 @@ struct client_t *do_accept(struct listen_t *l)
 		if (l->filters[i])
 			filter_parse(c, l->filters[i], 0); /* system filters */
 	}
-
+	
 	/* set non-blocking mode */
 	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
 		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
@@ -398,9 +398,11 @@ void accept_thread(void *asdf)
 			}
 			hlog(LOG_INFO, "Accept thread ready.");
 			
-			/* stop the dupechecking thread (if it runs) while adjusting
-			 * the amount of workers... it walks the worker list.
+			/* stop the dupechecking and uplink threads while adjusting
+			 * the amount of workers... they walk the worker list, and
+			 * might get confused when workers are stopped or started.
 			 */
+			uplink_stop();
 			dupecheck_stop();
 			workers_start();
 			dupecheck_start();
@@ -429,7 +431,6 @@ void accept_thread(void *asdf)
 				do_accept(l); /* accept a single connection */
 			l = l->next;
 		}
-		
 	}
 	
 	hlog(LOG_DEBUG, "Accept thread shutting down listening sockets and worker threads...");

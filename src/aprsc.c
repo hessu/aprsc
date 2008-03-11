@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "hmalloc.h"
 #include "hlog.h"
@@ -42,6 +43,8 @@
 #include "filter.h"
 #include "historydb.h"
 #include "crc32.h"
+
+struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 
 int shutting_down = 0;		// are we shutting down now?
 int reopen_logs = 0;		// should we reopen log files now?
@@ -152,6 +155,17 @@ int sighandler(int signum)
 		
 }
 
+/*
+ *	A very Linux specific thing, as there the pthreads are a special variation
+ *	of fork(), and per POSIX the profiling timers are not kept over fork()...
+ */
+void pthreads_profiling_reset(void)
+{
+	if (itv.it_interval.tv_usec || itv.it_interval.tv_sec) {
+	  setitimer(ITIMER_PROF, &itv, NULL);
+	}
+}
+
 
 /*
  *	Main
@@ -168,6 +182,7 @@ int main(int argc, char **argv)
 	setlinebuf(stdout);
 	setlinebuf(stderr);
 
+	getitimer(ITIMER_PROF, &itv);
 	
 	/* command line */
 	parse_cmdline(argc, argv);

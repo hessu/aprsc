@@ -356,6 +356,8 @@ void accept_thread(void *asdf)
 	struct pollfd *acceptpfd = NULL;
 	int listen_n = 0;
 	struct listen_t *l;
+
+	pthreads_profiling_reset();
 	
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);

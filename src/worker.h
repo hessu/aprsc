@@ -37,6 +37,8 @@
 
 extern time_t now;	/* current time - updated by the main thread */
 
+extern void pthreads_profiling_reset(void);
+
 #define CALLSIGNLEN_MAX 9
 
 /* packet length limiters and buffer sizes */
@@ -212,6 +214,9 @@ struct worker_t {
 	/* packets which have been parsed, waiting to be moved into
 	 * pbuf_incoming
 	 */
+  int pbuf_incoming_local_count; // debug stuff
+  int pbuf_incoming_count;       // debug stuff
+
 	struct pbuf_t *pbuf_incoming_local;
 	struct pbuf_t **pbuf_incoming_local_last;
 	

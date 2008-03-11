@@ -233,11 +233,16 @@ void incoming_flush(struct worker_t *self)
 		return;
 		
 	*self->pbuf_incoming_last = self->pbuf_incoming_local;
+	self->pbuf_incoming_last  = self->pbuf_incoming_local_last;
+	self->pbuf_incoming_count += self->pbuf_incoming_local_count;
 	pthread_mutex_unlock(&self->pbuf_incoming_mutex);
+
+	hlog(LOG_DEBUG, "incoming_flush() sent out %d packets, incoming_count %d", self->pbuf_incoming_local_count, incoming_count);
 	
 	/* clean the local lockfree queue */
 	self->pbuf_incoming_local = NULL;
 	self->pbuf_incoming_local_last = &self->pbuf_incoming_local;
+	self->pbuf_incoming_local_count = 0;
 }
 
 /*
@@ -414,13 +419,15 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->dstcall_end = pb->data + (dstcall_end - s);
 	pb->info_start  = info_start;
 	
-	hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
+//	hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
+
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
 
 	/* put the buffer in the thread's incoming queue */
 	*self->pbuf_incoming_local_last = pb;
 	self->pbuf_incoming_local_last = &pb->next;
+	++self->pbuf_incoming_local_count;
 
 ++incoming_count;
 
@@ -445,7 +452,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		return 0;
 	}
 
-	hlog(LOG_DEBUG, "Incoming: %.*s", len, s);
+//	hlog(LOG_DEBUG, "Incoming: %.*s", len, s);
 
 	if (c->state == CSTATE_UPLINKSIM) {
 	  long t;

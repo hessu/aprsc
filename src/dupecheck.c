@@ -39,9 +39,12 @@
 #include "worker.h"
 #include "crc32.h"
 
-int dupecheck_shutting_down = 0;
-int dupecheck_running = 0;
+int dupecheck_shutting_down;
+int dupecheck_running;
 pthread_t dupecheck_th;
+
+int pbuf_global_count;
+int pbuf_global_dupe_count;
 
 struct dupe_record_t {
 	struct dupe_record_t *next;
@@ -61,6 +64,61 @@ int dupecheck_db_size = 8192;
 cellarena_t *dupecheck_cells;
 
 int dupecheck_incount;
+
+/*
+ *	Global pbuf purger cleans out pbufs that are too old..
+ */
+void global_pbuf_purger(void)
+{
+	struct pbuf_t *pb;
+	struct pbuf_t *freeset[1000];
+	int n, n1, n2;
+	int pbuf_global_count_limit      = 30000; // real criteria should be expirer..
+	int pbuf_global_dupe_count_limit =  3000; // .. but in simulation our timers are not useful.
+
+	pb = pbuf_global;
+	n = 0;
+	n1 = 0;
+	while (pbuf_global_count > pbuf_global_count_limit && pb && pb->next && pb->next->next) {
+	  freeset[n++] = pb;
+	  ++n1;
+	  pb = pb->next;
+	  if (n >= 1000) {
+	    pbuf_free_many(freeset, n);
+	    n = 0;
+	  }
+	  --pbuf_global_count;
+	}
+	pbuf_global = pb;
+	if (n > 0) {
+	  pbuf_free_many(freeset, n);
+	  n = 0;
+	}
+
+	pb = pbuf_global_dupe;
+	n = 0;
+	n2 = 0;
+	while (pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb && pb->next && pb->next->next) {
+	  freeset[n++] = pb;
+	  ++n2;
+	  pb = pb->next;
+	  if (n >= 1000) {
+	    pbuf_free_many(freeset, n);
+	    n = 0;
+	  }
+	  --pbuf_global_dupe_count;
+	}
+	pbuf_global = pb;
+	if (n > 0) {
+	  pbuf_free_many(freeset, n);
+	  n = 0;
+	}
+	pbuf_global_dupe = pb;
+
+	hlog(LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs", n1, pbuf_global_count, n2, pbuf_global_dupe_count);
+}
+
+
 
 /*
  *	The cellmalloc does not need internal MUTEX, it is being used in single thread..
@@ -203,12 +261,16 @@ void dupecheck_thread(void)
 {
 	sigset_t sigs_to_block;
 	struct worker_t *w;
-	struct pbuf_t *pb_list, *pb;
-	struct pbuf_t *pb_out, *pb_out_last, **pb_out_prevp;
-	struct pbuf_t *pb_out_dupe, *pb_out_dupe_last, **pb_out_dupe_prevp;
+	struct pbuf_t *pb_list, *pb, *pbnext;
+	struct pbuf_t *pb_out, **pb_out_prevp, *pb_out_last;
+	struct pbuf_t *pb_out_dupe, **pb_out_dupe_prevp, *pb_out_dupe_last;
 	int n;
 	int e;
+	int c, d;
+	int pb_out_count, pb_out_dupe_count;
 	
+	pthreads_profiling_reset();
+
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);
 	sigaddset(&sigs_to_block, SIGINT);
@@ -224,13 +286,13 @@ void dupecheck_thread(void)
 	hlog(LOG_INFO, "Dupecheck thread started.");
 
 	while (!dupecheck_shutting_down) {
-		n = 0;
+		n = d = 0;
 		pb_out = NULL;
-		pb_out_last = NULL;
 		pb_out_prevp = &pb_out;
 		pb_out_dupe = NULL;
-		pb_out_dupe_last = NULL;
 		pb_out_dupe_prevp = &pb_out_dupe;
+		pb_out_count = pb_out_dupe_count = 0;
+		pb_out_last = pb_out_dupe_last = NULL;
 
 		/* walk through worker threads */
 		for (w = worker_threads; (w); w = w->next) {
@@ -242,24 +304,34 @@ void dupecheck_thread(void)
 			pb_list = w->pbuf_incoming;
 			w->pbuf_incoming = NULL;
 			w->pbuf_incoming_last = &w->pbuf_incoming;
+			c = w->pbuf_incoming_count;
+			w->pbuf_incoming_count = 0;
 			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 
-			hlog(LOG_INFO, "dupecheck got packets from worker %d;  n=%d",
-			     w->id, dupecheck_incount);
+			hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
+			     c, w->id, dupecheck_incount);
 
-			for (pb = pb_list; (pb); pb = pb->next) {
+			for (pb = pb_list; (pb); pb = pbnext) {
 				int rc = dupecheck(pb);
-				if (rc == 0) { // Not duplicate
-					pb_out_last = pb;
-					pb_out_prevp = &pb->next;
-				} else {       // Duplicate
-					pb_out_dupe_last = pb;
-					pb_out_dupe_prevp = &pb->next;
-				}
-			}
+				pbnext = pb->next; // it may get modified below..
 
-			n++;
+				if (rc == 0) { // Not duplicate
+					*pb_out_prevp = pb;
+					 pb_out_prevp = &pb->next;
+					 pb_out_last  = pb;
+					++pb_out_count;
+				} else {       // Duplicate
+					*pb_out_dupe_prevp = pb;
+					 pb_out_dupe_prevp = &pb->next;
+					 pb_out_dupe_last  = pb;
+					++pb_out_dupe_count;
+				}
+				n++;
+			}
 		}
+		// terminate those out-chains in every case..
+		*pb_out_prevp = NULL;
+		*pb_out_dupe_prevp = NULL;
 
 		/* put packets in the global buffer */
 		if (pb_out || pb_out_dupe) {
@@ -270,24 +342,28 @@ void dupecheck_thread(void)
 
 			if (pb_out) {
 				*pbuf_global_prevp = pb_out;
-				pbuf_global_prevp = pb_out_prevp;
-				pbuf_global_last = pb_out_last;
+				pbuf_global_prevp  = pb_out_prevp;
+				pbuf_global_last   = pb_out_last;
+				pbuf_global_count += pb_out_count;
 			}
 
 			if (pb_out_dupe) {
 				*pbuf_global_dupe_prevp = pb_out_dupe;
-				pbuf_global_dupe_prevp = pb_out_dupe_prevp;
-				pbuf_global_dupe_last = pb_out_dupe_last;
+				pbuf_global_dupe_prevp  = pb_out_dupe_prevp;
+				pbuf_global_dupe_last   = pb_out_dupe_last;
+				pbuf_global_dupe_count += pb_out_dupe_count;
 			}
-
 			if ((e = rwl_rdunlock(&pbuf_global_rwlock))) {
 				hlog(LOG_CRIT, "dupecheck: Failed to rdunlock pbuf_global_rwlock!");
 				exit(1);
 			}
 		}
+global_pbuf_purger();
+		if (n > 0)
+		  hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little, if there was nothing to do */
 		if (n == 0)
-			usleep(100 * 1000);
+			poll(NULL, 0, 100); // 100 ms
 	}
 	
 	hlog(LOG_INFO, "Dupecheck thread shut down; incount=%ld", dupecheck_incount);

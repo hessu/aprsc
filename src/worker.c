@@ -466,7 +466,7 @@ void process_outgoing(struct worker_t *self)
 	}
 	while ((pb = *self->pbuf_global_dupe_prevp)) {
 		process_outgoing_single(self, pb); /* in outgoing.c */
-		self->pbuf_global_prevp = &pb->next;
+		self->pbuf_global_dupe_prevp = &pb->next;
 	}
 	if ((e = rwl_rdunlock(&pbuf_global_rwlock))) {
 		hlog(LOG_CRIT, "worker: Failed to rdunlock pbuf_global_rwlock!");
@@ -482,6 +482,8 @@ void worker_thread(struct worker_t *self)
 {
 	sigset_t sigs_to_block;
 	
+	pthreads_profiling_reset();
+
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);
 	sigaddset(&sigs_to_block, SIGINT);
@@ -511,7 +513,7 @@ void worker_thread(struct worker_t *self)
 			incoming_flush(self);
 		
 		/* if we have new stuff in the global packet buffer, process it */
-		if (*self->pbuf_global_prevp)
+		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
 			process_outgoing(self);
 
 		/* time of next keepalive broadcast ? */
@@ -634,7 +636,8 @@ void workers_start(void)
 		w->pbuf_incoming_last = &w->pbuf_incoming;
 		pthread_mutex_init(&w->pbuf_incoming_mutex, NULL);
 		
-		w->pbuf_global_prevp = pbuf_global_prevp;
+		w->pbuf_global_prevp      = pbuf_global_prevp;
+		w->pbuf_global_dupe_prevp = pbuf_global_dupe_prevp;
 		
 		/* start the worker thread */
 		if (pthread_create(&w->th, NULL, (void *)worker_thread, w))

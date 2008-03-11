@@ -1,5 +1,9 @@
 TODO ITEMS LIST
 
+    - Logins used on APRS-IS must not consist of exactly 8 characters from 0
+      to 9 or A to F as this would indicate a server generated IP address
+      for the q construct.
+
     - remove the UPLINKSIM code (svn diff -r 99:100) before release and
       final testing
 

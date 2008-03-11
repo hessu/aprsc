@@ -19,8 +19,9 @@
  *	
  */
 
-#ifndef _SLABMALLOC_H_
-#define _SLABMALLOC_H_
+#ifndef _FOR_VALGRIND_ /* This does not mix with valgrind... */
+#ifndef _CELLMALLOC_H_
+#define _CELLMALLOC_H_
 
 /*
  *   cellmalloc() -- manages arrays of cells of data 
@@ -40,5 +41,10 @@ extern int   cellmallocmany(cellarena_t *cellarena, void **array, int numcells);
 extern void  cellfree(cellarena_t *cellarena, void *p);
 extern void  cellfreemany(cellarena_t *cellarena, void **array, int numcells);
 
+
+#endif
+#else /* _FOR_VALGRIND_  .. normal malloc/free is better */
+
+#include "hmalloc.h"
 
 #endif

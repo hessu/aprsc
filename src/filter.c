@@ -96,11 +96,17 @@ struct filter_head_t {
 struct filter_t {
 	struct filter_head_t h;
 #define FILT_TEXTBUFSIZE (64-sizeof(struct filter_head_t))
+#ifndef _FOR_VALGRIND_
 	char textbuf[FILT_TEXTBUFSIZE];
+#else
+	char textbuf[1];
+#endif
 };
 
 
+#ifndef _FOR_VALGRIND_
 cellarena_t *filter_cells;
+#endif
 
 
 float filter_lat2rad(float lat)
@@ -117,11 +123,13 @@ float filter_lon2rad(float lon)
 
 void filter_init(void)
 {
+#ifndef _FOR_VALGRIND_
 	filter_cells = cellinit( sizeof(struct filter_t), __alignof__(struct filter_t),
 				 CELLMALLOC_POLICY_LIFO, 128 /* 128 kB at the time */,
 				 0 /* minfree */ );
 
 	/* printf("filter: sizeof=%d alignof=%d\n",sizeof(struct filter_t),__alignof__(struct filter_t)); */
+#endif
 }
 
 
@@ -298,7 +306,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	}
 	
 	/* OK, pre-parsing produced accepted result */
-
+#ifndef _FOR_VALGRIND_
 	f = cellmalloc(filter_cells);
 	if (!f) return -1;
 	*f = f0; /* store pre-parsed values */
@@ -307,6 +315,12 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		f->h.text = f->textbuf;
 	} else
 		f->h.text = hstrdup(filt); /* and copy of filter text */
+#else
+	f = hmalloc(sizeof(*f) + strlen(filt));
+	*f = f0; /* store pre-parsed values */
+	f->h.text = f->textbuf;
+	strcpy(f->textbuf, filt); /* and copy of filter text */
+#endif
 
 	/* link to the tail.. */
 	while (*ff != NULL)
@@ -323,12 +337,14 @@ void filter_free(struct filter_t *f)
 
 	for ( ; f ; f = fnext ) {
 		fnext = f->h.next;
-		if (f->h.text) {
-			/* If not pointer to internal string, free it.. */
-			if (f->h.text != f->textbuf)
-				hfree((void*)(f->h.text));
-		}
+		/* If not pointer to internal string, free it.. */
+#ifndef _FOR_VALGRIND_
+		if (f->h.text != f->textbuf)
+		  hfree((void*)(f->h.text));
 		cellfree(filter_cells, f);
+#else
+		hfree(f);
+#endif
 	}
 }
 

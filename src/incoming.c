@@ -38,6 +38,7 @@
 
 long incoming_count;
 
+#ifndef _FOR_VALGRIND_
 /* global packet buffer freelists */
 
 cellarena_t *pbuf_cells_small;
@@ -45,7 +46,7 @@ cellarena_t *pbuf_cells_large;
 cellarena_t *pbuf_cells_huge;
 
 int pbuf_cells_kb = 1024; // 1M bunches is faster for system than 16M !
-
+#endif
 
 /*
  *	Get a buffer for a packet
@@ -56,6 +57,7 @@ int pbuf_cells_kb = 1024; // 1M bunches is faster for system than 16M !
 
 void pbuf_init(void)
 {
+#ifndef _FOR_VALGRIND_
 	pbuf_cells_small = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
 				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
 				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
@@ -65,6 +67,7 @@ void pbuf_init(void)
 	pbuf_cells_huge  = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_HUGE,
 				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
 				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
+#endif
 }
 
 /*
@@ -75,6 +78,7 @@ void pbuf_init(void)
 
 void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 {
+#ifndef _FOR_VALGRIND_
 	if (self) { /* Return to worker local pool */
 		switch (p->buf_len) {
 		case PACKETLEN_MAX_SMALL:
@@ -110,6 +114,9 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 		hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", p, p->buf_len);
 		break;
 	}
+#else
+	hfree(p);
+#endif
 }
 
 /*
@@ -120,10 +127,11 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 
 void pbuf_free_many(struct pbuf_t **array, int numbufs)
 {
+	int i;
+#ifndef _FOR_VALGRIND_
 	void **arraysmall  = alloca(sizeof(void*)*numbufs);
 	void **arraylarge  = alloca(sizeof(void*)*numbufs);
 	void **arrayhuge   = alloca(sizeof(void*)*numbufs);
-	int i;
 	int smallcnt = 0, largecnt = 0, hugecnt = 0;
 
 	for (i = 0; i < numbufs; ++i) {
@@ -148,8 +156,14 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 		cellfreemany(pbuf_cells_large, arraylarge, largecnt);
 	if (hugecnt > 0)
 		cellfreemany(pbuf_cells_huge,  arrayhuge,   hugecnt);
+#else
+	for (i = 0; i < numbufs; ++i) {
+		hfree(array[i]);
+	}
+#endif
 }
 
+#ifndef _FOR_VALGRIND_
 struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
 			     int len, int bunchlen)
 {
@@ -217,6 +231,20 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 		return NULL;
 	}
 }
+#else
+struct pbuf_t *pbuf_get(struct worker_t *self, int len)
+{
+	struct pbuf_t *pb;
+	int sz = sizeof(struct pbuf_t) + len;
+	pb = hmalloc(sz);
+
+	memset(pb, 0, sz);
+	pb->buf_len = len;
+	return pb;
+}
+#endif
+
+
 
 /*
  *	Move incoming packets from the thread-local incoming buffer
@@ -387,7 +415,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		hlog(LOG_INFO, "pbuf_get failed to get a block");
 		return -1; // No room :-(
 	}
-	pb->next = NULL;
+	pb->next = NULL; // pbuf arrives pre-zeroed
 	
 	/* store the source reference */
 	pb->origin = c;

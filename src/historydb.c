@@ -32,7 +32,9 @@
 #include "hmalloc.h"
 #include "crc32.h"
 
+#ifndef _FOR_VALGRIND_
 cellarena_t *historydb_cells;
+#endif
 
 
 // FIXME: Possibly multiple parallel locks (like 1000 ?) that keep
@@ -60,10 +62,12 @@ void historydb_init(void)
 	// printf("historydb_init() sizeof(mutex)=%d sizeof(rwlock)=%d\n",
 	//       sizeof(pthread_mutex_t), sizeof(rwlock_t));
 
+#ifndef _FOR_VALGRIND_
 	historydb_cells = cellinit( sizeof(struct history_cell_t),
 				    __alignof__(struct history_cell_t), 
 				    CELLMALLOC_POLICY_FIFO, 2048 /* 2 MB */,
 				    0 /* minfree */ );
+#endif
 
 	historydb_hash_modulo = 8192 ; // FIXME: is this acceptable or not ?
 
@@ -75,7 +79,11 @@ void historydb_init(void)
 // Called only under WR-LOCK
 void historydb_free(struct history_cell_t *p)
 {
+#ifndef _FOR_VALGRIND_
 	cellfree( historydb_cells, p );
+#else
+	hfree(p);
+#endif
 	--historydb_cellgauge;
 }
 
@@ -83,8 +91,11 @@ void historydb_free(struct history_cell_t *p)
 struct history_cell_t *historydb_alloc(int packet_len)
 {
 	++historydb_cellgauge;
-
+#ifndef _FOR_VALGRIND_
 	return cellmalloc( historydb_cells );
+#else
+	return hmalloc(sizeof(struct history_cell_t)+packet_len);
+#endif
 }
 
 void historydb_nopos(void) {}         // profiler call counter items
@@ -229,6 +240,7 @@ int historydb_load(FILE *fp)
 			hp->packettype  = packettype;
 			hp->flags       = flags;
 			hp->packetlen   = packetlen;
+			if (packetlen > 300) packetlen = 300; // max to 300..
 			memcpy(hp->packet, bufline, packetlen);
 
 			*hpp = hp;

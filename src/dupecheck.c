@@ -55,16 +55,21 @@ struct dupe_record_t {
 	int	 plen;	// Payload length
 	char	 addresses[20];
 	char	*packet;
+#ifndef _FOR_VALGRIND_
 	char	 packetbuf[200];
+#else
+	char	 packetbuf[1];
+#endif
 };
 
-struct dupe_record_t **dupecheck_db;
+struct dupe_record_t **dupecheck_db; /* hash index table */
+int dupecheck_db_size = 8192; /* Hash index table size */
+
+#ifndef _FOR_VALGRIND_
 struct dupe_record_t *dupecheck_free;
-
-int dupecheck_db_size = 8192;
-
-
 cellarena_t *dupecheck_cells;
+#endif
+
 
 int dupecheck_incount;
 
@@ -129,16 +134,18 @@ void global_pbuf_purger(void)
 
 void dupecheck_init(void)
 {
+#ifndef _FOR_VALGRIND_
 	dupecheck_db = hmalloc(sizeof(void*) * dupecheck_db_size);
 	dupecheck_cells = cellinit( sizeof(struct dupe_record_t), __alignof__(struct dupe_record_t),
 				    CELLMALLOC_POLICY_LIFO | CELLMALLOC_POLICY_NOMUTEX,
 				    512 /* 512 kB at the time */,  0 /* minfree */);
+#endif
 }
 
 struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 {
 	struct dupe_record_t *dp;
-
+#ifndef _FOR_VALGRIND_
 	if (dupecheck_free) {
 	  dp = dupecheck_free;
 	  dupecheck_free = dp->next;
@@ -154,16 +161,28 @@ struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 	else
 	  dp->packet = dp->packetbuf;
 
+#else
+	dp = hmalloc(pktlen + sizeof(*dp));
+	memset(dp, 0, sizeof(*dp));
+	dp->alen = alen;
+	dp->plen = pktlen;
+	dp->packet = dp->packetbuf;
+#endif
+
 	return dp;
 }
 
 void dupecheck_db_free(struct dupe_record_t *dp)
 {
+#ifndef _FOR_VALGRIND_
 	if (dp->packet != dp->packetbuf)
 		hfree(dp->packet);
 	dp->next = dupecheck_free;
 	dupecheck_free = dp;
 	// cellfree(dupecheck_cells, dp);
+#else
+	hfree(dp);
+#endif
 }
 
 

@@ -55,6 +55,7 @@ struct history_cell_t {
 
 	int  packetlen;
 	char packet[300];
+
 	/* FIXME: is this enough, or should there be two different
 	   sizes of cells ?  See  pbuf_t cells... */
 };

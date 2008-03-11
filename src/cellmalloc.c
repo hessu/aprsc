@@ -34,7 +34,7 @@
  *
  */
 
-
+#ifndef _FOR_VALGRIND_
 struct cellhead {
 	struct cellhead *next;
 };
@@ -264,3 +264,4 @@ void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 	if (ca->use_mutex)
 		pthread_mutex_unlock(&ca->mutex);
 }
+#endif /* (NOT) _FOR_VALGRIND_ */

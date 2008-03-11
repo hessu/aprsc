@@ -46,9 +46,17 @@ DEFS=	-Wall -Wstrict-prototypes -D_REENTRANT
 
 # -------------------------------------------------------------------- #
 
-.PHONY: 	all clean distclean
+.PHONY: 	all clean distclean valgrind
 
 all: aprsc
+
+
+### "valgrind" is not for running the valgrind, rather for compiling
+### the software so that internal cellmalloc et.al. are disabled.
+
+valgrind:
+	@echo "Did you do 'make clean' before 'make valgrind' ?"
+	make all CFLAGS="${CFLAGS} -D_FOR_VALGRIND_"
 
 # -------------------------------------------------------------------- #
 

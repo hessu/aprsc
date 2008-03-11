@@ -25,5 +25,6 @@
 void dupecheck_init(void);
 void dupecheck_start(void);
 void dupecheck_stop(void);
+void dupecheck_atend(void);
 
 #endif

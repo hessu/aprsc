@@ -50,6 +50,10 @@ extern int workers_configured;	/* number of workers to run */
 extern int stats_interval;
 extern int expiry_interval;
 
+extern int pbuf_global_expiration;
+extern int pbuf_global_dupe_expiration;
+
+
 extern int obuf_size;
 extern int ibuf_size;
 

@@ -106,8 +106,21 @@ void historydb_keymatch(void) {}
 
 uint32_t historydb_hash1(const char *s) 
 {
-	// FIXME: hash function !
-	return crc32((const void *)s);
+	return crc32((const void *)s);  // TODO: find a better hash function ?
+}
+
+void historydb_atend(void)
+{
+	int i;
+	struct history_cell_t *hp, *hp2;
+	for (i = 0; i < historydb_hash_modulo; ++i) {
+		hp = historydb_hash[i];
+		while (hp) {
+			hp2 = hp->next;
+			historydb_free(hp);
+			hp = hp2;
+		}
+	}
 }
 
 

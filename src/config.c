@@ -74,6 +74,9 @@ int stats_interval     = 1 * 60;
 int lastposition_storetime = 24*60*60;	/* how long the last position packet of each station is stored */
 int dupefilter_storetime   =     3*60;	/* how long to store information required for dupe filtering */
 
+int pbuf_global_expiration       = 35*60; /* 35 minutes */
+int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */
+
 int upstream_timeout =  5*60;		/* after N seconds of no input from an upstream, disconnect */
 int client_timeout   = 60*60;		/* after N seconds of no input from a client, disconnect */
 
@@ -624,5 +627,6 @@ void free_config(void)
 	mycall = myemail = myadmin = NULL;
 	logname = NULL;
 	free_listen_config(&listen_config);
+	free_uplink_config(&uplink_config);
 }
 

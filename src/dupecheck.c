@@ -76,58 +76,66 @@ int dupecheck_incount;
 /*
  *	Global pbuf purger cleans out pbufs that are too old..
  */
-void global_pbuf_purger(void)
+void global_pbuf_purger(const int all)
 {
 	struct pbuf_t *pb, *pb2;
-	struct pbuf_t *freeset[1000];
+	struct pbuf_t *freeset[1002];
 	int n, n1, n2;
 	int pbuf_global_count_limit      = 30000; // real criteria should be expirer..
 	int pbuf_global_dupe_count_limit =  3000; // .. but in simulation our timers are not useful.
 
+	time_t expire1 = now - pbuf_global_expiration;
+	time_t expire2 = now - pbuf_global_dupe_expiration;
+
+	if (all) {
+	  pbuf_global_count_limit = 0;
+	  pbuf_global_dupe_count_limit  = 0;
+	  expire1 = now+10;
+	  expire2 = now+10;
+	}
+
 	pb = pbuf_global;
 	n = 0;
 	n1 = 0;
-	while (pbuf_global_count > pbuf_global_count_limit &&
-	       pb &&
-	       pb->next &&
-	       pb->next->next) {
+	while ( pbuf_global_count > pbuf_global_count_limit &&
+		pb ) {
+
+	  if (pb->t > expire1) break; // stop at newer than expire1
 	  freeset[n++] = pb;
 	  ++n1;
+	  --pbuf_global_count;
+	  // dissociate the pbuf from the chain
 	  pb2 = pb->next; pb->next = NULL; pb = pb2;
 	  if (n >= 1000) {
 	    pbuf_free_many(freeset, n);
 	    n = 0;
 	  }
-	  --pbuf_global_count;
 	}
 	pbuf_global = pb;
 	if (n > 0) {
 	  pbuf_free_many(freeset, n);
-	  n = 0;
 	}
 
 	pb = pbuf_global_dupe;
 	n = 0;
 	n2 = 0;
-	while (pbuf_global_dupe_count > pbuf_global_dupe_count_limit && 
-	       pb &&
-	       pb->next &&
-	       pb->next->next) {
+	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && 
+		pb ) {
+	  if (pb->t > expire2) break; // stop at newer than expire2
 	  freeset[n++] = pb;
 	  ++n2;
+	  --pbuf_global_dupe_count;
+	  // dissociate the pbuf from the chain
 	  pb2 = pb->next; pb->next = NULL; pb = pb2;
 	  if (n >= 1000) {
 	    pbuf_free_many(freeset, n);
 	    n = 0;
 	  }
-	  --pbuf_global_dupe_count;
-	}
-	pbuf_global = pb;
-	if (n > 0) {
-	  pbuf_free_many(freeset, n);
-	  n = 0;
 	}
 	pbuf_global_dupe = pb;
+	if (n > 0) {
+	  pbuf_free_many(freeset, n);
+	}
 
 	if (n1 > 0 || n2 > 0) // report only when there is something to report...
 		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs",
@@ -403,7 +411,9 @@ void dupecheck_thread(void)
 				exit(1);
 			}
 		}
-global_pbuf_purger();
+
+		global_pbuf_purger(0);
+
 		if (n > 0)
 		  hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little, if there was nothing to do */
@@ -447,3 +457,18 @@ void dupecheck_stop(void)
 		hlog(LOG_INFO, "Dupecheck thread has terminated.");
 }
 
+void dupecheck_atend(void)
+{
+	int i;
+	struct dupe_record_t *dp, *dp2;
+	for (i = 0; i < dupecheck_db_size; ++i) {
+	  dp = dupecheck_db[i];
+	  while (dp) {
+	    dp2 = dp->next;
+	    dupecheck_db_free(dp);
+	    dp = dp2;
+	  }
+	}
+
+	global_pbuf_purger(1);
+}

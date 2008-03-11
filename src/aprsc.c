@@ -281,7 +281,10 @@ int main(int argc, char **argv)
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
 	// sp_free_freelist();
-	// free_config();
+
+	free_config();
+	dupecheck_atend();
+	historydb_atend();
 	
 	hlog(LOG_CRIT, "Shut down.");
 	close_log(0);

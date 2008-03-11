@@ -64,9 +64,9 @@ struct history_cell_t {
 extern void historydb_init(void);
 
 extern void historydb_dump(FILE *fp);
-extern int historydb_load(FILE *fp);
+extern int  historydb_load(FILE *fp);
+extern void historydb_atend(void);
 
 /* insert and lookup... interface yet unspecified */
 extern int historydb_insert(struct pbuf_t*);
 extern int historydb_lookup(const char *keybuf, struct history_cell_t **result);
-

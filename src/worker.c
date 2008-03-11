@@ -614,20 +614,13 @@ void workers_start(void)
 		
 		w = hmalloc(sizeof(*w));
 		*prevp = w;
+		memset(w, 0, sizeof(*w));
 
 		w->prevp = prevp;
 
-		w->next = NULL;
 		w->id = i;
-		w->shutting_down = 0;
-		w->clients = NULL;
-		w->new_clients = NULL;
 		pthread_mutex_init(&w->new_clients_mutex, NULL);
 		w->xp = xpoll_init((void *)w, &handle_client_event);
-		
-		w->pbuf_free_small = NULL;
-		w->pbuf_free_large = NULL;
-		w->pbuf_free_huge  = NULL;
 		
 		w->pbuf_incoming_local = NULL;
 		w->pbuf_incoming_local_last = &w->pbuf_incoming_local;

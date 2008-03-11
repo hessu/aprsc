@@ -235,7 +235,7 @@ void client_bad_filter_notify(struct worker_t *self, struct client_t *c, const c
 {
 	if (!c->warned) {
 		c->warned = 1;
-		client_printf(self, c, "# WARNING: BAD FILTER: %s\r\n", filt);
+		client_printf(self, c, "# Warning: Bad filter: %s\r\n", filt);
 	}
 }
 

@@ -81,14 +81,16 @@ struct client_t *client_alloc(void)
 
 void client_free(struct client_t *c)
 {
-	if (c->fd >= 0)	close(c->fd);
-	if (c->ibuf)	hfree(c->ibuf);
-	if (c->obuf)	hfree(c->obuf);
-	if (c->addr_s)	hfree(c->addr_s);
+	if (c->fd >= 0)	 close(c->fd);
+	if (c->ibuf)     hfree(c->ibuf);
+	if (c->obuf)     hfree(c->obuf);
+	if (c->addr_s)   hfree(c->addr_s);
+	if (c->username) hfree(c->username);
 
 	filter_free(c->defaultfilters);
 	filter_free(c->userfilters);
 
+	memset(c, 0, sizeof(*c));
 	hfree(c);
 }
 
@@ -413,6 +415,7 @@ void send_keepalives(struct worker_t *self)
 	sprintf(buf, "# %.40s ",SERVERID);
 	s = buf + strlen(buf);
 
+	memset(&t, 0, sizeof(t));
 	gmtime_r(&now, &t);
 	// s += strftime(s, 40, "%d %b %Y %T GMT", &t);
 	// However that depends upon LOCALE, thus following:

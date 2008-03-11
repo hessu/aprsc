@@ -40,12 +40,12 @@
 #include "crc32.h"
 #include "historydb.h"
 
-int dupecheck_shutting_down;
-int dupecheck_running;
+int dupecheck_shutting_down = 0;
+int dupecheck_running = 0;
 pthread_t dupecheck_th;
 
-int pbuf_global_count;
-int pbuf_global_dupe_count;
+int pbuf_global_count = 0;
+int pbuf_global_dupe_count = 0;
 
 struct dupe_record_t {
 	struct dupe_record_t *next;
@@ -87,7 +87,10 @@ void global_pbuf_purger(void)
 	pb = pbuf_global;
 	n = 0;
 	n1 = 0;
-	while (pbuf_global_count > pbuf_global_count_limit && pb && pb->next && pb->next->next) {
+	while (pbuf_global_count > pbuf_global_count_limit &&
+	       pb &&
+	       pb->next &&
+	       pb->next->next) {
 	  freeset[n++] = pb;
 	  ++n1;
 	  pb2 = pb->next; pb->next = NULL; pb = pb2;
@@ -106,7 +109,10 @@ void global_pbuf_purger(void)
 	pb = pbuf_global_dupe;
 	n = 0;
 	n2 = 0;
-	while (pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb && pb->next && pb->next->next) {
+	while (pbuf_global_dupe_count > pbuf_global_dupe_count_limit && 
+	       pb &&
+	       pb->next &&
+	       pb->next->next) {
 	  freeset[n++] = pb;
 	  ++n2;
 	  pb2 = pb->next; pb->next = NULL; pb = pb2;
@@ -123,7 +129,9 @@ void global_pbuf_purger(void)
 	}
 	pbuf_global_dupe = pb;
 
-	//hlog(LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs", n1, pbuf_global_count, n2, pbuf_global_dupe_count);
+	if (n1 > 0 || n2 > 0) // report only when there is something to report...
+		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs",
+		      n1, pbuf_global_count, n2, pbuf_global_dupe_count );
 }
 
 
@@ -134,8 +142,10 @@ void global_pbuf_purger(void)
 
 void dupecheck_init(void)
 {
-#ifndef _FOR_VALGRIND_
 	dupecheck_db = hmalloc(sizeof(void*) * dupecheck_db_size);
+	memset(dupecheck_db, 0, sizeof(void*) * dupecheck_db_size);
+
+#ifndef _FOR_VALGRIND_
 	dupecheck_cells = cellinit( sizeof(struct dupe_record_t), __alignof__(struct dupe_record_t),
 				    CELLMALLOC_POLICY_LIFO | CELLMALLOC_POLICY_NOMUTEX,
 				    512 /* 512 kB at the time */,  0 /* minfree */);

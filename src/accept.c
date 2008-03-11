@@ -438,5 +438,6 @@ void accept_thread(void *asdf)
 	close_listeners();
 	dupecheck_stop();
 	workers_stop(1);
+	hfree(acceptpfd);
 }
 

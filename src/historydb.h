@@ -45,7 +45,7 @@ struct history_cell_t {
 	struct history_cell_t *next;
 
 	time_t   arrivaltime;
-	char     key[CALLSIGNLEN_MAX+1];
+	char     key[CALLSIGNLEN_MAX+2];
 	uint32_t hash1;
 
 	float	lat, coslat, lon;

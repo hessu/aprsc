@@ -73,19 +73,24 @@ void historydb_init(void)
 }
 
 // Called only under WR-LOCK
-void historycell_free(struct history_cell_t *p)
+void historydb_free(struct history_cell_t *p)
 {
 	cellfree( historydb_cells, p );
 	--historydb_cellgauge;
 }
 
 // Called only under WR-LOCK
-struct history_cell_t *historycell_alloc(int packet_len)
+struct history_cell_t *historydb_alloc(int packet_len)
 {
 	++historydb_cellgauge;
 
 	return cellmalloc( historydb_cells );
 }
+
+void historydb_nopos(void) {}         // profiler call counter items
+void historydb_nointerest(void) {}
+void historydb_hashmatch(void) {}
+void historydb_keymatch(void) {}
 
 
 uint32_t historydb_hash1(const char *s) 
@@ -155,7 +160,7 @@ int historydb_load(FILE *fp)
 		for ( ; hp ; hp = nhp ) {
 			// the 'next' will get freed from underneath of us..
 			nhp = hp->next;
-			historycell_free(hp);
+			historydb_free(hp);
 		}
 		historydb_hash[i] = NULL;
 	}
@@ -213,7 +218,7 @@ int historydb_load(FILE *fp)
 		}
 		if (!hp1) {
 			// Not found on this chain, insert it!
-			hp = historycell_alloc(packetlen);
+			hp = historydb_alloc(packetlen);
 			hp->next = NULL;
 			hp->hash1 = h1;
 			strcpy(hp->key, keybuf);
@@ -248,11 +253,13 @@ int historydb_insert(struct pbuf_t *pb)
 
 	time_t expirytime   = now - lastposition_storetime;
 
-	char keybuf[CALLSIGNLEN_MAX+1];
+	char keybuf[CALLSIGNLEN_MAX+2];
 	char *s;
 
-	if (!(pb->flags & F_HASPOS))
+	if (!(pb->flags & F_HASPOS)) {
+	  historydb_nopos(); // debug thing -- profiling counter
 		return -1; // No positional data...
+	}
 
 	// NOTE: Parser does set on MESSAGES the RECIPIENTS
 	//       location if such is known! We do not want them...
@@ -263,7 +270,8 @@ int historydb_insert(struct pbuf_t *pb)
 	keybuf[CALLSIGNLEN_MAX] = 0;
 	if (pb->packettype & T_OBJECT) {
 		// Pick object name  ";item  *"
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX+1);
+		keybuf[CALLSIGNLEN_MAX+1] = 0;
 		s = strchr(keybuf, '*');
 		if (s) *s = 0;
 		else {
@@ -281,7 +289,8 @@ int historydb_insert(struct pbuf_t *pb)
 
 	} else if (pb->packettype & T_ITEM) {
 		// Pick item name  ") . . . !"  or ") . . . _"
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX);
+		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX+1);
+		keybuf[CALLSIGNLEN_MAX+1] = 0;
 		s = strchr(keybuf, '!');
 		if (s) *s = 0;
 		else {
@@ -297,6 +306,7 @@ int historydb_insert(struct pbuf_t *pb)
 		s = strchr(keybuf, '>');
 		if (s) *s = 0;
 	} else {
+	  historydb_nointerest(); // debug thing -- a profiling counter
 		return -1; // Not a packet with positional data, not interested in...
 	}
 
@@ -317,18 +327,20 @@ int historydb_insert(struct pbuf_t *pb)
 			// OLD...
 			*hp = cp->next;
 			cp->next = NULL;
-			historycell_free(cp);
+			historydb_free(cp);
 			continue;
 		}
-		if ( (cp->hash1 == h1) &&
+		if ( (cp->hash1 == h1)) {
 		       // Hash match, compare the key
-		       (strcmp(cp->key, keybuf) == 0) ) {
+		  historydb_hashmatch(); // debug thing -- a profiling counter
+		    if ((strcmp(cp->key, keybuf) == 0) ) {
 		  	// Key match!
+		      historydb_keymatch(); // debug thing -- a profiling counter
 			if (isdead) {
 				// Remove this key..
 				*hp = cp->next;
 				cp->next = NULL;
-				historycell_free(cp);
+				historydb_free(cp);
 				continue;
 			} else {
 				// Update the data content
@@ -345,16 +357,17 @@ int historydb_insert(struct pbuf_t *pb)
 				// Continue scanning the whole chain for possibly
 				// obsolete items
 			}
+		    }
 		} // .. else no match, advance hp..
 		hp = &(cp -> next);
 	}
 
 	if (!cp1 && !isdead) {
 		// Not found on this chain, append it!
-		cp = historycell_alloc(pb->packet_len);
+		cp = historydb_alloc(pb->packet_len);
 		cp->next = NULL;
-		cp->hash1 = h1;
 		strcpy(cp->key, keybuf);
+		cp->hash1 = h1;
 
 		cp->lat         = pb->lat;
 		cp->coslat      = pb->cos_lat;

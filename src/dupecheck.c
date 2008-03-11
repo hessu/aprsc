@@ -123,7 +123,7 @@ void global_pbuf_purger(void)
 	}
 	pbuf_global_dupe = pb;
 
-	hlog(LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs", n1, pbuf_global_count, n2, pbuf_global_dupe_count);
+	//hlog(LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs", n1, pbuf_global_count, n2, pbuf_global_dupe_count);
 }
 
 

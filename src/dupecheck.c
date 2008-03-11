@@ -38,6 +38,7 @@
 #include "cellmalloc.h"
 #include "worker.h"
 #include "crc32.h"
+#include "historydb.h"
 
 int dupecheck_shutting_down;
 int dupecheck_running;
@@ -58,6 +59,8 @@ struct dupe_record_t {
 };
 
 struct dupe_record_t **dupecheck_db;
+struct dupe_record_t *dupecheck_free;
+
 int dupecheck_db_size = 8192;
 
 
@@ -70,7 +73,7 @@ int dupecheck_incount;
  */
 void global_pbuf_purger(void)
 {
-	struct pbuf_t *pb;
+	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[1000];
 	int n, n1, n2;
 	int pbuf_global_count_limit      = 30000; // real criteria should be expirer..
@@ -82,7 +85,7 @@ void global_pbuf_purger(void)
 	while (pbuf_global_count > pbuf_global_count_limit && pb && pb->next && pb->next->next) {
 	  freeset[n++] = pb;
 	  ++n1;
-	  pb = pb->next;
+	  pb2 = pb->next; pb->next = NULL; pb = pb2;
 	  if (n >= 1000) {
 	    pbuf_free_many(freeset, n);
 	    n = 0;
@@ -101,7 +104,7 @@ void global_pbuf_purger(void)
 	while (pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb && pb->next && pb->next->next) {
 	  freeset[n++] = pb;
 	  ++n2;
-	  pb = pb->next;
+	  pb2 = pb->next; pb->next = NULL; pb = pb2;
 	  if (n >= 1000) {
 	    pbuf_free_many(freeset, n);
 	    n = 0;
@@ -134,7 +137,13 @@ void dupecheck_init(void)
 
 struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 {
-	struct dupe_record_t *dp = cellmalloc(dupecheck_cells);
+	struct dupe_record_t *dp;
+
+	if (dupecheck_free) {
+	  dp = dupecheck_free;
+	  dupecheck_free = dp->next;
+	} else
+	  dp = cellmalloc(dupecheck_cells);
 	if (!dp)
 	  return NULL;
 	dp->alen = alen;
@@ -152,7 +161,9 @@ void dupecheck_db_free(struct dupe_record_t *dp)
 {
 	if (dp->packet != dp->packetbuf)
 		hfree(dp->packet);
-	cellfree(dupecheck_cells, dp);
+	dp->next = dupecheck_free;
+	dupecheck_free = dp;
+	// cellfree(dupecheck_cells, dp);
 }
 
 
@@ -179,7 +190,7 @@ int dupecheck_sighandler(int signum)
 
 int dupecheck(struct pbuf_t *pb)
 {
-	/* FIXME: check a single packet */
+	/* check a single packet */
 	// pb->flags |= F_DUPE; /* this is a duplicate! */
 
 	int i;
@@ -201,6 +212,7 @@ int dupecheck(struct pbuf_t *pb)
 	datalen = pb->packet_len - (data - pb->data);
 
 	// Canonic tail has no SPACEs in data portion!
+	// TODO: how to treat 0 bytes ???
 	while (datalen > 0 && data[datalen-1] == ' ')
 	  --datalen;
 
@@ -234,12 +246,16 @@ int dupecheck(struct pbuf_t *pb)
 	      pb->flags |= F_DUPE;
 	      return F_DUPE;
 	    }
+	    // no packet match.. check next
 	  }
 	  dpp = &dp->next;
 	}
 	// dpp points to pointer at the tail of the chain
 
 	// 4) Add comparison copy of non-dupe into dupe-db
+	//    .. and historydb wants also copy..
+
+	historydb_insert(pb);
 
 	dp = dupecheck_db_alloc(addrlen, datalen);
 	if (!dp) return -1; // alloc error!

@@ -133,7 +133,9 @@ void close_client(struct worker_t *self, struct client_t *c)
 		c->next->prevp = c->prevp;
 	*c->prevp = c->next;
 
-
+	/* if this happens to be the uplink, tell the uplink module that the
+	 * connection has gone away
+	 */
 	if (c->state == CSTATE_UPLINK)
 		uplink_close(c);
 

@@ -39,11 +39,13 @@ extern time_t now;	/* current time - updated by the main thread */
 
 extern void pthreads_profiling_reset(void);
 
+/* minimum and maximum length of a callsign on APRS-IS */
+#define CALLSIGNLEN_MIN 3
 #define CALLSIGNLEN_MAX 9
 
 /* packet length limiters and buffer sizes */
-#define PACKETLEN_MIN 4		/* minimum length for a valid APRS-IS packet: "A>B:" */
-#define PACKETLEN_MAX 600	/* max... arbitrary and not documented */
+#define PACKETLEN_MIN 10	/* minimum length for a valid APRS-IS packet: "A1A>B1B:\r\n" */
+#define PACKETLEN_MAX 512	/* maximum length for a valid APRS-IS packet (incl. CRLF) */
 
 #define PACKETLEN_MAX_SMALL 130
 #define PACKETLEN_MAX_LARGE 300

@@ -474,8 +474,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	 * CR, LF or CRLF on input but make sure to use CRLF on output.
 	 */
 	
-	/* make sure it looks somewhat like an APRS-IS packet */
-	if (len < PACKETLEN_MIN || len+2 > PACKETLEN_MAX) {
+	/* make sure it looks somewhat like an APRS-IS packet... len is without CRLF */
+	if (len < PACKETLEN_MIN-2 || len > PACKETLEN_MAX-2) {
 		hlog(LOG_WARNING, "Packet size out of bounds (%d): %s", len, s);
 		return 0;
 	}
@@ -494,7 +494,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	}
 
 	
-	 /* starts with # => a comment packet, timestamp or something */
+	/* starts with # => a comment packet, timestamp or something */
 	if (memcmp(s, "# ",2) == 0)
 		return 0;
 

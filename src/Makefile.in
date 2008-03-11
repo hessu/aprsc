@@ -56,6 +56,7 @@ all: aprsc
 
 valgrind:
 	@echo "Did you do 'make clean' before 'make valgrind' ?"
+	@rm -f cellmalloc.o
 	make all CFLAGS="${CFLAGS} -D_FOR_VALGRIND_"
 
 # -------------------------------------------------------------------- #

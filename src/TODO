@@ -16,13 +16,6 @@ TODO ITEMS LIST
 
     - global packet queue expiration  (done, but..)
 
-    - history dumps
-	- Turn around the idea of worker scanning onwards the pbuf chain,
-	  and feeding same pbuf to all clients -- new would be to scan clients,
-	  and let each to forward the pbuf chain, and track the lag parameter.
-	- This way each client can have multiple modes -- write() errno EAGAIN
-	  is acceptable for history dump, while it is not so for regular feeds.
-
     - remove the UPLINKSIM code (svn diff -r 99:100) before release and
       final testing
 
@@ -36,3 +29,11 @@ To Consider:
       if used with full feeds)
 
     - SCTP sockets
+
+    - history dumps
+	- Turn around the idea of worker scanning onwards the pbuf chain,
+	  and feeding same pbuf to all clients -- new would be to scan clients,
+	  and let each to forward the pbuf chain, and track the lag parameter.
+	- This way each client can have multiple modes -- write() errno EAGAIN
+	  is acceptable for history dump, while it is not so for regular feeds.
+

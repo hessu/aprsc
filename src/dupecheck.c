@@ -40,6 +40,9 @@
 #include "crc32.h"
 #include "historydb.h"
 
+extern int uplink_simulator;
+
+
 int dupecheck_shutting_down = 0;
 int dupecheck_running = 0;
 pthread_t dupecheck_th;
@@ -100,7 +103,7 @@ void global_pbuf_purger(const int all)
 	while ( pbuf_global_count > pbuf_global_count_limit &&
 		pb ) {
 
-	  if (pb->t > expire1) break; // stop at newer than expire1
+	  if (pb->t > expire1 && !uplink_simulator) break; // stop at newer than expire1
 	  freeset[n++] = pb;
 	  ++n1;
 	  --pbuf_global_count;
@@ -121,7 +124,7 @@ void global_pbuf_purger(const int all)
 	n2 = 0;
 	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && 
 		pb ) {
-	  if (pb->t > expire2) break; // stop at newer than expire2
+	  if (pb->t > expire2 && !uplink_simulator) break; // stop at newer than expire2
 	  freeset[n++] = pb;
 	  ++n2;
 	  --pbuf_global_dupe_count;

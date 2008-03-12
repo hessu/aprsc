@@ -39,14 +39,18 @@
 #include "outgoing.h"
 #include "filter.h"
 
-time_t now;	/* current time, updated by the main thread */
+time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
+time_t tick;	/* real monotonous clock, may or may not be wallclock */
 
 extern int ibuf_size;
 
 struct worker_t *worker_threads = NULL;
 int workers_running = 0;
-
-int keepalive_interval = 20;    /* 20 seconds by default */
+int sock_write_expire  = 60;    /* 60 seconds OK ?       */
+int keepalive_interval = 20;    /* 20 seconds for individual socket, NOT all in sync! */
+int keepalive_poll_freq = 2;	/* keepalive analysis scan interval */
+int obuf_writes_treshold = 5;	/* This many writes per keepalive scan interval switch socket
+				   output to buffered. */
 
 /* global packet buffer */
 rwlock_t pbuf_global_rwlock = RWL_INITIALIZER;
@@ -155,6 +159,13 @@ void close_client(struct worker_t *self, struct client_t *c)
 
 int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
+	/* Count the number of writes towards this client,  the keepalive
+	   manager monitors this counter to determine if the socket should be
+	   kept in BUFFERED mode, or written immediately every time.
+	   Buffer flushing is done every keepalive_poll_freq (2) seconds.
+	*/
+	c->obuf_writes++;
+
 	if (c->obuf_end + len > c->obuf_size) {
 		/* Oops, cannot append the data to the output buffer.
 		 * Check if we can make space for it by moving data
@@ -163,20 +174,48 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 			/* Oh crap, the data will not fit even if we move stuff.
 			   Lets try writing.. */
-			int i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+			int i, e;
+		write_retry:;
+			i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+			e = errno;
+			if (i < 0 && (e == EINTR)) {
+			  // retrying..
+			  if (c->obuf_start > 0)
+			    memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+			  c->obuf_end  -= c->obuf_start;
+			  c->obuf_start = 0;
+			  goto write_retry;
+			}
 			if (i > 0) {
 				c->obuf_start += i;
-				c->obuf_writes++;
+				c->obuf_wtime = tick;
 			}
 			/* Is it still out of space ? */
 			if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 				/* Oh crap, the data will still not fit! */
-				return -1;
+
+#if WBUF_ADJUSTER
+			  // Fails to write, consider enlarging socket buffer..  Maybe..
+
+			  // Do Socket wbuf size adjustment (double it) and try to write again
+			  // ... until some limit.
+			  int wbuf = c->wbuf_size;
+			  wbuf *= 2;
+			  if (wbuf < 300000) { // FIXME: parametrize this limit!
+			    c->wbuf_size = wbuf;
+			    i = setsockopt(c->fd, SOL_SOCKET, SO_SNDBUF, &wbuf, sizeof(wbuf));
+			    hlog(LOG_DEBUG, "Enlarging client socket wbuf, now %d", wbuf);
+			    goto write_retry;
+			  }
+#endif
+			  hlog(LOG_DEBUG, "client_write(%s) fails; %s", c->addr_s, strerror(e));
+			  return -1;
 			}
 		}
 		/* okay, move stuff to the beginning to make space in the end */
-		memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
-		c->obuf_end = c->obuf_end - c->obuf_start;
+		if (c->obuf_start > 0)
+			memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+		c->obuf_end  -= c->obuf_start;
 		c->obuf_start = 0;
 	}
 	
@@ -187,10 +226,19 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
-		int i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+		int i, e;
+	write_retry_2:;
+		i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+		e = errno;
+		if (i < 0 && e == EINTR)
+		  goto write_retry_2;
+		if (i < 0 && len != 0) {
+			hlog(LOG_DEBUG, "client_write(%s) fails; %s", c->addr_s, strerror(e));
+			return -1;
+		}
 		if (i > 0) {
 			c->obuf_start += i;
-			c->obuf_writes++;
+			c->obuf_wtime = tick;
 		}
 	}
 	/* All done ? */
@@ -400,6 +448,9 @@ void collect_new_clients(struct worker_t *self)
 
 /* 
  *	Send keepalives to client sockets, run this once a second
+ *	This watches also obuf_wtime becoming too old, and also about
+ *	the number of writes on socket in previous run interval to
+ *	auto-adjust socket buffering mode.
  */
 void send_keepalives(struct worker_t *self)
 {
@@ -408,6 +459,7 @@ void send_keepalives(struct worker_t *self)
 	char buf[130], *s;
 	int len;
 	static const char *monthname[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
+	time_t w_expire = tick - sock_write_expire;
 
 	// Example message:
 	// # javAPRSSrvr 3.12b12 1 Mar 2008 15:11:20 GMT T2FINLAND 85.188.1.32:14580
@@ -436,7 +488,7 @@ void send_keepalives(struct worker_t *self)
 		/* No keepalives on UPLINK or PEER links.. */
 
 		/* Is it time for keepalive ? */
-		if (c->keepalive <= now) {
+		if (c->keepalive <= tick) {
 			int flushlevel = c->obuf_flushsize;
 			c->keepalive += keepalive_interval;
 
@@ -448,36 +500,31 @@ void send_keepalives(struct worker_t *self)
 			/* just fush if there was anything to write */
 			client_write(self, c, buf, 0);
 		}
+		if (c->obuf_wtime < w_expire) {
+			// TOO OLD!  Shutdown the client
+			shutdown(c->fd, SHUT_RDWR);
+			// Cleanup and close happens by the main loop..
+		}
+		if (c->obuf_writes > obuf_writes_treshold) {
+			// Lots and lots of writes, switch to buffering...
+
+		  if (c->obuf_flushsize == 0)
+		    hlog( LOG_DEBUG,"Switch client %p (%s) to buffered writes",
+			  c, c->addr_s );
+
+			c->obuf_flushsize = c->obuf_size - 200;
+		} else {
+		        // Not so much writes, back to "write immediate"
+		  if (c->obuf_flushsize != 0)
+		    hlog( LOG_DEBUG,"Switch client %p (%s) to unbuffered writes",
+			  c, c->addr_s );
+
+			c->obuf_flushsize = 0;
+		}
+		c->obuf_writes = 0;
 	}
 }
 
-
-/*
- *	Process outgoing packets, write them to clients
- */
-
-void process_outgoing(struct worker_t *self)
-{
-	struct pbuf_t *pb;
-	int e;
-	
-	if ((e = rwl_rdlock(&pbuf_global_rwlock))) {
-		hlog(LOG_CRIT, "worker: Failed to rdlock pbuf_global_rwlock!");
-		exit(1);
-	}
-	while ((pb = *self->pbuf_global_prevp)) {
-		process_outgoing_single(self, pb); /* in outgoing.c */
-		self->pbuf_global_prevp = &pb->next;
-	}
-	while ((pb = *self->pbuf_global_dupe_prevp)) {
-		process_outgoing_single(self, pb); /* in outgoing.c */
-		self->pbuf_global_dupe_prevp = &pb->next;
-	}
-	if ((e = rwl_rdunlock(&pbuf_global_rwlock))) {
-		hlog(LOG_CRIT, "worker: Failed to rdunlock pbuf_global_rwlock!");
-		exit(1);
-	}
-}
 
 /*
  *	Worker thread
@@ -486,6 +533,7 @@ void process_outgoing(struct worker_t *self)
 void worker_thread(struct worker_t *self)
 {
 	sigset_t sigs_to_block;
+	time_t next_keepalive = tick + 2;
 	
 	pthreads_profiling_reset();
 
@@ -522,7 +570,10 @@ void worker_thread(struct worker_t *self)
 			process_outgoing(self);
 
 		/* time of next keepalive broadcast ? */
-		send_keepalives(self);
+		if (tick > next_keepalive) {
+			send_keepalives(self);
+			next_keepalive += keepalive_poll_freq; /* Run them every 2 seconds */
+		}
 	}
 	
 	/* stop polling */
@@ -636,7 +687,7 @@ void workers_start(void)
 		
 		w->pbuf_global_prevp      = pbuf_global_prevp;
 		w->pbuf_global_dupe_prevp = pbuf_global_dupe_prevp;
-		
+
 		/* start the worker thread */
 		if (pthread_create(&w->th, NULL, (void *)worker_thread, w))
 			perror("pthread_create failed for worker_thread");

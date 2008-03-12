@@ -161,9 +161,11 @@ int sighandler(int signum)
  */
 void pthreads_profiling_reset(void)
 {
+#ifdef __linux__ /* Very Linux-specific code.. */
 	if (itv.it_interval.tv_usec || itv.it_interval.tv_sec) {
 	  setitimer(ITIMER_PROF, &itv, NULL);
 	}
+#endif
 }
 
 
@@ -178,7 +180,8 @@ int main(int argc, char **argv)
 	
 	/* close stdin */
 	close(0);
-	time(&now);
+	time(&tick);
+	now = tick;
 	setlinebuf(stdout);
 	setlinebuf(stderr);
 
@@ -242,8 +245,9 @@ int main(int argc, char **argv)
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
 		poll(NULL, 0, 300); // 0.300 sec -- or there abouts..
+		time(&tick);
 		if (!uplink_simulator)
-			time(&now);
+			now = tick;
 		
 		if (reopen_logs) {
 			reopen_logs = 0;
@@ -258,19 +262,6 @@ int main(int argc, char **argv)
 				accept_reconfiguring = 1;
 			}
 		}
-
-		/* 
-		if (now >= next_expiry) {
-			next_expiry = now + expiry_interval;
-			// expire
-			// pbuf_expire();
-		}
-		if (now >= next_stats) {
-			next_stats = now + stats_interval;
-			// log stats
-		}
-		*/
-
 	}
 	
 	hlog(LOG_INFO, "Signalling accept_thread to shut down...");

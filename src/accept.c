@@ -130,7 +130,11 @@ int open_tcp_listener(struct listen_t *l)
 	}
 	
 	arg = 1;
+#ifdef SO_REUSEPORT
+	setsockopt(f, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg));
+#else
 	setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
+#endif
 	
 	if (bind(f, l->ai->ai_addr, l->ai->ai_addrlen)) {
 		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
@@ -280,9 +284,22 @@ struct client_t *do_accept(struct listen_t *l)
 	c->addr  = sa;
 	c->state = CSTATE_LOGIN;
 	c->addr_s = hstrdup(eb);
-	c->keepalive = now;
+	c->keepalive = tick;
 	/* use the default login handler */
 	c->handler = &login_handler;
+
+#if WBUF_ADJUSTER
+	{
+	  int len, arg;
+	  /* Ask system's idea about what the sndbuf size is.  */
+	  len = sizeof(arg);
+	  i = getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, &len);
+	  if (i == 0)
+	    c->wbuf_size = arg;
+	  else
+	    c->wbuf_size = 8192; // default is syscall fails
+	}
+#endif
 
 	if (strcmp(l->name,"uplinksim") == 0) {
 	  // uplink simulator

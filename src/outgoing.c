@@ -24,6 +24,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "outgoing.h"
 #include "hlog.h"
@@ -63,5 +64,35 @@ void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		if (filter_process(self, c, pb) > 0) {
 			client_write(self, c, pb->data, pb->packet_len);
 		}
+	}
+}
+
+
+/*
+ *	Process outgoing packets, write them to clients
+ */
+
+void process_outgoing(struct worker_t *self)
+{
+	struct pbuf_t *pb;
+	int e;
+	
+	if ((e = rwl_rdlock(&pbuf_global_rwlock))) {
+		hlog(LOG_CRIT, "worker: Failed to rdlock pbuf_global_rwlock!");
+		exit(1);
+	}
+	while ((pb = *self->pbuf_global_prevp)) {
+		process_outgoing_single(self, pb); /* in outgoing.c */
+		self->last_pbuf_seqnum = pb->seqnum;
+		self->pbuf_global_prevp = &pb->next;
+	}
+	while ((pb = *self->pbuf_global_dupe_prevp)) {
+		process_outgoing_single(self, pb); /* in outgoing.c */
+		self->last_pbuf_dupe_seqnum = pb->seqnum;
+		self->pbuf_global_dupe_prevp = &pb->next;
+	}
+	if ((e = rwl_rdunlock(&pbuf_global_rwlock))) {
+		hlog(LOG_CRIT, "worker: Failed to rdunlock pbuf_global_rwlock!");
+		exit(1);
 	}
 }

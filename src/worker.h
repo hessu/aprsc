@@ -35,7 +35,8 @@
 #include "xpoll.h"
 #include "rwlock.h"
 
-extern time_t now;	/* current time - updated by the main thread */
+extern time_t now;	/* current time - updated by the main thread, MAY be running under simulator */
+extern time_t tick;	/* clocktick - monotonously increasing, never in simulator */
 
 extern void pthreads_profiling_reset(void);
 
@@ -52,9 +53,9 @@ extern void pthreads_profiling_reset(void);
 #define PACKETLEN_MAX_HUGE PACKETLEN_MAX
 
 /* number of pbuf_t structures to allocate at a time */
-#define PBUF_ALLOCATE_BUNCH_SMALL 20 /* grow to 2000 in production use - it's now small for debugging */
-#define PBUF_ALLOCATE_BUNCH_LARGE 20 /* grow to 2000 in production use - it's now small for debugging */
-#define PBUF_ALLOCATE_BUNCH_HUGE 5 /* grow to 50 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_SMALL 200 /* grow to 2000 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_LARGE 200 /* grow to 2000 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_HUGE   50 /* grow to 50 in production use - it's now small for debugging */
 
 /* a packet buffer */
 /* Type flags   */
@@ -92,7 +93,7 @@ struct pbuf_t {
 		*/
 
 	time_t t;		/* when the packet was received */
-	long seqnum;		/* ever increasing counter, dupecheck sets */
+	uint32_t seqnum;	/* ever increasing counter, dupecheck sets */
 	int packettype;		/* bitmask: one or more of T_* */
 	int flags;		/* bitmask: one or more of F_* */
 	
@@ -139,6 +140,7 @@ union sockaddr_u {
 	struct sockaddr_in6 si6;
 };
 
+#define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
 
 
 struct client_t {
@@ -167,7 +169,10 @@ struct client_t {
 	int   obuf_end;       /* where data in buffer ends */
 	int   obuf_flushsize; /* how much data in buf before forced write() at adding ? */
 	int   obuf_writes;    /* how many times (since last check) the socket has been written ? */
-
+	int   obuf_wtime;     /* when was last write? */
+#if WBUF_ADJUSTER
+	int   wbuf_size;      /* socket wbuf size */
+#endif
 	char  state;        /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */
 	char *username;     /* The callsign */
@@ -230,6 +235,9 @@ struct worker_t {
 	/* Pointer to last pointer in pbuf_global(_dupe) */
 	struct pbuf_t **pbuf_global_prevp;
 	struct pbuf_t **pbuf_global_dupe_prevp;
+
+	uint32_t	last_pbuf_seqnum;
+	uint32_t	last_pbuf_dupe_seqnum;
 };
 
 extern void pbuf_init(void);

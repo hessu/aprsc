@@ -79,75 +79,96 @@ cellarena_t *dupecheck_cells;
 #endif
 
 
-int dupecheck_incount;
+uint32_t  dupecheck_incount = -2000; // Explicite early wrap-around..
+
+int pbuf_seqid_lag(const uint32_t incount, const uint32_t pbuf_seq)
+{
+	int c = (int32_t)(incount - pbuf_seq);
+	if (pbuf_seq == 0)	// Worker without data.
+		c = 2000000000;
+	// Presumption is that above mentioned situation has very short
+	// existence, but as it can happen, we flag it with such a high
+	// value that temporarily the global_pbuf_purger() will not
+	// purge any items out of the global queue.
+	return c;
+}
+
 
 /*
  *	Global pbuf purger cleans out pbufs that are too old..
  */
-void global_pbuf_purger(const int all)
+void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_lag)
 {
 	struct pbuf_t *pb, *pb2;
-	struct pbuf_t *freeset[1002];
-	int n, n1, n2;
+	struct pbuf_t *freeset[2002];
+	int n, n1, n2, lag;
 
 	time_t expire1 = now - pbuf_global_expiration;
 	time_t expire2 = now - pbuf_global_dupe_expiration;
 
 	if (all) {
-	  pbuf_global_count_limit = 0;
-	  pbuf_global_dupe_count_limit  = 0;
-	  expire1 = now+10;
-	  expire2 = now+10;
+		pbuf_global_count_limit       = 0;
+		pbuf_global_dupe_count_limit  = 0;
+		expire1  = expire2       = now+10;
 	}
 
 	pb = pbuf_global;
 	n = 0;
 	n1 = 0;
-	while ( pbuf_global_count > pbuf_global_count_limit &&
-		pb ) {
+	while ( pbuf_global_count > pbuf_global_count_limit && pb ) {
 
-	  if (pb->t > expire1 && !uplink_simulator) break; // stop at newer than expire1
-	  freeset[n++] = pb;
-	  ++n1;
-	  --pbuf_global_count;
-	  // dissociate the pbuf from the chain
-	  pb2 = pb->next; pb->next = NULL; pb = pb2;
-	  if (n >= 1000) {
-	    pbuf_free_many(freeset, n);
-	    n = 0;
-	  }
+		if (pb->t > expire1)
+			break; // stop at newer than expire1
+		lag = pbuf_seqid_lag(dupecheck_incount, pb->seqnum);
+		if (pbuf_lag >= lag)
+			break; // some output-worker is lagging behind this item!
+
+		freeset[n++] = pb;
+		++n1;
+		--pbuf_global_count;
+		// dissociate the pbuf from the chain
+		pb2 = pb->next; pb->next = NULL; pb = pb2;
+		if (n >= 2000) {
+			pbuf_free_many(freeset, n);
+			n = 0;
+		}
 	}
 	pbuf_global = pb;
-	// FIXME: track oldest packet age ? or sequence number counter ?
 	if (n > 0) {
-	  pbuf_free_many(freeset, n);
+		pbuf_free_many(freeset, n);
 	}
 
 	pb = pbuf_global_dupe;
 	n = 0;
 	n2 = 0;
-	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && 
-		pb ) {
-	  if (pb->t > expire2 && !uplink_simulator) break; // stop at newer than expire2
-	  freeset[n++] = pb;
-	  ++n2;
-	  --pbuf_global_dupe_count;
-	  // dissociate the pbuf from the chain
-	  pb2 = pb->next; pb->next = NULL; pb = pb2;
-	  if (n >= 1000) {
-	    pbuf_free_many(freeset, n);
-	    n = 0;
-	  }
+	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb ) {
+
+		if (pb->t > expire2)
+			break; // stop at newer than expire2
+		lag = pbuf_seqid_lag(dupecheck_incount, pb->seqnum);
+		if (pbuf_dupe_lag >= lag)
+			break; // some output-worker is lagging behind this item!
+
+		freeset[n++] = pb;
+		++n2;
+		--pbuf_global_dupe_count;
+		// dissociate the pbuf from the chain
+		pb2 = pb->next; pb->next = NULL; pb = pb2;
+		if (n >= 2000) {
+			pbuf_free_many(freeset, n);
+			n = 0;
+		}
 	}
 	pbuf_global_dupe = pb;
-	// FIXME: track oldest packet age ? or sequence number counter ?
 	if (n > 0) {
-	  pbuf_free_many(freeset, n);
+		pbuf_free_many(freeset, n);
 	}
 
-	if (n1 > 0 || n2 > 0) // report only when there is something to report...
+	if (n1 > 0 || n2 > 0) {
+		// report only when there is something to report...
 		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs",
 		      n1, pbuf_global_count, n2, pbuf_global_dupe_count );
+	}
 }
 
 
@@ -306,11 +327,15 @@ int dupecheck(struct pbuf_t *pb)
 	if (!dp) return -1; // alloc error!
 
 	*dpp = dp;
-	dp->crc = crc;
-	dp->t   = now;
 	memcpy(dp->addresses, addr, addrlen);
 	memcpy(dp->packet,    data, datalen);
-
+	dp->crc = crc;
+	dp->t   = pb->t;    /* Arrival timestamp..
+			       In normal operation this is within 1s of 
+			       the wallclock time, but in simulator it
+			       can be radically off when feeding 150 000
+			       events in realtime second...
+			     */
 	return 0;
 }
 
@@ -327,8 +352,10 @@ void dupecheck_thread(void)
 	struct pbuf_t *pb_out_dupe, **pb_out_dupe_prevp, *pb_out_dupe_last;
 	int n;
 	int e;
-	int c, d;
+	int i, c, d;
 	int pb_out_count, pb_out_dupe_count;
+	int worker_pbuf_lag;
+	int worker_pbuf_dupe_lag;
 	
 	pthreads_profiling_reset();
 
@@ -348,15 +375,26 @@ void dupecheck_thread(void)
 
 	while (!dupecheck_shutting_down) {
 		n = d = 0;
-		pb_out = NULL;
+		pb_out       = NULL;
 		pb_out_prevp = &pb_out;
-		pb_out_dupe = NULL;
+		pb_out_dupe  = NULL;
 		pb_out_dupe_prevp = &pb_out_dupe;
-		pb_out_count = pb_out_dupe_count = 0;
-		pb_out_last = pb_out_dupe_last = NULL;
+		pb_out_count      = pb_out_dupe_count    = 0;
+		pb_out_last       = pb_out_dupe_last     = NULL;
+		worker_pbuf_lag   = worker_pbuf_dupe_lag = -1;
 
 		/* walk through worker threads */
 		for (w = worker_threads; (w); w = w->next) {
+			/* find the highest worker lag count... */
+
+			c = pbuf_seqid_lag(dupecheck_incount, w->last_pbuf_seqnum);
+			if (w->last_pbuf_seqnum == 0) c = 2000000000;
+			if (c > worker_pbuf_lag)
+			  worker_pbuf_lag = c;
+			c = pbuf_seqid_lag(dupecheck_incount, w->last_pbuf_dupe_seqnum);
+			if (c > worker_pbuf_dupe_lag)
+			  worker_pbuf_dupe_lag = c;
+
 			/* if there are items in the worker's pbuf_incoming, grab them and process */
 			if (!w->pbuf_incoming)
 				continue;
@@ -420,7 +458,18 @@ void dupecheck_thread(void)
 			}
 		}
 
-		global_pbuf_purger(0);
+#if 0
+		// If no workers are running, the output processing is also
+		// impossible, thus the default lag of "-1" is just fine,
+		// and the out-queue purge is not lag-restricted.
+
+		if (worker_pbuf_lag < 0)
+			worker_pbuf_lag = 2000000000;
+		if (worker_pbuf_dupe_lag < 0)
+			worker_pbuf_dupe_lag = 2000000000;
+#endif
+
+		global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
 
 		if (n > 0)
 		  hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
@@ -478,5 +527,5 @@ void dupecheck_atend(void)
 	  }
 	}
 
-	global_pbuf_purger(1);
+	global_pbuf_purger(1, 0, 0);
 }

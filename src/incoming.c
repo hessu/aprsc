@@ -245,7 +245,8 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 
 	for ( i = 1;  i < bunchlen; ++i ) {
 		pb = allocarray[i];
-		pb->next = *pool;
+		pb->next    = *pool;
+		pb->buf_len = len;
 		*pool = pb;
 	}
 

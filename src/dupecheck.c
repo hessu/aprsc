@@ -50,6 +50,11 @@ pthread_t dupecheck_th;
 int pbuf_global_count = 0;
 int pbuf_global_dupe_count = 0;
 
+int pbuf_global_count_limit      = 90000; // FIXME: real criteria should be expirer..
+int pbuf_global_dupe_count_limit =  9000; // FIXME: .. but in simulation our timers are not useful.
+					  // FIXME: .. or these should be global configurable parameters.
+
+
 struct dupe_record_t {
 	struct dupe_record_t *next;
 	uint32_t crc;
@@ -84,8 +89,6 @@ void global_pbuf_purger(const int all)
 	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[1002];
 	int n, n1, n2;
-	int pbuf_global_count_limit      = 30000; // real criteria should be expirer..
-	int pbuf_global_dupe_count_limit =  3000; // .. but in simulation our timers are not useful.
 
 	time_t expire1 = now - pbuf_global_expiration;
 	time_t expire2 = now - pbuf_global_dupe_expiration;
@@ -115,6 +118,7 @@ void global_pbuf_purger(const int all)
 	  }
 	}
 	pbuf_global = pb;
+	// FIXME: track oldest packet age ? or sequence number counter ?
 	if (n > 0) {
 	  pbuf_free_many(freeset, n);
 	}
@@ -136,6 +140,7 @@ void global_pbuf_purger(const int all)
 	  }
 	}
 	pbuf_global_dupe = pb;
+	// FIXME: track oldest packet age ? or sequence number counter ?
 	if (n > 0) {
 	  pbuf_free_many(freeset, n);
 	}

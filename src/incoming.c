@@ -246,7 +246,7 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	for ( i = 1;  i < bunchlen; ++i ) {
 		pb = allocarray[i];
 		pb->next    = *pool;
-		pb->buf_len = len;
+		pb->buf_len = len; // needed when local pool is discarded at worker shutdown
 		*pool = pb;
 	}
 
@@ -271,6 +271,7 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	for ( i = 1;  i < bunchlen; ++i ) {
 	  pb = hmalloc(sz);
 	  pb->next = *pool;
+	  // pb->buf_len = len; // NOT needed with VALGRIND when local pool is discarded at worker shutdown
 	  *pool = pb;
 	}
 

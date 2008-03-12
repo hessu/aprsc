@@ -322,6 +322,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	strcpy(f->textbuf, filt); /* and copy of filter text */
 #endif
 
+	// hlog(LOG_DEBUG, "parsed filter: t=%c n=%d '%s'", f->h.type, f->h.negation, f->h.text);
+
 	/* link to the tail.. */
 	while (*ff != NULL)
 		ff = &((*ff)->h.next);
@@ -510,7 +512,7 @@ int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   (* wild card allowed)
 	*/
 
-	const char *p = f->h.text + 2;
+	const char *p = (f->h.text) + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	int i = pb->srccall_end+1 - pb->data;
 
@@ -532,7 +534,7 @@ int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Supports * wild card.
 	*/
 
-	const char *p = f->h.text + 2;
+	const char *p = (f->h.text) + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	int i;
 
@@ -559,7 +561,7 @@ int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   digipeated by a particular station(s) (the station's call
 	   is in the path).   This filter allows the * wildcard.
 	*/
-	const char *p = f->h.text + 2;
+	const char *p = (f->h.text) + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	int i;
 
@@ -593,7 +595,7 @@ int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Pass all objects with the exact name of obj1, obj2, ...
 	   (* wild card allowed)
 	*/
-	const char *p = f->h.text + 2;
+	const char *p = (f->h.text) + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	char *s;
 
@@ -628,7 +630,7 @@ int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	   Pass traffic with fromCall that start with aa or bb or cc...
 	*/
 
-	const char *p = f->h.text + 2;
+	const char *p = (f->h.text) + 2;
 	char keybuf[CALLSIGNLEN_MAX+1];
 	int i = pb->srccall_end+1 - pb->data;
 	const char *k;
@@ -639,15 +641,21 @@ int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	memcpy( keybuf, pb->data, i);
 	keybuf[i] = 0;
 
+	// hlog(LOG_DEBUG, "p-filter: '%s' vs. '%s'", p, keybuf);
 	while (*p)  {
 		k = keybuf;
-		while (*p == *k && *k != 0 && *k != '/') {
+		while (*p == *k && *p != 0 && *p != '/') {
 			++p; ++k;
 		}
-		if (*k != 0 && *p == '/')
+#if 0
+		if (*k != 0 && (*p == '/' || *p == 0))
 			return f->h.negation ? 2 : 1; // PREFIX match
 		if (*k == 0 && (*p == '/' || *p == 0))
 			return f->h.negation ? 2 : 1; // Exact match
+#else
+		if (*p == '/' || *p == 0)
+			return f->h.negation ? 2 : 1; // either match
+#endif
 		
 		// No match, scan for next pattern
 		while (*p && *p != '/')
@@ -736,7 +744,7 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	    t/.*./OH2RDY/50  Everything within 50 km of OH2RDY's last known position
 	                     ("." is dummy addition for C comments..)
 	*/
-	const char *t = f->h.text+2;
+	const char *t = (f->h.text) + 2;
 	int rc = 0;
 	for ( ; *t && *t != '/' ; ++t) { /* Go thru all matchers */
 		switch (*t) {
@@ -887,7 +895,7 @@ int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	if (!(pb->flags & F_HASPOS))
 		return 0; // No position data...
 
-	p = f->h.text +2;
+	p = (f->h.text) +2;
 	for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
 		keybuf[i] = *p;
 		if (*p == 0 || *p == '/')
@@ -1033,7 +1041,7 @@ int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f
 		rc = -1;
 		break;
 	}
-	hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
+	// hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
 
 	return rc;
 }

@@ -27,6 +27,7 @@
 #include <strings.h>
 #include <ctype.h>
 #include <alloca.h>
+#include <stdlib.h>
 
 #include "config.h"
 #include "incoming.h"
@@ -84,7 +85,7 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 {
 	if (self) { /* Return to worker local pool */
 
-		hlog(LOG_DEBUG, "pbuf_free(%p) for worker %p - packet length: %d", p, self, p->buf_len);
+		// hlog(LOG_DEBUG, "pbuf_free(%p) for worker %p - packet length: %d", p, self, p->buf_len);
 
 		switch (p->buf_len) {
 		case PACKETLEN_MAX_SMALL:
@@ -110,7 +111,7 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 
 	/* Not worker local processing then, return to global pools. */
 
-	hlog(LOG_DEBUG, "pbuf_free(%p) for global pool - packet length: %d", p, p->buf_len);
+	// hlog(LOG_DEBUG, "pbuf_free(%p) for global pool - packet length: %d", p, p->buf_len);
 
 	switch (p->buf_len) {
 	case PACKETLEN_MAX_SMALL:
@@ -165,7 +166,7 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 		}
 	}
 
-	hlog( LOG_DEBUG, "pbuf_free_many(); counts: small %d large %d huge %d", smallcnt, largecnt, hugecnt );
+	// hlog( LOG_DEBUG, "pbuf_free_many(); counts: small %d large %d huge %d", smallcnt, largecnt, hugecnt );
 
 #ifndef _FOR_VALGRIND_
 	if (smallcnt > 0)
@@ -246,7 +247,7 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	for ( i = 1;  i < bunchlen; ++i ) {
 		pb = allocarray[i];
 		pb->next    = *pool;
-		pb->buf_len = len;
+		pb->buf_len = len; // this is necessary for worker local pool discard at worker shutdown
 		*pool = pb;
 	}
 
@@ -263,7 +264,10 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	pb->buf_len = len;
 	
 	return pb;
-#else
+
+#else /* Valgrind -version of things */
+
+
 	/* The local list is empty... get buffers from the global list. */
 
 	int sz = sizeof(struct pbuf_t) + len;
@@ -271,7 +275,7 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	for ( i = 1;  i < bunchlen; ++i ) {
 	  pb = hmalloc(sz);
 	  pb->next = *pool;
-	  pb->buf_len = len;
+	  pb->buf_len = len; // for valgrind this is not necessary.. but exists for symmetry's sake
 	  *pool = pb;
 	}
 
@@ -434,7 +438,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		via_start++;
 	
 	/* check if the srccall equals the client's login */
-	if (strlen(c->username) == src_end - s && strncasecmp(c->username, s, src_end - s) == 0)
+	if (strlen(c->username) == src_end - s && memcmp(c->username, s, src_end - s) == 0)
 		originated_by_client = 1;
 	
 	/* process Q construct, path_append_len of path_append will be copied

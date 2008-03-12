@@ -103,9 +103,9 @@ int new_cellblock(cellarena_t *ca)
 		ca->freecount += 1;
 	}
 
-	hlog( LOG_DEBUG, "new_cellblock(%p) of %dB freecount %d  returns to %p/%p",
-	      ca, ca->cellsize, ca->freecount,
-	      __builtin_return_address(1), __builtin_return_address(2) );
+	// hlog( LOG_DEBUG, "new_cellblock(%p) of %dB freecount %d  returns to %p/%p",
+	//       ca, ca->cellsize, ca->freecount,
+	//       __builtin_return_address(1), __builtin_return_address(2) );
 
 	return 0;
 }

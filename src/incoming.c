@@ -38,7 +38,11 @@
 
 long incoming_count;
 
-#ifndef _FOR_VALGRIND_
+#ifdef _FOR_VALGRIND_
+typedef struct cellarena_t {
+  int dummy;
+} cellarena_t;
+#endif
 /* global packet buffer freelists */
 
 cellarena_t *pbuf_cells_small;
@@ -46,7 +50,7 @@ cellarena_t *pbuf_cells_large;
 cellarena_t *pbuf_cells_huge;
 
 int pbuf_cells_kb = 1024; // 1M bunches is faster for system than 16M !
-#endif
+
 
 /*
  *	Get a buffer for a packet
@@ -78,27 +82,35 @@ void pbuf_init(void)
 
 void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 {
-#ifndef _FOR_VALGRIND_
 	if (self) { /* Return to worker local pool */
+
+		hlog(LOG_DEBUG, "pbuf_free(%p) for worker %p - packet length: %d", p, self, p->buf_len);
+
 		switch (p->buf_len) {
 		case PACKETLEN_MAX_SMALL:
 			p->next = self->pbuf_free_small;
 			self->pbuf_free_small = p;
-			return;
+			break;
 		case PACKETLEN_MAX_LARGE:
 			p->next = self->pbuf_free_large;
 			self->pbuf_free_large = p;
-			return;
+			break;
 		case PACKETLEN_MAX_HUGE:
 			p->next = self->pbuf_free_huge;
 			self->pbuf_free_huge = p;
-			return;
+			break;
 		default:
+			hlog(LOG_ERR, "pbuf_free(%p) for worker %p - packet length not known: %d", p, self, p->buf_len);
 			break;
 		}
+		return;
 	}
 
+#ifndef _FOR_VALGRIND_
+
 	/* Not worker local processing then, return to global pools. */
+
+	hlog(LOG_DEBUG, "pbuf_free(%p) for global pool - packet length: %d", p, p->buf_len);
 
 	switch (p->buf_len) {
 	case PACKETLEN_MAX_SMALL:
@@ -114,8 +126,10 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 		hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", p, p->buf_len);
 		break;
 	}
+	return;
 #else
 	hfree(p);
+	return;
 #endif
 }
 
@@ -128,7 +142,6 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 void pbuf_free_many(struct pbuf_t **array, int numbufs)
 {
 	int i;
-#ifndef _FOR_VALGRIND_
 	void **arraysmall  = alloca(sizeof(void*)*numbufs);
 	void **arraylarge  = alloca(sizeof(void*)*numbufs);
 	void **arrayhuge   = alloca(sizeof(void*)*numbufs);
@@ -146,16 +159,22 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 			arrayhuge[hugecnt++]   = array[i];
 			break;
 		default:
-			hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", array[i], array[i]->buf_len);
+		  hlog( LOG_ERR, "pbuf_free_many(%p) - packet length not known: %d :%d",
+			array[i], array[i]->buf_len, array[i]->packet_len );
 			break;
 		}
 	}
+
+	hlog( LOG_DEBUG, "pbuf_free_many(); counts: small %d large %d huge %d", smallcnt, largecnt, hugecnt );
+
+#ifndef _FOR_VALGRIND_
 	if (smallcnt > 0)
 		cellfreemany(pbuf_cells_small, arraysmall, smallcnt);
 	if (largecnt > 0)
 		cellfreemany(pbuf_cells_large, arraylarge, largecnt);
 	if (hugecnt > 0)
 		cellfreemany(pbuf_cells_huge,  arrayhuge,   hugecnt);
+
 #else
 	for (i = 0; i < numbufs; ++i) {
 		hfree(array[i]);
@@ -163,14 +182,41 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 #endif
 }
 
-#ifndef _FOR_VALGRIND_
-struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
-			     int len, int bunchlen)
+struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 {
 	struct pbuf_t *pb;
 	int i;
-	struct pbuf_t **allocarray = alloca(bunchlen * sizeof(void*));
-	
+	struct pbuf_t **allocarray;
+	struct pbuf_t **pool;
+	cellarena_t *global_pool;
+	int bunchlen;
+
+	/* select which thread-local freelist to use */
+	if (len <= PACKETLEN_MAX_SMALL) {
+		//hlog(LOG_DEBUG, "pbuf_get: Allocating small buffer for a packet of %d bytes", len);
+		pool        = &self->pbuf_free_small;
+		global_pool = pbuf_cells_small;
+		len         = PACKETLEN_MAX_SMALL;
+		bunchlen    = PBUF_ALLOCATE_BUNCH_SMALL;
+	} else if (len <= PACKETLEN_MAX_LARGE) {
+		//hlog(LOG_DEBUG, "pbuf_get: Allocating large buffer for a packet of %d bytes", len);
+		pool        = &self->pbuf_free_large;
+		global_pool = pbuf_cells_large;
+		len         = PACKETLEN_MAX_LARGE;
+		bunchlen    = PBUF_ALLOCATE_BUNCH_LARGE;
+	} else if (len <= PACKETLEN_MAX_HUGE) {
+		//hlog(LOG_DEBUG, "pbuf_get: Allocating huge buffer for a packet of %d bytes", len);
+		pool        = &self->pbuf_free_huge;
+		global_pool = pbuf_cells_huge;
+		len         = PACKETLEN_MAX_HUGE;
+		bunchlen    = PBUF_ALLOCATE_BUNCH_HUGE;
+	} else { /* too large! */
+		hlog(LOG_ERR, "pbuf_get: Not allocating a buffer for a packet of %d bytes!", len);
+		return NULL;
+	}
+
+	allocarray = alloca(bunchlen * sizeof(void*));
+
 	if (*pool) {
 		/* fine, just get the first buffer from the pool...
 		 * the pool is not doubly linked (not necessary)
@@ -178,27 +224,34 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
 		pb = *pool;
 		*pool = pb->next;
 
-		// hlog(LOG_DEBUG, "pbuf_get_real(%d): got one buf from local pool", len);
+		/* zero all header fields */
+		memset(pb, 0, sizeof(*pb));
+
+		/* we know the length in this sub-pool, set it */
+		pb->buf_len = len;
+
+		// hlog(LOG_DEBUG, "pbuf_get(%d): got one buf from local pool: %p", len, pb);
 
 		return pb;
 	}
 	
+#ifndef _FOR_VALGRIND_
 	/* The local list is empty... get buffers from the global list. */
 
 	bunchlen = cellmallocmany( global_pool, (void**)allocarray, bunchlen );
-
-	pb = allocarray[0];
-	pb->next = NULL;
+	if (bunchlen < 1) {
+	  abort();
+	}
 
 	for ( i = 1;  i < bunchlen; ++i ) {
-		if (*pool)
-			(*pool)->next = allocarray[i];
-		*pool = allocarray[i];
+		pb = allocarray[i];
+		pb->next = *pool;
+		*pool = pb;
 	}
-	if (*pool)
-		(*pool)->next = NULL;
 
-	// hlog(LOG_DEBUG, "pbuf_get_real(%d): got %d bufs from global pool", len, bunchlen);
+	pb = allocarray[0];
+
+	// hlog(LOG_DEBUG, "pbuf_get(%d): got %d bufs from global pool %p", len, bunchlen, pool);
 
 	/* ok, return the first buffer from the pool */
 
@@ -209,40 +262,27 @@ struct pbuf_t *pbuf_get_real(struct pbuf_t **pool, cellarena_t *global_pool,
 	pb->buf_len = len;
 	
 	return pb;
-}
-
-struct pbuf_t *pbuf_get(struct worker_t *self, int len)
-{
-	/* select which thread-local freelist to use */
-	if (len <= PACKETLEN_MAX_SMALL) {
-		//hlog(LOG_DEBUG, "pbuf_get: Allocating small buffer for a packet of %d bytes", len);
-		return pbuf_get_real(&self->pbuf_free_small, pbuf_cells_small,
-				     PACKETLEN_MAX_SMALL, PBUF_ALLOCATE_BUNCH_SMALL);
-	} else if (len <= PACKETLEN_MAX_LARGE) {
-		//hlog(LOG_DEBUG, "pbuf_get: Allocating large buffer for a packet of %d bytes", len);
-		return pbuf_get_real(&self->pbuf_free_large, pbuf_cells_large,
-				     PACKETLEN_MAX_LARGE, PBUF_ALLOCATE_BUNCH_LARGE);
-	} else if (len <= PACKETLEN_MAX_HUGE) {
-		//hlog(LOG_DEBUG, "pbuf_get: Allocating huge buffer for a packet of %d bytes", len);
-		return pbuf_get_real(&self->pbuf_free_huge, pbuf_cells_huge,
-				     PACKETLEN_MAX_HUGE, PBUF_ALLOCATE_BUNCH_HUGE);
-	} else { /* too large! */
-		hlog(LOG_ERR, "pbuf_get: Not allocating a buffer for a packet of %d bytes!", len);
-		return NULL;
-	}
-}
 #else
-struct pbuf_t *pbuf_get(struct worker_t *self, int len)
-{
-	struct pbuf_t *pb;
+	/* The local list is empty... get buffers from the global list. */
+
 	int sz = sizeof(struct pbuf_t) + len;
+
+	for ( i = 1;  i < bunchlen; ++i ) {
+	  pb = hmalloc(sz);
+	  pb->next = *pool;
+	  *pool = pb;
+	}
+
 	pb = hmalloc(sz);
 
 	memset(pb, 0, sz);
 	pb->buf_len = len;
+
+	// hlog(LOG_DEBUG, "pbuf_get_real(%d): got %d bufs to local pool, returning %p", len, bunchlen, pb);
+
 	return pb;
-}
 #endif
+}
 
 
 

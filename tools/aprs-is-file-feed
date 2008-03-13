@@ -1,6 +1,7 @@
 #!/usr/bin/perl 
 
-$VERSION = 'APRS-IS-RX version-1.0';
+$VERSION = 'APRS-IS-XMIT version-1.0';
+
 
 use POSIX;
 
@@ -9,38 +10,61 @@ select STDOUT; $| = 1;
 my $quit = 0;
 my $APRSIS;
 
-my $mycall = 'OH2MQK-RR';
+my $mycall = 'OH2MQK-WR';
 my $filter = 'p/OH2R -p/OH2 p/OH ';
-#my $filter = 'p/OH2R';
-$filter = 'p/OH';
 
-#$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
-$APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter );
+$APRSIS = APRS::IS->new('127.0.0.1:10190', $mycall, $filter);
 
 if (!defined($APRSIS)) {
     printf "aprsazel: Failed to open APRS-IS socket!\n";
     exit 4;
 }
 
+
+
+
 my $now = time;
 my $last = $now + 60*60;
+my $next = 100;
+my $cnt = 0;
 
-while (! $quit && $now < $last) {
+while (<>) {
 
-    local $line;
+    local $line = $_;
     local %aprs;
 
-    $now = time;
-    $line = $APRSIS->getline;
+    $APRSIS->sendline(sprintf("%d",$now)."\t".$line);
 
-    next if (!defined $line);
+    ++$cnt;
+    $now += 0.03; ## magic 
 
-    chomp $line;
+    if ($cnt >= $next) {
+	$APRSIS->flush();
+	while ($line = $APRSIS->getline) {
+	    ;
+	}
+	$next += 1000;
+    }
 
-    printf "%d\t%s\n", time, $line;
+#    next if (!defined $line);
+
+#    chomp $line;
+#    printf "%d\t%s\n", time, $line;
 }
 
-printf "\n";
+$APRSIS->flush();
+
+printf "\n cnt = $cnt\n";
+
+printf "Last tick: %s\n", $now;
+
+$last = $now + 3000;
+while ($now < $last) {
+    $now += 200;
+    $APRSIS->sendline(sprintf("%s\t# tick\r\n", $now));
+    $APRSIS->flush();
+    sleep 1;
+}
 
 exit 0;
 
@@ -143,13 +167,17 @@ sub getline {
 
     my @ready;
 
-    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
+    $self->{sock}->blocking(0);
+    # if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
 
-	# We have only one socket...
+# We have only one socket...
 
-	return $self->{sock}->getline;
+    my $l = $self->{sock}->getline;
 
-    }
+    $self->{sock}->blocking(1);
+    return $l;
+
+#    }
 
     undef;
 }
@@ -160,13 +188,28 @@ sub sendline {
 
     my @ready;
 
-    $self->{sock}->blocking(1);
-    $self->{sock}->printf( "%s\r\n", $line);
-    $self->{sock}->flush;
+#    $self->{sock}->blocking(1);
 
-    $self->{sock}->blocking(1);
+    $self->{buf} .= $line;
+
+#    $self->{sock}->printf( "%s", $line);
+#    $self->{sock}->flush;
+
+#    $self->{sock}->blocking(0);
 
     undef;
+}
+
+sub flush {
+    my $self = shift;
+    my $line = shift;
+
+    my @ready;
+
+    $self->{sock}->blocking(1);
+    $self->{sock}->write($self->{buf});
+    $self->{buf} = '';
+    $self->{sock}->flush;
 }
 
 # -------------------------------------------------------------------------

@@ -9,39 +9,38 @@ select STDOUT; $| = 1;
 my $quit = 0;
 my $APRSIS;
 
-my $mycall = 'OH2MQK-RR';
-my $filter = 'p/OH2R -p/OH2 p/OH ';
+my $mycall = 'MRX-';
 #my $filter = 'p/OH2R';
-$filter = 'p/OH';
+#my $filter = 'p/OH';
+my $filter = 'p/OH2R -p/OH2 p/OH ';
 
 #$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
-$APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter );
 
-if (!defined($APRSIS)) {
-    printf "aprsazel: Failed to open APRS-IS socket!\n";
-    exit 4;
+my @APRS = ();
+
+my $n = 500;
+
+foreach my $i (1 .. 500) {
+    my $call = sprintf("%s%d",$mycall,$i);
+    $APRSIS = APRS::IS->new('localhost:14580', $call, $filter );
+    if (!defined($APRSIS)) {
+	printf "aprsazel: Failed to open APRS-IS socket!\n";
+	exit 4;
+    }
+    push @APRS, $APRSIS;
 }
+
 
 my $now = time;
 my $last = $now + 60*60;
+local $line;
 
-while (! $quit && $now < $last) {
-
-    local $line;
-    local %aprs;
-
+while (1) {
     $now = time;
-    $line = $APRSIS->getline;
-
-    next if (!defined $line);
-
-    chomp $line;
-
-    printf "%d\t%s\n", time, $line;
+    foreach my $A (@APRS) {
+	$line = $A->getline;
+    }
 }
-
-printf "\n";
-
 exit 0;
 
 # -------------------------------------------------------------------------
@@ -52,6 +51,7 @@ use 5.006;
 use strict;
 use warnings;
 
+use IO::Handle '_IOFBF';
 use IO::Socket::INET;
 use IO::Select;
 
@@ -80,9 +80,9 @@ sub new {
     if (!defined($self->{sock})) {
         die(__PACKAGE__.": APRS::IS->new(".$url.")  failure: ".$!."\n");
     }
+    
 
-
-    $self->{select} = IO::Select->new( $self->{sock} );
+    #$self->{select} = IO::Select->new( $self->{sock} );
 
     $self->{aprsmycall} = uc( $mycall );
     $mycall =~ s/-.*//;
@@ -128,9 +128,12 @@ sub new {
 	    $main::VERSION, $self->{filterre} );
     $self->{sock}->flush;
 
-    $self->{sock}->blocking(1);
+#    $self->{rbuf} = ' ' x 16000;   ############## grr..  not avaibale
+#    $self->{sock}->setbuf( $self->{rbuf} );
 
-    # my $discard = $self->getline();
+    $self->{sock}->blocking(0);
+
+#    my $discard = $self->getline();
 
     $self;
 }
@@ -143,15 +146,11 @@ sub getline {
 
     my @ready;
 
-    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
-
+#    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
 	# We have only one socket...
-
-	return $self->{sock}->getline;
-
-    }
-
-    undef;
+    return $self->{sock}->getline;
+#    }
+#    undef;
 }
 
 sub sendline {
@@ -164,7 +163,7 @@ sub sendline {
     $self->{sock}->printf( "%s\r\n", $line);
     $self->{sock}->flush;
 
-    $self->{sock}->blocking(1);
+    $self->{sock}->blocking(0);
 
     undef;
 }

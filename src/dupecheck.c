@@ -79,25 +79,32 @@ cellarena_t *dupecheck_cells;
 #endif
 
 
-uint32_t  dupecheck_incount = -2000; // Explicite early wrap-around..
+uint32_t  dupecheck_seqnum      = -2000; // Explicite early wrap-around..
+uint32_t  dupecheck_dupe_seqnum = -2000; // Explicite early wrap-around..
 
-int pbuf_seqid_lag(const uint32_t incount, const uint32_t pbuf_seq)
+static int pbuf_seqnum_lag(const uint32_t seqnum, const uint32_t pbuf_seq)
 {
-	int c = (int32_t)(incount - pbuf_seq);
+	// The lag calculation method takes care of the value space
+	// wrap-around, thus this is not limited on on first 4 billion
+	// packets, or whatever smallish..  As long as there are less
+	// than 2 billion packets in the in-core value spaces.
+
+	int lag = (int32_t)(seqnum - pbuf_seq);
+
 	if (pbuf_seq == 0)	// Worker without data.
-		c = 2000000000;
+		lag = 2000000000;
 	// Presumption is that above mentioned situation has very short
 	// existence, but as it can happen, we flag it with such a high
 	// value that temporarily the global_pbuf_purger() will not
 	// purge any items out of the global queue.
-	return c;
+	return lag;
 }
 
 
 /*
  *	Global pbuf purger cleans out pbufs that are too old..
  */
-void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_lag)
+static void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_lag)
 {
 	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[2002];
@@ -119,7 +126,7 @@ void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_l
 
 		if (pb->t > expire1)
 			break; // stop at newer than expire1
-		lag = pbuf_seqid_lag(dupecheck_incount, pb->seqnum);
+		lag = pbuf_seqnum_lag(dupecheck_seqnum, pb->seqnum);
 		if (pbuf_lag >= lag)
 			break; // some output-worker is lagging behind this item!
 
@@ -145,7 +152,7 @@ void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_l
 
 		if (pb->t > expire2)
 			break; // stop at newer than expire2
-		lag = pbuf_seqid_lag(dupecheck_incount, pb->seqnum);
+		lag = pbuf_seqnum_lag(dupecheck_dupe_seqnum, pb->seqnum);
 		if (pbuf_dupe_lag >= lag)
 			break; // some output-worker is lagging behind this item!
 
@@ -166,8 +173,8 @@ void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_l
 
 	if (n1 > 0 || n2 > 0) {
 		// report only when there is something to report...
-		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs",
-		      n1, pbuf_global_count, n2, pbuf_global_dupe_count );
+		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs, lags: %d/%d",
+		      n1, pbuf_global_count, n2, pbuf_global_dupe_count, pbuf_lag, pbuf_dupe_lag );
 	}
 }
 
@@ -189,7 +196,7 @@ void dupecheck_init(void)
 #endif
 }
 
-struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
+static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 {
 	struct dupe_record_t *dp;
 #ifndef _FOR_VALGRIND_
@@ -219,7 +226,7 @@ struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 	return dp;
 }
 
-void dupecheck_db_free(struct dupe_record_t *dp)
+static void dupecheck_db_free(struct dupe_record_t *dp)
 {
 #ifndef _FOR_VALGRIND_
 	if (dp->packet != dp->packetbuf)
@@ -254,7 +261,7 @@ int dupecheck_sighandler(int signum)
  *	check a single packet for duplicates
  */
 
-int dupecheck(struct pbuf_t *pb)
+static int dupecheck(struct pbuf_t *pb)
 {
 	/* check a single packet */
 	// pb->flags |= F_DUPE; /* this is a duplicate! */
@@ -267,8 +274,6 @@ int dupecheck(struct pbuf_t *pb)
 	const char *data;
 	struct dupe_record_t **dpp, *dp;
 	time_t expiretime = now -  dupefilter_storetime;
-
-	pb->seqnum = ++dupecheck_incount;
 
 	// 1) collect canonic rep of the packet
 	addr    = pb->data;
@@ -350,7 +355,7 @@ int dupecheck(struct pbuf_t *pb)
  *	Dupecheck thread
  */
 
-void dupecheck_thread(void)
+static void dupecheck_thread(void)
 {
 	sigset_t sigs_to_block;
 	struct worker_t *w;
@@ -392,13 +397,17 @@ void dupecheck_thread(void)
 
 		/* walk through worker threads */
 		for (w = worker_threads; (w); w = w->next) {
+
 			/* find the highest worker lag count... */
 
-			c = pbuf_seqid_lag(dupecheck_incount, w->last_pbuf_seqnum);
+			/* It really does not matter when we do this calculation, the worker-threads
+			   are running independently of us, and only thing guaranteed for us is that
+			   they are progressing onwards the pbuf sequences. */
+			c = pbuf_seqnum_lag(dupecheck_seqnum, w->last_pbuf_seqnum);
 			if (w->last_pbuf_seqnum == 0) c = 2000000000;
 			if (c > worker_pbuf_lag)
 			  worker_pbuf_lag = c;
-			c = pbuf_seqid_lag(dupecheck_incount, w->last_pbuf_dupe_seqnum);
+			c = pbuf_seqnum_lag(dupecheck_dupe_seqnum, w->last_pbuf_dupe_seqnum);
 			if (c > worker_pbuf_dupe_lag)
 			  worker_pbuf_dupe_lag = c;
 
@@ -415,7 +424,7 @@ void dupecheck_thread(void)
 			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 
 			hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
-			     c, w->id, dupecheck_incount);
+			     c, w->id, dupecheck_seqnum);
 
 			for (pb = pb_list; (pb); pb = pbnext) {
 				int rc = dupecheck(pb);
@@ -425,11 +434,13 @@ void dupecheck_thread(void)
 					*pb_out_prevp = pb;
 					 pb_out_prevp = &pb->next;
 					 pb_out_last  = pb;
+					 pb->seqnum = ++dupecheck_seqnum;
 					++pb_out_count;
 				} else {       // Duplicate
 					*pb_out_dupe_prevp = pb;
 					 pb_out_dupe_prevp = &pb->next;
 					 pb_out_dupe_last  = pb;
+					 pb->seqnum = ++dupecheck_dupe_seqnum;
 					++pb_out_dupe_count;
 				}
 				n++;
@@ -485,7 +496,7 @@ void dupecheck_thread(void)
 			poll(NULL, 0, 100); // 100 ms
 	}
 	
-	hlog(LOG_INFO, "Dupecheck thread shut down; incount=%ld", dupecheck_incount);
+	hlog(LOG_INFO, "Dupecheck thread shut down; seqnum=%ld/%ld", dupecheck_seqnum, dupecheck_dupe_seqnum);
 	dupecheck_running = 0;
 }
 

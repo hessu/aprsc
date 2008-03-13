@@ -156,10 +156,9 @@ int xpoll(struct xpoll_t *xp, int timeout)
 		return r;
 	
 	struct xpoll_fd_t *xfd, *next;
-	xfd = xp->fds;
-	while (xfd) {
-		//hlog(LOG_DEBUG, "... checking fd %d", xfd->fd);
+	for (xfd = xp->fds; xfd; xfd = next) {
 		next = xfd->next; /* the current one might be deleted by a handler */
+		//hlog(LOG_DEBUG, "... checking fd %d", xfd->fd);
 		xfd->result = 0;
 		if (xp->pollfd[xfd->pollfd_n].revents) {
 			if (xp->pollfd[xfd->pollfd_n].revents & (POLLIN|POLLPRI))
@@ -170,7 +169,6 @@ int xpoll(struct xpoll_t *xp, int timeout)
 				xfd->result |= XP_ERR;
 			(*xp->handler)(xp, xfd);
 		}
-		xfd = next;
 	}
 #endif
 	

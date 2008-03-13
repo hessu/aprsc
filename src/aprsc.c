@@ -231,7 +231,7 @@ int main(int argc, char **argv)
 
 
 	/* Early inits in single-thread mode */
-	crcinit();
+	crc32init();
 	filter_init();
 	pbuf_init();
 	dupecheck_init();

@@ -22,8 +22,7 @@
 #ifndef CRC32_H
 #define CRC32_H
 
-extern void crcinit(void);
+extern void crc32init(void);
 extern uint32_t crc32n(const void *s, int slen, uint32_t key);
-extern uint32_t crc32(const void *s);
 
 #endif

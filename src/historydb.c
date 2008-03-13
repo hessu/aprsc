@@ -104,9 +104,9 @@ void historydb_hashmatch(void) {}
 void historydb_keymatch(void) {}
 
 
-uint32_t historydb_hash1(const char *s) 
+uint32_t historydb_hash1(const char *s, int keylen) 
 {
-	return crc32((const void *)s);  // TODO: find a better hash function ?
+	return crc32n((const void *)s, keylen, 0);  // TODO: find a better hash function ?
 }
 
 void historydb_atend(void)
@@ -166,7 +166,7 @@ int historydb_load(FILE *fp)
 	int packettype, flags;
 	float lat, lon;
 	int packetlen = 0;
-	int h1;
+	int h1, keylen;
 	struct history_cell_t **hpp;
 	struct history_cell_t *hp, *hp1;
 	int linecount = 0;
@@ -212,7 +212,8 @@ int historydb_load(FILE *fp)
 		if (t <= expirytime)
 			continue;	// Too old, forget it.
 		
-		h1 = historydb_hash1(keybuf);
+		keylen = strlen(keybuf);
+		h1 = historydb_hash1(keybuf, keylen);
 		i = h1 % historydb_hash_modulo;
 
 		hp1 = NULL;
@@ -273,7 +274,7 @@ int historydb_insert(struct pbuf_t *pb)
 {
 	int i;
 	uint32_t h1;
-	int isdead = 0;
+	int isdead = 0, keylen;
 	struct history_cell_t **hp, *cp, *cp1;
 
 	time_t expirytime   = now - lastposition_storetime;
@@ -334,10 +335,11 @@ int historydb_insert(struct pbuf_t *pb)
 	  historydb_nointerest(); // debug thing -- a profiling counter
 		return -1; // Not a packet with positional data, not interested in...
 	}
+	keylen = strlen(keybuf);
 
 	++historydb_inserts;
 
-	h1 = historydb_hash1(keybuf);
+	h1 = historydb_hash1(keybuf, keylen);
 	i = h1 % historydb_hash_modulo;
 
 	cp = cp1 = NULL;
@@ -418,13 +420,14 @@ int historydb_lookup(const char *keybuf, struct history_cell_t **result)
 	int i;
 	uint32_t h1;
 	struct history_cell_t **hp, *cp, *cp1;
+	int keylen = strlen(keybuf);
 
 	// validity is 5 minutes shorter than expiration time..
 	time_t validitytime   = now - lastposition_storetime - 5*60;
 
 	++historydb_lookups;
 
-	h1 = historydb_hash1(keybuf);
+	h1 = historydb_hash1(keybuf, keylen);
 	i = h1 % historydb_hash_modulo;
 
 	cp1 = NULL;

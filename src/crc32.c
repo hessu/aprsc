@@ -18,106 +18,110 @@
  *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *	
  */
-/*
- *	Copyright 1988 by Rayan S. Zachariassen, all rights reserved.
- *	This will be free software, but only when it is finished.
- */
-
-/*
- *
- * CRC32 code extracted out from  symbol.c  into its own file
- * by Matti Aarnio <mea@nic.funet.fi> 9-Sept-1999
- *
- */
 
 #include <stdint.h>
 #include <sys/types.h>
 
-/* crc table and hash algorithm from pathalias */
-/*
- * fold a string into a long int.  31 bit crc (from andrew appel).
- * the crc table is computed at run time by crcinit() -- we could
- * precompute, but it takes 1 clock tick on a 750.
- *
- * This fast table calculation works only if POLY is a prime polynomial
- * in the field of integers modulo 2.  Since the coefficients of a
- * 32-bit polynomail won't fit in a 32-bit word, the high-order bit is
- * implicit.  IT MUST ALSO BE THE CASE that the coefficients of orders
- * 31 down to 25 are zero.  Happily, we have candidates, from
- * E. J.  Watson, "Primitive Polynomials (Mod 2)", Math. Comp. 16 (1962):
- *      x^32 + x^7 + x^5 + x^3 + x^2 + x^1 + x^0
- *      x^31 + x^3 + x^0
- *
- * We reverse the bits to get:
- *      111101010000000000000000000000001 but drop the last 1
- *         f   5   0   0   0   0   0   0
- *      010010000000000000000000000000001 ditto, for 31-bit crc
- *         4   8   0   0   0   0   0   0
- */
-
 #include "crc32.h"
 
-#define POLY32 0xf5000000       /* 32-bit polynomial */
-#define POLY31 0x48000000       /* 31-bit polynomial */
-#define POLY POLY31     /* use 31-bit to avoid sign problems */
+#ifdef __GNUC__ // compiling with GCC ?
 
-static long CrcTable[128];
-static int crcinit_done = 0;
+#define likely(x)      __builtin_expect(!!(x), 1)
+#define unlikely(x)    __builtin_expect(!!(x), 0)
 
-void crcinit(void)
-{       
-	register int i,j;
-	register long sum;
-	
-	if (crcinit_done)
-		return;
+#else
 
-	for (i = 0; i < 128; i++) {
-		sum = 0;
-		for (j = 7-1; j >= 0; --j)
-			if (i & (1 << j))
-				sum ^= POLY >> j;
-		CrcTable[i] = sum;
-	}
-	crcinit_done = 1;
-}
+#define likely(x)     (x)
+#define unlikely(x)   (x)
 
-/*	Arbitary octet sequence of "slen" bytes.
- *	The scan result is added on value at "key", which
- *	user is expected to initialize as 0.
+#define __attribute__(x) 
+
+#endif
+
+// ======================================================================
+// The Linux kernel CRC32 computation code, heavily bastardized to simplify
+// used code, and aimed for performance..  pure and simple.
+// Furthermore, as we use this ONLY INTERNALLY, there is NO NEED to compute
+// INTEROPERABLE format of this thing!
+
+/*
+ * There are multiple 16-bit CRC polynomials in common use, but this is
+ * *the* standard CRC-32 polynomial, first popularized by Ethernet.
+ * x^32+x^26+x^23+x^22+x^16+x^12+x^11+x^10+x^8+x^7+x^5+x^4+x^2+x^1+x^0
  */
-uint32_t crc32n(const void *p, int slen, uint32_t key)
+
+#define CRCPOLY_LE 0xedb88320
+#define CRCPOLY_BE 0x04c11db7
+
+
+#define BE_TABLE_SIZE (1 << 8)
+
+static uint32_t crc32table_be[BE_TABLE_SIZE];
+
+
+/**
+ * crc32_be() - Calculate bitwise big-endian Ethernet AUTODIN II CRC32
+ * @crc - seed value for computation.  ~0 for Ethernet, sometimes 0 for
+ *        other uses, or the previous crc32 value if computing incrementally.
+ * @p   - pointer to buffer over which CRC is run
+ * @len - length of buffer @p
+ * 
+ */
+uint32_t __attribute__((pure)) crc32n(const void const *p, int len, uint32_t crc)
 {
-	const unsigned char *s = p;
+        const uint32_t      *b =(uint32_t *)p;
+        const uint32_t      *tab = crc32table_be;
 
-	if (!crcinit_done)
-	  crcinit();
+#  define DO_CRC(x) crc = tab[ (crc ^ (x)) & 255 ] ^ (crc>>8)
+#  define DO_CRC0() crc = tab[ (crc)       & 255 ] ^ (crc>>8)
 
-	/* Input string is to be CRCed to form a new key-id */
-	for (; slen > 0; ++s, --slen)
-	  key = (key >> 7) ^ CrcTable[(key ^ *s) & 0x7f];
-
-	key &= 0xFFFFFFFFUL;
-
-	return key;
+        /* Align it */
+        if (unlikely(((long)b)&3 && len)){
+                do {
+                        uint8_t *s = (uint8_t *)b;
+                        DO_CRC(*s++);
+                        b = (uint32_t *)s;
+                } while ((--len) && ((long)b)&3 );
+        }
+        if (likely(len >= 4)){
+                /* load data 32 bits wide, xor data 32 bits wide. */
+		size_t save_len = len & 3; // length of tail left over
+                len = len >> 2;
+                --b; /* use pre increment below(*++b) for speed */
+                do {
+                        crc ^= *++b;
+                        DO_CRC0();
+                        DO_CRC0();
+                        DO_CRC0();
+                        DO_CRC0();
+                } while (--len);
+                b++; /* point to next byte(s) */
+                len = save_len;
+        }
+        /* And the last few bytes */
+        if (len){
+                do {
+                        uint8_t *s = (uint8_t *)b;
+                        DO_CRC(*s++);
+                        b = (void *)s;
+                } while (--len);
+        }
+        return crc;
 }
 
-/* Zero-terminated "string" */
-uint32_t crc32(const void *p)
+/**
+ * crc32init_be() - allocate and initialize BE table data
+ */
+void crc32init(void)
 {
-	const unsigned char *s = p;
+        unsigned i, j;
+        uint32_t crc = 0x80000000;
 
-	uint32_t key;
+        crc32table_be[0] = 0;
 
-	if (!crcinit_done)
-	  crcinit();
-
-	/* Input string is to be CRCed to form a new key-id */
-	key = 0;
-	for (; *s; ++s)
-	  key = (key >> 7) ^ CrcTable[(key ^ *s) & 0x7f];
-
-	key &= 0xFFFFFFFFUL;
-
-	return key;
+        for (i = 1; i < BE_TABLE_SIZE; i <<= 1) {
+                crc = (crc << 1) ^ ((crc & 0x80000000) ? CRCPOLY_BE : 0);
+                for (j = 0; j < i; j++)
+                        crc32table_be[i + j] = crc ^ crc32table_be[j];
+        }
 }

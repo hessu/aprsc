@@ -330,12 +330,19 @@ int dupecheck(struct pbuf_t *pb)
 	memcpy(dp->addresses, addr, addrlen);
 	memcpy(dp->packet,    data, datalen);
 	dp->crc = crc;
-	dp->t   = pb->t;    /* Arrival timestamp..
-			       In normal operation this is within 1s of 
-			       the wallclock time, but in simulator it
-			       can be radically off when feeding 150 000
-			       events in realtime second...
-			     */
+	dp->t   = now; /* Use the current timestamp instead of the arrival time.
+	                  If our incoming worker, or dupecheck, is lagging for
+	                  reason or another (for example, a huge incoming burst
+	                  of traffic), using the arrival time instead of current
+	                  time could make the dupecheck db entry expire too early.
+	                  In an extreme trouble case, we could expire dupecheck db
+	                  entries very soon after the packet has gone out from us,
+	                  which would make loops more likely and possibly increase
+	                  the traffic and make us lag even more.
+	                  This timestamp should be closer to the *outgoing* time
+	                  than the *incoming* time, and current timestamp is a
+	                  good middle ground. Simulator is not important.
+			*/
 	return 0;
 }
 

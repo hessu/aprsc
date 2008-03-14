@@ -38,7 +38,7 @@
 extern time_t now;	/* current time - updated by the main thread, MAY be running under simulator */
 extern time_t tick;	/* clocktick - monotonously increasing, never in simulator */
 
-extern void pthreads_profiling_reset(void);
+extern void pthreads_profiling_reset(const char *name);
 
 /* minimum and maximum length of a callsign on APRS-IS */
 #define CALLSIGNLEN_MIN 3
@@ -189,6 +189,16 @@ struct client_t {
 	struct filter_t *defaultfilters;
 	struct filter_t *userfilters;
 
+
+	// Maybe we use these four items, or maybe not.
+	// They are there for experimenting with outgoing queue processing algorithms.
+
+	/* Pointer to last pointer in pbuf_global(_dupe) */
+	struct pbuf_t **pbuf_global_prevp;
+	struct pbuf_t **pbuf_global_dupe_prevp;
+
+	uint32_t	last_pbuf_seqnum;
+	uint32_t	last_pbuf_dupe_seqnum;
 };
 
 extern struct client_t *client_alloc(void);
@@ -246,7 +256,7 @@ extern void pbuf_free_many(struct pbuf_t **array, int numbufs);
 
 extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
-extern void client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
+extern int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
 
 extern struct worker_t *worker_threads;
 extern void workers_stop(int stop_all);

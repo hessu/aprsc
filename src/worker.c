@@ -29,15 +29,17 @@
 #include <time.h>
 #include <stdlib.h>
 
+#include "worker.h"
+
 #include "config.h"
 #include "hlog.h"
 #include "hmalloc.h"
-#include "worker.h"
 #include "login.h"
 #include "uplink.h"
 #include "incoming.h"
 #include "outgoing.h"
 #include "filter.h"
+#include "dupecheck.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
 time_t tick;	/* real monotonous clock, may or may not be wallclock */
@@ -54,11 +56,11 @@ int obuf_writes_treshold = 5;	/* This many writes per keepalive scan interval sw
 
 /* global packet buffer */
 rwlock_t pbuf_global_rwlock = RWL_INITIALIZER;
-struct pbuf_t  *pbuf_global = NULL;
-struct pbuf_t  *pbuf_global_last = NULL;
+struct pbuf_t  *pbuf_global       = NULL;
+struct pbuf_t  *pbuf_global_last  = NULL;
 struct pbuf_t **pbuf_global_prevp = &pbuf_global;
-struct pbuf_t  *pbuf_global_dupe = NULL;
-struct pbuf_t  *pbuf_global_dupe_last = NULL;
+struct pbuf_t  *pbuf_global_dupe       = NULL;
+struct pbuf_t  *pbuf_global_dupe_last  = NULL;
 struct pbuf_t **pbuf_global_dupe_prevp = &pbuf_global_dupe;
 
 /* object alloc/free */
@@ -126,13 +128,16 @@ void close_client(struct worker_t *self, struct client_t *c)
 	      self->id, c->state == CSTATE_CONNECTED ? "client":"uplink", c->fd, c->addr_s);
 
 	/* close */
-	if (c->fd >= 0)
+	if (c->fd >= 0) {
 		close(c->fd);
-	c->fd = -1;
 	
-	/* remove from polling list */
-	if (self->xp)
-		xpoll_remove(self->xp, c->xfd);
+		/* remove from polling list */
+		if (self->xp)
+			xpoll_remove(self->xp, c->xfd);
+	}
+
+	c->fd = -1;
+
 	
 	/* link the list together over this node */
 	if (c->next)
@@ -186,6 +191,13 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			  c->obuf_start = 0;
 			  goto write_retry;
 			}
+			if (i < 0 && (e == EPIPE)) {
+				/* Remote socket closed.. */
+				hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
+				// WARNING: This also destroys the client object!
+				close_client(self, c);
+				return -9;
+			}
 			if (i > 0) {
 				c->obuf_start += i;
 				c->obuf_wtime = tick;
@@ -208,7 +220,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			    goto write_retry;
 			  }
 #endif
-			  hlog(LOG_DEBUG, "client_write(%s) fails; %s", c->addr_s, strerror(e));
+			  hlog(LOG_DEBUG, "client_write(%s) fails/1; %s", c->addr_s, strerror(e));
 			  return -1;
 			}
 		}
@@ -231,9 +243,16 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 		e = errno;
 		if (i < 0 && e == EINTR)
-		  goto write_retry_2;
+			goto write_retry_2;
+		if (i < 0 && (e == EPIPE)) {
+			/* Remote socket closed.. */
+			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
+			// WARNING: This also destroys the client object!
+			close_client(self, c);
+			return -9;
+		}
 		if (i < 0 && len != 0) {
-			hlog(LOG_DEBUG, "client_write(%s) fails; %s", c->addr_s, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
 			return -1;
 		}
 		if (i > 0) {
@@ -279,12 +298,13 @@ int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ..
 /*
  *	tell the client once that it has bad filter definition
  */
-void client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt)
+int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt)
 {
 	if (!c->warned) {
 		c->warned = 1;
-		client_printf(self, c, "# Warning: Bad filter: %s\r\n", filt);
+		return client_printf(self, c, "# Warning: Bad filter: %s\r\n", filt);
 	}
+	return 0;
 }
 
 
@@ -299,6 +319,12 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	char *s;
 	char *ibuf_end;
 	char *row_start;
+
+	if (c->fd < 0) {
+		hlog(LOG_DEBUG, "client no longer alive, closing (%s)", c->fd, c->addr_s);
+		close_client(self, c);
+		return -1;
+	}
 	
 	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 	if (r == 0) {
@@ -357,6 +383,7 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 		/* there is nothing to write any more */
 		//hlog(LOG_DEBUG, "write: nothing to write on fd %d", c->fd);
 		xpoll_outgoing(self->xp, c->xfd, 0);
+		c->obuf_start = c->obuf_end = 0;
 		return 0;
 	}
 	
@@ -372,8 +399,10 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	
 	c->obuf_start += r;
 	//hlog(LOG_DEBUG, "write: %d bytes to client fd %d (%s) - %d in obuf", r, c->fd, c->addr_s, c->obuf_end - c->obuf_start);
-	if (c->obuf_start == c->obuf_end)
+	if (c->obuf_start == c->obuf_end) {
 		xpoll_outgoing(self->xp, c->xfd, 0);
+		c->obuf_start = c->obuf_end = 0;
+	}
 	
 	return 0;
 }
@@ -381,19 +410,19 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 {
 	struct worker_t *self = (struct worker_t *)xp->tp;
-	struct client_t *c = (struct client_t *)xfd->p;
+	struct client_t *c    = (struct client_t *)xfd->p;
 	
 	//hlog(LOG_DEBUG, "handle_client_event(%d): %d", xfd->fd, xfd->result);
-	
-	if (xfd->result & XP_IN) {
-		/* ok, read */
-		if (handle_client_readable(self, c) < 0)
-			return 0;
-	}
-	
-	if (xfd->result & XP_OUT) {
+
+	if (xfd->result & XP_OUT) {  /* priorize doing output */
 		/* ah, the client is writable */
 		if (handle_client_writeable(self, c) < 0)
+			return 0;
+	}
+
+	if (xfd->result & XP_IN) {  /* .. before doing input */
+		/* ok, read */
+		if (handle_client_readable(self, c) < 0)
 			return 0;
 	}
 	
@@ -406,7 +435,7 @@ int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 
 void collect_new_clients(struct worker_t *self)
 {
-	int pe;
+	int pe, n;
 	struct client_t *new_clients, *c;
 	
 	/* lock the queue */
@@ -427,12 +456,13 @@ void collect_new_clients(struct worker_t *self)
 	}
 	
 	/* move the new clients to the thread local client list */
+	n = self->xp->pollfd_used;
 	while (new_clients) {
 		c = new_clients;
 		new_clients = c->next;
 		
 		self->client_count++;
-		hlog(LOG_DEBUG, "do_accept(worker %d): got client fd %d", self->id, c->fd);
+		// hlog(LOG_DEBUG, "do_accept(worker %d): got client fd %d", self->id, c->fd);
 		c->next = self->clients;
 		if (c->next)
 			c->next->prevp = &c->next;
@@ -441,9 +471,12 @@ void collect_new_clients(struct worker_t *self)
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(self->xp, c->fd, (void *)c);
+
+		/* the new client may end up destroyed right away, never mind it here... */
 		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
 	}
-	
+	hlog( LOG_DEBUG, "Worker %d accepted %d new clients, now total %d",
+	      self->id, self->xp->pollfd_used - n, self->xp->pollfd_used );
 }
 
 /* 
@@ -454,10 +487,10 @@ void collect_new_clients(struct worker_t *self)
  */
 void send_keepalives(struct worker_t *self)
 {
-	struct client_t *c;
+	struct client_t *c, *cnext;
 	struct tm t;
 	char buf[130], *s;
-	int len;
+	int len, rc;
 	static const char *monthname[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 	time_t w_expire = tick - sock_write_expire;
 
@@ -479,7 +512,9 @@ void send_keepalives(struct worker_t *self)
 
 	len = (s - buf);
 
-	for (c = self->clients; (c); c = c->next) {
+	for (c = self->clients; (c); c = cnext) {
+		// the  c  may get destroyed from underneath of ourselves!
+		cnext = c->next;
 
 		if (// c->state == CSTATE_UPLINK ||
 		    c->state == CSTATE_UPLINKSIM ||
@@ -494,30 +529,32 @@ void send_keepalives(struct worker_t *self)
 
 			c->obuf_flushsize = 0;
 			/* Write out immediately */
-			client_write(self, c, buf, len);
+			rc = client_write(self, c, buf, len);
+			if (rc < -2) continue; // destroyed
 			c->obuf_flushsize = flushlevel;
 		} else {
 			/* just fush if there was anything to write */
-			client_write(self, c, buf, 0);
+			rc = client_write(self, c, buf, 0);
+			if (rc < -2) continue; // destroyed..
 		}
 		if (c->obuf_wtime < w_expire) {
 			// TOO OLD!  Shutdown the client
-			shutdown(c->fd, SHUT_RDWR);
-			// Cleanup and close happens by the main loop..
+			hlog( LOG_DEBUG,"Closing client %p fd %d (%s) due to obuf wtime timeout",
+			      c, c->fd, c->addr_s );
+			close_client(self, c);
+			continue;
 		}
 		if (c->obuf_writes > obuf_writes_treshold) {
 			// Lots and lots of writes, switch to buffering...
 
 		  if (c->obuf_flushsize == 0)
-		    hlog( LOG_DEBUG,"Switch client %p (%s) to buffered writes",
-			  c, c->addr_s );
+		    // hlog( LOG_DEBUG,"Switch client %p fd %d (%s) to buffered writes", c, c->fd, c->addr_s );
 
 			c->obuf_flushsize = c->obuf_size - 200;
 		} else {
 		        // Not so much writes, back to "write immediate"
 		  if (c->obuf_flushsize != 0)
-		    hlog( LOG_DEBUG,"Switch client %p (%s) to unbuffered writes",
-			  c, c->addr_s );
+		    // hlog( LOG_DEBUG,"Switch client %p fd %d (%s) to unbuffered writes", c, c->fd, c->addr_s );
 
 			c->obuf_flushsize = 0;
 		}
@@ -534,8 +571,13 @@ void worker_thread(struct worker_t *self)
 {
 	sigset_t sigs_to_block;
 	time_t next_keepalive = tick + 2;
-	
-	pthreads_profiling_reset();
+	char myname[20];
+	struct pbuf_t *p, *pn;
+	time_t next_lag_query = tick + 10;
+	time_t t1, t2, t3, t4, t5, t6, t7;
+
+	sprintf(myname,"worker %d", self->id);
+	pthreads_profiling_reset(myname);
 
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);
@@ -553,27 +595,50 @@ void worker_thread(struct worker_t *self)
 	
 	while (!self->shutting_down) {
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
-		if (self->new_clients)
-			collect_new_clients(self);
-		
+		t1 = tick;
+
+		/* if we have new stuff in the global packet buffer, process it */
+		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
+			process_outgoing(self);
+
+		t2 = tick;
+
+		// TODO: calculate different delay based on outgoing lag ?
 		/* poll for incoming traffic */
 		xpoll(self->xp, 200);
 		
 		/* if we have stuff in the local queue, try to flush it and make
 		 * it available to the dupecheck thread
 		 */
+		t3 = tick;
+
 		if (self->pbuf_incoming_local)
 			incoming_flush(self);
 		
-		/* if we have new stuff in the global packet buffer, process it */
-		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
-			process_outgoing(self);
+		t4 = tick;
+
+		if (self->new_clients)
+			collect_new_clients(self);
+
+		t5 = tick;
 
 		/* time of next keepalive broadcast ? */
 		if (tick > next_keepalive) {
-			send_keepalives(self);
 			next_keepalive += keepalive_poll_freq; /* Run them every 2 seconds */
+			send_keepalives(self);
 		}
+		t6 = tick;
+
+		if (tick > next_lag_query) {
+			int lag, lag1, lag2;
+			next_lag_query += 10; // every 10 seconds..
+			lag = outgoing_lag_report(self, &lag1, &lag2);
+			hlog(LOG_DEBUG, "Thread %d  pbuf lag %d,  dupelag %d", self->id, lag1, lag2);
+		}
+		t7 = tick;
+
+		hlog( LOG_DEBUG, "Worker thread %d loop step delays:  dt2: %d  dt3: %d  dt4: %d  dt5: %d  dt6: %d  dt7: %d",
+		      self->id, t2-t1, t3-t1, t4-t1, t5-t1, t6-t1, t7-t1 );
 	}
 	
 	/* stop polling */
@@ -584,7 +649,21 @@ void worker_thread(struct worker_t *self)
 	while (self->clients)
 		close_client(self, self->clients);
 	
-	/* workers_stop() will clean up thread-local pbuf pools */
+	/* clean up thread-local pbuf pools */
+
+	for (p = self->pbuf_free_small; p; p = pn) {
+		pn = p->next;
+		pbuf_free(NULL, p); // free to global pool
+	}
+	for (p = self->pbuf_free_large; p; p = pn) {
+		pn = p->next;
+		pbuf_free(NULL, p); // free to global pool
+	}
+	for (p = self->pbuf_free_huge; p; p = pn) {
+		pn = p->next;
+		pbuf_free(NULL, p); // free to global pool
+	}
+
 	
 	hlog(LOG_DEBUG, "Worker %d shut down.", self->id);
 }
@@ -596,7 +675,6 @@ void worker_thread(struct worker_t *self)
 void workers_stop(int stop_all)
 {
 	struct worker_t *w;
-	struct pbuf_t *p, *pn;
 	int e;
 	extern long incoming_count;
 	
@@ -604,7 +682,7 @@ void workers_stop(int stop_all)
 		hlog(LOG_DEBUG, "Stopping a worker thread...");
 		/* find the last worker thread and shut it down...
 		 * could shut down the first one, but to reduce confusion
-		 * will shut down the one with the hugest worker id :)
+		 * will shut down the one with the largest worker id :)
 		 *
 		 * This could be done even more cleanly by moving the connected
 		 * clients to the threads which are left running, but maybe
@@ -620,21 +698,6 @@ void workers_stop(int stop_all)
 			hlog(LOG_ERR, "Could not pthread_join worker %d: %s", w->id, strerror(e));
 		else
 			hlog(LOG_INFO, "Worker %d has terminated.", w->id);
-
-
-
-		for (p = w->pbuf_free_small; p; p = pn) {
-			pn = p->next;
-			pbuf_free(NULL, p);
-		}
-		for (p = w->pbuf_free_large; p; p = pn) {
-			pn = p->next;
-			pbuf_free(NULL, p);
-		}
-		for (p = w->pbuf_free_huge; p; p = pn) {
-			pn = p->next;
-			pbuf_free(NULL, p);
-		}
 
 		*(w->prevp) = NULL;
 		hfree(w);

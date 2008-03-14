@@ -36,24 +36,25 @@
 #include "hlog.h"
 #include "hmalloc.h"
 #include "cellmalloc.h"
-#include "worker.h"
 #include "crc32.h"
 #include "historydb.h"
 
 extern int uplink_simulator;
 
 
-int dupecheck_shutting_down = 0;
-int dupecheck_running = 0;
+int dupecheck_shutting_down;
+int dupecheck_running;
 pthread_t dupecheck_th;
 
-int pbuf_global_count = 0;
-int pbuf_global_dupe_count = 0;
+int pbuf_global_count;
+int pbuf_global_dupe_count;
 
 int pbuf_global_count_limit      = 90000; // FIXME: real criteria should be expirer..
 int pbuf_global_dupe_count_limit =  9000; // FIXME: .. but in simulation our timers are not useful.
 					  // FIXME: .. or these should be global configurable parameters.
 
+long long dupecheck_outcount;  /* 64 bit counters for statistics */
+long long dupecheck_dupecount;
 
 struct dupe_record_t {
 	struct dupe_record_t *next;
@@ -70,8 +71,8 @@ struct dupe_record_t {
 #endif
 };
 
-struct dupe_record_t **dupecheck_db; /* hash index table */
-int dupecheck_db_size = 8192; /* Hash index table size */
+struct dupe_record_t **dupecheck_db; /* Hash index table      */
+int dupecheck_db_size = 8192;        /* Hash index table size */
 
 #ifndef _FOR_VALGRIND_
 struct dupe_record_t *dupecheck_free;
@@ -79,8 +80,8 @@ cellarena_t *dupecheck_cells;
 #endif
 
 
-uint32_t  dupecheck_seqnum      = -2000; // Explicite early wrap-around..
-uint32_t  dupecheck_dupe_seqnum = -2000; // Explicite early wrap-around..
+volatile uint32_t  dupecheck_seqnum      = -2000; // Explicite early wrap-around..
+volatile uint32_t  dupecheck_dupe_seqnum = -2000; // Explicite early wrap-around..
 
 static int pbuf_seqnum_lag(const uint32_t seqnum, const uint32_t pbuf_seq)
 {
@@ -104,7 +105,7 @@ static int pbuf_seqnum_lag(const uint32_t seqnum, const uint32_t pbuf_seq)
 /*
  *	Global pbuf purger cleans out pbufs that are too old..
  */
-static void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf_dupe_lag)
+static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 {
 	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[2002];
@@ -112,6 +113,8 @@ static void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf
 
 	time_t expire1 = now - pbuf_global_expiration;
 	time_t expire2 = now - pbuf_global_dupe_expiration;
+
+	static int show_zeros = 1;
 
 	if (all) {
 		pbuf_global_count_limit       = 0;
@@ -171,10 +174,19 @@ static void global_pbuf_purger(const int all, const int pbuf_lag, const int pbuf
 		pbuf_free_many(freeset, n);
 	}
 
-	if (n1 > 0 || n2 > 0) {
+	// debug printout time...  map "undefined" lag values to zero.
+
+	if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
+	if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
+
+	if (show_zeros || n1 || n2 || pbuf_lag  || pbuf_dupe_lag) {
 		// report only when there is something to report...
 		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs, lags: %d/%d",
 		      n1, pbuf_global_count, n2, pbuf_global_dupe_count, pbuf_lag, pbuf_dupe_lag );
+		if (!(n1 || n2 || pbuf_lag || pbuf_dupe_lag))
+			show_zeros = 0;
+		else
+			show_zeros = 1;
 	}
 }
 
@@ -352,6 +364,29 @@ static int dupecheck(struct pbuf_t *pb)
 }
 
 /*
+ *	Worker asks for info on outgoing lag to adjust its main-loop delays
+ *	and priorities
+ */
+
+int  outgoing_lag_report(struct worker_t *self, int *lag, int *dupelag)
+{
+	int lag1 = pbuf_seqnum_lag(dupecheck_seqnum, self->last_pbuf_seqnum);
+	int lag2 = pbuf_seqnum_lag(dupecheck_dupe_seqnum, self->last_pbuf_dupe_seqnum);
+
+	if (lag)     *lag     = lag1;
+	if (dupelag) *dupelag = lag2;
+
+	if (lag1 == 2000000000) lag1 = 0;
+	if (lag2 == 2000000000) lag2 = 0;
+
+	if (lag1 < lag2) lag1 = lag2;
+
+	return lag1; // Higher of the two..
+}
+
+
+
+/*
  *	Dupecheck thread
  */
 
@@ -364,12 +399,13 @@ static void dupecheck_thread(void)
 	struct pbuf_t *pb_out_dupe, **pb_out_dupe_prevp, *pb_out_dupe_last;
 	int n;
 	int e;
-	int i, c, d;
+	int c, d;
 	int pb_out_count, pb_out_dupe_count;
 	int worker_pbuf_lag;
 	int worker_pbuf_dupe_lag;
+	time_t purge_tick = tick;
 	
-	pthreads_profiling_reset();
+	pthreads_profiling_reset("dupecheck");
 
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);
@@ -487,7 +523,13 @@ static void dupecheck_thread(void)
 			worker_pbuf_dupe_lag = 2000000000;
 #endif
 
-		global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
+		dupecheck_outcount  += pb_out_count;
+		dupecheck_dupecount += pb_out_dupe_count;
+
+		if (purge_tick != tick) { // once a second, at most..
+			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
+			purge_tick = tick;
+		}
 
 		if (n > 0)
 		  hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
@@ -496,7 +538,10 @@ static void dupecheck_thread(void)
 			poll(NULL, 0, 100); // 100 ms
 	}
 	
-	hlog(LOG_INFO, "Dupecheck thread shut down; seqnum=%ld/%ld", dupecheck_seqnum, dupecheck_dupe_seqnum);
+	hlog( LOG_INFO, "Dupecheck thread shut down; seqnum=%u/%u",
+	      pbuf_seqnum_lag(dupecheck_seqnum,(uint32_t)-2000),     // initial bias..
+	      pbuf_seqnum_lag(dupecheck_dupe_seqnum,(uint32_t)-2000));
+
 	dupecheck_running = 0;
 }
 
@@ -536,6 +581,7 @@ void dupecheck_atend(void)
 {
 	int i;
 	struct dupe_record_t *dp, *dp2;
+
 	for (i = 0; i < dupecheck_db_size; ++i) {
 	  dp = dupecheck_db[i];
 	  while (dp) {
@@ -545,5 +591,5 @@ void dupecheck_atend(void)
 	  }
 	}
 
-	global_pbuf_purger(1, 0, 0);
+	global_pbuf_purger(1, -1, -1); // purge everything..
 }

@@ -41,6 +41,10 @@
  *	never used), the history-db size is around 8-9 MB in memory.
  */
 
+#ifndef __HISTORYDB_H__
+#define __HISTORYDB_H__
+
+
 struct history_cell_t {
 	struct history_cell_t *next;
 
@@ -70,3 +74,5 @@ extern void historydb_atend(void);
 /* insert and lookup... interface yet unspecified */
 extern int historydb_insert(struct pbuf_t*);
 extern int historydb_lookup(const char *keybuf, struct history_cell_t **result);
+
+#endif

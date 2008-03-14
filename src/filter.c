@@ -422,7 +422,7 @@ function maidenhead_km_distance($This, $That) {
 
 */
 
-float maidenhead_km_distance(float lat1, float coslat1, float lon1, float lat2, float coslat2, float lon2)
+static float maidenhead_km_distance(float lat1, float coslat1, float lon1, float lat2, float coslat2, float lon2)
 {
 	float sindlat2 = sinf((lat1 - lat2) * 0.5);
 	float sindlon2 = sinf((lon1 - lon2) * 0.5);
@@ -442,7 +442,7 @@ float maidenhead_km_distance(float lat1, float coslat1, float lon1, float lat2, 
  *
  */
 
-int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* r/lat/lon/dist  	Range filter
 
@@ -478,7 +478,7 @@ int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* a/latN/lonW/latS/lonE  	Area filter
 	   The area filter works the same as range filter but the filter
@@ -505,7 +505,7 @@ int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* b/call1/call2...  	Budlist filter
 	   Pass all traffic FROM exact call: call1, call2, ...
@@ -525,7 +525,7 @@ int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return wildpatternmatch(keybuf, p, f->h.negation);
 }
 
-int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* u/unproto1/unproto2/...  	Unproto filter
 
@@ -554,7 +554,7 @@ int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return wildpatternmatch(keybuf, p, f->h.negation);
 }
 
-int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* d/digi1/digi2...  	Digipeater filter
 	   The digipeater filter will pass all packets that have been
@@ -575,7 +575,7 @@ int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* e/call1/call1/...  	Entry station filter
 	   This filter passes all packets with the specified
@@ -589,7 +589,7 @@ int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* o/obj1/obj2...  	Object filter
 	   Pass all objects with the exact name of obj1, obj2, ...
@@ -623,7 +623,7 @@ int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 
 	/* p/aa/bb/cc...  	Prefix filter
@@ -668,7 +668,7 @@ int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* q/con/ana  	q Contruct filter
 
@@ -690,7 +690,7 @@ int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* s/pri/alt/over  	Symbol filter  	pri = symbols in primary table
 
@@ -708,7 +708,7 @@ int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* [-]t/poimntqsu
 	   [-]t/poimntqsu/call/km
@@ -871,7 +871,7 @@ int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return (f->h.negation ? (rc+rc) : rc);
 }
 
-int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* f/call/dist  	Friend Range filter
 	   This is the same as the range filter except that the center is
@@ -923,7 +923,7 @@ int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 	return 0;
 }
 
-int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* m/dist  	My Range filter
 	   This is the same as the range filter except that the center is
@@ -966,7 +966,7 @@ int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t 
 }
 
 
-int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+static int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	int rc = 0;
 
@@ -1062,8 +1062,11 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
-		if (rc < 0)
-			client_bad_filter_notify(self, c, f->h.text);
+		if (rc < 0) {
+			rc = client_bad_filter_notify(self, c, f->h.text);
+			if (rc < 0) // possibly the client got destroyed here!
+				return rc;
+		}
 		if (rc > 0)
 			return (rc == 1);
 			// "2" reply means: "match, but don't pass.."

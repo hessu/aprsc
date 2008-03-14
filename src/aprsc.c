@@ -31,6 +31,9 @@
 #include <signal.h>
 #include <time.h>
 #include <sys/time.h>
+#ifdef __linux__ /* Very Linux-specific code.. */
+#include <sys/syscall.h>
+#endif
 
 #include "hmalloc.h"
 #include "hlog.h"
@@ -159,12 +162,16 @@ int sighandler(int signum)
  *	A very Linux specific thing, as there the pthreads are a special variation
  *	of fork(), and per POSIX the profiling timers are not kept over fork()...
  */
-void pthreads_profiling_reset(void)
+void pthreads_profiling_reset(const char *name)
 {
 #ifdef __linux__ /* Very Linux-specific code.. */
+	int tid;
 	if (itv.it_interval.tv_usec || itv.it_interval.tv_sec) {
 	  setitimer(ITIMER_PROF, &itv, NULL);
 	}
+
+	tid = syscall(SYS_gettid);
+	hlog(LOG_INFO, "Thread %s: Linux ThreadId: %d", name, tid);
 #endif
 }
 

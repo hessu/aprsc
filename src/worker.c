@@ -637,8 +637,9 @@ void worker_thread(struct worker_t *self)
 		}
 		t7 = tick;
 
-		/*hlog( LOG_DEBUG, "Worker thread %d loop step delays:  dt2: %d  dt3: %d  dt4: %d  dt5: %d  dt6: %d  dt7: %d",
-		      self->id, t2-t1, t3-t1, t4-t1, t5-t1, t6-t1, t7-t1 );*/
+		if (t7-t1 > 1) // only report if the delay is over 1 seconds.  they are a LOT rarer
+		  hlog( LOG_DEBUG, "Worker thread %d loop step delays:  dt2: %d  dt3: %d  dt4: %d  dt5: %d  dt6: %d  dt7: %d",
+			self->id, t2-t1, t3-t1, t4-t1, t5-t1, t6-t1, t7-t1 );
 	}
 	
 	/* stop polling */

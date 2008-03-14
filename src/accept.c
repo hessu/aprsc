@@ -232,12 +232,17 @@ void close_listeners(void)
 struct client_t *do_accept(struct listen_t *l)
 {
 	int fd, i;
+	int pe;
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len = sizeof(sa);
 	char eb[200];
 	char sbuf[20];
 	char *s;
+	static int next_receiving_worker = 0;
+	struct worker_t *w;
+	struct worker_t *wc;
+	int client_min = -1;
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
 		int e = errno;
@@ -320,25 +325,41 @@ struct client_t *do_accept(struct listen_t *l)
 		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
 		goto err;
 	}
-	
+
+#if 1
+	/* Use simple round-robin on client feeding.  Least clients is
+	 * quite attractive idea, but when clients arrive at huge bursts
+	 * they tend to move in big bunches, and it takes quite some while
+	 * before the worker updates its client-counters.
+	 */
+	for (i = 0, w = worker_threads; w ;  w = w->next, ++i) {
+	  if ( i >= next_receiving_worker) break;
+	}
+	wc = w;
+	if (! w) {
+	  wc = worker_threads;       // ran out of the worker chain, back to the first..
+	  next_receiving_worker = 0; // and reset the index too
+	}
+	// in every case, increment the next receiver index for the next call.
+	++next_receiving_worker;
+
+#else
 	/* find the worker with least clients...
 	 * This isn't strictly accurate, since the threads could change their
 	 * client counts during scanning, but we don't really care if the load distribution
 	 * is _exactly_ fair.
 	 */
 	
-	struct worker_t *w;
-	struct worker_t *wc = worker_threads;
-	int client_min = -1;
-	for (w = worker_threads; (w); w = w->next)
+	for (wc = w = worker_threads; (w); w = w->next)
 		if (w->client_count < client_min || client_min == -1) {
 			wc = w;
 			client_min = w->client_count;
 		}
-	
+#endif
+
 	/* ok, found it... lock the new client queue */
 	hlog(LOG_DEBUG, "... passing to thread %d with %d users", wc->id, wc->client_count);
-	int pe;
+
 	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
 		hlog(LOG_ERR, "do_accept(): could not lock new_clients_mutex: %s", strerror(pe));
 		goto err;
@@ -374,7 +395,7 @@ void accept_thread(void *asdf)
 	int listen_n = 0;
 	struct listen_t *l;
 
-	pthreads_profiling_reset();
+	pthreads_profiling_reset("accept");
 	
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);

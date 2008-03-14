@@ -120,7 +120,7 @@ void uplink_close(struct client_t *c)
 int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	char buf[1000];
-	int passcode;
+	int passcode, rc;
 
 
 	if (!c->username) c->username = hstrdup("simulator");
@@ -135,7 +135,8 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 
 	hlog(LOG_DEBUG, "%s: my login string: '%.*s'", c->addr_s, len-2, buf, len);
 
-	client_write(self, c, buf, len);
+	rc = client_write(self, c, buf, len);
+	if (rc < -2) return rc;
 
 	c->handler = incoming_handler;
 	
@@ -324,6 +325,8 @@ void uplink_thread(void *asdf)
 	int e, n, rc;
 	int uplink_n = 0;
 	struct uplink_config_t *l;
+
+	pthreads_profiling_reset("dupecheck");
 	
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);

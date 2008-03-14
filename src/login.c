@@ -64,7 +64,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	int argc;
 	char *argv[256];
-	int i;
+	int i, rc;
 	
 	/* make it null-terminated for our string processing */
 	char *e = s + len;
@@ -126,17 +126,23 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 		} else if (strcasecmp(argv[i], "filter") == 0) {
 			while (++i < argc) {
 				/* parse filters in argv[i] */
-				int rc = filter_parse(c, argv[i], 1);
-				if (rc)
-					client_printf( self, c, "# Parse errors on filter spec: '%s'\r\n", argv[i]);
+				rc = filter_parse(c, argv[i], 1);
+				if (rc) {
+					rc = client_printf( self, c, "# Parse errors on filter spec: '%s'\r\n", argv[i]);
+					if (rc < -2)
+						return rc; // The client probably got destroyed!
+				}
 			}
 		}
 	}
 	
-	client_printf( self, c, "# logresp %s %s, server %s\r\n",
-		       username,
-		       (c->validated) ? "verified" : "unverified",
-		       mycall );
+	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
+			    username,
+			    (c->validated) ? "verified" : "unverified",
+			    mycall );
+	if (rc < -2) {
+		return i; // The client probably got destroyed!
+	}
 
 	c->keepalive = now + keepalive_interval;
 

@@ -19,6 +19,44 @@
  *	
  */
 
+/* ======================================================================
+// The Linux kernel CRC32 computation code, heavily bastardized to simplify
+// used code, and aimed for performance..  pure and simple.
+// Furthermore, as we use this ONLY INTERNALLY, there is NO NEED to compute
+// INTEROPERABLE format of this thing!
+*/
+
+/*
+//  Some further notes:  Origins of the loop-unroll algorithm are from
+//  Richard Black at Cambridge University, UK, 1993:
+//  http://www.cl.cam.ac.uk/research/srg/bluebook/21/crc/node6.html
+//
+*/
+
+
+/*
+ * Oct 15, 2000 Matt Domsch <Matt_Domsch@dell.com>
+ * Nicer crc32 functions/docs submitted by linux@horizon.com.  Thanks!
+ * Code was from the public domain, copyright abandoned.  Code was
+ * subsequently included in the kernel, thus was re-licensed under the
+ * GNU GPL v2.
+ *
+ * Oct 12, 2000 Matt Domsch <Matt_Domsch@dell.com>
+ * Same crc32 function was used in 5 other places in the kernel.
+ * I made one version, and deleted the others.
+ * There are various incantations of crc32().  Some use a seed of 0 or ~0.
+ * Some xor at the end with ~0.  The generic crc32() function takes
+ * seed as an argument, and doesn't xor at the end.  Then individual
+ * users can do whatever they need.
+ *   drivers/net/smc9194.c uses seed ~0, doesn't xor with ~0.
+ *   fs/jffs2 uses seed 0, doesn't xor with ~0.
+ *   fs/partitions/efi.c uses seed ~0, xor's with ~0.
+ *
+ * This source code is licensed under the GNU General Public License,
+ * Version 2.  See the file COPYING for more details.
+ */
+
+
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -38,12 +76,6 @@
 
 #endif
 
-// ======================================================================
-// The Linux kernel CRC32 computation code, heavily bastardized to simplify
-// used code, and aimed for performance..  pure and simple.
-// Furthermore, as we use this ONLY INTERNALLY, there is NO NEED to compute
-// INTEROPERABLE format of this thing!
-
 /*
  * There are multiple 16-bit CRC polynomials in common use, but this is
  * *the* standard CRC-32 polynomial, first popularized by Ethernet.
@@ -56,6 +88,7 @@
 
 #define BE_TABLE_SIZE (1 << 8)
 
+/* this table should be aligned by CPU cache line size... */
 static uint32_t crc32table_be[BE_TABLE_SIZE];
 
 
@@ -86,7 +119,7 @@ uint32_t __attribute__((pure)) crc32n(const void const *p, int len, uint32_t crc
         if (likely(len >= 4)){
                 /* load data 32 bits wide, xor data 32 bits wide. */
 		size_t save_len = len & 3; // length of tail left over
-                len = len >> 2;
+                len = len >> 2; // number of 32-bit words to process
                 --b; /* use pre increment below(*++b) for speed */
                 do {
                         crc ^= *++b;

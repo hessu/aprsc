@@ -56,12 +56,10 @@ all: aprsc
 
 valgrind:
 	@echo "Did you do 'make clean' before 'make valgrind' ?"
-	@rm -f cellmalloc.o
 	make all CFLAGS="${CFLAGS} -D_FOR_VALGRIND_"
 
 profile:
 	@echo "Did you do 'make clean' before 'make profile' ?"
-	@rm -f cellmalloc.o
 	make all PROF=-pg
 
 # -------------------------------------------------------------------- #

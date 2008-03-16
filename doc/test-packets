@@ -17,3 +17,53 @@ OH7LZB-9>APZMDR,WIDE3-3,qAo,OH2RCH:!/0"acTjK">?S_ http://aprs.fi/
 
 mic-e:
 KG4PKR-1>SUSV9P,W4GGM-1,KA4BNI-2*,WIDE2,qAR,KB4YTM-1:'sZ&l!^K\]"6)}
+
+---- q-construct tests ---
+
+no Q construct
+SRC>DST,DIGI1,DIGI2*:test
+
+missing callsign after q construct?
+user SRC
+SRC>DST,DIGI1,DIGI2*,qAR,:test
+SRC>DST,DIGI1,DIGI2*,qAR:test
+SRC>DST,DIGI1,DIGI2*,qAR,A:test
+SRC>DST,qAR,ASDF:test
+SRC>DST,DIGI1,DIGI2*,qAR,IGATE:test
+
+too many callsigns?
+SRC>DST,DIGI1,DIGI2*,qAR,CALL1,CALL2:test
+
+packet ends with qAR,LOGIN
+user SRC pass 25520
+FOO>BAR,DIGI1,qAR,SRC:test
+SRC>BAR,DIGI1:test
+
+packet ends with LOGIN,I or VIACALL,I
+user SRC pass 25520
+FOO>BAR,DIGI1,SRC,I:test
+FOO>BAR,DIGI1,VIACALL,I:test
+
+FOO>BAR,DIGI1:test
+
+has a qAZ:
+FOO>BAR,DIGI1,qAZ,ASDF1:foo
+
+duplicate callsign after Q construct:
+FOO>BAR,DIGI1,qAR,ASDF1,ASDF2,ASDF3:foo
+FOO>BAR,DIGI1,qAR,ASDF1,ASDF1,ASDF1:foo
+FOO>BAR,DIGI1,qAR,ASDF1,ASDF2,ASDF1:foo
+FOO>BAR,DIGI1,qAR,ASDF,ASDF1,ASDF1:foo
+
+my callsign after Q construct:
+FOO>BAR,DIGI1,qAR,OH7LZB-13:foo
+FOO>BAR,DIGI1,qAR,OH7LZB-13,ASDF:foo
+FOO>BAR,DIGI1,qAR,ASF,OH7LZB-13:foo
+FOO>BAR,DIGI1,qAR,ASD,OH7LZB-13,ASDF:foo
+FOO>BAR,DIGI1,qAR,ASD,OH7LZB-135,ASDF:foo
+
+client callsign after Q but not last:
+user oh7lzb pass 20900
+FOO>BAR,DIGI1,qAR,OH7LZB:foo
+FOO>BAR,DIGI1,qAR,ASF,OH7LZB:foo
+FOO>BAR,DIGI1,qAR,ASF,OH7LZB,ASDF:foo

@@ -514,7 +514,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			}
 			keybuf[i] = 0;
 
-			i = historydb_lookup( keybuf, &history );
+			i = historydb_lookup( keybuf, i, &history );
 			if (i > 0) {
 				pb->lat     = history->lat;
 				pb->lng     = history->lon;

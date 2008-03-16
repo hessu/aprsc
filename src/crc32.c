@@ -19,14 +19,31 @@
  *	
  */
 
+/* ON THIS PROCESSING ALONE THE SYSTEM IS PUSHING AROUND 8-12 % OF CPU TIME!
+ * ... but the previous top waster, the aprsc output filters, are optimized
+ * to the hilt...
+ *
+ * There exists alternate implementations of CRC32 which are 1.7 - 2.3 times
+ * faster than this one with an expense of using 4kB / 8 kB / 16 kB of tables,
+ * which of course fill caches...
+ *
+ * What is needed is _fast_ hash function.  Preferrably arithmethic one,
+ * which does not need table lookups, and can work with aligned 32 bit
+ * data -- but also on unaligned, and on any byte counts...
+ *
+ * Contenders:
+ *   http://burtleburtle.net/bob/c/lookup3.c
+ *   http://www.ibiblio.org/pub/Linux/devel/lang/c/mph-1.2.tar.gz
+ *   http://www.concentric.net/~Ttwang/tech/inthash.htm
+ *   http://isthe.com/chongo/tech/comp/fnv/
+ */
+
 /* ======================================================================
 // The Linux kernel CRC32 computation code, heavily bastardized to simplify
 // used code, and aimed for performance..  pure and simple.
 // Furthermore, as we use this ONLY INTERNALLY, there is NO NEED to compute
 // INTEROPERABLE format of this thing!
-*/
-
-/*
+//
 //  Some further notes:  Origins of the loop-unroll algorithm are from
 //  Richard Black at Cambridge University, UK, 1993:
 //  http://www.cl.cam.ac.uk/research/srg/bluebook/21/crc/node6.html
@@ -86,7 +103,7 @@
 #define CRCPOLY_BE 0x04c11db7
 
 
-#define BE_TABLE_SIZE (1 << 8)
+#define BE_TABLE_SIZE (1 << 8) /* 256 entries - 1 kB */
 
 /* this table should be aligned by CPU cache line size... */
 static uint32_t crc32table_be[BE_TABLE_SIZE];

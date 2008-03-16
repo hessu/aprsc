@@ -122,13 +122,16 @@ int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 
 int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	//float lat = 0.0, lng = 0.0;
+	float lat = 0.0, lng = 0.0;
+	unsigned int lat_deg = 0, lat_min = 0, lat_min_frag = 0, lng_deg = 0, lng_min = 0, lng_min_frag = 0;
 	const char *d_start;
-	char dstcall[CALLSIGNLEN_MAX+1];
+	char dstcall[7];
 	char *p;
+	char sym_table, sym_code;
+	int posambiguity = 0;
 	int i;
 	
-	// fprintf(stderr, "parse_aprs_mice\n");
+	//fprintf(stderr, "parse_aprs_mice\n");
 	
 	/* check packet length */
 	if (body_end - body < 8)
@@ -156,7 +159,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 			|| (d_start[i] >= 'P' && d_start[i] <= 'Z')))
 				return 0;
 	
-	// fprintf(stderr, "\tpassed dstcall format check\n");
+	//fprintf(stderr, "\tpassed dstcall format check\n");
 	
 	/* validate information field (longitude, course, speed and
 	 * symbol table and code are checked). Not bullet proof..
@@ -173,10 +176,11 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	if ((body[6] < 0x21 || body[6] > 0x7b) && body[6] != 0x7d) return 0;
 	if (!valid_sym_table_uncompressed(body[7])) return 0;
 	
-	// fprintf(stderr, "\tpassed info format check\n");
+	//fprintf(stderr, "\tpassed info format check\n");
 	
 	/* make a local copy, we're going to modify it */
 	strncpy(dstcall, d_start, 6);
+	dstcall[6] = 0;
 	
 	/* First do the destination callsign
 	 * (latitude, message bits, N/S and W/E indicators and long. offset)
@@ -184,6 +188,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	 * Translate the characters to get the latitude
 	 */
 	 
+	//fprintf(stderr, "\tuntranslated dstcall: %s\n", dstcall);
 	for (p = dstcall; *p; p++) {
 		if (*p >= 'A' && *p <= 'J')
 			*p -= 'A' - '0';
@@ -192,9 +197,94 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 		else if (*p == 'K' || *p == 'L' || *p == 'Z')
 			*p = '_';
 	}
-	// fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
+	//fprintf(stderr, "\ttranslated dstcall: %s\n", dstcall);
 	
-	//pbuf_fill_pos(pb, lat, lng, 0, 0);
+	/* position ambiquity is going to get ignored now, it's not needed in this application. */
+	if (dstcall[5] == '_') { dstcall[5] = '5'; posambiguity = 1; }
+	if (dstcall[4] == '_') { dstcall[4] = '5'; posambiguity = 2; }
+	if (dstcall[3] == '_') { dstcall[3] = '5'; posambiguity = 3; }
+	if (dstcall[2] == '_') { dstcall[2] = '3'; posambiguity = 4; }
+	if (dstcall[1] == '_' || dstcall[0] == '_') { return 0; } /* cannot use posamb here */
+	
+	/* convert to degrees, minutes and decimal degrees, and then to a float lat */
+	if (sscanf(dstcall, "%2u%2u%2u",
+	    &lat_deg, &lat_min, &lat_min_frag) != 3) {
+		//fprintf(stderr, "\tsscanf failed\n");
+		return 0;
+	}
+	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 100.0 / 60.0;
+	
+	/* check the north/south direction and correct the latitude if necessary */
+	if (d_start[3] <= 0x4c)
+		lat = 0 - lat;
+	
+	/* Decode the longitude, the first three bytes of the body after the data
+	 * type indicator. First longitude degrees, remember the longitude offset.
+	 */
+	lng_deg = body[0] - 28;
+	if (body[4] >= 0x50)
+		lng_deg += 100;
+	if (lng_deg >= 180 && lng_deg <= 189)
+		lng_deg -= 80;
+	else if (lng_deg >= 190 && lng_deg <= 199)
+		lng_deg -= 190;
+	
+	/* Decode the longitude minutes */
+	lng_min = body[1] - 28;
+	if (lng_min >= 60)
+		lng_min -= 60;
+		
+	/* ... and minute decimals */
+	lng_min_frag = body[2] - 28;
+	
+	/* apply position ambiguity to longitude */
+	switch (posambiguity) {
+	case 0:
+		/* use everything */
+		lng = (float)lng_deg + (float)lng_min / 60.0
+			+ (float)lng_min_frag / 100.0 / 60.0;
+		break;
+	case 1:
+		/* ignore last number of lng_min_frag */
+		lng = (float)lng_deg + (float)lng_min / 60.0
+			+ (float)(lng_min_frag - lng_min_frag % 10 + 5) / 100.0 / 60.0;
+		break;
+	case 2:
+		/* ignore lng_min_frag */
+		lng = (float)lng_deg + ((float)lng_min + 0.5) / 60.0;
+		break;
+	case 3:
+		/* ignore lng_min_frag and last number of lng_min */
+		lng = (float)lng_deg + (float)(lng_min - lng_min % 10 + 5) / 60.0;
+		break;
+	case 4:
+		/* minute is unused -> add 0.5 degrees to longitude */
+		lng = (float)lng_deg + 0.5;
+		break;
+	default:
+		return 0;
+	}
+	
+	/* check the longitude E/W sign */
+	if (d_start[5] >= 0x50)
+		lng = 0 - lng;
+	
+	/* save the symbol table and code */
+	sym_code = body[6];
+	sym_table = body[7];
+	
+	/* ok, we're done */
+	/*
+	fprintf(stderr, "\tlat %u %u.%u (%.4f) lng %u %u.%u (%.4f)\n",
+	 	lat_deg, lat_min, lat_min_frag, lat,
+	 	lng_deg, lng_min, lng_min_frag, lng);
+	fprintf(stderr, "\tsym '%c' '%c'\n", sym_table, sym_code);
+	*/
+	
+	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
+		return 0; /* out of range */
+		
+	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 	return 0;
 }
 
@@ -284,7 +374,6 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	
 	// fprintf(stderr, "\tafter filling amb: %s\n", posbuf);
 	/* 3210.70N/13132.15E# */
-	//if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	    &lat_deg, &lat_min, &lat_min_frag, &lat_hemi, &sym_table,
 	    &lng_deg, &lng_min, &lng_min_frag, &lng_hemi, &sym_code) != 10) {

@@ -291,6 +291,7 @@ int historydb_insert(struct pbuf_t *pb)
 	//       location if such is known! We do not want them...
 
 	// FIXME: if (pb->packet_len > 300)  ???
+	// FIXME: have parser to fill  pb->objlen  so this needs not to scan the buffer again.
 
 
 	keybuf[CALLSIGNLEN_MAX] = 0;
@@ -415,12 +416,11 @@ int historydb_insert(struct pbuf_t *pb)
 
 /* lookup... */
 
-int historydb_lookup(const char *keybuf, struct history_cell_t **result)
+int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t **result)
 {
 	int i;
 	uint32_t h1;
 	struct history_cell_t **hp, *cp, *cp1;
-	int keylen = strlen(keybuf);
 
 	// validity is 5 minutes shorter than expiration time..
 	time_t validitytime   = now - lastposition_storetime - 5*60;

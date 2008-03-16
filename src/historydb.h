@@ -73,6 +73,6 @@ extern void historydb_atend(void);
 
 /* insert and lookup... interface yet unspecified */
 extern int historydb_insert(struct pbuf_t*);
-extern int historydb_lookup(const char *keybuf, struct history_cell_t **result);
+extern int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t **result);
 
 #endif

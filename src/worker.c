@@ -198,6 +198,10 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				close_client(self, c);
 				return -9;
 			}
+			if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
+			  // FIXME: WHAT TO DO ?
+			  // USE WBUF_ADJUSTER ?
+			}
 			if (i > 0) {
 				c->obuf_start += i;
 				c->obuf_wtime = tick;
@@ -250,6 +254,13 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			// WARNING: This also destroys the client object!
 			close_client(self, c);
 			return -9;
+		}
+		if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
+		  // FIXME: WHAT TO DO ?
+		  // USE WBUF_ADJUSTER ?
+		  /* tell the poller that we have outgoing data */
+		  xpoll_outgoing(self->xp, c->xfd, 1);
+		  return 0; // but could not write it at this time..
 		}
 		if (i < 0 && len != 0) {
 			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));

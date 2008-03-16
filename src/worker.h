@@ -53,12 +53,12 @@ extern void pthreads_profiling_reset(const char *name);
 #define PACKETLEN_MAX_HUGE PACKETLEN_MAX
 
 /* number of pbuf_t structures to allocate at a time */
-#define PBUF_ALLOCATE_BUNCH_SMALL 200 /* grow to 2000 in production use - it's now small for debugging */
-#define PBUF_ALLOCATE_BUNCH_LARGE 200 /* grow to 2000 in production use - it's now small for debugging */
-#define PBUF_ALLOCATE_BUNCH_HUGE   50 /* grow to 50 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_SMALL 2000 /* grow to 2000 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_LARGE 2000 /* grow to 2000 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_HUGE    50 /* grow to 50 in production use - it's now small for debugging */
 
 /* a packet buffer */
-/* Type flags   */
+/* Type flags -- some can happen in combinations: T_CWOP + T_WX / T_CWOP + T_POSITION ... */
 #define T_POSITION  (1 << 0) // Packet is of position type
 #define T_OBJECT    (1 << 1) // packet is an object
 #define T_ITEM      (1 << 2) // packet is an item
@@ -94,8 +94,9 @@ struct pbuf_t {
 
 	time_t t;		/* when the packet was received */
 	uint32_t seqnum;	/* ever increasing counter, dupecheck sets */
-	int packettype;		/* bitmask: one or more of T_* */
-	int flags;		/* bitmask: one or more of F_* */
+	uint16_t packettype;	/* bitmask: one or more of T_* */
+	uint16_t flags;		/* bitmask: one or more of F_* */
+	uint16_t objlen;	/* parsed length of object or item 3..9 */
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */

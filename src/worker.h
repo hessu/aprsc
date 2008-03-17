@@ -96,7 +96,6 @@ struct pbuf_t {
 	uint32_t seqnum;	/* ever increasing counter, dupecheck sets */
 	uint16_t packettype;	/* bitmask: one or more of T_* */
 	uint16_t flags;		/* bitmask: one or more of F_* */
-	uint16_t objlen;	/* parsed length of object or item 3..9 */
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */
@@ -105,6 +104,9 @@ struct pbuf_t {
 	const char *dstcall_end;	/* end of dest callsign SSID, output filter MAY change this! */
 	const char *qconstruct;	/* "qAX,incomingSSID:"	-- for q and e filters  */
 	const char *info_start;	/* pointer to start of info field */
+	
+	const char *srcname;	/* source's name (either srccall or object/item name) */
+	uint16_t srcname_len;	/* parsed length of source (object, item, srcall) name 3..9 */
 	
 	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */
 	float lng;	/* .. in RADIAN */

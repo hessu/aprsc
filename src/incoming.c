@@ -489,6 +489,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	packet_end = p; /* for easier overflow checking expressions */
 	/* fill necessary info for parsing and dupe checking in the packet buffer */
+	pb->srcname = pb->data;
+	pb->srcname_len = src_end - s;
 	pb->srccall_end = pb->data + (src_end - s);
 	pb->dstcall_end = pb->data + (dstcall_end - s);
 	pb->info_start  = info_start;

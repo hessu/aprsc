@@ -83,7 +83,10 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 
 static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	// float lat = 0.0, lng = 0.0;
+	float       lat,   lng;
+	const char *latp, *lngp;
+	int      i, la,    lo;
+	char        lac,   loc;
 
 	if (memcmp(body,"ULT",3) == 0) {
 		/* Ah..  "$ULT..." - that is, Ultimeter 2000 weather instrument */
@@ -91,27 +94,183 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		return 1;
 	}
 
-	fprintf(stderr, "parse_aprs_nmea:   '%.*s'\n", (int)(body_end - body), body);
+	lat  = lng  = 0.0;
+	latp = lngp = NULL;
+
+	/* NMEA sentences to understand:
+	   $GPGGA  Global Positioning System Fix Data
+	   $GPGLL  Geographic Position, Latitude/Longitude Data
+	   $GPRMC  Remommended Minimum Specific GPS/Transit Data
+	   $GPVTG  Velocity and track -- no position here!
+	   $GPWPT  Way Point Location ?? (bug in APRS specs ?)
+	   $GPWPL  Waypoint Load (not in APRS specs, but in NMEA specs)
+	   $PNTS   seen on APRS-IS, private sentense based on NMEA..
+	 */
+
+	if (memcmp( body, "GPGGA,", 6 ) == 0) {
+	  // GPGGA,175059,3347.4969,N,11805.7319,W,2,12,1.0,6.8,M,-32.1,M,,*7D
+	  //   v=1, looks fine
+	  // GPGGA,000000,5132.038,N,11310.221,W,1,09,0.8,940.0,M,-17.7,,
+	  //   v=1, timestamp odd, coords look fine
+	  // GPGGA,,,,,,0,00,,,,,,,*66
+	  //   v=0, invalid
+	  // GPGGA,121230,4518.7931,N,07322.3202,W,2,08,1.0,40.0,M,-32.4,M,,*46
+	  //   v=2, looks valid ?
+	  // GPGGA,193115.00,3302.50182,N,11651.22581,W,1,08,01.6,00465.90,M,-32.891,M,,*5F
+	  // $GPGGA,hhmmss.dd,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,v,
+	  //        ss,d.d,h.h,M,g.g,M,a.a,xxxx*hh<CR><LF>
+
+	  latp = body+6; // over the keyword
+	  while (latp < body_end && *latp != ',')
+	    ++latp; // scan over the timestamp
+	  if (*latp == ',') ++latp; // .. and into latitude.
+	  lngp = latp;
+	  while (lngp < body_end && *lngp != ',')
+	    ++lngp;
+	  if (*lngp == ',') ++lngp;
+	  if (*lngp != ',') ++lngp;
+	  if (*lngp == ',') ++lngp;
+	  // latp, and lngp  point to start of latitude and longitude substrings
+	  // respectively.  Should we check the validity ?
+
+	} else if (memcmp( body, "GPGLL,", 6 ) == 0) {
+	  // $GPGLL,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,hhmmss.dd,S,M*hh<CR><LF>
+	  latp = body+6; // over the keyword
+	  lngp = latp;
+	  while (lngp < body_end && *lngp != ',') // over latitude
+	    ++lngp;
+	  if (*lngp == ',') ++lngp; // and lat designator
+	  if (*lngp != ',') ++lngp; // and lat designator
+	  if (*lngp == ',') ++lngp;
+	  // latp, and lngp  point to start of latitude and longitude substrings
+	  // respectively
+
+	} else if (memcmp( body, "GPRMC,", 6 ) == 0) {
+	  // $GPRMC,hhmmss.dd,S,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,s.s,h.h,ddmmyy,d.d, <E|W>,M*hh<CR><LF>
+	  // ,S, = Status:  'A' = Valid, 'V' = Invalid
+	  // 
+	  // GPRMC,175050,A,4117.8935,N,10535.0871,W,0.0,324.3,100208,10.0,E,A*3B
+	  // GPRMC,000000,V,0000.0000,0,00000.0000,0,000,000,000000,,*01/It wasn't me :)
+	  //    invalid..
+	  // GPRMC,000043,V,4411.7761,N,07927.0448,W,0.000,0.0,290697,10.7,W*57
+	  // GPRMC,003803,A,3347.1727,N,11812.7184,W,000.0,000.0,140208,013.7,E*67
+	  // GPRMC,050058,A,4609.1143,N,12258.8184,W,0.000,0.0,100208,18.0,E*5B
+
+	  latp = body+6; // over the keyword
+	  while (latp < body_end && *latp != ',')
+	    ++latp; // scan over the timestamp
+	  if (*latp == ',') ++latp; // .. and into VALIDITY
+	  if (*latp != 'A')
+	    return 0; // INVALID !
+	  if (*latp != ',') ++latp;
+	  if (*latp == ',') ++latp;
+	  // now it points to latitude substring
+	  lngp = latp;
+	  while (lngp < body_end && *lngp != ',')
+	    ++lngp;
+	  if (*lngp == ',') ++lngp;
+	  if (*lngp != ',') ++lngp;
+	  if (*lngp == ',') ++lngp;
+	  // latp, and lngp  point to start of latitude and longitude substrings
+	  // respectively.
 
 
-	if (memcmp(body,"GP",2) != 0)
+	} else if (memcmp( body, "GPWPL,", 6 ) == 0) {
+	  // $GPWPL,4610.586,N,00607.754,E,4*70
+	  // $GPWPL,4610.452,N,00607.759,E,5*74
+	  latp = body+6;
+
+	} else if (memcmp( body, "PNTS,", 5 ) == 0) {
+	  // $PNTS,1,0,11,01,2002,231932,3539.687,N,13944.480,E,0,000,5,Roppongi UID RELAY,000,1*35
+	  // $PNTS,1,0,14,01,2007,131449,3535.182,N,13941.200,E,0,0.0,6,Oota-Ku KissUIDigi,000,1*1D
+	  // $PNTS,1,0,17,02,2008,120824,3117.165,N,13036.481,E,49,059,1,Kagoshima,000,1*71
+	  // $PNTS,1,0,17,02,2008,120948,3504.283,N,13657.933,E,00,000.0,6,,000,1*36
+	  // 
+	  // From Alinco EJ-41U Terminal Node Controller manual:
+	  // 
+	  // 5-4-7 $PNTS
+	  // This is a private-sentence based on NMEA-0183.  The data contains date,
+	  // time, latitude, longitude, moving speed, direction, altitude plus a short
+	  // message, group codes, and icon numbers. The EJ-41U does not analyze this
+	  // format but can re-structure it.
+	  // The data contains the following information:
+	  //  l $PNTS Starts the $PNTS sentence
+	  //  l version
+	  //  l the registered information. [0]=normal geographical location data.
+	  //    This is the only data EJ-41U can re-structure. [s]=Initial position
+	  //    for the course setting [E]=ending position for the course setting
+	  //    [1]=the course data between initial and ending [P]=the check point
+	  //    registration [A]=check data when the automatic position transmission
+	  //    is set OFF [R]=check data when the course data or check point data is
+	  //    received.
+	  //  l Dd/mm/yyyy/hh/mm/ss: Date and time indication.
+	  //  l Latitude in DMD followed by N or S
+	  //  l Longitude in DMD followed by E or W
+	  //  l Direction: Shown with the number 360 degrees divided by 64.
+	  //    00 stands for true north, 16 for east. Speed in Km/h
+	  //  l One of 15 characters [0] to [9], [A] to [E].
+	  //    NTSMRK command determines this character when EJ-41U is used.
+	  //  l A short message up to 20 bites. Use NTSMSG command to determine this message.
+	  //  l A group code: 3 letters with a combination of [0] to [9], [A] to [Z].
+	  //    Use NTSGRP command to determine.
+	  //  l Status: [1] for usable information, [0] for non-usable information.
+	  //  l *hh<CR><LF> the check-sum and end of PNTS sentence.
+
+	// FIXME: NMEA $PNTS sentence parser!
+
+
+
+	} else if (memcmp( body, "GPVTG,", 6 ) == 0) {
+	  //  GPVTG,000.0,T,358.8,M,000.0,N,0000.0,K*78
+	  //  GPVTG,000,T,003,M,00.0,N,00.0,K*4D
+	  //  NMEA, but no positional data..
+	  return 0;
+	}
+
+	if (!latp || !lngp) {
+
+		hlog(LOG_DEBUG, "Unknown NMEA: %.*s", (int)(body_end - body), body);
 		return 0; /* Well..  Not NMEA frame */
-	body += 2;
+	}
+
+	// hlog(LOG_DEBUG, "NMEA parsing: %.*s", (int)(body_end - body), body);
+	// hlog(LOG_DEBUG, "     lat=%.10s   lng=%.10s", latp, lngp);
+
+	i = sscanf(latp, "%2d%f,%c,", &la, &lat, &lac);
+	if (i != 3) {
+	  return 0; // parse failure
+	}
+	i = sscanf(lngp, "%3d%f,%c,", &lo, &lng, &loc);
+	if (i != 3) {
+	  return 0; // parse failure
+	}
+
+	if (lac != 'N' && lac != 'S' &&
+	    lac != 'n' && lac != 's')
+	  return 0; // bad indicator value
+	if (loc != 'E' && loc != 'W' &&
+	    loc != 'e' && loc != 'w')
+	  return 0; // bad indicator value
+
+	// hlog(LOG_DEBUG, "   lat: %c %2d %7.4f   lng: %c %2d %7.4f",
+	//                 lac, la, lat, loc, lo, lng);
+
+	lat = (float)la + lat/60.0;
+	lng = (float)lo + lng/60.0;
+
+	if (lac == 'S' || lac == 's')
+		lat = -lat;
+	if (loc == 'W' || loc == 'w')
+		lng = -lng;
 
 	pb->packettype |= T_POSITION;
 
-	/* NMEA sentences to understand:
-	   GGA  Global Positioning System Fix Data
-	   GLL  Geographic Position, Latitude/Longitude Data
-	   RMC  Remommended Minimum Specific GPS/Transit Data
-	   VTG  Velocity and track -- no position here!
-	   WPT  Way Point Location
-	 */
+	// FIXME: Symbol ???
+	// -- practically all SSIDs are used in source addresses,
+	//    including zero.
 
-	// FIXME: NMEA sentence parser!
-
-	//pbuf_fill_pos(pb, lat, lng, 0, 0);
-	return 0;
+	pbuf_fill_pos(pb, lat, lng, 0, 0);
+	return 1;
 }
 
 static int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)

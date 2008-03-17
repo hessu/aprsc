@@ -55,26 +55,30 @@ int valid_sym_table_uncompressed(char c)
 		    || (c >= 0x48 && c <= 0x57)); /* [\/\\A-Z0-9] */
 }
 
-void pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
+int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
 {
-	/* Pre-calculations for A/R/F/M-filter tests */
-	pb->lat     = filter_lat2rad(lat);  /* deg-to-radians */
-	pb->cos_lat = cosf(lat);            /* used in range filters */
-	pb->lng     = filter_lon2rad(lng);  /* deg-to-radians */
-
-	pb->flags |= F_HASPOS;	/* the packet has positional data */
-	
 	/* symbol table and code */
 	pb->symbol[0] = sym_table;
 	pb->symbol[1] = sym_code;
 	pb->symbol[2] = 0;
-
+	
 	/* Is it perhaps a weather report ? */
 	if (sym_code == '_' && (sym_table == '/' || sym_table == '\\')) 
 		pb->packettype |= T_WX;
 	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
 		pb->packettype |= T_WX;	/* Hurricane */
-
+	
+	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
+		return 0; /* out of range */
+	
+	/* Pre-calculations for A/R/F/M-filter tests */
+	pb->lat     = filter_lat2rad(lat);  /* deg-to-radians */
+	pb->cos_lat = cosf(lat);            /* used in range filters */
+	pb->lng     = filter_lon2rad(lng);  /* deg-to-radians */
+	
+	pb->flags |= F_HASPOS;	/* the packet has positional data */
+	
+	return 1;
 }
 
 int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
@@ -281,11 +285,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	fprintf(stderr, "\tsym '%c' '%c'\n", sym_table, sym_code);
 	*/
 	
-	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
-		return 0; /* out of range */
-		
-	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
-	return 0;
+	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
 int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_end)
@@ -331,11 +331,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	
 	// fprintf(stderr, "\tlat %.3f lng %.3f\n", lat, lng);
 	
-	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
-		return 0; /* out of range */
-	
-	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
-	return 1;
+	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
 int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *body_end)
@@ -411,11 +407,7 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	// 	lng_deg, lng_min, lng_min_frag, (int)lng_hemi, lng);
 	// fprintf(stderr, "\tsym '%c' '%c'\n", sym_table, sym_code);
 
-	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
-		return 0; /* out of range */
-	
-	pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
-	return 1;
+	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
 int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)

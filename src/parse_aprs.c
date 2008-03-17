@@ -43,19 +43,19 @@
  *	or an overlay character
  */
 
-int valid_sym_table_compressed(char c)
+static int valid_sym_table_compressed(char c)
 {
 	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
 		    || (c >= 0x61 && c <= 0x6A)); /* [\/\\A-Za-j] */
 }
 
-int valid_sym_table_uncompressed(char c)
+static int valid_sym_table_uncompressed(char c)
 {
 	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
 		    || (c >= 0x48 && c <= 0x57)); /* [\/\\A-Z0-9] */
 }
 
-int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
+static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
 {
 	/* symbol table and code */
 	pb->symbol[0] = sym_table;
@@ -81,7 +81,7 @@ int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const cha
 	return 1;
 }
 
-int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	// float lat = 0.0, lng = 0.0;
 
@@ -114,7 +114,7 @@ int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 	return 0;
 }
 
-int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	// float lat = 0.0, lng = 0.0;
 
@@ -124,7 +124,7 @@ int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
 	return 0;
 }
 
-int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	float lat = 0.0, lng = 0.0;
 	unsigned int lat_deg = 0, lat_min = 0, lat_min_frag = 0, lng_deg = 0, lng_min = 0, lng_min_frag = 0;
@@ -288,7 +288,7 @@ int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
-int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	char sym_table, sym_code;
 	int i;
@@ -334,7 +334,7 @@ int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
-int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	char posbuf[20];
 	unsigned int lat_deg = 0, lat_min = 0, lat_min_frag = 0, lng_deg = 0, lng_min = 0, lng_min_frag = 0;
@@ -410,7 +410,7 @@ int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *bod
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
-int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
 	pb->packettype |= T_OBJECT;
@@ -423,7 +423,7 @@ int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
 	return 0;
 }
 
-int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
 	pb->packettype |= T_ITEM;

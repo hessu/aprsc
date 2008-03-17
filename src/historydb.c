@@ -44,7 +44,7 @@ cellarena_t *historydb_cells;
 rwlock_t historydb_rwlock;
 
 struct history_cell_t **historydb_hash;
-int historydb_hash_modulo;
+#define HISTORYDB_HASH_MODULO 8192
 
 // monitor counters and gauges
 long historydb_inserts;
@@ -69,9 +69,7 @@ void historydb_init(void)
 				    0 /* minfree */ );
 #endif
 
-	historydb_hash_modulo = 8192 ; // FIXME: is this acceptable or not ?
-
-	i = sizeof(struct history_cell_t *) * historydb_hash_modulo;
+	i = sizeof(struct history_cell_t *) * HISTORYDB_HASH_MODULO;
 	historydb_hash = hmalloc(i);
 	memset(historydb_hash, 0, i);
 }
@@ -113,7 +111,7 @@ void historydb_atend(void)
 {
 	int i;
 	struct history_cell_t *hp, *hp2;
-	for (i = 0; i < historydb_hash_modulo; ++i) {
+	for (i = 0; i < HISTORYDB_HASH_MODULO; ++i) {
 		hp = historydb_hash[i];
 		while (hp) {
 			hp2 = hp->next;
@@ -144,7 +142,7 @@ void historydb_dump(FILE *fp)
 	// multiple locks ? one for each bucket, or for a subset of buckets ?
 	rwl_rdlock(&historydb_rwlock);
 
-	for ( i = 0; i < historydb_hash_modulo; ++i ) {
+	for ( i = 0; i < HISTORYDB_HASH_MODULO; ++i ) {
 		hp = historydb_hash[i];
 		for ( ; hp ; hp = hp->next )
 			if (hp->arrivaltime > expirytime)
@@ -176,7 +174,7 @@ int historydb_load(FILE *fp)
 	rwl_wrlock(&historydb_rwlock);
 
 	// discard previous content
-	for ( i = 0; i < historydb_hash_modulo; ++i ) {
+	for ( i = 0; i < HISTORYDB_HASH_MODULO; ++i ) {
 		struct history_cell_t *hp, *nhp;
 
 		hp = historydb_hash[i];
@@ -214,7 +212,8 @@ int historydb_load(FILE *fp)
 		
 		keylen = strlen(keybuf);
 		h1 = historydb_hash1(keybuf, keylen);
-		i = h1 % historydb_hash_modulo;
+		h1 ^= (h1 >> 16); /* Fold hash bits.. */
+		i = h1 % HISTORYDB_HASH_MODULO;
 
 		hp1 = NULL;
 		hpp = &historydb_hash[i];
@@ -291,7 +290,7 @@ int historydb_insert(struct pbuf_t *pb)
 	//       location if such is known! We do not want them...
 
 	// FIXME: if (pb->packet_len > 300)  ???
-	// FIXME: have parser to fill  pb->objlen  so this needs not to scan the buffer again.
+	// FIXME: have parser to fill  pb->objnamelen  so this needs not to scan the buffer again.
 
 
 	keybuf[CALLSIGNLEN_MAX] = 0;
@@ -341,7 +340,8 @@ int historydb_insert(struct pbuf_t *pb)
 	++historydb_inserts;
 
 	h1 = historydb_hash1(keybuf, keylen);
-	i = h1 % historydb_hash_modulo;
+	h1 ^= (h1 >> 16); /* Fold hash bits.. */
+	i = h1 % HISTORYDB_HASH_MODULO;
 
 	cp = cp1 = NULL;
 	hp = &historydb_hash[i];
@@ -428,7 +428,8 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	++historydb_lookups;
 
 	h1 = historydb_hash1(keybuf, keylen);
-	i = h1 % historydb_hash_modulo;
+	h1 ^= (h1 >> 16); /* Fold hash bits.. */
+	i = h1 % HISTORYDB_HASH_MODULO;
 
 	cp1 = NULL;
 	hp = &historydb_hash[i];

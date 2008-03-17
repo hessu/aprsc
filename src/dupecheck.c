@@ -72,7 +72,7 @@ struct dupe_record_t {
 };
 
 struct dupe_record_t **dupecheck_db; /* Hash index table      */
-int dupecheck_db_size = 8192;        /* Hash index table size */
+#define DUPECHECK_DB_SIZE 8192        /* Hash index table size */
 
 #ifndef _FOR_VALGRIND_
 struct dupe_record_t *dupecheck_free;
@@ -198,13 +198,15 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 
 void dupecheck_init(void)
 {
-	dupecheck_db = hmalloc(sizeof(void*) * dupecheck_db_size);
-	memset(dupecheck_db, 0, sizeof(void*) * dupecheck_db_size);
+	dupecheck_db  = hmalloc(sizeof(void*) * DUPECHECK_DB_SIZE);
+	memset(dupecheck_db, 0, sizeof(void*) * DUPECHECK_DB_SIZE);
 
 #ifndef _FOR_VALGRIND_
-	dupecheck_cells = cellinit( sizeof(struct dupe_record_t), __alignof__(struct dupe_record_t),
+	dupecheck_cells = cellinit( sizeof(struct dupe_record_t),
+				    __alignof__(struct dupe_record_t),
 				    CELLMALLOC_POLICY_LIFO | CELLMALLOC_POLICY_NOMUTEX,
-				    512 /* 512 kB at the time */,  0 /* minfree */);
+				    512 /* 512 kB at the time */,
+				    0 /* minfree */);
 #endif
 }
 
@@ -309,7 +311,8 @@ static int dupecheck(struct pbuf_t *pb)
 	// 3) lookup if same checksum is in some hash bucket chain
 	//  3b) compare packet...
 	//    3b1) flag as F_DUPE if so
-	i = crc % dupecheck_db_size;
+	crc ^= (crc >> 16); /* fold the bits.. */
+	i = crc % DUPECHECK_DB_SIZE;
 	dpp = &dupecheck_db[i];
 	while (*dpp) {
 	  dp = *dpp;
@@ -577,12 +580,14 @@ void dupecheck_stop(void)
 		hlog(LOG_INFO, "Dupecheck thread has terminated.");
 }
 
+/*	The  dupecheck_atend() is primarily for valgrind() to clean up dupecache.
+ */
 void dupecheck_atend(void)
 {
 	int i;
 	struct dupe_record_t *dp, *dp2;
 
-	for (i = 0; i < dupecheck_db_size; ++i) {
+	for (i = 0; i < DUPECHECK_DB_SIZE; ++i) {
 	  dp = dupecheck_db[i];
 	  while (dp) {
 	    dp2 = dp->next;

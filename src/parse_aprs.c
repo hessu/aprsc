@@ -40,7 +40,9 @@
 
 /*
  *	Check if the given character is a valid symbol table identifier
- *	or an overlay character
+ *	or an overlay character. The set is different for compressed
+ *	and uncompressed packets - the former has the overlaid number (0-9)
+ *	replaced with n-j.
  */
 
 static int valid_sym_table_compressed(char c)
@@ -54,6 +56,12 @@ static int valid_sym_table_uncompressed(char c)
 	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
 		    || (c >= 0x48 && c <= 0x57)); /* [\/\\A-Z0-9] */
 }
+
+/*
+ *	Fill the pbuf_t structure with a parsed position and
+ *	symbol table & code. Also does range checking for lat/lng
+ *	and pre-calculates cosf(lat) for range filters.
+ */
 
 static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
 {
@@ -80,6 +88,10 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 	
 	return 1;
 }
+
+/*
+ *	Parse NMEA position packets.
+ */
 
 static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body_end)
 {
@@ -283,6 +295,12 @@ static int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *bod
 	return 0;
 }
 
+/*
+ *	Parse a MIC-E position packet
+ *
+ *	APRS PROTOCOL REFERENCE 1.0.1 Chapter 10, page 42 (52 in PDF)
+ */
+
 static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	float lat = 0.0, lng = 0.0;
@@ -336,7 +354,8 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	if (body[3] < 0x1c || (unsigned char)body[3] > 0x7f) return 0;
 	if (body[4] < 0x1c || (unsigned char)body[4] > 0x7d) return 0;
 	if (body[5] < 0x1c || (unsigned char)body[5] > 0x7f) return 0;
-	if ((body[6] < 0x21 || body[6] > 0x7b) && body[6] != 0x7d) return 0;
+	if ((body[6] < 0x21 || (unsigned char)body[6] > 0x7b)
+		&& (unsigned char)body[6] != 0x7d) return 0;
 	if (!valid_sym_table_uncompressed(body[7])) return 0;
 	
 	//fprintf(stderr, "\tpassed info format check\n");
@@ -447,6 +466,12 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
+/*
+ *	Parse a compressed APRS position packet
+ *
+ *	APRS PROTOCOL REFERENCE 1.0.1 Chapter 9, page 36 (46 in PDF)
+ */
+
 static int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	char sym_table, sym_code;
@@ -492,6 +517,12 @@ static int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char
 	
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
+
+/*
+ *	Parse an uncompressed "normal" APRS packet
+ *
+ *	APRS PROTOCOL REFERENCE 1.0.1 Chapter 8, page 32 (42 in PDF)
+ */
 
 static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const char *body_end)
 {
@@ -569,6 +600,12 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
+/*
+ *	Parse an APRS object 
+ *
+ *	APRS PROTOCOL REFERENCE 1.0.1 Chapter 11, page 58 (68 in PDF)
+ */
+
 static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
 {
 	//float lat = 0.0, lng = 0.0;
@@ -581,6 +618,12 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	//pbuf_fill_pos(pb, lat, lng);
 	return 0;
 }
+
+/*
+ *	Parse an APRS item
+ *
+ *	APRS PROTOCOL REFERENCE 1.0.1 Chapter 11, page 59 (69 in PDF)
+ */
 
 static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
 {
@@ -604,9 +647,6 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
  *	Does also front-end part of the output filter's
  *	packet type classification job.
  *
- * TODO: Parse also symbols where applicable!
- *       .. pick defaults from source SSID value
- *       (maybe my caller can do destSSID/sourceSSID default digging?)
  * TODO: Recognize TELEM packets in !/=@ packets too!
  *
  */

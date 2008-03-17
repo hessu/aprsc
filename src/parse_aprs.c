@@ -113,7 +113,6 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	   $GPGGA  Global Positioning System Fix Data
 	   $GPGLL  Geographic Position, Latitude/Longitude Data
 	   $GPRMC  Remommended Minimum Specific GPS/Transit Data
-	   $GPVTG  Velocity and track -- no position here!
 	   $GPWPT  Way Point Location ?? (bug in APRS specs ?)
 	   $GPWPL  Waypoint Load (not in APRS specs, but in NMEA specs)
 	   $PNTS   seen on APRS-IS, private sentense based on NMEA..
@@ -245,10 +244,8 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		
 		// FIXME: NMEA $PNTS sentence parser!
 		
-	} else if (memcmp(body, "GPVTG,", 6) == 0) {
-		//  GPVTG,000.0,T,358.8,M,000.0,N,0000.0,K*78
-		//  GPVTG,000,T,003,M,00.0,N,00.0,K*4D
-		//  NMEA, but no positional data..
+	} else {
+		// Not a supported format.
 		return 0;
 	}
 	

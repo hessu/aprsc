@@ -694,7 +694,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		for ( ; *s && *s != '/'; ++s ) {
 			switch (*s) {
 			case '*':
-				f0.h.numnames |= 0x0FFF; /* "ALL" */
+				f0.h.numnames |= ~T_CWOP; /* "ALL" -- excluding CWOP */
 				break;
 			case 'c': case 'C':
 				f0.h.numnames |= T_CWOP;
@@ -941,30 +941,24 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Up to 1300 invocations per second.
 	*/
 	struct filter_refcallsign_t ref;
-	const char *d = pb->dstcall_end+1;
+	const char *d = pb->srccall_end + 1 + pb->dstcall_len + 1; /* viacall start */
 	const char *q = pb->qconst_start-1;
-	int i, rc;
+	int rc, i, j = 0;
 
-	/* dstcall_end DOES NOT initially include SSID!  Must scan it!
-	** We can advance the destcall_end and leave it at the real end..
-	** (d and u filters do this scan forward -- once)
-	*/
-	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
-		pb->dstcall_end += 1;
-
-	d = pb->dstcall_end+1;
-
-	if (d >= q) {
-		/* hlog something ? */
-	  return 0; /* No digipeaters on path at all. */
-	}
+	// hlog( LOG_INFO, "digifilter:  '%.*s' -> '%.*s'  q-d=%d",
+	//       (int)(pb->packet_len < 50 ? pb->packet_len : 50),
+	//       pb->data, (int)i, d, (int)(q-d) );
 
 	for (i = 0; d < q; ) {
+		++j; if (j > 10) break; // something seriously wrong..
+
 		if (*d == ',') ++d; /* second round and onwards.. */
-		for (i = 0; i+d <= q && i < CALLSIGNLEN_MAX; ++i) {
+		for (i = 0; i+d <= q && i <= CALLSIGNLEN_MAX; ++i) {
 			if (d[i] == ',')
 				break;
 		}
+
+		// hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
 
 		/* digipeater address  ",addr," */
 		memcpy( ref.callsign, d, i);
@@ -1403,20 +1397,18 @@ static int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct fi
 	*/
 
 	struct filter_refcallsign_t ref;
+	const char *d = pb->srccall_end+1;
 	int i;
 
-	/* dstcall_end DOES NOT initially include SSID!  Must scan it!
-	** We can advance the destcall_end and leave it at the real end..
-	*/
-	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
-	  pb->dstcall_end += 1;
-
-	i = pb->dstcall_end - (pb->srccall_end+1); /* *srccall_end == '>' */
+	i = pb->dstcall_len;
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
+	// hlog( LOG_INFO, "unproto:  '%.*s' -> '%.*s'",
+	//       (int)(pb->packet_len < 30 ? pb->packet_len : 30), pb->data, (int)i, d);
+
 	/* destination address  ">addr," */
-	memcpy( ref.callsign, pb->srccall_end+1, i);
+	memcpy( ref.callsign,   d, i);
 	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);

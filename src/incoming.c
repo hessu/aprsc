@@ -410,7 +410,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_start >= packet_end)
 		return -1;
 	
-	if (src_end - s > CALLSIGNLEN_MAX)
+	if (src_end - s > CALLSIGNLEN_MAX || src_end - s < CALLSIGNLEN_MIN)
 		return -1; /* too long source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
@@ -504,10 +504,10 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* put the buffer in the thread's incoming queue */
 	*self->pbuf_incoming_local_last = pb;
 	self->pbuf_incoming_local_last = &pb->next;
-	++self->pbuf_incoming_local_count;
-
-++incoming_count;
-
+	self->pbuf_incoming_local_count++;
+	
+	incoming_count++;
+	
 	return rc;
 }
 
@@ -523,14 +523,17 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	 * CR, LF or CRLF on input but make sure to use CRLF on output.
 	 */
 	
-	/* make sure it looks somewhat like an APRS-IS packet... len is without CRLF */
-	if (len < PACKETLEN_MIN-2 || len > PACKETLEN_MAX-2) {
-		hlog(LOG_WARNING, "Packet size out of bounds (%d): %s", len, s);
+	/* Make sure it looks somewhat like an APRS-IS packet... len is without CRLF.
+	 * Do not do PACKETLEN_MIN test here, since it would drop the 'filter'
+	 * commands.
+	 */
+	if (len > PACKETLEN_MAX-2) {
+		hlog(LOG_WARNING, "Packet too long (%d): %.*s", len, len, s);
 		return 0;
 	}
-
+	
 //	hlog(LOG_DEBUG, "Incoming: %.*s", len, s);
-
+	
 	if (c->state == CSTATE_UPLINKSIM) {
 	  long t;
 	  char *p = s;
@@ -541,22 +544,27 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	  len -= (p - s);
 	  s = p;
 	}
-
 	
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#')
 		return 0;
-	/* filter adjunct commands ? */
-	if (memcmp(s, "filter", 6) == 0 ||
-	    memcmp(s, "FILTER", 6) == 0) {
-		return filter_commands(self, c, s, len);
-	}
-
+	
 	/* do some parsing */
-	e = incoming_parse(self, c, s, len);
+	if (len < PACKETLEN_MIN-2)
+		e = -42;
+	else
+		e = incoming_parse(self, c, s, len);
+	
 	if (e < 0) {
+		/* filter adjunct commands ? */
+		if (strncasecmp(s, "filter", 6) == 0)
+			return filter_commands(self, c, s, len);
+		
 		/* failed parsing */
-		hlog(LOG_DEBUG,"Failed parsing (%d): %.*s",e,len,s);
+		if (e == -42)
+			hlog(LOG_DEBUG, "Packet too short (%d): %.*s", len, len, s);
+		else
+			hlog(LOG_DEBUG, "Failed parsing (%d): %.*s",e,len,s);
 	}
 	
 	return 0;

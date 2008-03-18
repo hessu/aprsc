@@ -454,6 +454,11 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	char dummyc;
 	struct filter_t *ff, **ffp;
 
+	if (is_user_filter && (!(c->flags & CLFLAGS_USERFILTEROK))) {
+		hlog(LOG_DEBUG, "No user-specified filters permitted");
+		return -1;
+	}
+
 	if (is_user_filter)
 		ffp = &c->userfilters;
 	else

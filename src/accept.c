@@ -57,6 +57,7 @@ struct listen_t {
 	
 	struct addrinfo *ai;
 	int fd;
+	int clientflags;
 	
 	char *name;
 	char *addr_s;
@@ -163,6 +164,7 @@ int open_listeners(void)
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
 		l = listener_alloc();
+		l->clientflags = lc->client_flags;
 
 		/* Pick first of the AIs for this listen definition */
 		
@@ -290,6 +292,7 @@ struct client_t *do_accept(struct listen_t *l)
 	c->state = CSTATE_LOGIN;
 	c->addr_s = hstrdup(eb);
 	c->keepalive = tick;
+	c->flags     = l->clientflags;
 	/* use the default login handler */
 	c->handler = &login_handler;
 
@@ -317,7 +320,9 @@ struct client_t *do_accept(struct listen_t *l)
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i])
-			filter_parse(c, l->filters[i], 0); /* system filters */
+			if (filter_parse(c, l->filters[i], 0) < 0) { /* system filters */
+				hlog(LOG_ERR, "Bad system filter definition: %s", l->filters[i]);
+			}
 	}
 	
 	/* set non-blocking mode */

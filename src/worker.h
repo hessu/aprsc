@@ -175,6 +175,15 @@ struct client_t {
 #if WBUF_ADJUSTER
 	int   wbuf_size;      /* socket wbuf size */
 #endif
+	int32_t flags;      /* bit flags on what kind of client this is */
+
+#define CLFLAGS_USERFILTEROK   0x001 /* Permits entry of user defined filters */
+#define CLFLAGS_UPLINKPORT     0x002
+#define CLFLAGS_PORT_RO	       0x004
+#define CLFLAGS_FULLFEED       0x008 /* Together with filter t/.*. -- which really implements it */
+#define CLFLAGS_DUPEFEED       0x008 /* Duplicates are also sent to client */
+#define CLFLAGS_MESSAGEONLY    0x010 /* Together with filter t/m   -- which really implements it */
+
 	char  state;        /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */
 	char *username;     /* The callsign */
@@ -182,7 +191,6 @@ struct client_t {
 	char *app_version;  /* application version, from 'user' command */
 
 	char  validated;    /* did the client provide a valid passcode */
-	char  want_dupes;   /* does the client want duplicate packets, too */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);

@@ -36,6 +36,7 @@
 #include "hmalloc.h"
 #include "hlog.h"
 #include "cfgfile.h"
+#include "worker.h"
 
 char def_cfgfile[] = "aprsc.conf";
 
@@ -114,7 +115,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout	},
 	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
-	{ "aprsis-uplink",	_CFUNC_ do_uplink,	&new_uplink_config	},
+	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "aprsis-peerip",	_CFUNC_ do_peerip,	&new_peerip_config	},
 	{ NULL,			NULL,			NULL			}
 };
@@ -239,7 +240,7 @@ int do_interval(time_t *dest, int argc, char **argv)
 /*
  *	Parse a peer definition directive
  *
- *	"keyword" [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
+ *	"keyword" <token?> [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
  *
  */
 
@@ -259,37 +260,38 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
 	req.ai_flags    = 0;
 	ai = NULL;
 
-	if (strcasecmp(argv[1], "tcp") == 0) {
+	if (strcasecmp(argv[2], "tcp") == 0) {
 		// well, do nothing for now.
-	} else if (strcasecmp(argv[3], "udp") == 0) {
+	} else if (strcasecmp(argv[2], "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
 #if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
-	} else if (strcasecmp(argv[3], "sctp") == 0) {
+	} else if (strcasecmp(argv[2], "sctp") == 0) {
 		req.ai_socktype = SOCK_SEQPACKET;
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		fprintf(stderr, "Peer-ip: Unsupported protocol '%s'\n", argv[1]);
+		hlog(LOG_ERR, "Peer-ip: Unsupported protocol '%s'\n", argv[2]);
 		return -2;
 	}
 	
-	port = atoi(argv[3]);
+	port = atoi(argv[4]);
 	if (port < 1 || port > 65535) {
-		fprintf(stderr, "Peer-ip: unsupported port number '%s'\n", argv[3]);
+		hlog(LOG_ERR, "Peer-ip: unsupported port number '%s'\n", argv[4]);
 		return -2;
 	}
 
-	i = getaddrinfo(argv[2], argv[3], &req, &ai);
+	i = getaddrinfo(argv[3], argv[4], &req, &ai);
 	if (i != 0) {
-		fprintf(stderr,"Peer-ip: address parse failure of '%s' '%s'",argv[2],argv[3]);
+		hlog(LOG_ERR,"Peer-ip: address parse failure of '%s' '%s'",argv[3],argv[4]);
 		return i;
 	}
 
 
 	l = hmalloc(sizeof(*l));
-	l->name = hstrdup(argv[1]);
-	l->host = hstrdup(argv[4]);
+	l->name = hstrdup(argv[0]);
+	l->host = hstrdup(argv[3]);
+	l->client_flags = 0; // ???
 	l->ai = ai;
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
@@ -310,7 +312,7 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
 /*
  *	Parse a uplink definition directive
  *
- *	"keyword" [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
+ *	"keyword" <token> {tcp|udp|sctp} <hostname> <portnum> [<filter> [..<more_filters>]]
  *
  */
 
@@ -319,10 +321,18 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	struct uplink_config_t *l;
 	int i, port;
 	struct addrinfo req, *ai;
+	int clflags = CLFLAGS_UPLINKPORT;
 
 	if (argc < 4)
 		return -1;
-	
+
+	if (strcasecmp(argv[1],"ro")==0) {
+	  clflags |= CLFLAGS_PORT_RO;
+	} // FIXME: other tokens ??
+
+	if (argc < 4)
+		return -1;
+
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
 	req.ai_socktype = SOCK_STREAM;
@@ -330,30 +340,30 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	req.ai_flags    = 0;
 	ai = NULL;
 
-	if (strcasecmp(argv[1], "tcp") == 0) {
+	if (strcasecmp(argv[2], "tcp") == 0) {
 		// well, do nothing for now.
-	} else if (strcasecmp(argv[1], "udp") == 0) {
+	} else if (strcasecmp(argv[2], "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
 #if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
-	} else if (strcasecmp(argv[1], "sctp") == 0) {
+	} else if (strcasecmp(argv[2], "sctp") == 0) {
 		req.ai_socktype = SOCK_SEQPACKET;
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		fprintf(stderr, "Uplink: Unsupported protocol '%s'\n", argv[1]);
+		hlog(LOG_ERR, "Uplink: Unsupported protocol '%s'\n", argv[2]);
 		return -2;
 	}
 	
-	port = atoi(argv[3]);
+	port = atoi(argv[4]);
 	if (port < 1 || port > 65535) {
-		fprintf(stderr, "Uplink: unsupported port number '%s'\n", argv[3]);
+		hlog(LOG_ERR, "Uplink: unsupported port number '%s'\n", argv[4]);
 		return -2;
 	}
 
-	i = getaddrinfo(argv[2], argv[3], &req, &ai);
+	i = getaddrinfo(argv[3], argv[4], &req, &ai);
 	if (i != 0) {
-		fprintf(stderr,"Uplink: address parse failure of '%s' '%s'",argv[2],argv[3]);
+		hlog(LOG_ERR,"Uplink: address parse failure of '%s' '%s'",argv[3],argv[4]);
 		return i;
 	}
 	if (ai)
@@ -362,14 +372,15 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 
 	l = hmalloc(sizeof(*l));
 
-	l->proto = hstrdup(argv[1]);
-	l->host  = hstrdup(argv[2]);
-	l->port  = hstrdup(argv[3]);
+	l->proto = hstrdup(argv[2]);
+	l->host  = hstrdup(argv[3]);
+	l->port  = hstrdup(argv[4]);
+	l->client_flags = clflags;
 
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
-		if (argc - 4 > i) {
-			l->filters[i] = hstrdup(argv[i+4]);
+		if (argc - 5 > i) {
+			l->filters[i] = hstrdup(argv[i+5]);
 		}
 	}
 	
@@ -385,7 +396,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 /*
  *	Parse a Listen directive
  *
- *	listen <label> <?> [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
+ *	listen <label> <token> [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
  *
  */
 
@@ -394,6 +405,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	int i, port;
 	struct listen_config_t *l;
 	struct addrinfo req, *ai;
+	int clflags = 0;
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -404,7 +416,20 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 
 	if (argc < 6)
 		return -1;
-	
+
+	if (strcasecmp(argv[2], "userfilter") == 0) {
+	  clflags = CLFLAGS_USERFILTEROK;
+	} else if (strcasecmp(argv[2], "fullfeed") == 0) {
+	  clflags = CLFLAGS_FULLFEED;
+	} else if (strcasecmp(argv[2], "dupefeed") == 0) {
+	  clflags = CLFLAGS_DUPEFEED;
+	} else if (strcasecmp(argv[2], "messageonly") == 0) {
+	  clflags = CLFLAGS_MESSAGEONLY;
+	} else {
+	  hlog(LOG_ERR, "Listen: unknown quality token: %s", argv[2]);
+	}
+
+
 	if (strcasecmp(argv[3], "tcp") == 0) {
 		/* well, do nothing for now. */
 	} else if (strcasecmp(argv[3], "udp") == 0) {
@@ -416,25 +441,26 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		fprintf(stderr, "Listen: Unsupported protocol '%s'\n", argv[3]);
+		hlog(LOG_ERR, "Listen: Unsupported protocol '%s'\n", argv[3]);
 		return -2;
 	}
 	
 	port = atoi(argv[5]);
 	if (port < 1 || port > 65535) {
-		fprintf(stderr, "Listen: unsupported port number '%s'\n", argv[5]);
+		hlog(LOG_ERR, "Listen: unsupported port number '%s'\n", argv[5]);
 		return -2;
 	}
 
 	i = getaddrinfo(argv[4], argv[5], &req, &ai);
 	if (i != 0) {
-		fprintf(stderr, "Listen: address parse failure of '%s' '%s'", argv[4], argv[5]);
+		hlog(LOG_ERR, "Listen: address parse failure of '%s' '%s'", argv[4], argv[5]);
 		return i;
 	}
 	
 	l = hmalloc(sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
+	l->client_flags = clflags;
 	l->ai = ai;
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;

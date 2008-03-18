@@ -86,6 +86,8 @@ struct listen_config_t {
 	struct addrinfo *ai;
 
 	const char *filters[10];		/* up to 10 filters, NULL when not defined */
+
+	int client_flags;
 };
 
 struct peerip_config_t {
@@ -98,6 +100,8 @@ struct peerip_config_t {
 	struct addrinfo *ai;
 
 	const char *filters[10];		/* up to 10 filters, NULL when not defined */
+
+	int client_flags;
 };
 
 struct uplink_config_t {
@@ -110,6 +114,8 @@ struct uplink_config_t {
 	const char *port;
 
 	const char *filters[10];		/* up to 10 filters, NULL when not defined */
+
+	int client_flags;
 };
 
 extern struct listen_config_t *listen_config;

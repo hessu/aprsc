@@ -115,15 +115,18 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 			c->app_version = hstrdup(argv[++i]);
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): No UDP port after UDP command", c->addr_s, username);
+				hlog(LOG_WARNING, "%s (%s): Missing UDP port number after UDP command", c->addr_s, username);
 				break;
 			}
 			c->udp_port = atoi(argv[i]);
 			if (c->udp_port < 1 || c->udp_port > 65535 || c->udp_port == 53) {
-				hlog(LOG_WARNING, "%s (%s): UDP port %s out of range", c->addr_s, username, argv[i]);
+				hlog(LOG_WARNING, "%s (%s): UDP port number %s is out of range", c->addr_s, username, argv[i]);
 				c->udp_port = 0;
 			}
 		} else if (strcasecmp(argv[i], "filter") == 0) {
+			if (!(c->flags & CLFLAGS_USERFILTEROK)) {
+				return client_printf(self, c, "# No user-specified filters on this port\r\n");
+			}
 			while (++i < argc) {
 				/* parse filters in argv[i] */
 				rc = filter_parse(c, argv[i], 1);

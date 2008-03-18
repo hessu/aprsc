@@ -256,6 +256,7 @@ int make_uplink(struct uplink_config_t *l)
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;
 	c->username = hstrdup(mycall);
+	c->flags    = l->client_flags;
 
 	hlog(LOG_DEBUG, "%s - Uplink connection on fd %d from %s", addr_s, c->fd, eb);
 

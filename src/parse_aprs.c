@@ -680,7 +680,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 				break;
 		}
 		if (*s == '>')
-			pb->flags |= T_CWOP;
+			pb->packettype |= T_CWOP;
 	}
 
 	/* the following parsing logic has been translated from Ham::APRS::FAP

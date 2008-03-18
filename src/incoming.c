@@ -494,6 +494,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->srcname_len = src_end - s;
 	pb->srccall_end = pb->data + (src_end - s);
 	pb->dstcall_end = pb->data + (dstcall_end - s);
+	pb->dstcall_len = via_start - src_end - 1;
 	pb->info_start  = info_start;
 	
 //	hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);

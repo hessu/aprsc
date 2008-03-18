@@ -97,6 +97,7 @@ struct pbuf_t {
 	uint16_t packettype;	/* bitmask: one or more of T_* */
 	uint16_t flags;		/* bitmask: one or more of F_* */
 	uint16_t srcname_len;	/* parsed length of source (object, item, srcall) name 3..9 */
+	uint16_t dstcall_len;	/* parsed length of destination callsign *including* SSID */
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */

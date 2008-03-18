@@ -11,7 +11,7 @@ my $quit = 0;
 my $APRSIS;
 
 my $mycall = 'OH2MQK-WR';
-my $filter = 'p/OH2R -p/OH2 p/OH ';
+my $filter = ''; 'p/OH2R -p/OH2 p/OH ';
 
 $APRSIS = APRS::IS->new('127.0.0.1:10190', $mycall, $filter);
 

@@ -3,6 +3,7 @@
 $VERSION = 'APRS-IS-RX version-1.0';
 
 use POSIX;
+use IO::Multiplex;
 
 select STDOUT; $| = 1;    
 
@@ -13,35 +14,70 @@ my $mycall = 'MRX-';
 #my $filter = 'p/OH2R';
 #my $filter = 'p/OH';
 my $filter = 'p/OH2R -p/OH2 p/OH ';
+$filter = 'p/OH/OI/OJ/OF';
+#my $filter = 'p/CW ';
 
 #$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
 
 my @APRS = ();
 
-my $n = 500;
+my $n =  300;
 
-foreach my $i (1 .. 500) {
+my $MUX = new IO::Multiplex;
+
+foreach my $i (1 .. $n) {
     my $call = sprintf("%s%d",$mycall,$i);
-    $APRSIS = APRS::IS->new('localhost:14580', $call, $filter );
+    if (($i % 3) == 0) { # filters only for 1/3'd of all contactees..
+	$APRSIS = APRS::IS->new('localhost:14580', $call, $filter );
+    } elsif (($i % 3) == 1) {
+	$call = sprintf("CW%04d",$i);
+	$APRSIS = APRS::IS->new('localhost:14580', $call, undef );
+    } else {
+	$APRSIS = APRS::IS->new('localhost:14580', $call, '-p/CW' );
+    }
     if (!defined($APRSIS)) {
 	printf "aprsazel: Failed to open APRS-IS socket!\n";
 	exit 4;
     }
+    $MUX->add( $APRSIS->sock() );
+
     push @APRS, $APRSIS;
 }
+$MUX->set_callback_object(__PACKAGE__);
+$MUX->loop();
 
-
-my $now = time;
-my $last = $now + 60*60;
-local $line;
-
-while (1) {
-    $now = time;
-    foreach my $A (@APRS) {
-	$line = $A->getline;
-    }
-}
+#
+#my $now = time;
+#my $last = $now + 60*60;
+#local $line;
+#
+#while (1) {
+#    $now = time;
+#    foreach my $A (@APRS) {
+#	$line = $A->getline;
+#    }
+#}
 exit 0;
+
+
+sub mux_input {
+    my $package = shift;
+    my $mux     = shift;
+    my $fh      = shift;
+    my $data    = shift;
+
+    $$data = '';
+}
+
+
+sub mux_eof {
+    my $package = shift;
+    my $mux     = shift;
+    my $fh      = shift;
+
+    $MUX->shutdown($fh, 1);
+}
+
 
 # -------------------------------------------------------------------------
 
@@ -62,6 +98,10 @@ sub aprspass {
     return ($h ^ 29666);
 }
 
+sub sock {
+    my $self = shift;
+    return $self->{sock};
+}
 
 sub new {
     my $that = shift;
@@ -86,7 +126,10 @@ sub new {
 
     $self->{aprsmycall} = uc( $mycall );
     $mycall =~ s/-.*//;
-    $self->{aprspass}   = aprspass( uc($mycall) );
+    $self->{aprspass}   = aprspass( $self->{aprsmycall} );
+    if ($self->{aprsmycall} =~ m/CW\d{4}/o) {
+	$self->{aprspass} = -1;
+    }
 
     $self->{filterre} = $target_filter_re;
 

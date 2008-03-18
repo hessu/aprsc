@@ -34,6 +34,7 @@
 #include "hlog.h"
 #include "parse_aprs.h"
 #include "parse_qc.h"
+#include "filter.h"
 
 #include "cellmalloc.h"
 
@@ -542,9 +543,14 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	}
 
 	
-	/* starts with # => a comment packet, timestamp or something */
+	/* starts with "# " => a comment packet, timestamp or something */
 	if (memcmp(s, "# ",2) == 0)
 		return 0;
+	/* filter adjunct commands ? */
+	if (memcmp(s, "filter", 6) == 0 ||
+	    memcmp(s, "FILTER", 6) == 0) {
+		return filter_commands(self, c, s, len);
+	}
 
 	/* do some parsing */
 	e = incoming_parse(self, c, s, len);

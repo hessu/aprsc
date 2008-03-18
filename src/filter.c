@@ -25,8 +25,8 @@
 #include <strings.h>
 #include <ctype.h>
 #include <stdint.h>
-
 #include <math.h>
+#include <alloca.h>
 
 #include "hmalloc.h"
 #include "hlog.h"
@@ -34,6 +34,7 @@
 #include "filter.h"
 #include "cellmalloc.h"
 #include "historydb.h"
+#include "cfgfile.h"
 
 /*
   See:  http://www.aprs-is.net/javaprssrvr/javaprsfilter.htm
@@ -102,6 +103,16 @@
 /* FIXME:  What exactly is the meaning of negation on the pattern ?
 **         Match as a failure to match, and stop searching ?
 **         Something filter dependent ?
+**
+** javAPRSSrvr Filter Adjunct  manual tells:
+
+ #14 Exclusion filter
+
+All the above filters also support exclusion. Be prefixing the above filters with a
+dash the result will be the opposite. Any packet that match the exclusion filter will
+NOT pass. The exclusion filters will be processed first so if there is a match for an
+exclusion then the packet is not passed no matter any other filter definitions.
+
 */
 
 #define WildCard      0x80  /* it is wild-carded prefix string  */
@@ -1265,7 +1276,7 @@ static int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct fi
 	   About 10-15 s-filters in entire APRS-IS core at any given time.
 	   Up to 520 invocations per second at peak.
 	*/
-	const char *s = f->text;
+	const char *s = f->h.text;
 	int rc = 0;
 
 	if (*s == '-') ++s;
@@ -1512,4 +1523,71 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 			/* "2" reply means: "match, but don't pass.." */
 	}
 	return 0;
+}
+
+/*
+ *	filter_commands() implements treatment for incoming client filter requests.
+ *
+ *	Return value propagates negative returns from things like  client_write()
+ *	indicating the struct client_t * object being destroyed.
+ */
+int filter_commands(struct worker_t *self, struct client_t *c, const char *s, int len)
+{
+	char *argv[256];	
+	struct filter_t *f;
+	char *b, *p;
+	int i, argc;
+
+	len -= 6;
+	s   += 6;
+
+	if ( *s == '?' && len == 1 ) {
+		/* Query current filters */
+		int lensum = 0;
+
+		
+		for (f = c->userfilters; f; f = f->h.next) {
+			lensum += 2 + strlen(f->h.text);
+		}
+
+		p = b = alloca(lensum+20);
+		p += sprintf(b, "# filters: ");
+		for (f = c->userfilters; f; f = f->h.next) {
+			p += sprintf(p, "%s ", f->h.text);
+		}
+		p += sprintf(p, "\r\n");
+		/* client can be destroyed here.. */
+		return client_write(self, c, b, (int)(p-b));
+	}
+	if (*s != ' ') {
+		return client_printf(self, c, "# Bad input\r\n");
+	}
+	++s;
+	--len;
+
+	if ( strncasecmp(s, "default", 7) == 0 && len == 7 ) {
+		/* discard any user defined filters that possibly were
+		   injected on this connection.  */
+		f = c->userfilters;
+		c->userfilters = NULL;
+		filter_free(f);
+		return client_printf(self, c, "# User filters reset to default\r\n");
+	}
+
+	/* new filter definitions to supercede previous ones */
+
+	/* Discard old ones. */
+	f = c->userfilters;
+	c->userfilters = NULL;
+	filter_free(f);
+
+	b = alloca(len+2);
+	memcpy(b, s, len);
+	b[len] = 0;
+
+	argc = parse_args( argv, b );
+	for (i = 0; i < argc; ++i) {
+		filter_parse(c, argv[i], 1); /* user filters */
+	}
+	return client_printf(self, c, "# Parsed %d filter specifications", i);
 }

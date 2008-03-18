@@ -19,7 +19,7 @@
  *	
  */
 
-// FIXME: filters: d e q s
+// FIXME: filters: q s
 
 #include <string.h>
 #include <strings.h>
@@ -53,7 +53,7 @@
   t/poimntqsu*c/call/km	Type filter
   u/unproto1/unproto2/.. Unproto filter (*)
 
-  Sample usage frequencies:
+  Sample usage frequencies (out of entire APRS-IS):
 
    23.7  a/  <-- Optimize!
     9.2  b/  <-- Optimize?
@@ -99,22 +99,23 @@
 */
 
 
-// FIXME:  What exactly is the meaning of negation on the pattern ?
-//         Match as a failure to match, and stop searching ?
-//         Something filter dependent ?
+/* FIXME:  What exactly is the meaning of negation on the pattern ?
+**         Match as a failure to match, and stop searching ?
+**         Something filter dependent ?
+*/
 
-#define WildCard      0x80  // it is wild-carded prefix string
-#define NegationFlag  0x40  // 
-#define LengthMask    0x0F  // only low 4 bits encode length
+#define WildCard      0x80  /* it is wild-carded prefix string  */
+#define NegationFlag  0x40  /*                                  */
+#define LengthMask    0x0F  /* only low 4 bits encode length    */
 
-// values above are chosen for 4 byte alignment..
+/* values above are chosen for 4 byte alignment.. */
 
 struct filter_refcallsign_t {
 	union {
-		char	  callsign[CALLSIGNLEN_MAX+1]; // size: 10..
-		int32_t	  cc[2]; // makes alignment!   // size:  8
-	}; // ANONYMOUS UNION
-	uint8_t	reflen; // length and flags
+		char	  callsign[CALLSIGNLEN_MAX+1]; /* size: 10.. */
+		int32_t	  cc[2]; /* makes alignment!   // size:  8   */
+	}; /* ANONYMOUS UNION */
+	int8_t	reflen; /* length and flags */
 };
 struct filter_head_t {
 	struct filter_t *next;
@@ -125,12 +126,15 @@ struct filter_head_t {
 #define f_coslat f_lonW /* for R filter */
 
 	char	type;	  /* 1 char			*/
-	uint8_t	negation; /* boolean flag		*/
-	int 	numnames;
+	int8_t	negation; /* boolean flag		*/
+	int16_t	numnames; /* used as named, and as bit-set on T_*** enumerations */
 	union {
-		struct filter_refcallsign_t  refcallsign;   // for cases where there is only one..
-		struct filter_refcallsign_t *refcallsigns;  // hmalloc()ed array, alignment important!
-	};
+		/* for cases where there is only one.. */
+		struct filter_refcallsign_t  refcallsign;
+		/*  hmalloc()ed array, alignment important! */
+		struct filter_refcallsign_t *refcallsigns;
+	}; /* ANONYMOUS UNION */
+	time_t  hist_age;
 };
 
 struct filter_t {
@@ -150,6 +154,9 @@ cellarena_t *filter_cells;
 #endif
 
 
+int hist_lookup_interval = 2; /* Cache lookups this much seconds on the filter entry */
+
+
 float filter_lat2rad(float lat)
 {
 	return (lat * (M_PI / 180.0));
@@ -165,38 +172,43 @@ float filter_lon2rad(float lon)
 void filter_init(void)
 {
 #ifndef _FOR_VALGRIND_
-	filter_cells = cellinit( sizeof(struct filter_t), __alignof__(struct filter_t),
-				 CELLMALLOC_POLICY_LIFO, 128 /* 128 kB at the time */,
+	filter_cells = cellinit( sizeof(struct filter_t),
+				 __alignof__(struct filter_t),
+				 CELLMALLOC_POLICY_LIFO,
+				 128 /* 128 kB at the time */,
 				 0 /* minfree */ );
 
-	/* printf("filter: sizeof=%d alignof=%d\n",sizeof(struct filter_t),__alignof__(struct filter_t)); */
+	/* printf("filter: sizeof=%d alignof=%d\n",
+	   sizeof(struct filter_t),__alignof__(struct filter_t)); */
 #endif
 }
 
 /*
  *	filter_match_on_callsignset()  matches prefixes, or exact keys
- *	on filters of types:  b, d, e, o, p, u  ('p' and 'b' need OPTIMIZATION)
+ *	on filters of types:  b, d, e, o, p, u
+ *	('p' and 'b' need OPTIMIZATION - others get it for free)
  *
  */
 
 static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int keylen, struct filter_t *f, MatchEnum wildok)
 {
 	int i;
-	struct filter_refcallsign_t *r = f->h.refcallsigns;
+	struct filter_refcallsign_t *r  = f->h.refcallsigns;
+	const uint32_t              *r1 = (const void*)ref->callsign;
 
 	for (i = 0; i < f->h.numnames; ++i) {
 		const int reflen = r[i].reflen;
 		const int len    = reflen & LengthMask;
-		const uint32_t *r1 = (const void*)ref->callsign;
 		const uint32_t *r2 = (const void*)r[i].callsign;
 
 		switch (wildok) {
 		case MatchExact:
 			if (len != keylen)
-				continue; // no match
-			// length OK, compare content - both buffers zero filled,
-			// and size is constant -- let compiler do smarts with
-			// constant comparison lengths...
+				continue; /* no match */
+			/* length OK, compare content - both buffers zero filled,
+			** and size is constant -- let compiler do smarts with
+			** constant comparison lengths...
+			*/
 			switch (len) {
 			case 1: case 2: case 3: case 4:
 			  if (memcmp( r1, r2, 4 ) != 0) continue;
@@ -208,22 +220,24 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			  if (memcmp( r1, r2, 9 ) != 0) continue;
 			  break;
 			default:
-			  return -1;
+			  return -1; /* bad match length */
 			  break;
 			}
-			// So it was an exact match
-			// Precisely speaking..  we should check that there is
-			// no WildCard flag, or such.  But then this match
-			// method should not be used if parser finds any such.
+			/* So it was an exact match
+			** Precisely speaking..  we should check that there is
+			** no WildCard flag, or such.  But then this match
+			** method should not be used if parser finds any such.
+			*/
 			return ( reflen & NegationFlag ? 2 : 1 );
 			break;
 		case MatchPrefix:
 			if (len > keylen || !len) {
-				// reference string length is longer than our key
+				/* reference string length is longer than our key */
 				continue;
 			}
-			// Let compiler do smarts - it "knowns" alignment, and
-			// the length is constant...
+			/* Let compiler do smarts - it "knowns" alignment, and
+			** the length is constant...
+			*/
 			switch (len) {
 			case 1:
 			  if (memcmp( r1, r2, 1 ) != 0) continue;
@@ -253,7 +267,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			  if (memcmp( r1, r2, 9 ) != 0) continue;
 			  break;
 			default:
-			  return -1;
+			  return -1; /* bad match length */
 			  break;
 			}
 
@@ -261,11 +275,12 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			break;
 		case MatchWild:
 			if (len > keylen || !len) {
-				// reference string length is longer than our key
+				/* reference string length is longer than our key */
 				continue;
 			}
-			// Let compiler do smarts - it "knowns" alignment, and
-			// the length is constant...
+			/* Let compiler do smarts - it "knowns" alignment, and
+			** the length is constant...
+			*/
 			switch (len) {
 			case 1:
 			  if (memcmp( r1, r2, 1 ) != 0) continue;
@@ -295,7 +310,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			  if (memcmp( r1, r2, 9 ) != 0) continue;
 			  break;
 			default:
-			  return -1;
+			  return -1; /* bad match length */
 			  break;
 			}
 
@@ -333,15 +348,15 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	if (*p == '-') ++p;
 	while (*p && *p != '/') ++p;
 	if (*p == '/') ++p;
-	// count the number of prefixes in there..
+	/* count the number of prefixes in there.. */
 	while (*p) {
 		if (*p) ++refmax;
 		while (*p && *p != '/') ++p;
 		if (*p == '/') ++p;
 	}
-	if (refmax == 0) return -1; // No prefixes ??
+	if (refmax == 0) return -1; /* No prefixes ?? */
 
-	if (ff && ff->h.type == f0->h.type) { // SAME TYPE, extend previous record!
+	if (ff && ff->h.type == f0->h.type) { /* SAME TYPE, extend previous record! */
 		extend = 1;
 		refcount = ff->h.numnames + refmax;
 		refbuf   = hrealloc(ff->h.refcallsigns, sizeof(*refbuf) * refcount);
@@ -357,7 +372,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	while (*p && *p != '/') ++p;
 	if (*p == '/') ++p;
 
-	// hlog(LOG_DEBUG, "p-filter: '%s' vs. '%s'", p, keybuf);
+	/* hlog(LOG_DEBUG, "p-filter: '%s' vs. '%s'", p, keybuf); */
 	while (*p)  {
 		k = prefixbuf;
 		memset(prefixbuf, 0, sizeof(prefixbuf));
@@ -398,18 +413,19 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		ff->h.numnames     = refcount;
 		i = strlen(ff->h.text) + strlen(filt0)+2;
 		if (i <= FILT_TEXTBUFSIZE) {
-			// Fits in our built-in buffer block - like previous..
-			// Append on existing buffer
+			/* Fits in our built-in buffer block - like previous..
+			** Append on existing buffer
+			*/
 			s = ff->textbuf + strlen(ff->textbuf);
 			sprintf(s, " %s", filt0);
 		} else {
-			// It does not fit anymore..
-			s = hmalloc(i); // alloc a new one
-			sprintf(s, "%s %s", p, filt0); // .. and catenate.
+			/* It does not fit anymore.. */
+			s = hmalloc(i); /* alloc a new one */
+			sprintf(s, "%s %s", p, filt0); /* .. and catenate. */
 			p = ff->h.text;
-			if (ff->h.text != ff->textbuf) // possibly free old
+			if (ff->h.text != ff->textbuf) /* possibly free old */
 				hfree((void*)p);
-			ff->h.text = s;     // store new
+			ff->h.text = s;     /* store new */
 		}
 	}
 	/* If not extending existing filter item, let main parser do the finalizations */
@@ -461,33 +477,33 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			   &f0.h.f_latS, &f0.h.f_lonE, &dummyc);
 
 		if (i != 4) {
-			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
 
 		if (!( -90.01 < f0.h.f_latN && f0.h.f_latN <  90.01)) {
-			hlog(LOG_DEBUG, "Bad latN value: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter latN value: %s", filt0);
 			return -2;
 		}
 		if (!(-180.01 < f0.h.f_lonW && f0.h.f_lonW < 180.01)) {
-			hlog(LOG_DEBUG, "Bad lonW value: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter lonW value: %s", filt0);
 			return -2;
 		}
 		if (!( -90.01 < f0.h.f_latS && f0.h.f_latS <  90.01)) {
-			hlog(LOG_DEBUG, "Bad latS value: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter latS value: %s", filt0);
 			return -2;
 		}
 		if (!(-180.01 < f0.h.f_lonE && f0.h.f_lonE < 180.01)) {
-			hlog(LOG_DEBUG, "Bad lonE value: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter lonE value: %s", filt0);
 			return -2;
 		}
 
 		if (f0.h.f_latN < f0.h.f_latS) {
-			hlog(LOG_DEBUG, "Bad: latN<latS: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter: latN<latS: %s", filt0);
 			return -3; /* expect: latN >= latS */
 		}
 		if (f0.h.f_lonW > f0.h.f_lonE) {
-			hlog(LOG_DEBUG, "Bad: lonW>lonE: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter: lonW>lonE: %s", filt0);
 			return -3; /* expect: lonW <= lonE */
 		}
 
@@ -508,7 +524,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
 		if (i < 0)
 			return i;
-		if (i > 0) // extended previous
+		if (i > 0) /* extended previous */
 			return 0;
 
 
@@ -521,7 +537,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
 		if (i < 0)
 			return i;
-		if (i > 0) // extended previous
+		if (i > 0) /* extended previous */
 			return 0;
 
 		break;
@@ -533,7 +549,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
 		if (i < 0)
 			return i;
-		if (i > 0) // extended previous
+		if (i > 0) /* extended previous */
 			return 0;
 
 		break;
@@ -544,7 +560,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		i = sscanf(filt, "r/%9[^/]/%f", f0.h.refcallsign.callsign, &f0.h.f_dist);
 		if (i != 2 || f0.h.f_dist < 0.1) {
-			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
 
@@ -554,9 +570,10 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		hlog(LOG_DEBUG, "Filter: %s -> F xxx %.3f", filt0, f0.h.f_dist);
 
-		// NOTE: Could do static location resolving at connect time, 
-		// and then use the same way as 'r' range does.  The friends
-		// are rarely moving...
+		/* NOTE: Could do static location resolving at connect time, 
+		** and then use the same way as 'r' range does.  The friends
+		** are rarely moving...
+		*/
 
 		break;
 
@@ -585,7 +602,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
 		if (i < 0)
 			return i;
-		if (i > 0) // extended previous
+		if (i > 0) /* extended previous */
 			return 0;
 
 		break;
@@ -598,9 +615,16 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchPrefix );
 		if (i < 0)
 			return i;
-		if (i > 0) // extended previous
+		if (i > 0) /* extended previous */
 			return 0;
 
+		break;
+
+	case 'q':
+	case 'Q':
+		/* q/con/ana           q Contruct filter */
+		;
+		
 		break;
 
 	case 'r':
@@ -610,16 +634,16 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = sscanf(filt, "r/%f/%f/%f",
 			 &f0.h.f_latN, &f0.h.f_lonW, &f0.h.f_dist);
 		if (i != 3 || f0.h.f_dist < 0.1) {
-			hlog(LOG_DEBUG, "Bad parse: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
 
 		if (!( -90.01 < f0.h.f_latN && f0.h.f_latN <  90.01)) {
-			hlog(LOG_DEBUG, "Bad lat value: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter lat value: %s", filt0);
 			return -2;
 		}
 		if (!(-180.01 < f0.h.f_lonW && f0.h.f_lonW < 180.01)) {
-			hlog(LOG_DEBUG, "Bad lon value: %s", filt0);
+			hlog(LOG_DEBUG, "Bad filter lon value: %s", filt0);
 			return -2;
 		}
 
@@ -634,7 +658,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 's':
 	case 'S':
 		/* s/pri/alt/over  	Symbol filter  */
-	  // FIXME: S-filter pre-parser
+		// FIXME: S-filter pre-parser
 		break;
 
 	case 't':
@@ -644,7 +668,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		*/
 		s = filt+1;
 		f0.h.type = 't';
-		// re-use  f0.h.numnames  field for T_** flags
+		/* re-use  f0.h.numnames  field for T_** flags */
 		f0.h.numnames = 0;
 
 		if (*s++ != '/') {
@@ -654,7 +678,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		for ( ; *s && *s != '/'; ++s ) {
 			switch (*s) {
 			case '*':
-				f0.h.numnames |= 0x0FFF; // "ALL"
+				f0.h.numnames |= 0x0FFF; /* "ALL" */
 				break;
 			case 'c': case 'C':
 				f0.h.numnames |= T_CWOP;
@@ -693,14 +717,14 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		}
 		if (*s == '/' && s[1] != 0) { /* second format */
 			i = sscanf(s, "/%9[^/]/%f%c", f0.h.refcallsign.callsign, &f0.h.f_dist, &dummyc);
-			if ( i != 2 || f0.h.f_dist < 0.1 || // 0.1 km minimum radius
+			if ( i != 2 || f0.h.f_dist < 0.1 || /* 0.1 km minimum radius */
 			     strlen(f0.h.refcallsign.callsign) < CALLSIGNLEN_MIN ) {
 				hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 				return -1;
 			}
 			f0.h.refcallsign.callsign[CALLSIGNLEN_MAX] = 0;
 			f0.h.refcallsign.reflen = strlen(f0.h.refcallsign.callsign);
-			f0.h.type = 'T'; // two variants...
+			f0.h.type = 'T'; /* two variants... */
 		}
 
 		break;
@@ -712,7 +736,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
 		if (i < 0)
 			return i;
-		if (i > 0) // extended previous
+		if (i > 0) /* extended previous */
 			return 0;
 
 		break;
@@ -720,7 +744,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 
 	default:;
-		// No pre-parsers for other types
+		/* No pre-parsers for other types */
 		hlog(LOG_DEBUG, "Filter: %s", filt0);
 		break;
 	}
@@ -730,19 +754,19 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	f = cellmalloc(filter_cells);
 	if (!f) return -1;
 	*f = f0; /* store pre-parsed values */
-	if (strlen(filt) < FILT_TEXTBUFSIZE) {
-		strcpy(f->textbuf, filt);
+	if (strlen(filt0) < FILT_TEXTBUFSIZE) {
+		strcpy(f->textbuf, filt0);
 		f->h.text = f->textbuf;
 	} else
-		f->h.text = hstrdup(filt); /* and copy of filter text */
+		f->h.text = hstrdup(filt0); /* and copy of filter text */
 #else
-	f = hmalloc(sizeof(*f) + strlen(filt));
+	f = hmalloc(sizeof(*f) + strlen(filt0));
 	*f = f0; /* store pre-parsed values */
 	f->h.text = f->textbuf;
 	strcpy(f->textbuf, filt); /* and copy of filter text */
 #endif
 
-	// hlog(LOG_DEBUG, "parsed filter: t=%c n=%d '%s'", f->h.type, f->h.negation, f->h.text);
+	/* hlog(LOG_DEBUG, "parsed filter: t=%c n=%d '%s'", f->h.type, f->h.negation, f->h.text); */
 
 	/* link to the tail.. */
 	if (ff)
@@ -846,9 +870,12 @@ static int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct fi
 	   (by means of aprs packet parse finding out the location..)
 
 	   OPTIMIZE !
+
+	   50-70 instances in APRS-IS core at any given time.
+	   Up to 2500 invocations per second.
 	*/
 	;
-	if (!(pb->flags & F_HASPOS)) // packet with a position.. (msgs with RECEIVER's position)
+	if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
 		return 0;
 
 	if ((pb->lat <= f->h.f_latN) &&
@@ -868,7 +895,10 @@ static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Pass all traffic FROM exact call: call1, call2, ...
 	   (* wild card allowed)
 
-	   Optimize ? ("only" around 10% of usage cases)
+	   OPTIMIZE ? (comes "free" with P and friends infra)
+
+	   50/70 instances in APRS-IS core at any given time.
+	   Up to 2500 invocations per second.
 	*/
 
 	struct filter_refcallsign_t ref;
@@ -876,9 +906,9 @@ static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
-	// source address  "addr">...
-	memset( &ref, 0, sizeof(ref) );
+	/* source address  "addr">... */
 	memcpy( ref.callsign, pb->data, i);
+	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchExact);
 }
@@ -890,19 +920,49 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 	   The digipeater filter will pass all packets that have been
 	   digipeated by a particular station(s) (the station's call
 	   is in the path).   This filter allows the * wildcard.
+
+	   ... 130 000 packets per hour, 25-35 filters in use at any given time.
+	   Up to 1300 invocations per second.
 	*/
 	struct filter_refcallsign_t ref;
-	int i;
+	const char *d = pb->dstcall_end+1;
+	const char *q = pb->qconst_start-1;
+	int i, rc;
 
-	return -1; // FIXME: write d-filter
+	/* dstcall_end DOES NOT initially include SSID!  Must scan it!
+	** We can advance the destcall_end and leave it at the real end..
+	** (d and u filters do this scan forward -- once)
+	*/
+	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
+		pb->dstcall_end += 1;
 
-	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+	d = pb->dstcall_end+1;
 
-	// destination address  ">addr,"
-	memset( &ref, 0, sizeof(ref) );
-	memcpy( ref.callsign, pb->srccall_end+1, i);
+	if (d >= q) {
+		/* hlog something ? */
+	  return 0; /* No digipeaters on path at all. */
+	}
 
-	return filter_match_on_callsignset(&ref, i, f, MatchWild);
+	for (i = 0; d < q; ) {
+		if (*d == ',') ++d; /* second round and onwards.. */
+		for (i = 0; i+d <= q && i < CALLSIGNLEN_MAX; ++i) {
+			if (d[i] == ',')
+				break;
+		}
+
+		/* digipeater address  ",addr," */
+		memcpy( ref.callsign, d, i);
+		memset( ref.callsign+i, 0, sizeof(ref)-i );
+
+		if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+
+		rc = filter_match_on_callsignset(&ref, i, f, MatchWild);
+		if (rc) {
+			return (rc == 1);
+		}
+		d += i;
+	}
+	return 0;
 }
 
 static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
@@ -913,18 +973,24 @@ static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct fi
 	   callsign-SSID(s) immediately following the q construct.
 	   This allows filtering based on receiving IGate, etc.
 	   Supports * wildcard.
+
+	   2-6 instances in APRS-IS core at any given time.
+	   Up to 200 invocations per second.
 	*/
 
 	struct filter_refcallsign_t ref;
+	const char *e = pb->qconst_start+4;
 	int i;
+	for (i = 0; i <= CALLSIGNLEN_MAX; ++i) {
+		if (e[i] == ',')
+			break;
+	}
+	if (e[i] != ',' || i < CALLSIGNLEN_MIN)
+		return 0; /* Bad Entry-station callsign */
 
-	return -1; // FIXME: write e-filter
-
-	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
-
-	// destination address  ">addr,"
-	memset( &ref, 0, sizeof(ref) );
-	memcpy( ref.callsign, pb->srccall_end+1, i);
+	/* destination address  ">addr," */
+	memcpy( ref.callsign, e, i);
+	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }
@@ -944,6 +1010,8 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 	   and then use the same way as 'r' range does.  The friends
 	   are rarely moving...
 
+	   15-25 instances in APRS-IS core at any given time.
+	   Up to 900 invocations per second.
 	*/
 
 	struct history_cell_t *history;
@@ -953,18 +1021,24 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 	float lat2, lon2, coslat2;
 
 	const char *callsign = f->h.refcallsign.callsign;
-	int i = f->h.refcallsign.reflen;
+	int i                = f->h.refcallsign.reflen;
 
-	if (!(pb->flags & F_HASPOS)) // packet with a position.. (msgs with RECEIVER's position)
-		return 0; // No position data...
+	if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
+		return 0; /* No position data... */
 
-	// find friend's last location packet
-	i = historydb_lookup( callsign, i, &history );
-	if (!i) return 0; // no lookup result..
+	/* find friend's last location packet */
+	if (f->h.hist_age < now) {
+		i = historydb_lookup( callsign, i, &history );
+		if (!i) return 0; /* no lookup result.. */
+		f->h.hist_age = now + hist_lookup_interval;
+		f->h.f_latN   = history->lat;
+		f->h.f_lonE   = history->lon;
+		f->h.f_coslat = history->coslat;
+	}
 
-	lat1    = history->lat;
-	lon1    = history->lon;
-	coslat1 = history->coslat;
+	lat1    = f->h.f_latN;
+	lon1    = f->h.f_lonE;
+	coslat1 = f->h.f_coslat;
 
 	lat2    = pb->lat;
 	lon2    = pb->lng;
@@ -993,6 +1067,9 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	   fix, it could stay fixed...    Or true historydb lookup frequency
 	   could be limited to once per - say - every 100 seconds per any
 	   given filter ?  (wants time_t variable into filter...)
+
+	   80-120 instances in APRS-IS core at any given time.
+	   Up to 4200 invocations per second.
 	*/
 
 	float lat1, lon1, coslat1;
@@ -1002,19 +1079,24 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	struct history_cell_t *history;
 
 
-	if (!(pb->flags & F_HASPOS)) // packet with a position.. (msgs with RECEIVER's position)
+	if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
 		return 0;
 
-	if (!c->username) // Should not happen...
+	if (!c->username) /* Should not happen... */
 		return 0;
 
-	i = historydb_lookup( c->username, strlen(c->username), &history );
-	if (!i) return 0; // no result
+	if (f->h.hist_age < now) {
+		i = historydb_lookup( c->username, strlen(c->username), &history );
+		if (!i) return 0; /* no result */
+		f->h.hist_age = now + hist_lookup_interval;
+		f->h.f_latN   = history->lat;
+		f->h.f_lonE   = history->lon;
+		f->h.f_coslat = history->coslat;
+	}
 
-	lat1    = history->lat;
-	lon1    = history->lon;
-	coslat1 = history->coslat;
-
+	lat1    = f->h.f_latN;
+	lon1    = f->h.f_lonE;
+	coslat1 = f->h.f_coslat;
 
 	lat2    = pb->lat;
 	lon2    = pb->lng;
@@ -1033,20 +1115,26 @@ static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Pass all objects with the exact name of obj1, obj2, ...
 	   (* wild card allowed)
 	   PROBABLY ALSO ITEMs
+
+	   Usage frequency: 0.2%
+
+	   .. 2 cases in entire APRS-IS core at any time.
+	   About 50-70 invocations per second at peak.
 	*/
 	struct filter_refcallsign_t ref;
 	int i;
 
 	const char *s;
 
-	if ( (pb->packettype & (T_OBJECT|T_ITEM)) == 0 ) // not an Object NOR Item
+	if ( (pb->packettype & (T_OBJECT|T_ITEM)) == 0 ) /* not an Object NOR Item */
 		return 0;
 
-	// Pick object name  ";item  *" or ";item  _" -- strip tail spaces
-	// Pick item name    ")item!" or ")item_"     -- keep all spaces
+	/* Pick object name  ";item  *" or ";item  _" -- strip tail spaces
+	** Pick item name    ")item!" or ")item_"     -- keep all spaces
+	*/
 
-	// FIXME?  These filters are very rare in real use...
-	// FIXME: have parser to fill  pb->objlen  so this needs not to scan the buffer again.
+	/* FIXME?  These filters are very rare in real use...   */
+	/* FIXME: have parser to fill  pb->objnamelen  so this needs not to scan the buffer again. */
 
 	s = pb->info_start+1;
 	if (pb->packettype & T_OBJECT) { // It is an Object - No embedded spaces!
@@ -1056,13 +1144,13 @@ static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct fi
 		}
 	} else { // It is an ITEM then..
 		for (i = 0; i < CALLSIGNLEN_MAX; ++i, ++s) {
-			if (*s == '!' || *s == '_') // Embedded space are OK!
+			if (*s == '!' || *s == '_') /* Embedded space are OK! */
 				break;
 		}
 	}
 	if (i < 1) return 0; /* Bad object/item name */
 
-	// object name
+	/* object name */
 	memcpy( ref.callsign, pb->info_start+1, i);
 	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
@@ -1075,7 +1163,12 @@ static int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct fi
 	/* p/aa/bb/cc...  	Prefix filter
 	   Pass traffic with fromCall that start with aa or bb or cc...
 
+	   Usage frequency: 14.4%
+
 	   OPTIMIZE!
+
+	   .. 80-100 cases in entire APRS-IS core at any time.
+	   Up to 3500 invocations per second at peak.
 	*/
 
 	struct filter_refcallsign_t ref;
@@ -1083,7 +1176,7 @@ static int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
-	// source address  "addr">...
+	/* source address  "addr">... */
 	memcpy( ref.callsign, pb->data, i);
 	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
@@ -1104,7 +1197,12 @@ static int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct fi
 	   q/C    Pass all traffic with qAC
 	   q/rR   Pass all traffic with qAr or qAR
 	   q//I   Pass all position packets from IGATES identified
-	              in other packets by qAr or qAR
+	          in other packets by qAr or qAR
+
+	   Usage frequency: 0.4%
+
+	   .. 2-6 cases in entire APRS-IS core at any time.
+	   Up to 200 invocations per second at peak.
 	*/
 
 	// FIXME: write q-filter
@@ -1126,7 +1224,8 @@ static int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Messages addressed to stations within the range are also passed.
 	   (by means of aprs packet parse finding out the location..)
 
-	   OPTIMIZE!
+	   About 120-150 r-filters in entire APRS-IS core at any given time.
+	   Up to 5200 invocations per second at peak.
 	*/
 
 	float lat1    = f->h.f_latN;
@@ -1136,7 +1235,7 @@ static int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	float lat2, lon2, coslat2;
 
-	if (!(pb->flags & F_HASPOS)) // packet with a position.. (msgs with RECEIVER's position)
+	if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
 		return 0;
 
 	lat2    = pb->lat;
@@ -1162,11 +1261,20 @@ static int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct fi
 	   s/->   This will pass all House and Car symbols (primary table)
 	   s//#   This will pass all Digi with or without overlay
 	   s//#/T This will pass all Digi with overlay of capital T
+
+	   About 10-15 s-filters in entire APRS-IS core at any given time.
+	   Up to 520 invocations per second at peak.
 	*/
+	const char *s = f->text;
+	int rc = 0;
 
-	// FIXME: write s-filter
+	if (*s == '-') ++s;
+	s += 2;
 
-	return -1;
+	// FIXME: s-filter
+
+	//	return f->h.negation ? 2 : 1;
+	return 0;
 }
 
 static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
@@ -1199,6 +1307,12 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 	   (station callsign-SSID or object name) for the requested station
 	   types.
 
+	   About 40-60 s-filters in entire APRS-IS core at any given time.
+	   Up to 2100 invocations per second at peak.
+
+	   For the second format perhaps 2-3 in APRS-IS at any time.
+	   (mapping to 60-100 invocations per second)
+
 	   Usage examples:
 
 	   -t/c              Everything except CWOP
@@ -1206,12 +1320,14 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 	                     ("." is dummy addition for C comments..)
 	*/
 	int rc = 0;
-	if (pb->packettype & f->h.numnames) // reused numnames as comparison bitmask
+	if (pb->packettype & f->h.numnames) /* reused numnames as comparison bitmask */
 		rc = 1;
 
 	/* Either it stops here, or it continues... */
 
-	if (rc && f->h.type == 'T') { /* Within a range of callsign ? */
+	if (rc && f->h.type == 'T') { /* Within a range of callsign ?
+				       * Rather rare..  perhaps 2-3 in APRS-IS.
+				       */
 		const char *callsign    = f->h.refcallsign.callsign;
 		const int   callsignlen = f->h.refcallsign.reflen;
 		float range, r;
@@ -1220,22 +1336,29 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 		struct history_cell_t *history;
 		int i;
 
-		hlog(LOG_DEBUG, "type filter with callsign range used! '%s'", f->h.text);
+		hlog(LOG_DEBUG, "Type filter with callsign range used! '%s'", f->h.text);
 
-		if (!(pb->flags & F_HASPOS)) // packet with a position.. (msgs with RECEIVER's position)
-			return 0; // No positional data..
+		if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
+			return 0; /* No positional data.. */
 
 		range = f->h.f_dist;
 
 		/* So..  Now we have a callsign, and we have range.
-		   Lets find callsign's location, and range to that item.. */
+		   Lets find callsign's location, and range to that item..
+		   .. 60-100 lookups per second. */
 
-		i = historydb_lookup( callsign, callsignlen, &history );
-		if (!i) return 0; // no lookup result..
+		if (f->h.hist_age < now) {
+			i = historydb_lookup( callsign, callsignlen, &history );
+			if (!i) return 0; /* no lookup result.. */
+			f->h.hist_age = now + hist_lookup_interval;
+			f->h.f_latN   = history->lat;
+			f->h.f_lonE   = history->lon;
+			f->h.f_coslat = history->coslat;
+		}
 
-		lat1    = history->lat;
-		lon1    = history->lon;
-		coslat1 = history->coslat;
+		lat1    = f->h.f_latN;
+		lon1    = f->h.f_lonE;
+		coslat1 = f->h.f_coslat;
 
 		lat2    = pb->lat;
 		lon2    = pb->lng;
@@ -1259,23 +1382,26 @@ static int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct fi
 	   This filter passes all packets with the specified destination
 	   callsign-SSID(s) (also known as the To call or unproto call).
 	   Supports * wild card.
+
+	   Seen hardly ever in APRS-IS core, some rare instances in Tier-2.
 	*/
 
 	struct filter_refcallsign_t ref;
 	int i;
 
-	// dstcall_end DOES NOT initially include SSID!  Must scan it!
-	// We can advance the destcall_end and leave it at the real end..
+	/* dstcall_end DOES NOT initially include SSID!  Must scan it!
+	** We can advance the destcall_end and leave it at the real end..
+	*/
 	while (pb->dstcall_end[0] != ',' && pb->dstcall_end[0] != ':')
 	  pb->dstcall_end += 1;
 
-	i = pb->dstcall_end - (pb->srccall_end+1); // *srccall_end == '>'
+	i = pb->dstcall_end - (pb->srccall_end+1); /* *srccall_end == '>' */
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
-	// destination address  ">addr,"
-	memset( &ref, 0, sizeof(ref) );
+	/* destination address  ">addr," */
 	memcpy( ref.callsign, pb->srccall_end+1, i);
+	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }
@@ -1355,7 +1481,7 @@ static int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filt
 		rc = -1;
 		break;
 	}
-	// hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
+	/* hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc); */
 
 	return rc;
 }
@@ -1366,10 +1492,10 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
-		// no reports to user about bad filters..
+		/* no reports to user about bad filters.. */
 		if (rc > 0)
 			return (rc == 1);
-			// "2" reply means: "match, but don't pass.."
+			/* "2" reply means: "match, but don't pass.." */
 	}
 
 	f = c->userfilters;
@@ -1378,12 +1504,12 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		int rc = filter_process_one(c, pb, f);
 		if (rc < 0) {
 			rc = client_bad_filter_notify(self, c, f->h.text);
-			if (rc < 0) // possibly the client got destroyed here!
+			if (rc < 0) /* possibly the client got destroyed here! */
 				return rc;
 		}
 		if (rc > 0)
 			return (rc == 1);
-			// "2" reply means: "match, but don't pass.."
+			/* "2" reply means: "match, but don't pass.." */
 	}
 	return 0;
 }

@@ -543,8 +543,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	}
 
 	
-	/* starts with "# " => a comment packet, timestamp or something */
-	if (memcmp(s, "# ",2) == 0)
+	/* starts with '#' => a comment packet, timestamp or something */
+	if (*s == '#')
 		return 0;
 	/* filter adjunct commands ? */
 	if (memcmp(s, "filter", 6) == 0 ||

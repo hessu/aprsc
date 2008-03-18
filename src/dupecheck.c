@@ -462,8 +462,8 @@ static void dupecheck_thread(void)
 			w->pbuf_incoming_count = 0;
 			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 
-			hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
-			     c, w->id, dupecheck_seqnum);
+			// hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
+			//      c, w->id, dupecheck_seqnum);
 
 			for (pb = pb_list; (pb); pb = pbnext) {
 				int rc = dupecheck(pb);
@@ -529,13 +529,13 @@ static void dupecheck_thread(void)
 		dupecheck_outcount  += pb_out_count;
 		dupecheck_dupecount += pb_out_dupe_count;
 
-		if (purge_tick != tick) { // once a second, at most..
+		if (purge_tick < tick) { // once a second, at most..
 			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
-			purge_tick = tick;
+			purge_tick = tick + 10;
 		}
 
-		if (n > 0)
-		  hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
+		// if (n > 0)
+		//    hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little, if there was nothing to do */
 		if (n == 0)
 			poll(NULL, 0, 100); // 100 ms

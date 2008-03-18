@@ -366,7 +366,9 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		if (*s == '\r' || *s == '\n') {
 			/* found EOL */
 			if (s - row_start > 0)
-				c->handler(self, c, row_start, s - row_start);
+			  /* NOTE: handler call CAN destroy the c-> object ! */
+			  if (c->handler(self, c, row_start, s - row_start) < 0)
+			    return -1;
 			/* skip the rest of EOL (it might have been zeroed by the handler) */
 			while (s < ibuf_end && (*s == '\r' || *s == '\n' || *s == 0))
 				s++;

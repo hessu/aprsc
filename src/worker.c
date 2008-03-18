@@ -505,7 +505,8 @@ void send_keepalives(struct worker_t *self)
 	char buf[130], *s;
 	int len, rc;
 	static const char *monthname[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
-	time_t w_expire = tick - sock_write_expire;
+	time_t w_expire    = tick - sock_write_expire;
+	time_t w_keepalive = tick - keepalive_interval;
 
 	// Example message:
 	// # javAPRSSrvr 3.12b12 1 Mar 2008 15:11:20 GMT T2FINLAND 85.188.1.32:14580
@@ -536,9 +537,9 @@ void send_keepalives(struct worker_t *self)
 		/* No keepalives on UPLINK or PEER links.. */
 
 		/* Is it time for keepalive ? */
-		if (c->keepalive <= tick) {
+		if (c->keepalive <= tick && c->obuf_wtime < w_keepalive) {
 			int flushlevel = c->obuf_flushsize;
-			c->keepalive += keepalive_interval;
+			c->keepalive = tick + keepalive_interval;
 
 			c->obuf_flushsize = 0;
 			/* Write out immediately */

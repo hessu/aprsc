@@ -93,6 +93,34 @@
 
 #endif
 
+#if 1 // lets see if  FVN-1  can do better than CRC32..
+
+void crc32init(void) { }
+
+uint32_t __attribute__((pure)) crc32n(const void const *p, int len, uint32_t hash)
+{
+	const uint8_t *u = p;
+	int i;
+#define FNV_32_PRIME     16777619
+#define FVN_32_OFFSET  2166136261
+
+	if (hash == 0)
+		hash = FVN_32_OFFSET;
+
+	for (i = 0; i < len; ++i, ++u) {
+#if defined(NO_FNV_GCC_OPTIMIZATION)
+		hash *= FNV_32_PRIME;
+#else
+		hash += (hash<<1) + (hash<<4) + (hash<<7) +
+		        (hash<<8) + (hash<<24);
+#endif
+		hash ^= (uint32_t) *u;
+	}
+	return hash;
+}
+
+#else
+
 /*
  * There are multiple 16-bit CRC polynomials in common use, but this is
  * *the* standard CRC-32 polynomial, first popularized by Ethernet.
@@ -175,3 +203,5 @@ void crc32init(void)
                         crc32table_be[i + j] = crc ^ crc32table_be[j];
         }
 }
+
+#endif

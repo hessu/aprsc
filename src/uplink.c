@@ -161,6 +161,8 @@ int make_uplink(struct uplink_config_t *l)
 	struct addrinfo req;
 	char addr_s[80];
 	int port;
+	int pe;
+	struct worker_t *wc;
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -258,7 +260,7 @@ int make_uplink(struct uplink_config_t *l)
 	c->username = hstrdup(mycall);
 	c->flags    = l->client_flags;
 
-	hlog(LOG_DEBUG, "%s - Uplink connection on fd %d from %s", addr_s, c->fd, eb);
+	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", addr_s, c->fd, eb);
 
 	uplink_client = c;
 
@@ -274,24 +276,12 @@ int make_uplink(struct uplink_config_t *l)
 		goto err;
 	}
 	
-	/* find the worker with least clients...
-	 * This isn't strictly accurate, since the threads could change their
-	 * client counts during scanning, but we don't really care if the load distribution
-	 * is _exactly_ fair.
+	/* Push it on the first worker, which ever it is..
 	 */
+
+	wc = worker_threads;
 	
-	struct worker_t *w;
-	struct worker_t *wc = worker_threads;
-	int client_min = -1;
-	for (w = worker_threads; (w); w = w->next)
-		if (w->client_count < client_min || client_min == -1) {
-			wc = w;
-			client_min = w->client_count;
-		}
-	
-	/* ok, found it... lock the new client queue */
-	hlog(LOG_DEBUG, "... passing to thread %d with %d users", wc->id, wc->client_count);
-	int pe;
+	hlog(LOG_INFO, "... passing to worker thread %d with %d users", wc->id, wc->client_count);
 	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
 		hlog(LOG_ERR, "make_uplink(): could not lock new_clients_mutex: %s", strerror(pe));
 		goto err;
@@ -323,9 +313,7 @@ err:
 void uplink_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
-	int e, n, rc;
-	int uplink_n = 0;
-	struct uplink_config_t *l;
+	int rc;
 
 	pthreads_profiling_reset("dupecheck");
 	

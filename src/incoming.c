@@ -439,7 +439,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		via_start++;
 	
 	/* check if the srccall equals the client's login */
-	if (strlen(c->username) == src_end - s && memcmp(c->username, s, src_end - s) == 0)
+	if (strlen(c->username) == src_end - s && memcmp(c->username, s, (int)(src_end - s)) == 0)
 		originated_by_client = 1;
 	
 	/* process Q construct, path_append_len of path_append will be copied
@@ -456,7 +456,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	}
 	
 	/* get a packet buffer */
-	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNULL */
+	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNUL */
 	if (!pb) {
 		// This should never happen...
 		hlog(LOG_INFO, "pbuf_get failed to get a block");
@@ -473,8 +473,11 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* Copy the unmodified part of the packet header */
 	memcpy(pb->data, s, path_end - s);
 	p = pb->data + (path_end - s);
+
+	pb->qconst_start = p; // FIXME: wrong pointer.. usually couple tokens beyond qcons...
+                              //        Used by  d- and e-filters.
 	
-	/* Copy the modified or appended part of the packet header */
+	/* Copy the modified or appended part of the packet header -- qcons */
 	memcpy(p, path_append, path_append_len);
 	p += path_append_len;
 	
@@ -482,8 +485,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	memcpy(p, info_start - 1, datalen);
 	info_start = p + 1;
 	p += datalen;
-	memcpy(p, "\r\n\x00", 3); /* append missing CRLFNULL */
-	p += 2; /* We ignore the convenience NULL. */
+	memcpy(p, "\r\n", 3); /* append missing CRLFNUL,
+				 the NUL is implied in C-style ASCIIZ strings  */
+	p += 2; /* We ignore the convenience NUL. */
 	
 	/* How much there really is data? */
 	pb->packet_len = p - pb->data;

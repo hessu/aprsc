@@ -454,15 +454,19 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	char dummyc;
 	struct filter_t *ff, **ffp;
 
-	if (is_user_filter && (!(c->flags & CLFLAGS_USERFILTEROK))) {
+	if (is_user_filter && c && (!(c->flags & CLFLAGS_USERFILTEROK))) {
 		hlog(LOG_DEBUG, "No user-specified filters permitted");
 		return -1;
 	}
 
-	if (is_user_filter)
+	if (!c) { /* built-in configuration scanning filter parsing */
+		ffp = &f;
+		f = NULL;
+	} else if (is_user_filter) {
 		ffp = &c->userfilters;
-	else
+	} else {
 		ffp = &c->defaultfilters;
+	}
 
 	ff = *ffp;
 	for ( ; ff && ff->h.next; ff = ff->h.next)
@@ -477,9 +481,9 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	}
 	f0.h.type = *filt;
 
-	if (!strchr("abdeopqrstuABDEOPQRSTU",*filt)) {
+	if (!strchr("abdemopqrstuABDEMOPQRSTU",*filt)) {
 		/* Not valid filter code */
-		hlog(LOG_DEBUG, "Bad filter: %s", filt0);
+		hlog(LOG_DEBUG, "Bad filter code: %s", filt0);
 		return -1;
 	}
 
@@ -488,9 +492,12 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'A':
 		/*  a/latN/lonW/latS/lonE     Area filter -- OPTIMIZE!  */
 
-		i = sscanf(filt, "a/%f/%f/%f/%f%c",
+		i = sscanf(filt+1, "/%f/%f/%f/%f%c",
 			   &f0.h.f_latN, &f0.h.f_lonW,
 			   &f0.h.f_latS, &f0.h.f_lonE, &dummyc);
+
+		if (i == 5 && dummyc == '/')
+			i = 4;
 
 		if (i != 4) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
@@ -574,7 +581,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'F':
 		/*  f/call/dist         Friend's range filter  */
 
-		i = sscanf(filt, "r/%9[^/]/%f", f0.h.refcallsign.callsign, &f0.h.f_dist);
+		i = sscanf(filt+1, "/%9[^/]/%f", f0.h.refcallsign.callsign, &f0.h.f_dist);
 		if (i != 2 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
@@ -597,7 +604,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'M':
 		/*  m/dist            My range filter  */
 
-		i = sscanf(filt, "r/%f", &f0.h.f_dist);
+		i = sscanf(filt+1, "/%f", &f0.h.f_dist);
 		if (i != 1 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
@@ -647,7 +654,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'R':
 		/*  r/lat/lon/dist            Range filter  */
 
-		i = sscanf(filt, "r/%f/%f/%f",
+		i = sscanf(filt+1, "/%f/%f/%f",
 			 &f0.h.f_latN, &f0.h.f_lonW, &f0.h.f_dist);
 		if (i != 3 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
@@ -764,6 +771,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		hlog(LOG_DEBUG, "Filter: %s", filt0);
 		break;
 	}
+
+	if (!c) return 0; /* Just a verification scan, not actual fill in parse */
 	
 	/* OK, pre-parsing produced accepted result */
 #ifndef _FOR_VALGRIND_

@@ -37,6 +37,7 @@
 #include "hlog.h"
 #include "cfgfile.h"
 #include "worker.h"
+#include "filter.h"
 
 char def_cfgfile[] = "aprsc.conf";
 
@@ -465,6 +466,11 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
 		if (argc - 6 > i) {
+			if (filter_parse(NULL,argv[i+6],0) < 0) {
+			  hlog( LOG_ERR,"Bad filter definition on '%s' port %s: '%s'",
+				argv[1],argv[5],argv[i+6] );
+			  continue;
+			}
 			l->filters[i] = hstrdup(argv[i+6]);
 		}
 	}

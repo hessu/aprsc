@@ -12,9 +12,11 @@ my $APRSIS;
 my $mycall = 'OH2MQK-RR';
 my $filter = 'p/OH2R -p/OH2 p/OH ';
 #my $filter = 'p/OH2R';
-$filter = 'p/OH';
+$filter = 't/c*'; #'p/OH';
+#$filter = undef;
 
 #$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
+#$APRSIS = APRS::IS->new('rotate.aprs.net:23', $mycall, $filter);
 $APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter );
 
 if (!defined($APRSIS)) {
@@ -116,16 +118,26 @@ sub new {
 ##
 
     $self->{sock}->blocking(1);
-    $self->{sock}->printf( "user %s pass %s vers %s filter %s\r\n",
-			   $self->{aprsmycall},
-			   $self->{aprspass}, # -- but we are read-only !
-			   $main::VERSION, $self->{filterre}
-    );
+    if (defined($self->{filterre})) {
+	    $self->{sock}->printf( "user %s pass %s vers %s filter %s\r\n",
+				   $self->{aprsmycall},
+				   $self->{aprspass}, # -- but we are read-only !
+				   $main::VERSION, $self->{filterre} );
+	    printf( "user %s pass %s vers %s filter %s\n",
+		    $self->{aprsmycall},
+		    $self->{aprspass}, # -- but we are read-only !
+		    $main::VERSION, $self->{filterre} );
+    } else {
+	    $self->{sock}->printf( "user %s pass %s vers %s\r\n",
+				   $self->{aprsmycall},
+				   $self->{aprspass}, # -- but we are read-only !
+				   $main::VERSION );
+	    printf( "user %s pass %s vers %s\n",
+		    $self->{aprsmycall},
+		    $self->{aprspass}, # -- but we are read-only !
+		    $main::VERSION );
+    }
 
-    printf( "user %s pass %s vers %s filter %s\n",
-	    $self->{aprsmycall},
-	    $self->{aprspass}, # -- but we are read-only !
-	    $main::VERSION, $self->{filterre} );
     $self->{sock}->flush;
 
     $self->{sock}->blocking(1);

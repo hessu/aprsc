@@ -33,7 +33,7 @@ foreach my $i (1 .. $n) {
 	$call = sprintf("CW%04d",$i);
 	$APRSIS = APRS::IS->new('localhost:14580', $call, undef );
     } else {
-	$APRSIS = APRS::IS->new('localhost:14580', $call, '-p/CW' );
+	$APRSIS = APRS::IS->new('localhost:14580', $call, 'u/APZMDR' );
     }
     if (!defined($APRSIS)) {
 	printf "aprsazel: Failed to open APRS-IS socket!\n";

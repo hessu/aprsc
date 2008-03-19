@@ -38,6 +38,15 @@
  *   http://isthe.com/chongo/tech/comp/fnv/
  */
 
+/*
+//  FNV-1a  hash from   http://isthe.com/chongo/tech/comp/fnv/
+//
+//  It is algorithmic hash without memory lookups.
+//  Compiler seems to prefer actual multiplication over a bunch of
+//  fixed shifts and additions.
+*/
+
+
 /* ======================================================================
 // The Linux kernel CRC32 computation code, heavily bastardized to simplify
 // used code, and aimed for performance..  pure and simple.
@@ -77,7 +86,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include "crc32.h"
+#include "keyhash.h"
 
 #ifdef __GNUC__ // compiling with GCC ?
 
@@ -93,11 +102,11 @@
 
 #endif
 
-#if 1 // lets see if  FVN-1  can do better than CRC32..
+#if 1 // lets see if  FVN-1a  can do better than CRC32..
 
-void crc32init(void) { }
+void keyhash_init(void) { }
 
-uint32_t __attribute__((pure)) crc32n(const void const *p, int len, uint32_t hash)
+uint32_t __attribute__((pure)) keyhash(const void const *p, int len, uint32_t hash)
 {
 	const uint8_t *u = p;
 	int i;
@@ -145,7 +154,7 @@ static uint32_t crc32table_be[BE_TABLE_SIZE];
  * @len - length of buffer @p
  * 
  */
-uint32_t __attribute__((pure)) crc32n(const void const *p, int len, uint32_t crc)
+uint32_t __attribute__((pure)) keyhash(const void const *p, int len, uint32_t crc)
 {
         const uint32_t      *b =(uint32_t *)p;
         const uint32_t      *tab = crc32table_be;
@@ -190,7 +199,7 @@ uint32_t __attribute__((pure)) crc32n(const void const *p, int len, uint32_t crc
 /**
  * crc32init_be() - allocate and initialize BE table data
  */
-void crc32init(void)
+void keyhash_init(void)
 {
         unsigned i, j;
         uint32_t crc = 0x80000000;

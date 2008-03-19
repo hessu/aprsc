@@ -36,7 +36,7 @@
 #include "hlog.h"
 #include "hmalloc.h"
 #include "cellmalloc.h"
-#include "crc32.h"
+#include "keyhash.h"
 #include "historydb.h"
 
 extern int uplink_simulator;
@@ -58,7 +58,7 @@ long long dupecheck_dupecount;
 
 struct dupe_record_t {
 	struct dupe_record_t *next;
-	uint32_t crc;
+	uint32_t hash;
 	time_t	 t;
 	int	 alen;	// Address length
 	int	 plen;	// Payload length
@@ -283,7 +283,7 @@ static int dupecheck(struct pbuf_t *pb)
 	int i;
 	int addrlen;  // length of the address part
 	int datalen;  // length of the payload
-	uint32_t crc;
+	uint32_t hash, idx;
 	const char *addr;
 	const char *data;
 	struct dupe_record_t **dpp, *dp;
@@ -305,14 +305,15 @@ static int dupecheck(struct pbuf_t *pb)
 
 	// 2) calculate checksum (from disjoint memory areas)
 
-	crc = crc32n(addr, addrlen, 0);
-	crc = crc32n(data, datalen, crc);
+	hash = keyhash(addr, addrlen, 0);
+	hash = keyhash(data, datalen, hash);
+	idx  = hash;
 
 	// 3) lookup if same checksum is in some hash bucket chain
 	//  3b) compare packet...
 	//    3b1) flag as F_DUPE if so
-	crc ^= (crc >> 16); /* fold the bits.. */
-	i = crc % DUPECHECK_DB_SIZE;
+	idx ^= (idx >> 16); /* fold the bits.. */
+	i = idx % DUPECHECK_DB_SIZE;
 	dpp = &dupecheck_db[i];
 	while (*dpp) {
 	  dp = *dpp;
@@ -322,8 +323,8 @@ static int dupecheck(struct pbuf_t *pb)
 	    dupecheck_db_free(dp);
 	    continue;
 	  }
-	  if (dp->crc == crc) {
-	    // CRC match!
+	  if (dp->hash == hash) {
+	    // HASH match!
 	    if (dp->alen == addrlen &&
 		dp->plen == datalen &&
 		memcmp(addr, dp->addresses, addrlen) == 0 &&
@@ -349,7 +350,7 @@ static int dupecheck(struct pbuf_t *pb)
 	*dpp = dp;
 	memcpy(dp->addresses, addr, addrlen);
 	memcpy(dp->packet,    data, datalen);
-	dp->crc = crc;
+	dp->hash = hash;
 	dp->t   = now; /* Use the current timestamp instead of the arrival time.
 	                  If our incoming worker, or dupecheck, is lagging for
 	                  reason or another (for example, a huge incoming burst

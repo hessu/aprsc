@@ -30,7 +30,7 @@
 #include "cellmalloc.h"
 #include "historydb.h"
 #include "hmalloc.h"
-#include "crc32.h"
+#include "keyhash.h"
 
 #ifndef _FOR_VALGRIND_
 cellarena_t *historydb_cells;
@@ -104,7 +104,7 @@ void historydb_keymatch(void) {}
 
 uint32_t historydb_hash1(const char *s, int keylen) 
 {
-	return crc32n((const void *)s, keylen, 0);  // TODO: find a better hash function ?
+	return keyhash((const void *)s, keylen, 0);  // TODO: find a better hash function ?
 }
 
 void historydb_atend(void)
@@ -164,7 +164,7 @@ int historydb_load(FILE *fp)
 	int packettype, flags;
 	float lat, lon;
 	int packetlen = 0;
-	int h1, keylen;
+	int h1, h2, keylen;
 	struct history_cell_t **hpp;
 	struct history_cell_t *hp, *hp1;
 	int linecount = 0;
@@ -212,8 +212,9 @@ int historydb_load(FILE *fp)
 		
 		keylen = strlen(keybuf);
 		h1 = historydb_hash1(keybuf, keylen);
-		h1 ^= (h1 >> 16); /* Fold hash bits.. */
-		i = h1 % HISTORYDB_HASH_MODULO;
+		h2 = h1;
+		h2 ^= (h2 >> 16); /* Fold hash bits.. */
+		i = h2 % HISTORYDB_HASH_MODULO;
 
 		hp1 = NULL;
 		hpp = &historydb_hash[i];
@@ -272,7 +273,7 @@ int historydb_load(FILE *fp)
 int historydb_insert(struct pbuf_t *pb)
 {
 	int i;
-	uint32_t h1;
+	uint32_t h1, h2;
 	int isdead = 0, keylen;
 	struct history_cell_t **hp, *cp, *cp1;
 
@@ -340,8 +341,9 @@ int historydb_insert(struct pbuf_t *pb)
 	++historydb_inserts;
 
 	h1 = historydb_hash1(keybuf, keylen);
-	h1 ^= (h1 >> 16); /* Fold hash bits.. */
-	i = h1 % HISTORYDB_HASH_MODULO;
+	h2 = h1;
+	h2 ^= (h2 >> 16); /* Fold hash bits.. */
+	i = h2 % HISTORYDB_HASH_MODULO;
 
 	cp = cp1 = NULL;
 	hp = &historydb_hash[i];
@@ -419,7 +421,7 @@ int historydb_insert(struct pbuf_t *pb)
 int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t **result)
 {
 	int i;
-	uint32_t h1;
+	uint32_t h1, h2;
 	struct history_cell_t **hp, *cp, *cp1;
 
 	// validity is 5 minutes shorter than expiration time..
@@ -428,8 +430,9 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	++historydb_lookups;
 
 	h1 = historydb_hash1(keybuf, keylen);
-	h1 ^= (h1 >> 16); /* Fold hash bits.. */
-	i = h1 % HISTORYDB_HASH_MODULO;
+	h2 = h1;
+	h2 ^= (h2 >> 16); /* Fold hash bits.. */
+	i = h2 % HISTORYDB_HASH_MODULO;
 
 	cp1 = NULL;
 	hp = &historydb_hash[i];

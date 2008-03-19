@@ -19,10 +19,10 @@
  *	
  */
 
-#ifndef CRC32_H
-#define CRC32_H
+#ifndef KEYHASH_H
+#define KEYHASH_H
 
-extern void crc32init(void);
-extern uint32_t crc32n(const void *s, int slen, uint32_t key);
+extern void     keyhash_init(void);
+extern uint32_t keyhash(const void *s, int slen, uint32_t hash0);
 
 #endif

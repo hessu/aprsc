@@ -45,7 +45,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "historydb.h"
-#include "crc32.h"
+#include "keyhash.h"
 
 struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 
@@ -238,7 +238,7 @@ int main(int argc, char **argv)
 
 
 	/* Early inits in single-thread mode */
-	crc32init();
+	keyhash_init();
 	filter_init();
 	pbuf_init();
 	dupecheck_init();

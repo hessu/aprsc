@@ -1,0 +1,974 @@
+#!/usr/bin/perl 
+
+#
+# One day in mid-March 2008 the three core servers of APRS-IS had
+# client connections in the way that are defined in this script.
+#
+# This is a development tool to simulate "real" client load on
+# APRS core software.   None are sending into the server, but
+# intention here is to see how much output processing load is
+# caused by these, and what can be done to that part of the
+# system to improve things.
+#
+# Written by Matti Aarnio, OH2MQK,  as a part of APRSC software suite.
+#
+
+$VERSION = 'APRS-IS-CORESIMRX version-1.0';
+
+use POSIX;
+use IO::Multiplex;
+
+select STDOUT; $| = 1;    
+
+my $quit = 0;
+my $APRSIS;
+
+my @specdata = simspecs();
+printf "specdata:  $#specdata\n";
+
+my $mycall = 'MRX-';
+#my $filter = 'p/OH2R';
+#my $filter = 'p/OH';
+#my $filter = 'p/OH2R -p/OH2 p/OH ';
+#$filter = 'p/OH/OI/OJ/OF';
+#$filter = 'd/OH2RDS';
+#my $filter = 'p/CW ';
+
+my @APRS = ();
+
+my $n =  0;
+
+my $MUX = new IO::Multiplex;
+
+foreach my $l (@specdata) {
+    ++$n;
+    my @spec = split(" ",$l, 3);
+
+    my $port = $spec[0];
+    my $call = $spec[1];
+    my $filter = $spec[2];
+
+    next if ($port eq '');
+
+    next if ($port eq '23000'); # No UDP support
+
+    $port = '10152' if ($port eq '23'); # non-super-user driven test server does not serve on port number below 1024
+    $port = '10152' if ($port eq '10153');  ## No history feeding
+    $port = '10152' if ($port eq '10151');  ## No history feeding
+    $port = '14580' if ($port eq '10253');  ## No history feeding - filtered port
+    $port = '20152' if ($port eq '20153');  ## No history feeding
+    $filter = undef if ($filter eq '');
+
+#    printf "Port='%s'  call='%s'  filter='%s'\n", $port, $call, $filter;
+
+    $APRSIS = APRS::IS->new('localhost:'.$port, $call, $filter );
+
+     if (!defined($APRSIS)) {
+	printf "aprsazel: Failed to open APRS-IS socket!  port=%s\n", $port;
+	exit 4;
+     }
+
+     $MUX->add( $APRSIS->sock() );
+
+     push @APRS, $APRSIS;
+}
+$MUX->set_callback_object(__PACKAGE__);
+$MUX->loop();
+
+#
+#my $now = time;
+#my $last = $now + 60*60;
+#local $line;
+#
+#while (1) {
+#    $now = time;
+#    foreach my $A (@APRS) {
+#	$line = $A->getline;
+#    }
+#}
+exit 0;
+
+
+sub mux_input {
+    my $package = shift;
+    my $mux     = shift;
+    my $fh      = shift;
+    my $data    = shift;
+
+    $$data = '';
+}
+
+
+sub mux_eof {
+    my $package = shift;
+    my $mux     = shift;
+    my $fh      = shift;
+
+    $MUX->shutdown($fh, 1);
+}
+
+
+# -------------------------------------------------------------------------
+
+package APRS::IS;
+
+use 5.006;
+use strict;
+use warnings;
+
+use IO::Handle '_IOFBF';
+use IO::Socket::INET;
+use IO::Select;
+
+sub aprspass {
+    my ($a, $h) = (0, 0);
+    map($h ^= ord(uc) << ($a^=8),
+	pop =~ m/./g);
+    return ($h ^ 29666);
+}
+
+sub sock {
+    my $self = shift;
+    return $self->{sock};
+}
+
+sub new {
+    my $that = shift;
+    my $class = ref($that) || $that;
+    # my %atts = @_;
+    my ($url, $mycall, $target_filter_re) = @_; # Just one arg: APRS-IS URL (host:port)
+
+    # Register the callers package.
+    my $self = { caller_pkg => (caller)[0] };
+
+    bless ($self, $class);
+
+    # parse attrs
+    $self->{sock} = IO::Socket::INET->new($url);
+
+    if (!defined($self->{sock})) {
+        die(__PACKAGE__.": APRS::IS->new(".$url.")  failure: ".$!."\n");
+    }
+    
+
+    #$self->{select} = IO::Select->new( $self->{sock} );
+
+    $self->{aprsmycall} = uc( $mycall );
+    $mycall =~ s/-.*//;
+    $self->{aprspass}   = aprspass( $self->{aprsmycall} );
+    if ($self->{aprsmycall} =~ m/CW\d{4}/o) {
+	$self->{aprspass} = -1;
+    }
+
+    $self->{filterre} = $target_filter_re;
+
+#   printf ( "APRS::IS->new()  mycall='%s'  aprspass=%d   filterre='%s'\n",
+#            $self->{aprsmycall}, $self->{aprspass}, $self->{filterre} );
+
+
+##
+##    *  Need to send on initial connect the following logon line:
+##      user callsign pass passcode vers appname versionnum rest_of_line
+##
+##      callsign = login callsign-SSID
+##      passcode = login passcode per APRS-IS algorithm, -1 = read-only
+##      appname = application name (1 word)
+##      versionnum = application version number (no spaces)
+##      rest_of_line = server command if connecting to a port that supports commands (see Server Commands)
+##
+##      (appname and versionnum should not exceed 15 characters)
+##
+##       
+##    * Need to recognize both TCPIP and TCPXX as TCP/IP stations
+##    * Need to provide a means to perform the user validation. This can either be a user entered password,
+##      or a client program can automatically figure out the password given the callsign.
+##      If the later is used, it is the client programmer's responsibility to be certain that non-amateurs
+##      are not given registrations that can validate themselves in APRS-IS.
+##    * Probably a good idea to perform some feedback about the limitations of TCPIP without a registration number.
+##
+
+    $self->{sock}->blocking(1);
+    if (defined($self->{filterre})) {
+	$self->{sock}->printf( "user %s pass %s vers %s filter %s\r\n",
+			       $self->{aprsmycall},
+			       $self->{aprspass}, # -- but we are read-only !
+			       $main::VERSION, $self->{filterre} );
+	printf( "user %s pass %s vers %s filter %s\n",
+		$self->{aprsmycall},
+		$self->{aprspass}, # -- but we are read-only !
+		$main::VERSION, $self->{filterre} );
+    } else {
+	$self->{sock}->printf( "user %s pass %s vers %s\r\n",
+			       $self->{aprsmycall},
+			       $self->{aprspass}, # -- but we are read-only !
+			       $main::VERSION );
+	printf( "user %s pass %s vers %s\n",
+		$self->{aprsmycall},
+		$self->{aprspass}, # -- but we are read-only !
+		$main::VERSION );
+    }
+
+    $self->{sock}->flush;
+
+#    $self->{rbuf} = ' ' x 16000;   ############## grr..  not avaibale
+#    $self->{sock}->setbuf( $self->{rbuf} );
+
+    $self->{sock}->blocking(0);
+
+#    my $discard = $self->getline();
+
+    $self;
+}
+
+# -------------------------------------------------------------------------
+# Get a line, or wait 1 sec
+
+sub getline {
+    my $self = shift;
+
+    my @ready;
+
+#    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
+	# We have only one socket...
+    return $self->{sock}->getline;
+#    }
+#    undef;
+}
+
+sub sendline {
+    my $self = shift;
+    my $line = shift;
+
+    my @ready;
+
+    $self->{sock}->blocking(1);
+    $self->{sock}->printf( "%s\r\n", $line);
+    $self->{sock}->flush;
+
+    $self->{sock}->blocking(0);
+
+    undef;
+}
+
+# -------------------------------------------------------------------------
+
+package main;
+
+sub simspecs {
+my $simdata = "\
+   23      findu  
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+14580     VE9SJN  
+14580   KD8CAO-5  b/kd8cao*/k8yse*/k8ou*/kd8cal*
+   23     KG6VAD  
+   23     STUKEL  
+   23       NK1B  
+14580      W2CEA  m/125 p/KA1MZY/KE5PLN/ r/29/-98/100
+ 1314     VE7WBI  
+10156    N9OSQ-7  m/350
+10154       K8TQ  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580      K8YSE  
+14580    K0FJ-10  r/39/-101/250 t/n
+14580    W4DEX-2  
+14580      KG2LD  r/40/-75/50 t/n
+14580     CWOP-3  t/w
+14580       K7YE  m/500
+14580     pa3bwe  b/PA3BWE-9
+14580   VA7MOS-0  a/50/-126/48/-120
+14580   GB7DS-AS  
+14580   KB0NLY-2  m/200
+14580  VE1AIC-JS  
+   23    NG0E-15  
+14580    KC9XG-2  r/41.61/-88.10/50 p/PCSAT/W3ADO-1/RS0ISS/4XTECH/PACB d/PCSAT*/W3ADO-1/RS0ISS*/4XTECH*/PACB*
+10152     T2J-ne  
+14580     URCALL  r/37/-81/1500
+14580  VE7VIC-AS  
+14580  DB0HRF-BS  
+10152    T2SPAIN  
+   23   ei7wdx-3  
+14580     KB7IVK  m/150
+14580   W8KHW-DS  
+10155  LA9FOA-JS  r/69.627/18.954/1800
+14580   K2DIG-AS  
+14580  VA6KRM-JS  r/53.49069/-113.44910/200
+10152    KH6KI-1  
+14580   K0MDG-AS  
+14580   W0OMD-BS  
+20158  WB5BBW-JS  m/1000 -p/CW
+14580     VE7SUN  m/500
+10154      AE6QE  M/4067
+   23    N1UEC-3  
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+20157    K2GE-14  m/100 -p/CW
+   23       NS8E  
+14580     KD5KNR  r/32/-97/1000
+   23    W8FSM-5  
+   23     W9IF-7  
+10154    okfirst  a/38/-104/32/-90
+20156   KG4WSV-3  m/350 -p/CW
+   23      VE6NY  
+14580   KE5BCC-0  m/600
+14580     WM5Z-1  m/300
+10153  KB4JHU-15  
+20157   WB4EPG-3  m/150 -p/CW
+10152  T2FUKUOKA  
+10151     PD0JEW  
+14580      K4SGT  m/100 t/n
+14580     VE7BZC  a/60/-140/47/-85 a/51/-85/43/-52 b/VE7EIS
+10253   KC9DGP-1  m/50
+10154     K6IB-1  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580   W6HHD-AS  
+14580   W5LBB-IG  a/34.7473/-103.0428/32.96/-99.9888
+14580   IGate-LA  
+   23       N1HQ  
+   23    N8XHZ-1  
+10152  T2SAITAMA  
+20156   KD4MOJ-9  m/350 -p/CW
+10152    T2TUENL  
+14580   NS9RC-AS  
+14580      N8VNR  -p/CW m/100 b/WB8ZHU* f/WB8ZHU-7/100 f/WB8ZHU/100
+20158     KG4USO  m/1000 -p/CW
+14580       K7JD  -p/CW -p/K7JDS p/K7JD/N7RXY b/ROCKY/KC7NPV-7/N7MXO-7/KB1LQP/AD7KV/NG0X-11/KE7ATD-7/K7RKT-2/N13MY b/WR5J-3/WR5J-7/KE7QXT-7/N30YD b/KI6GII-1/KE7QXT-7 p/KD7YOH
+10152     KC5DFC  
+14580  KI6JUL-AS  
+   23    K6TZ-JS  
+14580     DB0SDA  r/51/6/800
+14580   LA6TMA-1  m/700 -b/METAR-2 -p/CW
+14580  VE5BJM-JS  a/60/-120/48/-93
+14580     KC0NWS  m/500
+10157   PP5FMM-1  m/100
+14580       W0NH  r/39/-94/150
+14580    iJOBURG  r/-29/24/4000
+14580  DB0WZB-BS  
+   23  KE6AFE-14  
+14580     DB0XIP  m/100
+20156   AB9FT-10  m/350 -p/CW
+10152     WA4DSY  
+   23     KF4UCI  
+14580      W4EOC  -b/CW* m/150 -q/cx -s/_//
+14580     KA5MDY  r/34/-105/1000 r/30/-98/1000
+10152  T2KOBLENZ  
+14580   WA6KHG-4  
+14580     VE1NRB  m/300 a/60/-127/48/-113
+14580     KE5HYW  m/500
+14580     VE2FET  b/VA*/VE*/VO*/CG*/CF*/VC*/VY*/CI*/CH*/VX*/VG*/VB*
+14580   ZS6EY-W1  
+14580      MB7DS  
+14580  WD4STR-AS  
+   23    K5LSU-5  
+   23     WT7T-6  
+14580   W4KCQ-AS  
+10152   T2BRAZIL  
+14580  OE6XAD-BS  
+14580   CS3RMD-1  p/CT/CU/EA
+14580   N5PHR-10  m/300
+14580    W2SRH-1  m/500
+14580  KF6FIR-JS  
+14580   DO0YA-JS  a/55/6/47/15 b/ISS*/RS0ISS*/WD5EGC* s//s p/d/ea8/eb8/ec8 -b/CW*
+   23      DG3IC  
+14580   DB0GV-15  s/><ORSUXY[^efgjktuvHbs/usN^
+10157     VK4TEC  m/100
+10155  DB0RES-JS  a/75/-36/32/28
+10152   N1UAN-JS  
+14580   IR3UQ-BS  
+14580    VE2LY-3  F/VA2RP-9/50 F/CW4967/125 B/VE2*/VA2* M/30
+10152   DB0ANF-S  
+14580   KG4MFJ-1  m/175 -p/cw
+   23    5B8AP-5  
+   23   W6RAY-JS  
+14580     KB9MMA  b/KB9MMA s//a/ o/WxSvr
+14580   SW8EUO-2  m/450
+10159     CX2ACB  m/3000
+14580     SP9AMH  p/sp9amh-9/kch63/
+14580     DB0XIE  m/100
+14580  KG6WTF-JS  
+14580     SW8LMA  m/450
+20156   KA0GFC-9  m/350 -p/CW
+   23      findu  
+   23   IR5UN-11  
+   23  KC7ZRU-15  
+14580  ON0ULG-BS  
+10157    N3WWN-3  m/100
+10152     T2NZAA  
+14580     DB0XIK  m/5
+14580   W6YYY-AS  
+14580   KF6WAX-2  r/35/-80/2000 t/m
+14580   WA0FW-10  m/350
+14580   W0MAO-AS  
+10152   PI4TUE-5  
+   23    N3IDX-1  
+14580      N3UJJ  
+10152    T2SOCAL  
+   23     KB0YER  
+10159  ZS0NTP-10  m/3000
+14580     DB0XIM  m/200
+14580    W6YX-JS  r/37.408/-122.16/200
+   23     KB9KRI  
+14580      N4DBM  e/N4DBM
+14580    N4DBM-2  m/300 -p/CW
+10152     APRSFL  
+14580   K4DSO-AS  
+14580  VA3ODG-AS  
+10152   OZ4DII-1  
+   23   iFRANCE2  
+10154    N0HZN-4  m/400
+   23   WE4LC-10  
+   23    K5WPN-1  
+14580  HG1DFB-JS  a/83/-50/30/42
+14580   VK4YRO-4  p/vk4/vk3tsw
+14580      M0BEH  r/55/-4/600
+10152  T2MONTANA  
+14580    NE5R-AS  
+   23   KD4OCI-9  
+10152  PE1NAT-JS  
+14580   AE5PL-IG  p/FWD/SEC/AE5PL a/33.405/-96.845/32.981/-96.295 e/K5TIT*
+14580     PA0GKR  
+   23     N0CALL  
+10154     KB8SGF  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+   23    WJ3G-JS  
+10155      DO2GM  a/75/-36/32/28
+14580   OH6HFX-1  
+10159       ZR5S  m/3000
+14580  DB0DUR-BS  
+14580     OH6HFX  r/64/23/800
+14580   NM5WR-AS  
+14580      W9PPN  
+10151      N9WST  
+10152   LU4HH-JS  
+   23   DB0REC-3  
+14580     CW5292  
+   23     DB0FHO  
+10151      W1KFR  
+10152    APRSPRT  
+   23   K6KIT-11  
+14580     CW3409  
+10151     KB2JCG  
+10151   KB0STN-1  
+   23   N5LEZ-JS  
+ 1314  DB0VOX-JS  b/dg8ngn
+ 1314  DB0SAO-JS  b/dg8ngn
+   23   K4INT-44  
+14580   OH2KKU-1  
+14580   DL1HRC-5  m/500
+14580      N8BJX  m/150
+14580   KE7BBK-1  
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+   23     iJAPAN  
+10151       WU2Z  
+14580    W7JZU-5  
+   23      W4ACS  
+   23   KF4GTA-9  
+   23      KB5LS  
+   23      findu  
+   23      T2ARG  
+14580      F4CEP  p/F/TK/3A/C3
+   23    KF9UG-7  
+14580     KA5STE  b/k5gas-* m/500
+14580   F1ZPL-BS  
+14580   VE5MPA-1  m/50
+14580   K1HRO-AS  
+   23  PE1NSU-10  
+   23    n2njh-3  
+ 1314     YO3KXL  
+   23      K2GXT  
+14580    W5GB-JS  r/32.2811666666667/-106.7535/200
+10151      N0RXD  
+10152  T2NBRASKA  
+14580      KL1SF  r/63/-148/900
+14580     YD0NXX  
+10154      N2TBX  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+20156   VE6GPL-1  m/200
+14580  WA8LMF-15  b/WA8LMF t/n
+14580  WA8LMF-13  f/WA8LMF/100 -p/CW t/n
+   23    KL7AA-2  
+14580    WX0U-99  
+14580    K5QQ-11  
+14580    K5MBH-4  -q/X b/N9UOF*/KC5EVE*/K9GVF*/K5MBH* m/600 f/KC5EVE/100 f/N9UOF-1/100
+10152  T2MNTREAL  
+14580   W3ADO-14  r/38.98/-76.48/50 p/BUOY1,PCSAT/W3ADO-1/RS0ISS/ANDE/4XTECH/PACB d/PCSAT*/W3ADO-1/RS0ISS*/ANDE*/4XTECH*/PACB*
+14580     YB2ZDD  a/5.5/95/-11/141 -r/5.5/104.35/475
+10154  KG6QVB-10  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580     OH7LZB  
+   23   WX9GRB-2  
+   23   WX9ILX-6  
+14580  DB0BOS-BS  
+14580  VE3YYZ-AS  
+14580  KA0TMW-JS  b/WD8RFS/KA0TMW/CW3421/CW5472/CW5421/DLH*/MVX* e/AF9T
+14580   W6DHS-BS  
+14580   W7KDS-AS  
+14580  WH6DHT-AS  
+14580   GB7IC-AS  
+10152  T2FINLAND  
+   23      findu  
+   23  VE7ROM-15  
+14579   KD4BNQ-1  r/34/-118/270
+10151    VE3XF-1  
+ 1314     VE7BGB  
+14580   VA3DDB-1  r/44/-80/750
+14580      OH1MN  
+10152  PD2RLD-TL  
+   23   WI5FI-15  
+14580       KY4K  m/500
+10155  LA9FOA-JS  r/60.3588333333333/5.293/1800
+14580  KC5EVE-13  m/500 b/KC5EVE* f/N0GIO/500 f/KC5EVE-11/300 f/KE5JXZ/300
+10152    KN6KS-2  
+14580    N3UJJ-7  m/100
+10156    N7OEY-3  r/34/-86/350 r/41/-112/350 r/33/-89/250
+14580   PA3BWE-0  b/PA3BWE-9
+10152      KV4OA  
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+   23    k6tpk-7  
+14580   KB7KFC-1  r/33/-111/700 t/m
+ 1314   LA4JAA-1  
+14580       N0AN  
+10152  T2SAPPORO  
+14580   W3EOC-AS  
+10152     T2J-ne  
+14580   N0LWV-IG  r/37.5045/-121.929666666667/200
+14580  IK2CHZ-11  r/45.4566666666667/9.27916666666667/200
+10152  T2TURKIYE  
+   23    N5FAZ-2  
+   23   VE3HLY-0  
+14580   YC1ZAC-1  a/5.5/95/-11/141
+14580   KD7DVD-2  m/500
+ 1314   VA3TOK-4  
+ 1314  KC9IRH-10  
+14580    N7OEY-4  r/34/-86/350 r/41/-112/350 r/33/-89/250
+14580     WX4CAE  r/35/-80/500 p/CAE/CHS/GSP/ILM/NHC
+14580     VE2UQH  r/45/-75/100
+20152    K3PDK-1  t/poimntqsu -p/CW
+   23   G7CIY-10  
+14580    K5MBH-3  -s//a/W -q/X/U m/600 f/KC5EVE/100 f/N9UOF-1/100 f/KC5EVE/100 f/K9GVF-9/100 f/K5MBH-9/100
+14580       WT4M  b/WT4M f/WT4M/600 -p/CW
+14580     QDGATE  m/500
+14580     WB5BKL  r/30.5/-98.3/250 t/n -p/CW
+10159     WA7QFR  m/3000
+14580     KC0MWM  m/800 f/k0bev-1/200
+14580   YB3JF-12  a/5.5/95/-11/141 -r/5.5/104.35/475
+14580  YC2WAN-10  a/5.5/95/-11/141 -r/5.5/104.35/475
+14580  OH2KKU-15  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+10152    T2DIJON  
+ 1314   yo6plb-6  
+14580      AC0HY  m/500
+10155  LA3QMA-JS  r/60.3588333333333/5.293/1800
+   23   S53DXX-2  
+14580  KI4QMQ-AS  
+10154     K6IB-2  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580   KB3NAI-1  r/39.1/-77.13/100
+14579   WA7RVV-1  M/500 R/27/-82/200 -P/CW
+14580   K5BAR-JS  r/32.452/-99.735/200
+ 1314      N8UMO  
+14580      KM5VY  r/35/-106/100
+14580     db0hrc  f/DL1HRC-5/50
+14580  KE6AFE-na  a/42/-125/32/-114 -d/TCPXX -t/oimntq -e/K7WFR-1/KG6OWS-1
+10154      WD0BC  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+10152     WB7SWW  
+ 1314    N3NXO-5  
+14580   DB0WZ-AS  
+14580      N5IMJ  r/33.4/-104.4/550
+14580     CW0374  b/CW0374/KD5UJU*
+10157       N4LW  m/100
+14579      AA6HF  r/34/-118/270
+   23     PA3DFR  
+   23    N9HUW-6  
+ 1314   VE3CGR-4  
+14580   IR2UX-AS  
+14580     KB2GGS  r/40/-074/60
+20157      K2DLS  m/100 -p/CW
+14580     VE4KLM  r/50/-97/300
+14580    K8YSE-2  p/kd8cao/k8yse/k8ou/k8vjg/rs0iss/pcsat-1/pcsat-2/pcsat-11/pcsat-12 m/50
+10154     KE5KUL  b/KC5CGT*/KD5DYP*/N5LTZ*/KE5KUL*/KC5HQY*/KD5ROK*
+10157   N7QQU-15  m/100
+20156   SM3HHI-5  m/350 -p/CW
+14580     N2MH-S  b/N2MH*
+14580     OH2KKU  a/72/16/58/34 p/OF/OG/OH/OI/OJ d/OH2RDG/OH2KKU-15
+   23     ATHnet  
+14580     DL1NER  m/200
+   23   KC5GOI-3  
+10152   ZL1AMC-3  
+14580   KC2NJM-1  m/100
+14580   KC0DWX-3  m/250 t/n
+   23  VA7YLW-15  
+10152     CS6ARC  
+14580      N4MRV  b/N4MRV-1/50
+14580     KB1MTS  b/KB1MTS*/KB3NAI*/N2GYI*/W2TSL*
+20157     WA5LNL  m/100 -p/CW
+14580  WA4SAS-JS  r/35/-81/700 -b/CW* -b/cw*
+14580   W2JKK-10  r/40.6326/-74.5636/80 b/W2JKK* -b/CW*
+20157      W2CXM  m/100 -p/CW
+10152  iBRETAGNE  
+10157     WD9EKA  m/100
+20154   KG6BAJ-2  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900 -p/CW
+10154     WD6EJO  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580     LA1BFA  m/500
+14580  DB0ADB-BS  
+10154    AB0XK-8  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580     VE7AEZ  
+14580   KA0MOS-1  
+14580       AJ0O  m/1000
+14580  IR0UAC-AS  
+14580      DG4CD  m/300
+10152   W6OTH-10  
+14580     KC7GNM  r/31/-110/300
+   23     MB7UIV  
+14580      DJ0QN  m/250
+10151       P43L  
+14580      N9NOK  m/100
+10152   KG4CYX-3  
+14580  KI6KQU-BS  
+14580   KB9MMC-2  b/KB9MMC s//a!/W
+14580   W4DOC-AS  
+14580  KI4SBA-AS  
+10152   T2POLAND  
+20154     KC4OUA  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900 -p/CW
+14580   W1IXU-BS  
+14580  WX8GRR-BS  
+14580      N7ZIM  r/44/-121/60
+20155   DL8YQ-JS  a/75/-36/32/28 -p/CW
+   23  KB0THN-JS  
+10152     TI3AMM  
+   23   DL9SAU-1  
+14580     WB5QLD  m/300 f/W5CCL-1/20 f/W5CCL-3/10
+14580    WW4FL-1  r/35/-80/350 t/m
+ 1314    APRSALY  
+10152      N8AVR  
+20152     WB5TZJ  t/poimntqsu -p/CW
+20152   N5VRP-12  t/poimntqsu -p/CW
+14580     W0GS-2  -p/* -d/TCP*
+   23     YI9DRX  
+   23   WA0MFZ-5  
+   23      W5EVH  
+14580   PD3WS-JS  r/52.076758333/4.294163889/50
+   23     MB7USA  
+14580   YB3JF-10  a/5.5/95/-11/141 -r/5.5/104.35/475
+10155     ED3ZAG  a/75/-36/32/28
+14580   N5PHR-10  m/300
+14580  DF0MHR-BS  
+14580  DB0ZAV-DS  p/HS p/E2 p/7Z1
+14580     VE7CUS  m/500
+10151  IS0TKQ-JS  
+   23  LA2DKA-10  
+10156     WB0VTM  m/350
+14580     YB2ZDU  a/5.5/95/-11/141 -r/5.5/104.35/475
+20152     LA4JAA  t/poimntqsu -p/CW
+   23   KE4URL-5  
+14580       K7JD  p/K7JD/N7RXY m/30 -p/CW -p/K7JDS b/ROCKY/KC7NPV-7/N7MXO-7/KB1LQP/AD7KV/NG0X-11/KE7ATD-7/K7RKT-2/N13MY b/WR5J-3/WR5J-7/KE7QXT-7/N30YD b/KI6GII-1/KE7QXT-7 p/KD7YOH
+20154  APRSDEPOT  t/pm
+   23     SV2CBN  
+   23   DK0TUX-3  
+10156   KA0GFC-3  m/350
+10153     DG1HRA  
+14580    N6NU-14  m/200 -b/CW*
+   23   iURUGUAY  
+14580   KF6WAX-1  r/35/-80/1000 t/m
+   23      W1TXK  
+   23  DL0IMA-IN  
+14580  OE1XDS-BS  
+   23   VE4COR-1  
+14580   W5NCD-JS  
+   23     EB8BQU  
+   23     KJ4G-2  
+14580  VE6WRN-AS  
+14580    KP4TP-3  m/500
+10152      K4XTT  
+10152  T2APRSWST  
+10152   T2ITALYS  
+14580  WA6IRC-AS  
+   23     KD8GBH  
+10152   HP2AT-11  
+10152   T2GLARUS  
+10152    T2ITALY  
+   23      K5WPN  
+14580   DL0IMA-1  
+10152     KC9BKP  
+   23   9Y4TTL-7  
+   23     iw7dqr  
+   23     FIGATE  
+10151    N4YLC-7  
+14580   LA3WP-JS  r/60.617/8.29033333333333/200
+14580     CW8136  
+   23  IT9OBK-11  
+   23      n7nxs  
+14580   KF6WAX-4  r/35/-80/500 t/m
+   23   AHUBSWE2  
+10156  KA0GFC-12  m/350
+   23   KB0RSC-1  
+14580     PA0GKR  
+   23  KC2APG-JS  
+14580   VA6FM-JS  r/50.0376666666667/-110.691/200
+10152  T2MSSOURI  
+10152     TA2MUM  
+14580     KB7ZVA  b/DW* p/CW t/nw
+14579  WD5EAE-11  r/32.66/-95.11/150 p/PCSAT/W3ADO-1/RS0ISS/ANDE/4XTECH/PACB d/PCSAT*/WA3AD
+10151     WA7V-8  
+10152      N9ZIP  
+10151    N3ZLL-2  
+10152  IW2OHX-JS  
+   23      VE3XF  
+14580     KE6AFE  -d/TCPXX r/37/-122/300 s/:// o/STEAM
+14580     CW1697  
+10151      N2VFK  
+   23   PI1RWD-9  
+10151     VA3CKI  
+14580     CW9552  
+14580    N3OZB-2  
+14580  ki4bum-20  t/pw a/70/-180/11/-55
+14580     CW9800  
+10151      N1UEC  
+10152   T2ERFURT  
+   23  LX0APS-JS  
+10151    N7QXO-2  
+10151      N3XKU  
+14580     CW3409  
+   23      findu  
+14580   socalHOG  a/34.4/-118.9/33.4/-117.1 -p/CW
+14580  KD7UQG-10  
+14580       NONE  b/KB1MTS*
+14580     CWOP-1  t/w
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+   23     KF6KYI  
+14580      N7SAR  r/32/-111/200 b/wd7o*
+14580      N5YIZ  
+14580     KC0ARF  -s//a/W -s//a/D -s//? t/n -b/CW* -b/WX*
+10155  HG1PXX-11  a/75/-36/32/28
+14580     KA2FNK  m/500
+14580     KD5DYP  
+10152     KG4NRC  
+20155     MB7UNN  a/75/-36/32/28 -p/CW
+14580   KA1UDX-2  r/40/-75/200
+14580   VE7QC-15  m/250
+14580     JF1AJE  r/35/140/1500 p/K7OFT/SV2AGW/DB0ANF/K4HG/M0CYP/AD6SK/WB4APR
+14580       CWOP  t/w
+   23   KC8JNV-2  
+14580    K8YSE-6  p/K8YSE/KD8CAO/K8OU/W3ADO-1/PCSAT-1/PCSAT-2/PCSAT-11/PCSAT-12/NMARS/W3ADO-1/PCSAT-1/PCSAT-2/PCSAT-2/PCSAT-11/PCSAT-12/NMARS r/41/-81/100
+20152      W1JPZ  t/poimntqsu -p/CW
+14580      W0JRT  p/K0QVF/W0JRT/K0NMS/KC0SKX d/W0JRT-3/W0JRT-5
+14580      K8TIH  
+14580   K6MDD-AS  
+14579     WX5AMA  a/49/-107/25/-86 t/n
+14580  KC5EVE-14  r/34/-105/700 r/30/-98/500
+14580   W5GAD-AS  
+14580      TA2KF  p/TA/TB/YM/DL
+14580      KH7UK  p/KH7UK m/805 b/KH7UK*/KH7O*/AH6MG*/KH6MP*/KH6L*/KH6HAK*/NH7WL*/NH7QH*/WH6SJ*/AH6LT*/WH6VH*/W6KZ*/AH6RH*/KH6OCD*/NH7WN*/PHNL
+14580  KC2CWT-JS  r/41.449666666666665/-73.6625/200 -b/CW*
+14580  IR3UCZ-BS  
+14580     NOCALL  p/K3PDK/KB3QLC
+   23     VE5HLT  
+14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
+14580     KA1MZY  m/900 p/KI4QYO/KC5RY/KA1MZY/N9PBJ/W5ZIT/NG1P/W3VLG/W2CEA r/43/-75/110
+14580     KE6DZD  r/41/-99/150
+   23  VE3VBA-10  
+14580    AA3GN-1  m/300 a/40/-90/30/-70
+10152     GX0RYQ  
+14580      K3LAG  r/39/-77/750 b/kb3fif*/kb3ljm*/n3tos/k3lag*/w3emg* -b/CW*
+10152    T2USASW  
+10152    T2TOKYO  
+10152     EA5APY  
+   23     iEUROP  
+14580      N7OKG  
+10152  T2IRELAND  
+10152   SR5DRA-1  
+10154      GUEST  r/44/-89/300 -d/TCPXX -b/B*/C*/D*/E*/F*/G*/H*/I*/J*/L*/O*/P*/Q*/R*/S*/T*/U*/V*/X*/Y*/Z*
+10152   N1ICS-JS  
+14580   K1LNX-JS  p/MRX
+20157  WB9TLH-12  m/100 -p/CW
+14580   W9ICE-CS  
+   23     WB5AOH  
+   23    IQ6PE-5  
+14580      N5PTN  r/30/-100/1200
+10152    K9IU-13  
+14580       KA5J  
+   23      findu  
+14580   KC9DGP-1  m/50 t/n/kc9dgp-1/200 t/m/kc9dgp-1/200
+10152   T2FRANCE  
+10154   AC7YY-15  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+10154     KB9NTX  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+   23     K2KZ-3  
+10152      T2ZUG  
+14580  WW4EMC-AS  
+14580  DB0VOX-BS  
+14580       KB8O  m/50
+   23   KC8QCH-1  
+14580   W6UUU-AS  
+14580     KD7GJB  b/KD7GJB f/KD7GJB/600 -p/CW
+   23   KD6DCN-5  
+14580   KA1UDX-1  r/40/-75/300 t/woimntqs q/C/i a/40/-73/35/-80
+14580     kc5hqy  m/805 b/KD5VIU-*/KE5PL-*/W5EBS-* -p/CW
+14580   W7DIN-BS  
+14580   K6IFR-BS  
+20157    K5JRA-1  m/100 -p/CW
+14580     KE5KUL  
+14580     CWOP-2  t/w
+14580   HB9BO-BS  
+10152   T2AUST-2  
+   23     VE9APR  
+14580   NJ2DG-AS  
+   23    AHUBSWE  
+10152     EA5GVB  
+20155     MB7UNR  a/75/-36/32/28 -p/CW
+10152      T2MCI  
+14580   KC0RYE-1  m/500 t/mn
+10152     IW0QNL  
+20157      N4MRV  b/N4MRV-1/50
+23000  jFindU-JS  
+14580     KB8O-5  m/100
+   23      F6BGR  
+14580   KD0AFL-2  r/40/-94/250
+   23    W2BRW-1  
+10154      GUEST  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580  KF6BQK-BS  
+14580  KE5KAF-CS  
+10152    APRSUK2  
+   23      WP4YF  
+20157   N0AGX-12  m/100 -p/CW
+20158   VE2PKT-1  m/1000 -p/CW
+14580  WD5AII-AS  
+14580  KB8ZGL-JS  r/42.8481666666667/-85.6993333333333/400 t/n
+14580   GB7FK-BS  
+14580  KE6ZBX-IG  r/37.445533333333333333333333333333/-122.14156666666666666666666666667/200
+10152  T2ONTARIO  
+10152     T2AUST  
+   23   SM5YLG-1  
+ 1314     KD5WDQ  
+14578   KD5WDQ-2  m/500
+14580   K6SOA-AS  
+ 1314   AB9FT-12  
+10152  DB0OSN-10  
+14580    N6GPS-1  m/5
+   23   KC0FXY-1  
+10154    N0PBA-3  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580     WB5BKL  r/30.5/-98.3/250 t/n -p/CW
+14580  KE7JFH-AS  
+14580   KA0MOS-1  
+20152      VE3HJ  m/3500 -b/CW*
+14580   W5NGU-AS  
+   23  KB2FAF-JS  
+14580   VE2FET-3  m/300 b/DOQRZ/VA*/VE*/VO*/CG*/CF*/VC*/VY*/CI*/CH*/VX*/VG*/VB*
+14580   DB0BS-BS  
+14580  KE7MVI-BS  
+10154      AB4KN  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580  KI4HDU-JS  b/KI4HDU* t/m t/n
+   23      K0GND  
+14579     WD5IYT  a/49/-107/25/-86 t/n
+14580    N8DEU-5  r/34/-86/150 t/n
+10152  KB0THN-JS  
+14580   K5RKN-BS  
+14580   W5SHV-AS  
+10154     KD5QYV  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+   23  9A1CKL-11  
+   23  KD5UIG-JS  
+14580  VA3NAG-AS  
+10151  KB9WGA-15  
+14579   KC0IKU-1  a/49/-107/25/-86 t/n
+10152    AB0BW-6  
+10152     TAMU-2  
+10152   IW0QNL-2  
+   23  OK1KYU-14  
+14580     WA0RTU  r/40/-95/175
+14580   N5PHR-10  m/300
+10152   T2ZURICH  
+14580      DO0ET  m/100
+10152     KI4AZX  
+10152  WP4MXB-JS  
+10152    NF0T-39  
+10152     WD8JVQ  
+14580  IR3UEF-BS  
+10151  KF4GTA-11  
+14580     KP4FRE  a/19/-68/17/-65
+14580  KI4BWJ-10  r/37/-77/10
+10152     KC5CYY  
+14580  KI4WXS-AS  
+14580   K5TIT-AS  
+   23  SV1CPO-10  
+14580       K7JD  -p/CW -p/K7JDS p/K7JD/N7RXY b/ROCKY/KC7NPV-7/N7MXO-7/KB1LQP/AD7KV/NG0X-11/KE7ATD-7/K7RKT-2/N13MY b/WR5J-3/WR5J-7/KE7QXT-7/N30YD b/KI6GII-1/KE7QXT-7 p/KD7YOH
+   23  VA3ROM-10  
+   23    W0BIS-1  
+14580   W3EXW-BS  
+20152    aprsLON  t/poimntqsu -p/CW
+14580  HS3LIQ-DS  m/6000 p/HS/E2/PCS/RS0/DB0ZAV/WE7U/WU2Z d/rsoiss-3/pcsat-1/pcsat2 s/`
+10154      GUEST  r/28/-80/280 -d/TCPXX -b/B*/C*/D*/E*/F*/G*/H*/I*/J*/L*/M*/O*/P*/Q*/R*/V*/S*/T*/U*/W*/X*/Y*/Z*
+ 1314     VE6DJJ  
+14580  VA7ICM-AS  
+14578   WA2MCT-7  r/31/-99/750
+14580  DB0DDS-BS  
+14580      N6TBQ  
+14580   W0BIS-10  
+10152     IK0TOL  
+14580     KI4RBC  b/KI4RBC-9
+20152      WW5AA  r/34/-92/400 t/n
+   23  HG8OVI-11  
+10152   T2WESTTN  
+10155   ON3VHF-5  a/75/-36/32/28
+14580     CW3783  
+14580      T2BOX  
+10154   N1OFZ-JS  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+10152  T2NUENGLD  
+14580       K4CP  -b/CW* -t/o m/200 -s/_//
+20152      N5VRP  t/poimntqsu -p/CW
+14580     KC9AXZ  a/51/-95/42/-82 a/38/-90/34/-81 a/36/-94/32/-90 b/ab9hh/k9drx
+10152  T2MIDWEST  
+10152  MAKEDONIA  
+10152     PA4ELF  
+14580  VK3RWN-AS  
+10152     WA0TJT  
+14580  ZS6CEY-JS  r/-30.04829/30.88068/3000
+14580  ON5VDK-JS  t/m
+10151     EA8AQI  
+14580     MB7UZS  m/500
+14580    N0SWP-7  r/39/-94/450
+10152    W5VEX-2  
+14580   KP4FRE-2  a/19/-68/17/-65
+14580    K6ZC-BS  
+10152     KA4REY  
+10152    AB0BW-4  
+14580     K0FJ-4  t/n
+10152   OZ4DII-1  
+14580   DB0DF-BS  
+10155     IW5AKT  a/75/-36/32/28
+14580  DB0FEU-BS  
+14580     WM5Z-3  m/300
+20154     WL7CKY  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900 -p/CW
+14580    9Z4FZ-3  r/10.64/-61.29/50 p/PCSAT/W3ADO-1/RS0ISS/ANDE/4XTECH/PACB d/PCSAT*/WA3ADO-1/RS0ISS*/ANDE*/4XTECH*/PACB*
+10152  SZ8L_GREE  
+14580    9Z4HA-7  r/10.64/-61.29/50 p/PCSAT/W3ADO-1/RS0ISS/ANDE/4XTECH/PACB d/PCSAT*/WA3ADO-1/RS0ISS*/ANDE*/4XTECH*/PACB*
+14578     N0CALL  r/31/-99/750
+14580  KE6STH-13  b/KE6STH*/KD7ODD*/KG6NBX*/N6IL*
+10152     WA0D-9  
+10152   VA2PGN-4  
+14580   KK5XF-JS  r/36.1888333333333/-93.1993333333333/300
+14580     KV0S-3  m/200
+   23     IV3UNM  
+14580    N5TD-JS  
+   23   N1IIC-JS  
+   23   KE5SHQ-1  
+14580     CW3504  
+14580     CW0732  
+14580  VE1MPF-JS  r/46.0898/-64.7723/400
+14580      PJ2BR  r/36/-97/100
+10154      W0IBM  a/50/-130/20/-65 r/65/-152/900 r/20/-156/900
+14580     KB5FIO  
+10152       WE7U  
+14580       pass  
+   23   PI1RWD-9  
+   23      WH6KO  
+10152       K7YE  
+10151     KF6QEX  
+10151      VE5ZG  
+   23  KD7GIZ-10  
+10152    T2POLNW  
+10151     KF4HJW  
+14578       W5ZS  m/500
+10152      G7NFK  
+14580     KC7EHJ  r/40/-084/160 b/N8JE*/W8LCZ*/AA8Q* t/n -b/CW*
+   23   F4BWT-JS  
+10152   KC9GKA-1  
+14580     CW9195  
+   23       OSOR  
+10151     W9SM-9  
+14580   AA6AV-10  
+   23   KG4IJB-3";
+return split("\n",$simdata);
+}

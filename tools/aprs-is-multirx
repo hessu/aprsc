@@ -126,7 +126,7 @@ sub new {
 
     $self->{aprsmycall} = uc( $mycall );
     $mycall =~ s/-.*//;
-    $self->{aprspass}   = aprspass( $self->{aprsmycall} );
+    $self->{aprspass}   = aprspass( uc($mycall) );
     if ($self->{aprsmycall} =~ m/CW\d{4}/o) {
 	$self->{aprspass} = -1;
     }

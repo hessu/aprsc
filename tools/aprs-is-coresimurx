@@ -124,7 +124,7 @@ sub aprspass {
     my ($a, $h) = (0, 0);
     map($h ^= ord(uc) << ($a^=8),
 	pop =~ m/./g);
-    return ($h ^ 29666);
+    return (($h ^ 29666) & 65535);
 }
 
 sub sock {
@@ -155,7 +155,7 @@ sub new {
 
     $self->{aprsmycall} = uc( $mycall );
     $mycall =~ s/-.*//;
-    $self->{aprspass}   = aprspass( $self->{aprsmycall} );
+    $self->{aprspass}   = aprspass( uc($mycall) );
     if ($self->{aprsmycall} =~ m/CW\d{4}/o) {
 	$self->{aprspass} = -1;
     }

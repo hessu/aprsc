@@ -302,6 +302,7 @@ int make_uplink(struct uplink_config_t *l)
 	
 err:
 	client_free(c);
+	uplink_client = NULL;
 	return -1;
 }
 

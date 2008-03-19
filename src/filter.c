@@ -392,6 +392,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		while (*p != 0 && *p != '/' && i < (CALLSIGNLEN_MAX)) {
 			if (*p == '*') {
 				wildcard = 1;
+				++p;
 				if (wildok != MatchWild)
 					return -1;
 				continue;

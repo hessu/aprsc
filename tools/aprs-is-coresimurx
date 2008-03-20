@@ -24,9 +24,49 @@ my $quit = 0;
 my $APRSIS;
 
 my @specdata = simspecs();
-printf "specdata:  $#specdata\n";
+# printf "specdata:  $#specdata\n";
+# Split it 3 ways..
+my $n =  -1;
+my @spec1 = ();
+my @spec2 = ();
+my @spec3 = ();
+foreach my $l (@specdata) {
+    ++$n;  $n %= 3;
+    if ($n == 0) {
+	push @spec1, $l;
+    } elsif ($n == 1) {
+	push @spec2, $l;
+    } elsif ($n == 2) {
+	push @spec3, $l;
+    }
+}
 
-my $mycall = 'MRX-';
+## Now fork me 3 ways..
+
+for $n (1..3) {
+    my $pid = fork();
+    if ($pid > 0) { # Client
+	if ($n == 1) {
+	    work(@spec1);
+	} elsif ($n == 2) {
+	    work(@spec2);
+	} elsif ($n == 3) {
+	    work(@spec3);
+	}
+	exit 0;
+    }
+}
+wait;
+wait;
+wait;
+
+exit 0;
+
+
+sub work {
+    my @specdata = @_;
+
+    my $mycall = 'MRX-';
 #my $filter = 'p/OH2R';
 #my $filter = 'p/OH';
 #my $filter = 'p/OH2R -p/OH2 p/OH ';
@@ -34,46 +74,47 @@ my $mycall = 'MRX-';
 #$filter = 'd/OH2RDS';
 #my $filter = 'p/CW ';
 
-my @APRS = ();
+    my @APRS = ();
 
-my $n =  0;
 
-my $MUX = new IO::Multiplex;
+    my $MUX = new IO::Multiplex;
 
-foreach my $l (@specdata) {
-    ++$n;
-    my @spec = split(" ",$l, 3);
+    my $n = 0;
+    foreach my $l (@specdata) {
+	++$n;
+	my @spec = split(" ",$l, 3);
 
-    my $port = $spec[0];
-    my $call = $spec[1];
-    my $filter = $spec[2];
+	my $port = $spec[0];
+	my $call = $spec[1];
+	my $filter = $spec[2];
 
-    next if ($port eq '');
+	next if ($port eq '');
 
-    next if ($port eq '23000'); # No UDP support
+	next if ($port eq '23000'); # No UDP support
 
-    $port = '10152' if ($port eq '23'); # non-super-user driven test server does not serve on port number below 1024
-    $port = '10152' if ($port eq '10153');  ## No history feeding
-    $port = '10152' if ($port eq '10151');  ## No history feeding
-    $port = '14580' if ($port eq '10253');  ## No history feeding - filtered port
-    $port = '20152' if ($port eq '20153');  ## No history feeding
-    $filter = undef if ($filter eq '');
+	$port = '10152' if ($port eq '23'); # non-super-user driven test server does not serve on port number below 1024
+	$port = '10152' if ($port eq '10153');  ## No history feeding
+	$port = '10152' if ($port eq '10151');  ## No history feeding
+	$port = '14580' if ($port eq '10253');  ## No history feeding - filtered port
+	$port = '20152' if ($port eq '20153');  ## No history feeding
+	$filter = undef if ($filter eq '');
 
 #    printf "Port='%s'  call='%s'  filter='%s'\n", $port, $call, $filter;
 
-    $APRSIS = APRS::IS->new('localhost:'.$port, $call, $filter );
+	$APRSIS = APRS::IS->new('localhost:'.$port, $call, $filter );
 
-     if (!defined($APRSIS)) {
-	printf "aprsazel: Failed to open APRS-IS socket!  port=%s\n", $port;
-	exit 4;
-     }
-
-     $MUX->add( $APRSIS->sock() );
-
-     push @APRS, $APRSIS;
+	if (!defined($APRSIS)) {
+	    printf "aprsazel: Failed to open APRS-IS socket!  port=%s\n", $port;
+	    exit 4;
+	}
+	
+	$MUX->add( $APRSIS->sock() );
+	
+	push @APRS, $APRSIS;
+    }
+    $MUX->set_callback_object(__PACKAGE__);
+    $MUX->loop();
 }
-$MUX->set_callback_object(__PACKAGE__);
-$MUX->loop();
 
 #
 #my $now = time;

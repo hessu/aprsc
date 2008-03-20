@@ -531,7 +531,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			return -3; /* expect: lonW <= lonE */
 		}
 
-		hlog(LOG_DEBUG, "Filter: %s -> A %.3f %.3f %.3f %.3f", filt0, f0.h.f_latN, f0.h.f_lonW, f0.h.f_latS, f0.h.f_lonE);
+		// hlog(LOG_DEBUG, "Filter: %s -> A %.3f %.3f %.3f %.3f", filt0, f0.h.f_latN, f0.h.f_lonW, f0.h.f_latS, f0.h.f_lonE);
 		
 		f0.h.f_latN = filter_lat2rad(f0.h.f_latN);
 		f0.h.f_lonW = filter_lon2rad(f0.h.f_lonW);
@@ -592,7 +592,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		f0.h.refcallsign.reflen = strlen(f0.h.refcallsign.callsign);
 		f0.h.numnames = 1;
 
-		hlog(LOG_DEBUG, "Filter: %s -> F xxx %.3f", filt0, f0.h.f_dist);
+		// hlog(LOG_DEBUG, "Filter: %s -> F xxx %.3f", filt0, f0.h.f_dist);
 
 		/* NOTE: Could do static location resolving at connect time, 
 		** and then use the same way as 'r' range does.  The friends
@@ -611,7 +611,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			return -1;
 		}
 
-		hlog(LOG_DEBUG, "Filter: %s -> M %.3f", filt0, f0.h.f_dist);
+		// hlog(LOG_DEBUG, "Filter: %s -> M %.3f", filt0, f0.h.f_dist);
 
 		f0.h.f_latN = filter_lat2rad(f0.h.f_latN);
 		f0.h.f_lonW = filter_lon2rad(f0.h.f_lonW);
@@ -648,6 +648,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'Q':
 		/* q/con/ana           q Contruct filter */
 		;
+		return -1; /* FIXME: q-cons support missing */
 		
 		break;
 
@@ -682,7 +683,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 's':
 	case 'S':
 		/* s/pri/alt/over  	Symbol filter  */
-		// FIXME: S-filter pre-parser
+	
+		return -1;	// FIXME: S-filter pre-parser
 		break;
 
 	case 't':
@@ -769,7 +771,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 	default:;
 		/* No pre-parsers for other types */
-		hlog(LOG_DEBUG, "Filter: %s", filt0);
+		// hlog(LOG_DEBUG, "Filter: %s", filt0);
 		break;
 	}
 
@@ -1356,7 +1358,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 		struct history_cell_t *history;
 		int i;
 
-		hlog(LOG_DEBUG, "Type filter with callsign range used! '%s'", f->h.text);
+		/* hlog(LOG_DEBUG, "Type filter with callsign range used! '%s'", f->h.text); */
 
 		if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
 			return 0; /* No positional data.. */
@@ -1369,6 +1371,11 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 
 		if (f->h.hist_age < now) {
 			i = historydb_lookup( callsign, callsignlen, &history );
+
+			// hlog( LOG_DEBUG, "Type filter with callsign range used! call='%s', range=%.1f position %sfound",
+			//       callsign, range, i ? "" : "not ");
+
+
 			if (!i) return 0; /* no lookup result.. */
 			f->h.hist_age = now + hist_lookup_interval;
 			f->h.f_latN   = history->lat;

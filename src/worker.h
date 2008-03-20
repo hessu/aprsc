@@ -274,5 +274,6 @@ extern void workers_stop(int stop_all);
 extern void workers_start(void);
 
 extern int keepalive_interval;
+extern int fileno_limit;
 
 #endif

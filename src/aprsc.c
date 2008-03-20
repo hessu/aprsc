@@ -34,6 +34,7 @@
 #ifdef __linux__ /* Very Linux-specific code.. */
 #include <sys/syscall.h>
 #endif
+#include <sys/resource.h>
 
 #include "hmalloc.h"
 #include "hlog.h"
@@ -49,10 +50,11 @@
 
 struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 
-int shutting_down = 0;		// are we shutting down now?
-int reopen_logs = 0;		// should we reopen log files now?
-int reconfiguring = 0;		// should we reconfigure now?
+int shutting_down;		// are we shutting down now?
+int reopen_logs;		// should we reopen log files now?
+int reconfiguring;		// should we reconfigure now?
 int uplink_simulator;
+int fileno_limit;
 
 /*
  *	Parse arguments
@@ -184,6 +186,7 @@ int main(int argc, char **argv)
 {
 	pthread_t accept_th;
 	int e;
+	struct rlimit rlim;
 	
 	/* close stdin */
 	close(0);
@@ -191,6 +194,13 @@ int main(int argc, char **argv)
 	now = tick;
 	setlinebuf(stdout);
 	setlinebuf(stderr);
+
+	/* Adjust process global fileno limit */
+	e = getrlimit(RLIMIT_NOFILE, &rlim);
+	rlim.rlim_cur = rlim.rlim_max;
+	e = setrlimit(RLIMIT_NOFILE, &rlim);
+	e = getrlimit(RLIMIT_NOFILE, &rlim);
+	fileno_limit = rlim.rlim_cur;
 
 	getitimer(ITIMER_PROF, &itv);
 	

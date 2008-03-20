@@ -31,6 +31,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <sys/resource.h>
 
 #include "config.h"
 #include "hmalloc.h"
@@ -85,6 +86,8 @@ int client_timeout   = 60*60;		/* after N seconds of no input from a client, dis
 int ibuf_size = 8100;			/* size of input buffer for clients */
 int obuf_size = 32*1024;		/* size of output buffer for clients */
 
+int new_fileno_limit;
+
 int verbose;
 
 /* address:port pairs being listened */
@@ -115,9 +118,10 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "dupefiltercache",	_CFUNC_ do_interval,	&dupefilter_storetime	},
 	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout	},
 	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
+	{ "filelimit",		_CFUNC_ do_int,		&new_fileno_limit	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
-	{ "aprsis-peerip",	_CFUNC_ do_peerip,	&new_peerip_config	},
+	{ "peerip",		_CFUNC_ do_peerip,	&new_peerip_config	},
 	{ NULL,			NULL,			NULL			}
 };
 
@@ -590,6 +594,23 @@ int read_config(void)
 		hlog(LOG_WARNING, "Config: myemail is not defined.");
 		failed = 1;
 	}
+
+	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
+	  /* Adjust process global fileno limit */
+	  int e;
+	  struct rlimit rlim;
+	  e = getrlimit(RLIMIT_NOFILE, &rlim);
+	  rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
+	  e = setrlimit(RLIMIT_NOFILE, &rlim);
+	  e = getrlimit(RLIMIT_NOFILE, &rlim);
+	  fileno_limit = rlim.rlim_cur;
+	  if (fileno_limit < new_fileno_limit)
+	    hlog(LOG_WARNING, "CONFIGURATION COULD NOT RAISE FILENO LIMIT, it is now %d", fileno_limit);
+	  else
+	    hlog(LOG_INFO, "After configuration, fileno limit is now %d", fileno_limit);
+	}
+
+
 	
 	if (workers_configured < 1) {
 		hlog(LOG_WARNING, "Configured less than 1 worker threads. Using 1.");

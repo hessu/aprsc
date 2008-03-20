@@ -241,10 +241,11 @@ struct client_t *do_accept(struct listen_t *l)
 	char eb[200];
 	char sbuf[20];
 	char *s;
-	static int next_receiving_worker = 0;
+	static int next_receiving_worker;
 	struct worker_t *w;
 	struct worker_t *wc;
 	int client_min = -1;
+	static time_t last_EMFILE_report;
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
 		int e = errno;
@@ -270,6 +271,13 @@ struct client_t *do_accept(struct listen_t *l)
 
 				break;
 
+			/* Too many open files -- rate limit the reporting -- every 10th second or so.. */
+			case EMFILE:
+				if (last_EMFILE_report + 10 <= tick) {
+					last_EMFILE_report = tick;
+					hlog(LOG_ERR, "accept() failed: %s (continuing)", strerror(e));
+				}
+				return NULL;
 			/* Errors reporting system internal/external glitches */
 			default:
 				hlog(LOG_ERR, "accept() failed: %s (continuing)", strerror(e));

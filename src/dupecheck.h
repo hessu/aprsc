@@ -26,6 +26,7 @@
 
 extern long long dupecheck_outcount;  /* statistics counter */
 extern long long dupecheck_dupecount; /* statistics counter */
+extern int       dupecheck_cellgauge; /* statistics gauge   */
 
 extern int  outgoing_lag_report(struct worker_t *self, int*lag, int*dupelag);
 

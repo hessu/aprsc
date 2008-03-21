@@ -45,6 +45,7 @@ extern int uplink_simulator;
 int dupecheck_shutting_down;
 int dupecheck_running;
 pthread_t dupecheck_th;
+int dupecheck_cellgauge;
 
 int pbuf_global_count;
 int pbuf_global_dupe_count;
@@ -214,20 +215,20 @@ static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 {
 	struct dupe_record_t *dp;
 #ifndef _FOR_VALGRIND_
-	if (dupecheck_free) {
-	  dp = dupecheck_free;
-	  dupecheck_free = dp->next;
+	if (dupecheck_free) { /* pick from free chain */
+		dp = dupecheck_free;
+		dupecheck_free = dp->next;
 	} else
-	  dp = cellmalloc(dupecheck_cells);
+		dp = cellmalloc(dupecheck_cells);
 	if (!dp)
-	  return NULL;
+		return NULL;
 	dp->alen = alen;
 	dp->plen = pktlen;
 	dp->next = NULL;
 	if (pktlen > sizeof(dp->packetbuf))
-	  dp->packet = hmalloc(pktlen+1);
+		dp->packet = hmalloc(pktlen+1);
 	else
-	  dp->packet = dp->packetbuf;
+		dp->packet = dp->packetbuf;
 
 #else
 	dp = hmalloc(pktlen + sizeof(*dp));
@@ -236,6 +237,8 @@ static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 	dp->plen = pktlen;
 	dp->packet = dp->packetbuf;
 #endif
+
+	++dupecheck_cellgauge;
 
 	return dp;
 }
@@ -251,8 +254,39 @@ static void dupecheck_db_free(struct dupe_record_t *dp)
 #else
 	hfree(dp);
 #endif
+	--dupecheck_cellgauge;
 }
 
+/*	The  dupecheck_cleanup() is for regular database cleanups,
+ *	Call this about once a minute.
+ *
+ *	Note: entry validity is possibly shorter time than the cleanup
+ *	invocation interval!
+ */
+static void dupecheck_cleanup(void)
+{
+	struct dupe_record_t *dp, **dpp;
+	time_t expiretime = now - dupefilter_storetime;
+	int cleancount = 0, i;
+	
+
+	for (i = 0; i < DUPECHECK_DB_SIZE; ++i) {
+		dpp = & dupecheck_db[i];
+		while (( dp = *dpp )) {
+			if (dp->t < expiretime) {
+				/* Old..  discard. */
+				*dpp = dp->next;
+				dp->next = NULL;
+				dupecheck_db_free(dp);
+				++cleancount;
+				continue;
+			}
+			/* No expiry, just advance the pointer */
+			dpp = &dp->next;
+		}
+	}
+	hlog(LOG_DEBUG, "dupecheck_cleanup() removed %d entries", cleancount);
+}
 
 /*
  *	signal handler
@@ -316,26 +350,21 @@ static int dupecheck(struct pbuf_t *pb)
 	i = idx % DUPECHECK_DB_SIZE;
 	dpp = &dupecheck_db[i];
 	while (*dpp) {
-	  dp = *dpp;
-	  if (dp->t < expiretime) {
-	    // Too old, discard
-	    *dpp = dp->next;
-	    dupecheck_db_free(dp);
-	    continue;
-	  }
-	  if (dp->hash == hash) {
-	    // HASH match!
-	    if (dp->alen == addrlen &&
-		dp->plen == datalen &&
-		memcmp(addr, dp->addresses, addrlen) == 0 &&
-		memcmp(data, dp->packet,    datalen) == 0) {
-	      // PACKET MATCH!
-	      pb->flags |= F_DUPE;
-	      return F_DUPE;
-	    }
-	    // no packet match.. check next
-	  }
-	  dpp = &dp->next;
+		dp = *dpp;
+		if (dp->hash == hash &&
+		    dp->t > expiretime) {
+			// HASH match!  And not too old!
+			if (dp->alen == addrlen &&
+			    dp->plen == datalen &&
+			    memcmp(addr, dp->addresses, addrlen) == 0 &&
+			    memcmp(data, dp->packet,    datalen) == 0) {
+				// PACKET MATCH!
+				pb->flags |= F_DUPE;
+				return F_DUPE;
+			}
+			// no packet match.. check next
+		}
+		dpp = &dp->next;
 	}
 	// dpp points to pointer at the tail of the chain
 
@@ -408,6 +437,7 @@ static void dupecheck_thread(void)
 	int worker_pbuf_lag;
 	int worker_pbuf_dupe_lag;
 	time_t purge_tick = tick;
+	time_t cleanup_tick = now;
 	
 	pthreads_profiling_reset("dupecheck");
 
@@ -530,9 +560,15 @@ static void dupecheck_thread(void)
 		dupecheck_outcount  += pb_out_count;
 		dupecheck_dupecount += pb_out_dupe_count;
 
-		if (purge_tick < tick) { // once a second, at most..
+		if (purge_tick <= tick) { // once per 10 seconds..
 			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
 			purge_tick = tick + 10;
+		}
+
+		if (cleanup_tick <= now) { // once in a (simulated) minute or so..
+			cleanup_tick = now + 60;
+
+			dupecheck_cleanup();
 		}
 
 		// if (n > 0)
@@ -589,13 +625,21 @@ void dupecheck_atend(void)
 	struct dupe_record_t *dp, *dp2;
 
 	for (i = 0; i < DUPECHECK_DB_SIZE; ++i) {
-	  dp = dupecheck_db[i];
-	  while (dp) {
-	    dp2 = dp->next;
-	    dupecheck_db_free(dp);
-	    dp = dp2;
-	  }
+		dp = dupecheck_db[i];
+		while (dp) {
+			dp2 = dp->next;
+			dupecheck_db_free(dp);
+			dp = dp2;
+		}
 	}
-
+#if 0 /* Well, not really...  valgrind did hfree() the dupecells,
+	 and without valgrind we really are not interested of freeup of
+	 the free chain... */
+	dp = dupecheck_free;
+	for ( ; dp ; dp = dp2 ) {
+		dp2 = dp->next;
+		cellfree(dupecheck_cells, dp);
+	}
+#endif
 	global_pbuf_purger(1, -1, -1); // purge everything..
 }

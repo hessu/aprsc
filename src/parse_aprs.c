@@ -632,7 +632,7 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 		return 0;
 	}
 	
-	/* check item's name - scan for non-printable characters and the last
+	/* check object's name - scan for non-printable characters and the last
 	 * non-space character
 	 */
 	for (i = 0; i < 9; i++) {
@@ -650,7 +650,7 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	pb->srcname = body;
 	pb->srcname_len = namelen+1;
 	
-	// fprintf(stderr, "\tobject name: %.*s\n", pb->srcname_len, pb->srcname);
+	// fprintf(stderr, "\tobject name: '%.*s'\n", pb->srcname_len, pb->srcname);
 	
 	/* Forward the location parsing onwards */
 	if (valid_sym_table_compressed(body[17]))
@@ -672,14 +672,45 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 
 static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	//float lat = 0.0, lng = 0.0;
-	pb->packettype |= T_ITEM;
-
-	// FIXME: parse APRS item
-
-	// fprintf(stderr, "parse_aprs_item\n");
+	int i;
 	
-	//pbuf_fill_pos(pb, lat, lng);
+	pb->packettype |= T_ITEM;
+	
+	//fprintf(stderr, "parse_aprs_item\n");
+	
+	/* check item's name - scan for non-printable characters and the
+	 * ending character ! or _
+	 */
+	for (i = 0; i < 9 && body[i] != '!' && body[i] != '_'; i++) {
+		if (body[i] < 0x20 || body[i] > 0x7e)
+			return 0; /* non-printable */
+	}
+	
+	if (body[i] != '!' && body[i] != '_') {
+		//fprintf(stderr, "\titem name ends with neither ! or _\n");
+		return 0;
+	}
+	
+	if (i < 3 || i > 9) {
+		//fprintf(stderr, "\titem name has invalid length\n");
+		return 0;
+	}
+	
+	pb->srcname = body;
+	pb->srcname_len = i;
+	
+	//fprintf(stderr, "\titem name: '%.*s'\n", pb->srcname_len, pb->srcname);
+	
+	/* Forward the location parsing onwards */
+	i++;
+	if (valid_sym_table_compressed(body[i]))
+		return parse_aprs_compressed(pb, body + i, body_end);
+	
+	if (body[i] >= '0' && body[i] <= '9')
+		return parse_aprs_uncompressed(pb, body + i, body_end);
+	
+	//fprintf(stderr, "\tno valid position in item\n");
+	
 	return 0;
 }
 

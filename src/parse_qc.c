@@ -195,7 +195,8 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
  *	reuse some code snippets.
  */
 
-int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, char **path_end, int pathlen, int originated_by_client)
+int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
+              char **path_end, int pathlen, char **new_q_start, int originated_by_client)
 {
 	char *q_start = NULL; /* points to the , before the Q construct */
 	char *q_nextcall = NULL; /* points to the , after the Q construct */ 
@@ -354,6 +355,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 					*(q_start + 3) = 'o';
 					q_type = 'o';
 					// fprintf(stderr, "\treplaced qAR with qAo\n");
+					/* Not going to modify the construct, update pointer to it */
+					*new_q_start = q_start + 1;
 				}
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
 				// fprintf(stderr, "\tpath has ,I in the end\n");
@@ -389,6 +392,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 				q_proto = 'A';
 				q_type = 'O';
 			}
+			
 			/* Skip to "All packets with q constructs" */
 			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 		}
@@ -399,6 +403,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 		 */
 		if (q_proto) {
 			// fprintf(stderr, "\texisting q construct\n");
+			/* Not going to modify the construct, update pointer to it */
+			*new_q_start = q_start + 1;
 			/* Skip to "All packets with q constructs" */
 			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 		}
@@ -512,6 +518,10 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start, 
 			q_type = 'S';
 		}
 	}
+	
+	/* If we haven't generated a new Q construct, return a pointer to the existing one */
+	if (!new_q_len)
+		*new_q_start = q_start + 1;
 	
 	return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
 }

@@ -377,6 +377,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	const char *info_end; /* end of the info */
 	char *dstcall_end; /* end of dstcall ([:,]) */
 	char *via_start; /* start of the digipeater path (after dstcall,) */
+	char *q_start = NULL; /* start of the Q construct (points to the 'q') */
 	const char *data;	  /* points to original incoming path/payload separating ':' character */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
@@ -446,7 +447,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 * to the end of the path later
 	 */
 	path_append_len = q_process( c, path_append, sizeof(path_append),
-					via_start, &path_end, pathlen,
+					via_start, &path_end, pathlen, &q_start,
 					originated_by_client );
 	
 	if (path_append_len < 0) {
@@ -473,13 +474,22 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* Copy the unmodified part of the packet header */
 	memcpy(pb->data, s, path_end - s);
 	p = pb->data + (path_end - s);
-
-	pb->qconst_start = p; // FIXME: wrong pointer.. usually couple tokens beyond qcons...
-                              //        Used by  d- and e-filters.
+	
+	/* If q_process left q_start unmodified (as NULL), it wants to say
+	 * that it produced a new Q construct, which is returned in
+	 * path_append. If it points somewhere in the header, then fine,
+	 * it points to an existing Q construct.
+	 */
+	if (q_start == NULL && path_append_len > 0)
+		pb->qconst_start = p + 1;
+	else if (q_start > s && q_start < path_end)
+		pb->qconst_start = q_start;
 	
 	/* Copy the modified or appended part of the packet header -- qcons */
 	memcpy(p, path_append, path_append_len);
 	p += path_append_len;
+	
+	// hlog(LOG_DEBUG, "q construct: %.*s", 3, pb->qconst_start);
 	
 	/* Copy the unmodified end of the packet (including the :) */
 	memcpy(p, info_start - 1, datalen);
@@ -501,8 +511,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->dstcall_len = via_start - src_end - 1;
 	pb->info_start  = info_start;
 	
-//	hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
-
+	// hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
+	
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
 

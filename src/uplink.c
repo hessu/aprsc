@@ -316,7 +316,7 @@ void uplink_thread(void *asdf)
 	sigset_t sigs_to_block;
 	int rc;
 
-	pthreads_profiling_reset("dupecheck");
+	pthreads_profiling_reset("uplink");
 	
 	sigemptyset(&sigs_to_block);
 	sigaddset(&sigs_to_block, SIGALRM);

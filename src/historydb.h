@@ -69,6 +69,8 @@ extern void historydb_init(void);
 
 extern void historydb_dump(FILE *fp);
 extern int  historydb_load(FILE *fp);
+
+extern void historydb_cleanup(void);
 extern void historydb_atend(void);
 
 /* insert and lookup... interface yet unspecified */

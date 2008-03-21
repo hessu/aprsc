@@ -101,12 +101,10 @@ void historydb_nointerest(void) {}
 void historydb_hashmatch(void) {}
 void historydb_keymatch(void) {}
 
-
-uint32_t historydb_hash1(const char *s, int keylen) 
-{
-	return keyhash((const void *)s, keylen, 0);  // TODO: find a better hash function ?
-}
-
+/*
+ *     The  historydb_atend()  does exist primarily to make valgrind
+ *     happy about lost memory object tracking.
+ */
 void historydb_atend(void)
 {
 	int i;
@@ -211,7 +209,7 @@ int historydb_load(FILE *fp)
 			continue;	// Too old, forget it.
 		
 		keylen = strlen(keybuf);
-		h1 = historydb_hash1(keybuf, keylen);
+		h1 = keyhash(keybuf, keylen, 0);
 		h2 = h1;
 		h2 ^= (h2 >> 16); /* Fold hash bits.. */
 		i = h2 % HISTORYDB_HASH_MODULO;
@@ -340,7 +338,7 @@ int historydb_insert(struct pbuf_t *pb)
 
 	++historydb_inserts;
 
-	h1 = historydb_hash1(keybuf, keylen);
+	h1 = keyhash(keybuf, keylen, 0);
 	h2 = h1;
 	h2 ^= (h2 >> 16); /* Fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
@@ -362,7 +360,7 @@ int historydb_insert(struct pbuf_t *pb)
 		}
 		if ( (cp->hash1 == h1)) {
 		       // Hash match, compare the key
-		  historydb_hashmatch(); // debug thing -- a profiling counter
+		    historydb_hashmatch(); // debug thing -- a profiling counter
 		    if ((strcmp(cp->key, keybuf) == 0) ) {
 		  	// Key match!
 		      historydb_keymatch(); // debug thing -- a profiling counter
@@ -429,7 +427,7 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 
 	++historydb_lookups;
 
-	h1 = historydb_hash1(keybuf, keylen);
+	h1 = keyhash(keybuf, keylen, 0);
 	h2 = h1;
 	h2 ^= (h2 >> 16); /* Fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
@@ -471,3 +469,44 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	return 1;
 }
 
+
+
+/*
+ *	The  historydb_cleanup()  exists to purge too old data out of
+ *	the database at regular intervals.  Call this about once a minute.
+ */
+
+void historydb_cleanup(void)
+{
+	struct history_cell_t **hp, *cp;
+	int i, cleancount = 0;
+
+	// validity is 5 minutes shorter than expiration time..
+	time_t expirytime   = now - lastposition_storetime;
+
+
+	for (i = 0; i < HISTORYDB_HASH_MODULO; ++i) {
+		hp = &historydb_hash[i];
+
+		// multiple locks ? one for each bucket, or for a subset of buckets ?
+		// .. or should we just lock outside the for(i ...) loop ?
+		rwl_wrlock(&historydb_rwlock);
+
+		while (( cp = *hp )) {
+			if (cp->arrivaltime < expirytime) {
+				// OLD...
+				*hp = cp->next;
+				cp->next = NULL;
+				historydb_free(cp);
+				++cleancount;
+				continue;
+			}
+			/* No expiry, just advance the pointer */
+			hp = &(cp -> next);
+		}
+
+		// Free the lock
+		rwl_wrunlock(&historydb_rwlock);
+	}
+	hlog(LOG_DEBUG, "historydb_cleanup() removed %d entries", cleancount);
+}

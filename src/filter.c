@@ -19,7 +19,7 @@
  *	
  */
 
-// FIXME: filters: q s
+// FIXME: filters: s
 
 #include <string.h>
 #include <strings.h>
@@ -35,6 +35,7 @@
 #include "cellmalloc.h"
 #include "historydb.h"
 #include "cfgfile.h"
+#include "keyhash.h"
 
 /*
   See:  http://www.aprs-is.net/javaprssrvr/javaprsfilter.htm
@@ -154,14 +155,50 @@ struct filter_t {
 	char textbuf[FILT_TEXTBUFSIZE];
 };
 
+#define QC_C	0x001 /* Q-filter flag bits */
+#define QC_X	0x002
+#define QC_U	0x004
+#define QC_o	0x008
+#define QC_O	0x010
+#define QC_S	0x020
+#define QC_r	0x040
+#define QC_R	0x080
+#define QC_Z	0x100
+#define QC_I	0x200
+
+#define QC_AnalyticsI	0x800
+
+/* For q-filter analytics: entrycall igate filter database */
+struct filter_entrycall_t {
+	struct filter_entrycall_t *next;
+	time_t expirytime;
+	uint32_t hash;
+	int	len;
+	union {
+		char	callsign[CALLSIGNLEN_MAX+1];
+		int32_t cc[2]; /* makes alignment */
+	}; /* ANONYMOUS UNION */
+	char qcode;	/* q-construct code */
+};
+
 typedef enum {
 	MatchExact,
 	MatchPrefix,
 	MatchWild
 } MatchEnum;
 
+#define FILTER_ENTRYCALL_HASHSIZE 2048 /* Around 500-600 in db,
+					  this looks for collision free result.. */
+
+rwlock_t filter_entrycall_rwlock;
+int filter_entrycall_maxage = 60*60;  /* 1 hour, default.  Validity on lookups: 5 minutes less..  */
+
+struct filter_entrycall_t *filter_entrycall_hash[FILTER_ENTRYCALL_HASHSIZE];
+
+
 #ifndef _FOR_VALGRIND_
 cellarena_t *filter_cells;
+cellarena_t *filter_entrycall_cells;
 #endif
 
 
@@ -191,8 +228,203 @@ void filter_init(void)
 
 	/* printf("filter: sizeof=%d alignof=%d\n",
 	   sizeof(struct filter_t),__alignof__(struct filter_t)); */
+
+	filter_entrycall_cells = cellinit( sizeof(struct filter_entrycall_t),
+					   __alignof__(struct filter_entrycall_t),
+					   CELLMALLOC_POLICY_FIFO,
+					   32 /* 32 kB at the time */,
+					   0 /* minfree */ );
 #endif
 }
+
+static void filter_entrycall_free(struct filter_entrycall_t *f)
+{
+#ifndef _FOR_VALGRIND_
+	cellfree( filter_entrycall_cells, f );
+#else
+	hfree(f);
+#endif
+}
+
+/*
+ *	filter_entrycall_insert() is for support of  q//i  filters.
+ *	That is, "pass on any message that has traversed thru entry 
+ *	igate which has identified itself with qAr or qAR.  Not all
+ *	messages traversed thru such gate will have those same q-cons
+ *	values, thus this database keeps info about entry igate that
+ *	have shown such capability in recent past.
+ *
+ *	FIXME: This must be called by the incoming_parse() in every case
+ *	(or at least when qcons is either 'r' or 'R'.)
+ *
+ *	The key has no guaranteed alignment, no way to play tricks
+ *	with gcc builtin optimizers.
+ */
+
+int filter_entrycall_insert(const char *key, const int keylen, const char qcons)
+{
+	struct filter_entrycall_t *f, **fp, *f2;
+	/* OK, pre-parsing produced accepted result */
+	uint32_t hash;
+	int idx;
+
+	/* We insert only those that have Q-Constructs of qAR or qAr */
+	if (qcons != 'r' && qcons != 'R') return 0;
+
+	hash = keyhash(key, keylen, 0);
+	idx = (hash ^ (hash >> 16)) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
+
+	rwl_wrlock(&filter_entrycall_rwlock);
+
+	fp = &filter_entrycall_hash[idx];
+	f2 = NULL;
+	while (( f = *fp )) {
+		if ( f->hash == hash ) {
+			if (f->len == keylen) {
+				int cmp = memcmp(f->callsign, key, keylen);
+				if (cmp == 0) { /* Have key match */
+					f->expirytime = now + filter_entrycall_maxage;
+					f->qcode      = qcons;
+					f2 = f;
+					break;
+				}
+			}
+		}
+		/* No match at all, advance the pointer.. */
+		fp = &(f -> next);
+	}
+	if (!f2) {
+
+		/* Allocate and insert into hash table */
+
+		fp = &filter_entrycall_hash[idx];
+
+#ifndef _FOR_VALGRIND_
+		f = cellmalloc(filter_entrycall_cells);
+#else
+		f = hmalloc(sizeof(*f));
+#endif
+		if (f) {
+			f->next  = *fp;
+			f->expirytime = now + filter_entrycall_maxage;
+			f->hash  = hash;
+			f->len   = keylen;
+			memcpy(f->callsign, key, keylen);
+			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
+			f->qcode = qcons;
+
+			*fp = f2 = f;
+		}
+	}
+
+	rwl_wrunlock(&filter_entrycall_rwlock);
+
+	return (f2 != NULL);
+}
+
+/*
+ *	filter_entrycall_lookup() is for support of  q//i  filters.
+ *	That is, "pass on any message that has traversed thru entry 
+ *	igate which has identified itself with qAr or qAR.  Not all
+ *	messages traversed thru such gate will have those same q-cons
+ *	values, thus this keeps database about entry servers that have
+ *	shown such capability in recent past.
+ *
+ *	The key has no guaranteed alignment, no way to play tricks
+ *	with gcc builtin optimizers.
+ */
+
+static int filter_entrycall_lookup(const char *key, const int keylen)
+{
+	struct filter_entrycall_t *f, **fp, *f2;
+	uint32_t hash = keyhash(key, keylen, 0);
+	int idx = (hash ^ (hash >> 16)) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
+
+	f2 = NULL;
+
+	rwl_rdlock(&filter_entrycall_rwlock);
+
+	fp = &filter_entrycall_hash[idx];
+	while (( f = *fp )) {
+		if ( f->hash == hash ) {
+			if (f->len == keylen) {
+				int rc =  memcmp(f->callsign, key, keylen);
+				if (rc == 0) { /* Have key match, see if it is
+						  still valid entry ? */
+					if (f->expirytime < now - 60) {
+						f2 = f;
+						break;
+					}
+				}
+			}
+		}
+		/* No match at all, advance the pointer.. */
+		fp = &(f -> next);
+	}
+
+	rwl_rdunlock(&filter_entrycall_rwlock);
+
+	return (f2 != NULL);
+}
+
+/* 
+ *	The  filter_entrycall_cleanup()  does purge old entries
+ *	out of the database.  Run about once a minute.
+ */
+void filter_entrycall_cleanup(void)
+{
+	int k, cleancount = 0;
+	struct filter_entrycall_t *f, **fp;
+
+	rwl_wrlock(&filter_entrycall_rwlock);
+
+	for (k = 0; k < FILTER_ENTRYCALL_HASHSIZE; ++k) {
+		fp = & filter_entrycall_hash[k];
+		while (( f = *fp )) {
+			/* Did it expire ? */
+			if (f->expirytime <= now) {
+				*fp = f->next;
+				f->next = NULL;
+				filter_entrycall_free(f);
+				++cleancount;
+				continue;
+			}
+			/* No purge, advance the pointer.. */
+			fp = &(f -> next);
+		}
+	}
+
+	rwl_wrunlock(&filter_entrycall_rwlock);
+
+	hlog(LOG_DEBUG, "filter_entrycall_cleanup() removed %d entries", cleancount);
+}
+
+/* 
+ *	The  filter_entrycall_atend()  does purge all entries
+ *	out of the database.  Run at the exit of the program.
+ *	This exists primarily to make valgrind happy...
+ */
+void filter_entrycall_atend(void)
+{
+	int k;
+	struct filter_entrycall_t *f, **fp;
+
+	rwl_wrlock(&filter_entrycall_rwlock);
+
+	for (k = 0; k < FILTER_ENTRYCALL_HASHSIZE; ++k) {
+		fp = & filter_entrycall_hash[k];
+		while (( f = *fp )) {
+			*fp = f->next;
+			f->next = NULL;
+			filter_entrycall_free(f);
+		}
+	}
+
+	rwl_wrunlock(&filter_entrycall_rwlock);
+}
+
+
+
 
 /*
  *	filter_match_on_callsignset()  matches prefixes, or exact keys
@@ -647,8 +879,63 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'q':
 	case 'Q':
 		/* q/con/ana           q Contruct filter */
-		;
-		return -1; /* FIXME: q-cons support missing */
+		s = filt+1;
+		f0.h.type = 'q';
+		/* re-use  f0.h.numnames  field for QC_** flags */
+		f0.h.numnames = 0;
+
+		if (*s++ != '/') {
+			hlog(LOG_DEBUG, "Bad q-filter parse: %s", filt0);
+			return -1;
+		}
+		for ( ; *s && *s != '/'; ++s ) {
+			switch (*s) {
+			case 'C':
+				f0.h.numnames |= QC_C;
+				break;
+			case 'X':
+				f0.h.numnames |= QC_X;
+				break;
+			case 'U':
+				f0.h.numnames |= QC_U;
+				break;
+			case 'o':
+				f0.h.numnames |= QC_o;
+				break;
+			case 'O':
+				f0.h.numnames |= QC_O;
+				break;
+			case 'S':
+				f0.h.numnames |= QC_S;
+				break;
+			case 'r':
+				f0.h.numnames |= QC_r;
+				break;
+			case 'R':
+				f0.h.numnames |= QC_R;
+				break;
+			case 'Z':
+				f0.h.numnames |= QC_Z;
+				break;
+			case 'I':
+				f0.h.numnames |= QC_I;
+				break;
+			default:
+				hlog(LOG_DEBUG, "Bad q-filter parse: %s", filt0);
+				return -1;
+			}
+		}
+		if (*s == '/') { /* second format */
+			++s;
+			if (*s == 'i' || *s == 'I') {
+				f0.h.numnames |= QC_AnalyticsI;
+				++s;
+			}
+			if (*s) {
+				hlog(LOG_DEBUG, "Bad q-filter parse: %s", filt0);
+				return -1;
+			}
+		}
 		
 		break;
 
@@ -1004,13 +1291,13 @@ static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct fi
 	const char *e = pb->qconst_start+4;
 	int i;
 	for (i = 0; i <= CALLSIGNLEN_MAX; ++i) {
-		if (e[i] == ',')
+		if (e[i] == ',' || e[i] == ':')
 			break;
 	}
-	if (e[i] != ',' || i < CALLSIGNLEN_MIN)
+	if ((e[i] != ',' && e[i] != ':') || i < CALLSIGNLEN_MIN)
 		return 0; /* Bad Entry-station callsign */
 
-	/* destination address  ">addr," */
+	/* entry station address  "qA*,addr," */
 	memcpy( ref.callsign, e, i);
 	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
@@ -1227,9 +1514,66 @@ static int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Up to 200 invocations per second at peak.
 	*/
 
-	// FIXME: write q-filter
+	const char *e = pb->qconst_start+2;
+	int mask;
+	int i;
 
-	return -1;
+	switch (*e) {
+	case 'C':
+		mask = QC_C;
+		break;
+	case 'X':
+		mask = QC_X;
+		break;
+	case 'U':
+		mask = QC_U;
+		break;
+	case 'o':
+		mask = QC_o;
+		break;
+	case 'O':
+		mask = QC_O;
+		break;
+	case 'S':
+		mask = QC_S;
+		break;
+	case 'r':
+		mask = QC_r;
+		break;
+	case 'R':
+		mask = QC_R;
+		break;
+	case 'Z':
+		mask = QC_Z;
+		break;
+	case 'I':
+		mask = QC_I;
+		break;
+	default:
+		return 0; /* Should not happen... */
+		break;
+	}
+
+	if (f->h.numnames & mask) {
+		/* Something matched! */
+		return 1;
+	}
+	if (f->h.numnames & QC_AnalyticsI) {
+		/* Oh ?  Analytical!  Pick entry igate name..
+		   Has it ever been accepted into entry-igate database ? */
+		e += 2;
+		for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
+			if (e[i] == ',' || e[i] == ':')
+				break;
+		}
+		if ((e[i] != ',' && e[i] != ':') || i < CALLSIGNLEN_MIN)
+			return 0; /* Bad Entry-station callsign */
+
+		if (filter_entrycall_lookup(e, i))
+			return 1; /* Found on entry-igate database! */
+	}
+
+	return 0; /* No match */
 }
 
 

@@ -187,6 +187,7 @@ int main(int argc, char **argv)
 	pthread_t accept_th;
 	int e;
 	struct rlimit rlim;
+	time_t cleanup_tick;
 	
 	/* close stdin */
 	close(0);
@@ -254,6 +255,7 @@ int main(int argc, char **argv)
 	dupecheck_init();
 	historydb_init();
 
+	time(&cleanup_tick);
 
 	/* start the accept thread, which will start server threads */
 	if (pthread_create(&accept_th, NULL, (void *)accept_thread, NULL))
@@ -279,6 +281,12 @@ int main(int argc, char **argv)
 				accept_reconfiguring = 1;
 			}
 		}
+		if (cleanup_tick < tick) {
+			cleanup_tick += 60;
+
+			historydb_cleanup();
+			filter_entrycall_cleanup();
+		}
 	}
 	
 	hlog(LOG_INFO, "Signalling accept_thread to shut down...");
@@ -293,6 +301,7 @@ int main(int argc, char **argv)
 	free_config();
 	dupecheck_atend();
 	historydb_atend();
+	filter_entrycall_atend();
 	
 	hlog(LOG_CRIT, "Shut down.");
 	close_log(0);

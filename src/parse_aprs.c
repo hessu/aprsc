@@ -76,7 +76,7 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
 		pb->packettype |= T_WX;	/* Hurricane */
 	
-	if (lat < 90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
+	if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
 		return 0; /* out of range */
 	
 	/* Pre-calculations for A/R/F/M-filter tests */
@@ -613,14 +613,54 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 
 static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *body_end)
 {
-	//float lat = 0.0, lng = 0.0;
+	int i;
+	int namelen = -1;
+	
 	pb->packettype |= T_OBJECT;
-
-	// FIXME: parse APRS object
-
-	// fprintf(stderr, "parse_aprs_object\n");
-
-	//pbuf_fill_pos(pb, lat, lng);
+	
+	//fprintf(stderr, "parse_aprs_object\n");
+	
+	/* check that the object name ends with either * or _ */
+	if (*(body + 9) != '*' && *(body + 9) != '_') {
+		// fprintf(stderr, "\tinvalid object kill character\n");
+		return 0;
+	}
+	
+	/* check that the timestamp ends with a z */
+	if (*(body + 16) != 'z' && *(body + 16) != 'Z') {
+		// fprintf(stderr, "\tinvalid object timestamp z character\n");
+		return 0;
+	}
+	
+	/* check item's name - scan for non-printable characters and the last
+	 * non-space character
+	 */
+	for (i = 0; i < 9; i++) {
+		if (body[i] < 0x20 || body[i] > 0x7e)
+			return 0; /* non-printable */
+		if (body[i] != ' ')
+			namelen = i;
+	}
+	
+	if (namelen < 0) {
+		// fprintf(stderr, "\tobject has empty name\n");
+		return 0;
+	}
+	
+	pb->srcname = body;
+	pb->srcname_len = namelen+1;
+	
+	// fprintf(stderr, "\tobject name: %.*s\n", pb->srcname_len, pb->srcname);
+	
+	/* Forward the location parsing onwards */
+	if (valid_sym_table_compressed(body[17]))
+		return parse_aprs_compressed(pb, body + 17, body_end);
+	
+	if (body[17] >= '0' && body[17] <= '9')
+		return parse_aprs_uncompressed(pb, body + 17, body_end);
+	
+	// fprintf(stderr, "\tno valid position in object\n");
+	
 	return 0;
 }
 
@@ -811,7 +851,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		return 1;
 
 	case ';':
-		if (body_end - body > 18) {
+		if (body_end - body > 29) {
 			rc = parse_aprs_object(pb, body, body_end);
 			if (rc)
 				return rc;

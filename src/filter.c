@@ -437,35 +437,19 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 {
 	int i;
 	struct filter_refcallsign_t *r  = f->h.refcallsigns;
-	const uint32_t              *r1 = (const void*)ref->callsign;
+	const char                  *r1 = (const void*)ref->callsign;
 
 	for (i = 0; i < f->h.numnames; ++i) {
 		const int reflen = r[i].reflen;
 		const int len    = reflen & LengthMask;
-		const uint32_t *r2 = (const void*)r[i].callsign;
+		const char   *r2 = (const void*)r[i].callsign;
 
 		switch (wildok) {
 		case MatchExact:
 			if (len != keylen)
 				continue; /* no match */
-			/* length OK, compare content - both buffers zero filled,
-			** and size is constant -- let compiler do smarts with
-			** constant comparison lengths...
-			*/
-			switch (len) {
-			case 1: case 2: case 3: case 4:
-			  if (memcmp( r1, r2, 4 ) != 0) continue;
-			  break;
-			case 5: case 6: case 7: case 8:
-			  if (memcmp( r1, r2, 8 ) != 0) continue;
-			  break;
-			case 9:
-			  if (memcmp( r1, r2, 9 ) != 0) continue;
-			  break;
-			default:
-			  return -1; /* bad match length */
-			  break;
-			}
+			/* length OK, compare content */
+			if (memcmp( r1, r2, len ) != 0) continue;
 			/* So it was an exact match
 			** Precisely speaking..  we should check that there is
 			** no WildCard flag, or such.  But then this match
@@ -478,41 +462,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 				/* reference string length is longer than our key */
 				continue;
 			}
-			/* Let compiler do smarts - it "knowns" alignment, and
-			** the length is constant...
-			*/
-			switch (len) {
-			case 1:
-			  if (memcmp( r1, r2, 1 ) != 0) continue;
-			  break;
-			case 2:
-			  if (memcmp( r1, r2, 2 ) != 0) continue;
-			  break;
-			case 3:
-			  if (memcmp( r1, r2, 3 ) != 0) continue;
-			  break;
-			case 4:
-			  if (memcmp( r1, r2, 4 ) != 0) continue;
-			  break;
-			case 5:
-			  if (memcmp( r1, r2, 5 ) != 0) continue;
-			  break;
-			case 6:
-			  if (memcmp( r1, r2, 6 ) != 0) continue;
-			  break;
-			case 7:
-			  if (memcmp( r1, r2, 7 ) != 0) continue;
-			  break;
-			case 8:
-			  if (memcmp( r1, r2, 8 ) != 0) continue;
-			  break;
-			case 9:
-			  if (memcmp( r1, r2, 9 ) != 0) continue;
-			  break;
-			default:
-			  return -1; /* bad match length */
-			  break;
-			}
+			if (memcmp( r1, r2, len ) != 0) continue;
 
 			return ( reflen & NegationFlag ? 2 : 1 );
 			break;
@@ -521,41 +471,8 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 				/* reference string length is longer than our key */
 				continue;
 			}
-			/* Let compiler do smarts - it "knowns" alignment, and
-			** the length is constant...
-			*/
-			switch (len) {
-			case 1:
-			  if (memcmp( r1, r2, 1 ) != 0) continue;
-			  break;
-			case 2:
-			  if (memcmp( r1, r2, 2 ) != 0) continue;
-			  break;
-			case 3:
-			  if (memcmp( r1, r2, 3 ) != 0) continue;
-			  break;
-			case 4:
-			  if (memcmp( r1, r2, 4 ) != 0) continue;
-			  break;
-			case 5:
-			  if (memcmp( r1, r2, 5 ) != 0) continue;
-			  break;
-			case 6:
-			  if (memcmp( r1, r2, 6 ) != 0) continue;
-			  break;
-			case 7:
-			  if (memcmp( r1, r2, 7 ) != 0) continue;
-			  break;
-			case 8:
-			  if (memcmp( r1, r2, 8 ) != 0) continue;
-			  break;
-			case 9:
-			  if (memcmp( r1, r2, 9 ) != 0) continue;
-			  break;
-			default:
-			  return -1; /* bad match length */
-			  break;
-			}
+
+			if (memcmp( r1, r2, len ) != 0) continue;
 
 			if (reflen & WildCard)
 				return ( reflen & NegationFlag ? 2 : 1 );

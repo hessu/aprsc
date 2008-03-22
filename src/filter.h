@@ -34,10 +34,12 @@ extern int  filter_commands(struct worker_t *self, struct client_t *c, const cha
 extern int  filter_entrycall_insert(struct pbuf_t *pb);
 extern void filter_entrycall_cleanup(void);
 extern void filter_entrycall_atend(void);
+extern int  filter_entrycall_cellgauge;
 
 extern int  filter_wx_insert(struct pbuf_t *pb);
 extern void filter_wx_cleanup(void);
 extern void filter_wx_atend(void);
+extern int  filter_wx_cellgauge;
 
 extern float filter_lat2rad(float lat);
 extern float filter_lon2rad(float lon);

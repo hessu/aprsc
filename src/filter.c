@@ -195,6 +195,7 @@ typedef enum {
 rwlock_t filter_entrycall_rwlock;
 int filter_entrycall_maxage = 60*60;  /* 1 hour, default.  Validity on
 					 lookups: 5 minutes less..  */
+int filter_entrycall_cellgauge;
 
 struct filter_entrycall_t *filter_entrycall_hash[FILTER_ENTRYCALL_HASHSIZE];
 
@@ -204,6 +205,7 @@ struct filter_entrycall_t *filter_entrycall_hash[FILTER_ENTRYCALL_HASHSIZE];
 rwlock_t filter_wx_rwlock;
 int filter_wx_maxage = 60*60;         /* 1 hour, default.  Validity on
 					 lookups: 5 minutes less..  */
+int filter_wx_cellgauge;
 
 struct filter_wx_t *filter_wx_hash[FILTER_WX_HASHSIZE];
 
@@ -375,7 +377,10 @@ static int filter_entrycall_lookup(const struct pbuf_t *pb)
 	const int keylen = pb->entrycall_len;
 
 	uint32_t  hash   = keyhash(key, keylen, 0);
-	int idx = (hash ^ (hash >> 16)) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
+	int idx = ( hash ^                /* Fold the hashbits.. */
+		    (hash >> 11) ^
+		    (hash >> 22)
+		    ) % FILTER_ENTRYCALL_HASHSIZE;
 
 	f2 = NULL;
 
@@ -469,6 +474,7 @@ static void filter_wx_free(struct filter_wx_t *f)
 #else
 	hfree(f);
 #endif
+	--filter_wx_cellgauge;
 }
 
 /*
@@ -486,11 +492,15 @@ int filter_wx_insert(struct pbuf_t *pb)
 	uint32_t hash;
 	int idx;
 
+	/* If it is not a WX packet without position, we are not intrerested */
 	if (!((pb->packettype & T_WX) && !(pb->flags & F_HASPOS)))
-		return 0; // Not a WX packet without position, not intrerested
+		return 0;
 
 	hash = keyhash(key, keylen, 0);
-	idx = (hash ^ (hash >> 16)) % FILTER_WX_HASHSIZE; /* Fold the hashbits.. */
+	idx = ( hash ^                /* Fold the hashbits.. */
+		(hash >> 10) ^
+		(hash >> 20)
+		) % FILTER_WX_HASHSIZE;
 
 	rwl_wrlock(&filter_wx_rwlock);
 
@@ -521,6 +531,7 @@ int filter_wx_insert(struct pbuf_t *pb)
 #else
 		f = hmalloc(sizeof(*f));
 #endif
+		++filter_wx_cellgauge;
 		if (f) {
 			f->next  = *fp;
 			f->expirytime = now + filter_wx_maxage;
@@ -630,8 +641,6 @@ void filter_wx_atend(void)
 
 	rwl_wrunlock(&filter_wx_rwlock);
 }
-
-
 
 
 /*
@@ -947,7 +956,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		f0.h.refcallsign.callsign[CALLSIGNLEN_MAX] = 0;
 		f0.h.refcallsign.reflen = strlen(f0.h.refcallsign.callsign);
-		f0.h.numnames = 0; // reusing this as "position-cache valid" flag
+		f0.h.numnames = 0; /* reusing this as "position-cache valid" flag */
 
 		// hlog(LOG_DEBUG, "Filter: %s -> F xxx %.3f", filt0, f0.h.f_dist);
 
@@ -967,7 +976,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
-		f0.h.numnames = 0; // reusing this as "position-cache valid" flag
+		f0.h.numnames = 0; /* reusing this as "position-cache valid" flag */
 
 		// hlog(LOG_DEBUG, "Filter: %s -> M %.3f", filt0, f0.h.f_dist);
 		break;
@@ -1102,7 +1111,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		s = filt+1;
 		f0.h.type = 't';
 		f0.h.bitflags = 0;
-		f0.h.numnames = 0; // reusing this as "position-cache valid" flag
+		f0.h.numnames = 0; /* reusing this as "position-cache valid" flag */
 
 		if (*s++ != '/') {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
@@ -1304,8 +1313,6 @@ static int filter_process_one_a(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Messages addressed to stations within the area are also passed.
 	   (by means of aprs packet parse finding out the location..)
 
-	   OPTIMIZE !
-
 	   50-70 instances in APRS-IS core at any given time.
 	   Up to 2500 invocations per second.
 	*/
@@ -1330,8 +1337,6 @@ static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Pass all traffic FROM exact call: call1, call2, ...
 	   (* wild card allowed)
 
-	   OPTIMIZE ? (comes "free" with P and friends infra)
-
 	   50/70 instances in APRS-IS core at any given time.
 	   Up to 2500 invocations per second.
 	*/
@@ -1345,7 +1350,7 @@ static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct fi
 	memcpy( ref.callsign, pb->data, i);
 	memset( ref.callsign+i, 0, sizeof(ref)-i );
 
-	return filter_match_on_callsignset(&ref, i, f, MatchExact);
+	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }
 
 static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
@@ -1356,7 +1361,7 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 	   digipeated by a particular station(s) (the station's call
 	   is in the path).   This filter allows the * wildcard.
 
-	   ... 130 000 packets per hour, 25-35 filters in use at any given time.
+	   25-35 filters in use at any given time.
 	   Up to 1300 invocations per second.
 	*/
 	struct filter_refcallsign_t ref;
@@ -1369,7 +1374,8 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 	//       pb->data, (int)i, d, (int)(q-d) );
 
 	for (i = 0; d < q; ) {
-		++j; if (j > 10) break; // something seriously wrong..
+		++j;
+		if (j > 10) break; /* way too many callsigns... */
 
 		if (*d == ',') ++d; /* second round and onwards.. */
 		for (i = 0; i+d <= q && i <= CALLSIGNLEN_MAX; ++i) {
@@ -1411,7 +1417,7 @@ static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct fi
 	const char *e = pb->qconst_start+4;
 	int         i = pb->entrycall_len;
 
-	if (i < 1) // should not happen..
+	if (i < 1) /* should not happen.. */
 		return 0; /* Bad Entry-station callsign */
 
 	/* entry station address  "qA*,addr," */
@@ -1438,6 +1444,9 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	   15-25 instances in APRS-IS core at any given time.
 	   Up to 900 invocations per second.
+
+	   Caching the historydb_lookup() result will lower CPU power
+	   spent on the historydb.
 	*/
 
 	struct history_cell_t *history;
@@ -1489,13 +1498,14 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	   Messages addressed to stations within the range are also passed.
 	   (by means of aprs packet parse finding out the location..)
 
-	   OPTIMIZE! (21% of all filters!)
-
 	   NOTE:  MY RANGE is rarely moving, once there is a positional
 	   fix, it could stay fixed...
 
 	   80-120 instances in APRS-IS core at any given time.
 	   Up to 4200 invocations per second.
+
+	   Caching the historydb_lookup() result will lower CPU power
+	   spent on the historydb.
 	*/
 
 	float lat1, lon1, coslat1;
@@ -1577,8 +1587,6 @@ static int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	   Usage frequency: 14.4%
 
-	   OPTIMIZE!
-
 	   .. 80-100 cases in entire APRS-IS core at any time.
 	   Up to 3500 invocations per second at peak.
 	*/
@@ -1619,7 +1627,6 @@ static int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	const char *e = pb->qconst_start+2;
 	int mask;
-	int i;
 
 	switch (*e) {
 	case 'C':
@@ -1784,15 +1791,16 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 	if (pb->packettype & f->h.bitflags) /* bitflags as comparison bitmask */
 		rc = 1;
 
-	if (!rc && (f->h.bitflags & T_WX)) {
-		// "Note: The weather type filter also passes positions packets
+	if (!rc && (f->h.bitflags & T_WX) && (pb->flags & F_HASPOS)) {
+		/* "Note: The weather type filter also passes positions packets
 		//        for positionless weather packets."
 		//
 		// 1) recognize positionless weather packets
 		// 2) register their source callsigns, do this in  input_parse
-		// 3) when filtering for weather data, check non-weather recognized
-		//    packets against the database in point 2
+		// 3) when filtering for weather data, check non-weather 
+		//    recognized packets against the database in point 2
 		// 4) pass on packets matching point 3
+		*/
 
 		rc = filter_wx_lookup(pb);
 	}
@@ -1824,8 +1832,9 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 			i = historydb_lookup( callsign, callsignlen, &history );
 			f->h.numnames = i;
 
-			// hlog( LOG_DEBUG, "Type filter with callsign range used! call='%s', range=%.1f position %sfound",
+			/* hlog( LOG_DEBUG, "Type filter with callsign range used! call='%s', range=%.1f position %sfound",
 			//       callsign, range, i ? "" : "not ");
+			*/
 
 
 			if (!i) return 0; /* no lookup result.. */
@@ -1874,8 +1883,9 @@ static int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
 
-	// hlog( LOG_INFO, "unproto:  '%.*s' -> '%.*s'",
+	/* hlog( LOG_INFO, "unproto:  '%.*s' -> '%.*s'",
 	//       (int)(pb->packet_len < 30 ? pb->packet_len : 30), pb->data, (int)i, d);
+	*/
 
 	/* destination address  ">addr," */
 	memcpy( ref.callsign,   d, i);

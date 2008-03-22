@@ -5,9 +5,9 @@
 
 # Configuration for aprsc, an APRS-IS server for core servers
 
-MyCall     NOCALL
+MyCall     TESTING
 MyEmail    email@example.com
-MyAdmin    "My Name, MYCALL"
+MyAdmin    "Admin, N0CALL"
 
 ### Directories #########
 # Data directory (for database files)
@@ -48,48 +48,9 @@ ClientTimeout		48h
 #		msgonly - messages only
 #		userfilter - user-specified filters
 #
-# Feed controls are partially implemented with system specific filters.
-# Area-filters would be similar (like all of North America with a/// filters)
-#
-# Note: areas are not very precise definitions...
-#
-####### --- Feeds with no CWOP
-Listen "Full feed, no CWOP"                       fullfeed tcp 0.0.0.0 20152  t/*
-Listen "Full feed with duplicates, no CWOP"	  dupefeed tcp ::1     20160  t/*
-Listen "Usa only feed, no CWOP"                   fullfeed tcp 0.0.0.0 20154  -t/c a/90/-180/24/-30 a/25/-160/15/-150
-Listen "Europe only feed, no CWOP"                fullfeed tcp 0.0.0.0 20155  -t/c a/90/-30/30/60
-Listen "Stations within 350 km or your location"  fullfeed tcp 0.0.0.0 20156  -t/c m/350
-Listen "Stations within 100 km or your location"  fullfeed tcp 0.0.0.0 20157  -t/c m/100
-Listen "Stations within 1000 km or your location" fullfeed tcp 0.0.0.0 20158  -t/c m/1000
-Listen "Stations within 3000 km or your location" fullfeed tcp 0.0.0.0 20159  -t/c m/3000
-
-Listen "Regional East Coast US Only Feed"         fullfeed tcp 0.0.0.0 24579  -t/c a/90/-85/24/-30
-
-####### --- Feeds with CWOP
-
-#
-# Note: service on port 23 _requires_ this program to run as _root_
-#
-Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0     23   t/c*
 Listen "Messages only"                            messageonly tcp 0.0.0.0   1314   t/m
 Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152   t/c*
-Listen "Full feed with CWOP and duplicates"       dupefeed    tcp ::1      10160   t/c*
 Listen "User-specified filters"                   userfilter  tcp 0.0.0.0  14580
-
-Listen "Usa only feed, with CWOP"                           fullfeed tcp 0.0.0.0 10154  a/90/-180/24/-30 a/25/-160/15/-150
-Listen "Europe only feed, with CWOP"                        fullfeed tcp 0.0.0.0 10155  a/90/-30/30/60
-Listen "Stations within 350 km or your location with CWOP"  fullfeed tcp 0.0.0.0 10156  m/350
-Listen "Stations within 100 km or your location with CWOP"  fullfeed tcp 0.0.0.0 10157  m/100
-Listen "Stations within 1000 km or your location with CWOP" fullfeed tcp 0.0.0.0 10158  m/1000
-Listen "Stations within 3000 km or your location with CWOP" fullfeed tcp 0.0.0.0 10159  m/3000
-
-Listen "Regional 750 km @ Brady, Tx"		            fullfeed tcp 0.0.0.0 14578  r/31/-99/750
-Listen "Regional central USA: 49N 107W x 25N 86W"	    fullfeed tcp 0.0.0.0 14579  a/49/-107/25/-86
-
-#Uplink "Uplink" rw  tcp  finland.aprs2.net 10152
-#Uplink "Uplink" ro  tcp  finland.aprs2.net 10152
-
-#Listen "uplinksim" uplinksim tcp 127.0.0.1 10190
 
 ### Internals ############
 # The number of worker threads to run - set this to the number of

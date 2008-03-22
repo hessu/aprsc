@@ -74,7 +74,7 @@ sub start($)
 		return "Product already running.";
 	}
 	
-	warn "Product command line: $self->{cmdline}\n";
+	#warn "Product command line: $self->{cmdline}\n";
 	
 	my($stdin, $stdout, $stderr);
 	my $pid = open3($stdin, $stdout, $stderr, $self->{'cmdline'});

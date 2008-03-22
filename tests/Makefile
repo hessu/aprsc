@@ -3,8 +3,8 @@
 
 TEST_FILES = t/*.t
 TEST_VERBOSE = 0
-INST_LIB = .
-INST_ARCHLIB = .
+INST_LIB = libperl
+INST_ARCHLIB = libperl
 
 PERL=/usr/bin/perl
 

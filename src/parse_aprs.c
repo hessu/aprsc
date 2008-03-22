@@ -38,6 +38,12 @@
 #include "filter.h"
 #include "historydb.h"
 
+#ifdef DEBUG_PARSE_APRS
+#define DEBUG_LOG(a) { hlog(LOG_DEBUG, a); }
+#else
+#define DEBUG_LOG(a) { }
+#endif
+
 /*
  *	Check if the given character is a valid symbol table identifier
  *	or an overlay character. The set is different for compressed
@@ -76,16 +82,24 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
 		pb->packettype |= T_WX;	/* Hurricane */
 	
-	if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0)
+	if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
+#ifdef DEBUG_PARSE_APRS
+		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
+#endif
 		return 0; /* out of range */
+	}
 	
+#ifdef DEBUG_PARSE_APRS
+	hlog(LOG_DEBUG, "\tposition ok: lat %.3f lng %.3f", lat, lng);
+#endif
+
 	/* Pre-calculations for A/R/F/M-filter tests */
 	pb->lat     = filter_lat2rad(lat);  /* deg-to-radians */
 	pb->cos_lat = cosf(lat);            /* used in range filters */
 	pb->lng     = filter_lon2rad(lng);  /* deg-to-radians */
 	
 	pb->flags |= F_HASPOS;	/* the packet has positional data */
-	
+
 	return 1;
 }
 
@@ -294,7 +308,7 @@ static int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *bod
 {
 	// float lat = 0.0, lng = 0.0;
 
-	// fprintf(stderr, "parse_aprs_telem\n");
+	DEBUG_LOG("parse_aprs_telem");
 
 	//pbuf_fill_pos(pb, lat, lng, 0, 0);
 	return 0;
@@ -317,7 +331,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	int posambiguity = 0;
 	int i;
 	
-	//fprintf(stderr, "parse_aprs_mice\n");
+	DEBUG_LOG("parse_aprs_mice");
 	
 	/* check packet length */
 	if (body_end - body < 8)
@@ -345,7 +359,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 			|| (d_start[i] >= 'P' && d_start[i] <= 'Z')))
 				return 0;
 	
-	//fprintf(stderr, "\tpassed dstcall format check\n");
+	DEBUG_LOG("\tpassed dstcall format check");
 	
 	/* validate information field (longitude, course, speed and
 	 * symbol table and code are checked). Not bullet proof..
@@ -363,7 +377,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 		&& (unsigned char)body[6] != 0x7d) return 0;
 	if (!valid_sym_table_uncompressed(body[7])) return 0;
 	
-	//fprintf(stderr, "\tpassed info format check\n");
+	DEBUG_LOG("\tpassed info format check");
 	
 	/* make a local copy, we're going to modify it */
 	strncpy(dstcall, d_start, 6);
@@ -396,7 +410,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	/* convert to degrees, minutes and decimal degrees, and then to a float lat */
 	if (sscanf(dstcall, "%2u%2u%2u",
 	    &lat_deg, &lat_min, &lat_min_frag) != 3) {
-		//fprintf(stderr, "\tsscanf failed\n");
+		DEBUG_LOG("\tsscanf failed");
 		return 0;
 	}
 	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 100.0 / 60.0;
@@ -484,7 +498,7 @@ static int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char
 	int lat1, lat2, lat3, lat4, lng1, lng2, lng3, lng4;
 	double lat = 0.0, lng = 0.0;
 	
-	// fprintf(stderr, "parse_aprs_compressed\n");
+	DEBUG_LOG("parse_aprs_compressed");
 	
 	/* A compressed position is always 13 characters long.
 	 * Make sure we get at least 13 characters and that they are ok.
@@ -518,8 +532,6 @@ static int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char
 	lat = 90.0 - ((double)(lat1 * 91 * 91 * 91 + lat2 * 91 * 91 + lat3 * 91 + lat4) / (double)380926.0);
 	lng = -180.0 + ((double)(lng1 * 91 * 91 * 91 + lng2 * 91 * 91 + lng3 * 91 + lng4) / (double)190463.0);
 	
-	// fprintf(stderr, "\tlat %.3f lng %.3f\n", lat, lng);
-	
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
@@ -539,10 +551,10 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	int issouth = 0;
 	int iswest = 0;
 	
-	// fprintf(stderr, "parse_aprs_uncompressed\n");
+	DEBUG_LOG("parse_aprs_uncompressed");
 	
 	if (body_end - body < 19) {
-		// fprintf(stderr, "\ttoo short\n");
+		DEBUG_LOG("\ttoo short");
 		return 0;
 	}
 	
@@ -568,7 +580,7 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	    &lat_deg, &lat_min, &lat_min_frag, &lat_hemi, &sym_table,
 	    &lng_deg, &lng_min, &lng_min_frag, &lng_hemi, &sym_code) != 10) {
-		// fprintf(stderr, "\tsscanf failed\n");
+		DEBUG_LOG("\tsscanf failed");
 		return 0;
 	}
 	
@@ -618,11 +630,11 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	
 	pb->packettype |= T_OBJECT;
 	
-	//fprintf(stderr, "parse_aprs_object\n");
+	DEBUG_LOG("parse_aprs_object");
 	
 	/* check that the object name ends with either * or _ */
 	if (*(body + 9) != '*' && *(body + 9) != '_') {
-		// fprintf(stderr, "\tinvalid object kill character\n");
+		DEBUG_LOG("\tinvalid object kill character");
 		return 0;
 	}
 	
@@ -636,14 +648,16 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	 * non-space character
 	 */
 	for (i = 0; i < 9; i++) {
-		if (body[i] < 0x20 || body[i] > 0x7e)
+		if (body[i] < 0x20 || body[i] > 0x7e) {
+			DEBUG_LOG("\tobject name has unprintable characters");
 			return 0; /* non-printable */
+		}
 		if (body[i] != ' ')
 			namelen = i;
 	}
 	
 	if (namelen < 0) {
-		// fprintf(stderr, "\tobject has empty name\n");
+		DEBUG_LOG("\tobject has empty name");
 		return 0;
 	}
 	
@@ -659,7 +673,7 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	if (body[17] >= '0' && body[17] <= '9')
 		return parse_aprs_uncompressed(pb, body + 17, body_end);
 	
-	// fprintf(stderr, "\tno valid position in object\n");
+	DEBUG_LOG("\tno valid position in object");
 	
 	return 0;
 }
@@ -676,23 +690,25 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
 	
 	pb->packettype |= T_ITEM;
 	
-	//fprintf(stderr, "parse_aprs_item\n");
+	DEBUG_LOG("parse_aprs_item");
 	
 	/* check item's name - scan for non-printable characters and the
 	 * ending character ! or _
 	 */
 	for (i = 0; i < 9 && body[i] != '!' && body[i] != '_'; i++) {
-		if (body[i] < 0x20 || body[i] > 0x7e)
+		if (body[i] < 0x20 || body[i] > 0x7e) {
+			DEBUG_LOG("\titem name has unprintable characters");
 			return 0; /* non-printable */
+		}
 	}
 	
 	if (body[i] != '!' && body[i] != '_') {
-		//fprintf(stderr, "\titem name ends with neither ! or _\n");
+		DEBUG_LOG("\titem name ends with neither ! or _");
 		return 0;
 	}
 	
 	if (i < 3 || i > 9) {
-		//fprintf(stderr, "\titem name has invalid length\n");
+		DEBUG_LOG("\titem name has invalid length");
 		return 0;
 	}
 	
@@ -709,7 +725,7 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
 	if (body[i] >= '0' && body[i] <= '9')
 		return parse_aprs_uncompressed(pb, body + i, body_end);
 	
-	//fprintf(stderr, "\tno valid position in item\n");
+	DEBUG_LOG("\tno valid position in item");
 	
 	return 0;
 }
@@ -730,7 +746,7 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
 int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 {
 	char packettype, poschar;
-	int paclen, rc;
+	int paclen;
 	const char *body;
 	const char *body_end;
 	const char *pos_start;
@@ -783,16 +799,14 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		/* could be mic-e, minimum body length 9 chars */
 		if (paclen >= 9) {
 			pb->packettype |= T_POSITION;
-			rc = parse_aprs_mice(pb, body, body_end);
-			if (rc)
-				return rc;
+			return parse_aprs_mice(pb, body, body_end);
 		}
-		break;
+		return 0;
 
 	case '!':
 		if (pb->info_start[1] == '!') { /* Ultimeter 2000 */
 			pb->packettype |= T_WX;
-			return 1;
+			return 0;
 		}
 	case '=':
 	case '/':
@@ -813,30 +827,22 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		poschar = *body;
 		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
-			if (body_end - body >= 13) {
-				rc = parse_aprs_compressed(pb, body, body_end);
-				if (rc)
-					return rc;
-			}
+			if (body_end - body >= 13)
+				return parse_aprs_compressed(pb, body, body_end);
 			
 		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
 			/* normal uncompressed position */
-			if (body_end - body >= 19) {
-				rc = parse_aprs_uncompressed(pb, body, body_end);
-				if (rc)
-					return rc;
-			}
+			if (body_end - body >= 19)
+				return parse_aprs_uncompressed(pb, body, body_end);
 		}
-		break;
+		return 0;
 
 	case '$':
 		if (body_end - body > 10) {
 			// Is it OK to declare it as position packet ?
-			rc = parse_aprs_nmea(pb, body, body_end);
-			if (rc)
-				return rc;
+			return parse_aprs_nmea(pb, body, body_end);
 		}
-		break;
+		return 0;
 
 	case ':':
 		pb->packettype |= T_MESSAGE;
@@ -877,52 +883,46 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 				pb->cos_lat = history->coslat;
 
 				pb->flags  |= F_HASPOS;
+				return 1;
 			}
 		}
-		return 1;
+		return 0;
 
 	case ';':
-		if (body_end - body > 29) {
-			rc = parse_aprs_object(pb, body, body_end);
-			if (rc)
-				return rc;
-		}
-		break;
+		if (body_end - body > 29)
+			return parse_aprs_object(pb, body, body_end);
+		return 0;
 
 	case '>':
 		pb->packettype |= T_STATUS;
-		return 1;
+		return 0;
 
 	case '?':
 		pb->packettype |= T_QUERY;
-		return 1;
+		return 0;
 
 	case ')':
 		if (body_end - body > 18) {
-			rc = parse_aprs_item(pb, body, body_end);
-			if (rc)
-				return rc;
+			return parse_aprs_item(pb, body, body_end);
 		}
-		break;
+		return 0;
 
 	case 'T':
 		if (body_end - body > 18) {
 			pb->packettype |= T_TELEMETRY;
-			rc = parse_aprs_telem(pb, body, body_end);
-			if (rc)
-				return rc;
+			return parse_aprs_telem(pb, body, body_end);
 		}
-		return 1;
+		return 0;
 
 	case '#': /* Peet Bros U-II Weather Station */
 	case '*': /* Peet Bros U-I  Weather Station */
 	case '_': /* Weather report without position */
 		pb->packettype |= T_WX;
-		return 1;
+		return 0;
 
 	case '{':
 		pb->packettype |= T_USERDEF;
-		return 1;
+		return 0;
 
 	default:
 		break;
@@ -937,15 +937,13 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		poschar = *pos_start;
 		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
-		    	if (body_end - pos_start >= 13) {
+		    	if (body_end - pos_start >= 13)
 		    		return parse_aprs_compressed(pb, pos_start, body_end);
-			}
 			return 0;
 		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
 			/* normal uncompressed position */
-			if (body_end - pos_start >= 19) {
+			if (body_end - pos_start >= 19)
 				return parse_aprs_uncompressed(pb, pos_start, body_end);
-			}
 			return 0;
 		}
 	}

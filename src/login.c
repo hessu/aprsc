@@ -91,6 +91,8 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	c->state = CSTATE_CONNECTED;
 	c->username = hstrdup(username);
 	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
+	if (c->flags & CLFLAGS_UPLINKSIM)
+		c->handler = &incoming_uplinksim_handler;
 	
 	int given_passcode = -1;
 	

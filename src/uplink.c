@@ -139,6 +139,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	if (rc < -2) return rc;
 
 	c->handler = incoming_handler;
+	c->state   = CSTATE_CONNECTED;
 	
 	return 0;
 }

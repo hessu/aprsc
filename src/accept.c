@@ -317,12 +317,8 @@ struct client_t *do_accept(struct listen_t *l)
 	}
 #endif
 
-	if (strcmp(l->name,"uplinksim") == 0) {
-	  // uplink simulator
-	  c->state = CSTATE_UPLINKSIM;
-	  c->handler = uplink_login_handler;
-	  uplink_simulator = 1;
-	}
+	if (c->flags & CLFLAGS_UPLINKSIM)
+		uplink_simulator = 1;
 
 	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
 	

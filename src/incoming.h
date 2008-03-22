@@ -28,6 +28,7 @@ extern char *memstr(char *needle, char *haystack, char *haystack_end);
 
 extern void incoming_flush(struct worker_t *self);
 extern int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len);
+extern int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, char *s, int len);
 
 #endif
 

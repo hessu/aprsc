@@ -1,0 +1,38 @@
+userCall=TESTING
+AdminInfo=Admin, N0CALL
+isBackground=false
+stderr=logs/err.log
+#
+# Global Parameters
+#
+excludeCalls=NITRUS;N0CALL;NOCALL
+useHistoryQueue=false
+#
+# Server Adjunct
+#
+ServerAdjunct=ServerAdjunct
+#
+# Console and Log Ports
+#
+consolePorts=127.0.0.1:14500
+logList=127.0.0.1
+logPorts=127.0.0.1:14502
+errorPorts=127.0.0.1:14503
+dupePorts=127.0.0.1:14504
+loopPorts=127.0.0.1:14505
+callLogPorts=127.0.0.1:14506
+connLogPorts=127.0.0.1:14507
+TNCLogPorts=127.0.0.1:14508
+#
+# Status Page Parameters
+#
+statusPorts=14501
+plainStatusPorts=14511
+portTable=10152;Full APRS-IS Feed;14580;User-defined Filtered Feed;1314;Message-only Feed
+#
+# Client Port Properties
+#
+noEchoPorts=10152u
+msgOnlyPorts=1314u
+IGatePorts=14580u
+#

@@ -19,7 +19,7 @@
  *	
  */
 
-// FIXME: filters: s
+// FIXME: write filters: s
 
 #include <string.h>
 #include <strings.h>
@@ -123,10 +123,7 @@ exclusion then the packet is not passed no matter any other filter definitions.
 /* values above are chosen for 4 byte alignment.. */
 
 struct filter_refcallsign_t {
-	union {
-		char	  callsign[CALLSIGNLEN_MAX+1]; /* size: 10.. */
-		int32_t	  cc[2]; /* makes alignment!   // size:  8   */
-	}; /* ANONYMOUS UNION */
+	char	callsign[CALLSIGNLEN_MAX+1]; /* size: 10.. */
 	int8_t	reflen; /* length and flags */
 };
 struct filter_head_t {
@@ -138,8 +135,9 @@ struct filter_head_t {
 #define f_coslat f_lonW /* for R filter */
 
 	char	type;	  /* 1 char			*/
-	int8_t	negation; /* boolean flag		*/
-	int16_t	numnames; /* used as named, and as bit-set on T_*** enumerations */
+	int16_t	negation; /* boolean flag		*/
+	int16_t	numnames; /* used as named, and as cache validity flag */
+	int16_t bitflags; /* used as bit-set on T_*** enumerations */
 	union {
 		/* for cases where there is only one.. */
 		struct filter_refcallsign_t  refcallsign;
@@ -174,11 +172,16 @@ struct filter_entrycall_t {
 	time_t expirytime;
 	uint32_t hash;
 	int	len;
-	union {
-		char	callsign[CALLSIGNLEN_MAX+1];
-		int32_t cc[2]; /* makes alignment */
-	}; /* ANONYMOUS UNION */
-	char qcode;	/* q-construct code */
+	char	callsign[CALLSIGNLEN_MAX+1];
+	char	qcode;	/* q-construct code */
+};
+
+struct filter_wx_t {
+	struct filter_wx_t *next;
+	time_t expirytime;
+	uint32_t hash;
+	int	len;
+	char	callsign[CALLSIGNLEN_MAX+1];
 };
 
 typedef enum {
@@ -187,22 +190,35 @@ typedef enum {
 	MatchWild
 } MatchEnum;
 
-#define FILTER_ENTRYCALL_HASHSIZE 2048 /* Around 500-600 in db,
-					  this looks for collision free result.. */
-
+#define FILTER_ENTRYCALL_HASHSIZE 2048 /* Around 500-600 in db,  this looks
+					  for collision free result.. */
 rwlock_t filter_entrycall_rwlock;
-int filter_entrycall_maxage = 60*60;  /* 1 hour, default.  Validity on lookups: 5 minutes less..  */
+int filter_entrycall_maxage = 60*60;  /* 1 hour, default.  Validity on
+					 lookups: 5 minutes less..  */
 
 struct filter_entrycall_t *filter_entrycall_hash[FILTER_ENTRYCALL_HASHSIZE];
+
+
+#define FILTER_WX_HASHSIZE 1024        /* Around 300-400 in db,  this looks
+					  for collision free result.. */
+rwlock_t filter_wx_rwlock;
+int filter_wx_maxage = 60*60;         /* 1 hour, default.  Validity on
+					 lookups: 5 minutes less..  */
+
+struct filter_wx_t *filter_wx_hash[FILTER_WX_HASHSIZE];
 
 
 #ifndef _FOR_VALGRIND_
 cellarena_t *filter_cells;
 cellarena_t *filter_entrycall_cells;
+cellarena_t *filter_wx_cells;
 #endif
 
 
-int hist_lookup_interval = 2; /* Cache lookups this much seconds on the filter entry */
+int hist_lookup_interval = 20; /* FIXME: Configurable: Cache historydb
+				  position lookups this much seconds on
+				  each filter entry referring to some
+				  fixed callsign (f,m,t) */
 
 
 float filter_lat2rad(float lat)
@@ -234,6 +250,12 @@ void filter_init(void)
 					   CELLMALLOC_POLICY_FIFO,
 					   32 /* 32 kB at the time */,
 					   0 /* minfree */ );
+
+	filter_wx_cells = cellinit( sizeof(struct filter_wx_t),
+				    __alignof__(struct filter_wx_t),
+				    CELLMALLOC_POLICY_FIFO,
+				    32 /* 32 kB at the time */,
+				    0 /* minfree */ );
 #endif
 }
 
@@ -261,12 +283,24 @@ static void filter_entrycall_free(struct filter_entrycall_t *f)
  *	with gcc builtin optimizers.
  */
 
-int filter_entrycall_insert(const char *key, const int keylen, const char qcons)
+int filter_entrycall_insert(struct pbuf_t *pb)
 {
 	struct filter_entrycall_t *f, **fp, *f2;
 	/* OK, pre-parsing produced accepted result */
 	uint32_t hash;
-	int idx;
+	int idx, keylen;
+	const char qcons = pb->qconst_start[2];
+	const char *key = pb->qconst_start+4;
+
+	for (keylen = 0; keylen <= CALLSIGNLEN_MAX; ++keylen) {
+		int c = key[keylen];
+		if (c == ',' || c == ':')
+			break;
+	}
+	if ((key[keylen] != ',' && key[keylen] != ':') || keylen < CALLSIGNLEN_MIN)
+		return 0; /* Bad entry-station callsign */
+
+pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
 
 	/* We insert only those that have Q-Constructs of qAR or qAr */
 	if (qcons != 'r' && qcons != 'R') return 0;
@@ -334,10 +368,13 @@ int filter_entrycall_insert(const char *key, const int keylen, const char qcons)
  *	with gcc builtin optimizers.
  */
 
-static int filter_entrycall_lookup(const char *key, const int keylen)
+static int filter_entrycall_lookup(const struct pbuf_t *pb)
 {
 	struct filter_entrycall_t *f, **fp, *f2;
-	uint32_t hash = keyhash(key, keylen, 0);
+	const char *key  = pb->qconst_start+4;
+	const int keylen = pb->entrycall_len;
+
+	uint32_t  hash   = keyhash(key, keylen, 0);
 	int idx = (hash ^ (hash >> 16)) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
 
 	f2 = NULL;
@@ -421,6 +458,177 @@ void filter_entrycall_atend(void)
 	}
 
 	rwl_wrunlock(&filter_entrycall_rwlock);
+}
+
+
+
+static void filter_wx_free(struct filter_wx_t *f)
+{
+#ifndef _FOR_VALGRIND_
+	cellfree( filter_wx_cells, f );
+#else
+	hfree(f);
+#endif
+}
+
+/*
+ *	The  filter_wx_insert()  does lookup key storage for problem of:
+ *
+ *	Positionless T_WX packets want also position packets on output filters.
+ */
+
+int filter_wx_insert(struct pbuf_t *pb)
+{
+	struct filter_wx_t *f, **fp, *f2;
+	/* OK, pre-parsing produced accepted result */
+	const char *key  = pb->data;
+	const int keylen = pb->srccall_end - key;
+	uint32_t hash;
+	int idx;
+
+	if (!((pb->packettype & T_WX) && !(pb->flags & F_HASPOS)))
+		return 0; // Not a WX packet without position, not intrerested
+
+	hash = keyhash(key, keylen, 0);
+	idx = (hash ^ (hash >> 16)) % FILTER_WX_HASHSIZE; /* Fold the hashbits.. */
+
+	rwl_wrlock(&filter_wx_rwlock);
+
+	fp = &filter_wx_hash[idx];
+	f2 = NULL;
+	while (( f = *fp )) {
+		if ( f->hash == hash ) {
+			if (f->len == keylen) {
+				int cmp = memcmp(f->callsign, key, keylen);
+				if (cmp == 0) { /* Have key match */
+					f->expirytime = now + filter_wx_maxage;
+					f2 = f;
+					break;
+				}
+			}
+		}
+		/* No match at all, advance the pointer.. */
+		fp = &(f -> next);
+	}
+	if (!f2) {
+
+		/* Allocate and insert into hash table */
+
+		fp = &filter_wx_hash[idx];
+
+#ifndef _FOR_VALGRIND_
+		f = cellmalloc(filter_wx_cells);
+#else
+		f = hmalloc(sizeof(*f));
+#endif
+		if (f) {
+			f->next  = *fp;
+			f->expirytime = now + filter_wx_maxage;
+			f->hash  = hash;
+			f->len   = keylen;
+			memcpy(f->callsign, key, keylen);
+			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
+
+			*fp = f2 = f;
+		}
+	}
+
+	rwl_wrunlock(&filter_wx_rwlock);
+
+	return 0;
+}
+
+static int filter_wx_lookup(const struct pbuf_t *pb)
+{
+	struct filter_wx_t *f, **fp, *f2;
+	const char *key  = pb->data;
+	const int keylen = pb->srccall_end - key;
+
+	uint32_t  hash   = keyhash(key, keylen, 0);
+	int idx = (hash ^ (hash >> 16)) % FILTER_WX_HASHSIZE; /* Fold the hashbits.. */
+
+	f2 = NULL;
+
+	rwl_rdlock(&filter_wx_rwlock);
+
+	fp = &filter_wx_hash[idx];
+	while (( f = *fp )) {
+		if ( f->hash == hash ) {
+			if (f->len == keylen) {
+				int rc =  memcmp(f->callsign, key, keylen);
+				if (rc == 0) { /* Have key match, see if it is
+						  still valid entry ? */
+					if (f->expirytime < now - 60) {
+						f2 = f;
+						break;
+					}
+				}
+			}
+		}
+		/* No match at all, advance the pointer.. */
+		fp = &(f -> next);
+	}
+
+	rwl_rdunlock(&filter_wx_rwlock);
+
+	return (f2 != NULL);
+}
+
+
+/* 
+ *	The  filter_wx_cleanup()  does purge old entries
+ *	out of the database.  Run about once a minute.
+ */
+void filter_wx_cleanup(void)
+{
+	int k, cleancount = 0;
+	struct filter_wx_t *f, **fp;
+
+	rwl_wrlock(&filter_wx_rwlock);
+
+	for (k = 0; k < FILTER_WX_HASHSIZE; ++k) {
+		fp = & filter_wx_hash[k];
+		while (( f = *fp )) {
+			/* Did it expire ? */
+			if (f->expirytime <= now) {
+				*fp = f->next;
+				f->next = NULL;
+				filter_wx_free(f);
+				++cleancount;
+				continue;
+			}
+			/* No purge, advance the pointer.. */
+			fp = &(f -> next);
+		}
+	}
+
+	rwl_wrunlock(&filter_wx_rwlock);
+
+	hlog(LOG_DEBUG, "filter_wx_cleanup() removed %d entries", cleancount);
+}
+
+/* 
+ *	The  filter_wx_atend()  does purge all entries
+ *	out of the database.  Run at the exit of the program.
+ *	This exists primarily to make valgrind happy...
+ */
+void filter_wx_atend(void)
+{
+	int k;
+	struct filter_wx_t *f, **fp;
+
+	rwl_wrlock(&filter_wx_rwlock);
+
+	for (k = 0; k < FILTER_WX_HASHSIZE; ++k) {
+		fp = & filter_wx_hash[k];
+		while (( f = *fp )) {
+			*fp = f->next;
+			f->next = NULL;
+			filter_wx_free(f);
+		}
+	}
+
+	rwl_wrunlock(&filter_wx_rwlock);
 }
 
 
@@ -631,7 +839,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	}
 	f0.h.type = *filt;
 
-	if (!strchr("abdemopqrstuABDEMOPQRSTU",*filt)) {
+	if (!strchr("abdefmopqrstuABDEFMOPQRSTU",*filt)) {
 		/* Not valid filter code */
 		hlog(LOG_DEBUG, "Bad filter code: %s", filt0);
 		return -1;
@@ -739,7 +947,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		f0.h.refcallsign.callsign[CALLSIGNLEN_MAX] = 0;
 		f0.h.refcallsign.reflen = strlen(f0.h.refcallsign.callsign);
-		f0.h.numnames = 1;
+		f0.h.numnames = 0; // reusing this as "position-cache valid" flag
 
 		// hlog(LOG_DEBUG, "Filter: %s -> F xxx %.3f", filt0, f0.h.f_dist);
 
@@ -759,13 +967,9 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
+		f0.h.numnames = 0; // reusing this as "position-cache valid" flag
 
 		// hlog(LOG_DEBUG, "Filter: %s -> M %.3f", filt0, f0.h.f_dist);
-
-		f0.h.f_latN = filter_lat2rad(f0.h.f_latN);
-		f0.h.f_lonW = filter_lon2rad(f0.h.f_lonW);
-
-		f0.h.f_coslat = cosf( f0.h.f_latN ); /* Store pre-calculated COS of LAT */
 		break;
 
 	case 'o':
@@ -798,8 +1002,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/* q/con/ana           q Contruct filter */
 		s = filt+1;
 		f0.h.type = 'q';
-		/* re-use  f0.h.numnames  field for QC_** flags */
-		f0.h.numnames = 0;
+		f0.h.bitflags = 0; /* For QC_*  flags */
 
 		if (*s++ != '/') {
 			hlog(LOG_DEBUG, "Bad q-filter parse: %s", filt0);
@@ -808,34 +1011,34 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		for ( ; *s && *s != '/'; ++s ) {
 			switch (*s) {
 			case 'C':
-				f0.h.numnames |= QC_C;
+				f0.h.bitflags |= QC_C;
 				break;
 			case 'X':
-				f0.h.numnames |= QC_X;
+				f0.h.bitflags |= QC_X;
 				break;
 			case 'U':
-				f0.h.numnames |= QC_U;
+				f0.h.bitflags |= QC_U;
 				break;
 			case 'o':
-				f0.h.numnames |= QC_o;
+				f0.h.bitflags |= QC_o;
 				break;
 			case 'O':
-				f0.h.numnames |= QC_O;
+				f0.h.bitflags |= QC_O;
 				break;
 			case 'S':
-				f0.h.numnames |= QC_S;
+				f0.h.bitflags |= QC_S;
 				break;
 			case 'r':
-				f0.h.numnames |= QC_r;
+				f0.h.bitflags |= QC_r;
 				break;
 			case 'R':
-				f0.h.numnames |= QC_R;
+				f0.h.bitflags |= QC_R;
 				break;
 			case 'Z':
-				f0.h.numnames |= QC_Z;
+				f0.h.bitflags |= QC_Z;
 				break;
 			case 'I':
-				f0.h.numnames |= QC_I;
+				f0.h.bitflags |= QC_I;
 				break;
 			default:
 				hlog(LOG_DEBUG, "Bad q-filter parse: %s", filt0);
@@ -845,7 +1048,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		if (*s == '/') { /* second format */
 			++s;
 			if (*s == 'i' || *s == 'I') {
-				f0.h.numnames |= QC_AnalyticsI;
+				f0.h.bitflags |= QC_AnalyticsI;
 				++s;
 			}
 			if (*s) {
@@ -876,7 +1079,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			return -2;
 		}
 
-		hlog(LOG_DEBUG, "Filter: %s -> R %.3f %.3f %.3f", filt0, f0.h.f_latN, f0.h.f_lonW, f0.h.f_dist);
+		// hlog(LOG_DEBUG, "Filter: %s -> R %.3f %.3f %.3f", filt0, f0.h.f_latN, f0.h.f_lonW, f0.h.f_dist);
 
 		f0.h.f_latN = filter_lat2rad(f0.h.f_latN);
 		f0.h.f_lonW = filter_lon2rad(f0.h.f_lonW);
@@ -898,8 +1101,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		*/
 		s = filt+1;
 		f0.h.type = 't';
-		/* re-use  f0.h.numnames  field for T_** flags */
-		f0.h.numnames = 0;
+		f0.h.bitflags = 0;
+		f0.h.numnames = 0; // reusing this as "position-cache valid" flag
 
 		if (*s++ != '/') {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
@@ -908,37 +1111,37 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		for ( ; *s && *s != '/'; ++s ) {
 			switch (*s) {
 			case '*':
-				f0.h.numnames |= ~T_CWOP; /* "ALL" -- excluding CWOP */
+				f0.h.bitflags |= ~T_CWOP; /* "ALL" -- excluding CWOP */
 				break;
 			case 'c': case 'C':
-				f0.h.numnames |= T_CWOP;
+				f0.h.bitflags |= T_CWOP;
 				break;
 			case 'i': case 'I':
-				f0.h.numnames |= T_ITEM;
+				f0.h.bitflags |= T_ITEM;
 				break;
 			case 'm': case 'M':
-				f0.h.numnames |= T_MESSAGE;
+				f0.h.bitflags |= T_MESSAGE;
 				break;
 			case 'n': case 'N':
-				f0.h.numnames |= T_NWS;
+				f0.h.bitflags |= T_NWS;
 				break;
 			case 'o': case 'O':
-				f0.h.numnames |= T_OBJECT;
+				f0.h.bitflags |= T_OBJECT;
 				break;
 			case 'p': case 'P':
-				f0.h.numnames |= T_POSITION;
+				f0.h.bitflags |= T_POSITION;
 				break;
 			case 'q': case 'Q':
-				f0.h.numnames |= T_QUERY;
+				f0.h.bitflags |= T_QUERY;
 				break;
 			case 's': case 'S':
-				f0.h.numnames |= T_STATUS;
+				f0.h.bitflags |= T_STATUS;
 				break;
 			case 't': case 'T':
-				f0.h.numnames |= T_TELEMETRY;
+				f0.h.bitflags |= T_TELEMETRY;
 				break;
 			case 'u': case 'U':
-				f0.h.numnames |= T_USERDEF;
+				f0.h.bitflags |= T_USERDEF;
 				break;
 			default:
 				hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
@@ -1206,12 +1409,9 @@ static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	struct filter_refcallsign_t ref;
 	const char *e = pb->qconst_start+4;
-	int i;
-	for (i = 0; i <= CALLSIGNLEN_MAX; ++i) {
-		if (e[i] == ',' || e[i] == ':')
-			break;
-	}
-	if ((e[i] != ',' && e[i] != ':') || i < CALLSIGNLEN_MIN)
+	int         i = pb->entrycall_len;
+
+	if (i < 1) // should not happen..
 		return 0; /* Bad Entry-station callsign */
 
 	/* entry station address  "qA*,addr," */
@@ -1255,12 +1455,14 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 	/* find friend's last location packet */
 	if (f->h.hist_age < now) {
 		i = historydb_lookup( callsign, i, &history );
-		if (!i) return 0; /* no lookup result.. */
+		f->h.numnames = i;
 		f->h.hist_age = now + hist_lookup_interval;
+		if (!i) return 0; /* no lookup result.. */
 		f->h.f_latN   = history->lat;
 		f->h.f_lonE   = history->lon;
 		f->h.f_coslat = history->coslat;
 	}
+	if (!f->h.numnames) return 0; /* histdb lookup cache invalid */
 
 	lat1    = f->h.f_latN;
 	lon1    = f->h.f_lonE;
@@ -1290,9 +1492,7 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	   OPTIMIZE! (21% of all filters!)
 
 	   NOTE:  MY RANGE is rarely moving, once there is a positional
-	   fix, it could stay fixed...    Or true historydb lookup frequency
-	   could be limited to once per - say - every 100 seconds per any
-	   given filter ?  (wants time_t variable into filter...)
+	   fix, it could stay fixed...
 
 	   80-120 instances in APRS-IS core at any given time.
 	   Up to 4200 invocations per second.
@@ -1313,12 +1513,14 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	if (f->h.hist_age < now) {
 		i = historydb_lookup( c->username, strlen(c->username), &history );
-		if (!i) return 0; /* no result */
 		f->h.hist_age = now + hist_lookup_interval;
+		f->h.numnames = i;
+		if (!i) return 0; /* no result */
 		f->h.f_latN   = history->lat;
 		f->h.f_lonE   = history->lon;
 		f->h.f_coslat = history->coslat;
 	}
+	if (!f->h.numnames) return 0; /* cached lookup invalid.. */
 
 	lat1    = f->h.f_latN;
 	lon1    = f->h.f_lonE;
@@ -1355,25 +1557,9 @@ static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct fi
 	if ( (pb->packettype & (T_OBJECT|T_ITEM)) == 0 ) /* not an Object NOR Item */
 		return 0;
 
-	/* Pick object name  ";item  *" or ";item  _" -- strip tail spaces
-	** Pick item name    ")item!" or ")item_"     -- keep all spaces
-	*/
-
-	/* FIXME?  These filters are very rare in real use...   */
-	/* FIXME: have parser to fill  pb->objnamelen  so this needs not to scan the buffer again. */
-
-	s = pb->info_start+1;
-	if (pb->packettype & T_OBJECT) { // It is an Object - No embedded spaces!
-		for (i = 0; i < CALLSIGNLEN_MAX; ++i, ++s) {
-			if (*s == ' ' || *s == '*' || *s == '_')
-				break;
-		}
-	} else { // It is an ITEM then..
-		for (i = 0; i < CALLSIGNLEN_MAX; ++i, ++s) {
-			if (*s == '!' || *s == '_') /* Embedded space are OK! */
-				break;
-		}
-	}
+	/* parse_aprs() has picked item/object name pointer and length.. */
+	s = pb->srcname;
+	i = pb->srcname_len;
 	if (i < 1) return 0; /* Bad object/item name */
 
 	/* object name */
@@ -1471,22 +1657,14 @@ static int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct fi
 		break;
 	}
 
-	if (f->h.numnames & mask) {
+	if (f->h.bitflags & mask) {
 		/* Something matched! */
 		return 1;
 	}
-	if (f->h.numnames & QC_AnalyticsI) {
-		/* Oh ?  Analytical!  Pick entry igate name..
+	if (f->h.bitflags & QC_AnalyticsI) {
+		/* Oh ?  Analytical! 
 		   Has it ever been accepted into entry-igate database ? */
-		e += 2;
-		for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
-			if (e[i] == ',' || e[i] == ':')
-				break;
-		}
-		if ((e[i] != ',' && e[i] != ':') || i < CALLSIGNLEN_MIN)
-			return 0; /* Bad Entry-station callsign */
-
-		if (filter_entrycall_lookup(e, i))
+		if (filter_entrycall_lookup(pb))
 			return 1; /* Found on entry-igate database! */
 	}
 
@@ -1603,9 +1781,21 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 	                     ("." is dummy addition for C comments..)
 	*/
 	int rc = 0;
-	if (pb->packettype & f->h.numnames) /* reused numnames as comparison bitmask */
+	if (pb->packettype & f->h.bitflags) /* bitflags as comparison bitmask */
 		rc = 1;
 
+	if (!rc && (f->h.bitflags & T_WX)) {
+		// "Note: The weather type filter also passes positions packets
+		//        for positionless weather packets."
+		//
+		// 1) recognize positionless weather packets
+		// 2) register their source callsigns, do this in  input_parse
+		// 3) when filtering for weather data, check non-weather recognized
+		//    packets against the database in point 2
+		// 4) pass on packets matching point 3
+
+		rc = filter_wx_lookup(pb);
+	}
 	/* Either it stops here, or it continues... */
 
 	if (rc && f->h.type == 'T') { /* Within a range of callsign ?
@@ -1632,6 +1822,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 
 		if (f->h.hist_age < now) {
 			i = historydb_lookup( callsign, callsignlen, &history );
+			f->h.numnames = i;
 
 			// hlog( LOG_DEBUG, "Type filter with callsign range used! call='%s', range=%.1f position %sfound",
 			//       callsign, range, i ? "" : "not ");
@@ -1643,6 +1834,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 			f->h.f_lonE   = history->lon;
 			f->h.f_coslat = history->coslat;
 		}
+		if (!f->h.numnames) return 0; /* No valid data at range center position cache */
 
 		lat1    = f->h.f_latN;
 		lon1    = f->h.f_lonE;

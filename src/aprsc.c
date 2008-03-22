@@ -285,6 +285,7 @@ int main(int argc, char **argv)
 			cleanup_tick += 60;
 
 			historydb_cleanup();
+			filter_wx_cleanup();
 			filter_entrycall_cleanup();
 		}
 	}
@@ -301,6 +302,7 @@ int main(int argc, char **argv)
 	free_config();
 	dupecheck_atend();
 	historydb_atend();
+	filter_wx_atend();
 	filter_entrycall_atend();
 	
 	hlog(LOG_CRIT, "Shut down.");

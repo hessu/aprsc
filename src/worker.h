@@ -98,6 +98,7 @@ struct pbuf_t {
 	uint16_t flags;		/* bitmask: one or more of F_* */
 	uint16_t srcname_len;	/* parsed length of source (object, item, srcall) name 3..9 */
 	uint16_t dstcall_len;	/* parsed length of destination callsign *including* SSID */
+	uint16_t entrycall_len;
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */
@@ -113,7 +114,6 @@ struct pbuf_t {
 	float cos_lat;	/* cache of COS of LATitude for radial distance filter    */
 
 	char symbol[3]; /* 2(+1) chars of symbol, if any, NUL for not found */
-	char qcon;      /* 1 char of q-construct for filters, NUL for not found  */
 
 	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };

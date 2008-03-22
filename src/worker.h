@@ -128,11 +128,11 @@ extern struct pbuf_t  *pbuf_global_dupe_last;
 extern struct pbuf_t **pbuf_global_dupe_prevp;
 
 /* a network client */
-#define CSTATE_LOGIN      0
-#define CSTATE_CONNECTED  1
-#define CSTATE_COREPEER   2
-#define CSTATE_UPLINK     3
-#define CSTATE_UPLINKSIM  4
+typedef enum {
+	CSTATE_LOGIN,
+	CSTATE_CONNECTED,
+	CSTATE_COREPEER
+} CStateEnum;
 
 struct worker_t; /* used in client_t, but introduced later */
 struct filter_t; /* used in client_t, but introduced later */
@@ -178,15 +178,16 @@ struct client_t {
 #endif
 	int32_t flags;      /* bit flags on what kind of client this is */
 
-#define CLFLAGS_USERFILTEROK   0x001 /* Permits entry of user defined filters */
+#define CLFLAGS_INPORT         0x001
 #define CLFLAGS_UPLINKPORT     0x002
 #define CLFLAGS_UPLINKSIM      0x004
-#define CLFLAGS_PORT_RO	       0x010
+#define CLFLAGS_PORT_RO	       0x008
+#define CLFLAGS_USERFILTEROK   0x010 /* Permits entry of user defined filters */
 #define CLFLAGS_FULLFEED       0x100 /* Together with filter t/c* -- which really implements it */
 #define CLFLAGS_DUPEFEED       0x200 /* Duplicates are also sent to client */
 #define CLFLAGS_MESSAGEONLY    0x400 /* Together with filter t/m   -- which really implements it */
 
-	char  state;        /* state of the client... one of CSTATE_* */
+	CStateEnum state;   /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */
 	char *username;     /* The callsign */
 	char *app_name;     /* application name, from 'user' command */

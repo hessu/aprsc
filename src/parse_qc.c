@@ -49,9 +49,9 @@ int is_verified_client_login(char *s, int len)
 
 #define MAX_Q_CALLS 64
 
-int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
-		int new_q_len, char q_proto, char q_type, char *q_start,
-		char *path_end)
+static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
+			int new_q_len, char q_proto, char q_type, char *q_start,
+			char *path_end )
 {
 	char *qcallv[MAX_Q_CALLS+1];
 	int qcallc;
@@ -148,7 +148,9 @@ int q_dropcheck(struct client_t *c, char *new_q, int new_q_size,
 		/* 2) */
 		if (l == username_len && strncasecmp(qcallv[i], c->username, username_len) == 0) {
 			/* ok, login is client's login, handle step 3) */
-			if (c->state == CSTATE_CONNECTED && i != qcallc - 1) {
+			if (c->state == CSTATE_CONNECTED &&
+			    (c->flags & CLFLAGS_INPORT) &&
+			    (i != qcallc - 1)) {
 				/* 3) hits: from an inbound connection, client login found in path,
 				 * but is not the last viacall
 				 * TODO: should dump...
@@ -256,7 +258,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 	 * All packets from an inbound connection that would normally be passed per current validation algorithm:
 	 */
 	
-	if (c->state == CSTATE_CONNECTED) {
+	if (c->state == CSTATE_CONNECTED &&
+	    (c->flags & CLFLAGS_INPORT)) {
 		/*
 		 * If the packet entered the server from an UDP port:
 		 * {
@@ -378,7 +381,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 					} else {
 						/* Replace ,VIACALL,I with qAr,VIACALL */
 						*path_end = p;
-						new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+						new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", (int)(prevcall_end - prevcall), prevcall);
 						q_proto = 'A';
 						q_type = 'r';
 					}
@@ -451,7 +454,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 				} else {
 					/* Replace ,VIACALL,I with qAr,VIACALL */
 					*path_end = p;
-					new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+					new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", (int)(prevcall_end - prevcall), prevcall);
 					q_proto = 'A';
 					q_type = 'r';
 				}
@@ -486,7 +489,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 	 * Untested at the time of implementation (no uplink support yet)
 	 */
 	
-	if (!q_proto && (c->state == CSTATE_UPLINK || c->state == CSTATE_UPLINKSIM)) {
+	if (!q_proto && (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))) {
 		if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
 			// fprintf(stderr, "\tpath has ,I in the end\n");
 			/* the path is terminated with ,I - lookup previous callsign in path */
@@ -499,7 +502,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 				// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 				/* Replace ,VIACALL,I with qAr,VIACALL */
 				*path_end = p;
-				new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", prevcall_end - prevcall, prevcall);
+				new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", (int)(prevcall_end - prevcall), prevcall);
 				q_proto = 'A';
 				q_type = 'r';
 			} else {

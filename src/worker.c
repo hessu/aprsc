@@ -125,7 +125,8 @@ int worker_sighandler(int signum)
 void close_client(struct worker_t *self, struct client_t *c)
 {
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
-	      self->id, c->state == CSTATE_CONNECTED ? "client":"uplink", c->fd, c->addr_s);
+	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
+			  ? "client":"uplink" ), c->fd, c->addr_s);
 
 	/* close */
 	if (c->fd >= 0) {
@@ -147,7 +148,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 	/* if this happens to be the uplink, tell the uplink module that the
 	 * connection has gone away
 	 */
-	if (c->state == CSTATE_UPLINK)
+	if (c->flags & CLFLAGS_UPLINKPORT)
 		uplink_close(c);
 
 	/* free it up */
@@ -530,9 +531,8 @@ void send_keepalives(struct worker_t *self)
 		// the  c  may get destroyed from underneath of ourselves!
 		cnext = c->next;
 
-		if (// c->state == CSTATE_UPLINK ||
-		    c->state == CSTATE_UPLINKSIM ||
-		    c->state == CSTATE_COREPEER)
+		if ( c->flags & (CLFLAGS_UPLINKSIM|CLFLAGS_UPLINKPORT) ||
+		     c->state == CSTATE_COREPEER )
 			continue;
 		/* No keepalives on UPLINK or PEER links.. */
 

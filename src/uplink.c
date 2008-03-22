@@ -253,7 +253,7 @@ int make_uplink(struct uplink_config_t *l)
 	c = client_alloc();
 	c->fd    = fd;
 	c->addr  = sa;
-	c->state = CSTATE_UPLINK;
+	c->state = CSTATE_CONNECTED;
 	c->addr_s = hstrdup(eb);
 	c->keepalive = now;
 	/* use the default login handler */

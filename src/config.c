@@ -415,7 +415,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	int i, port;
 	struct listen_config_t *l;
 	struct addrinfo req, *ai;
-	int clflags = 0;
+	int clflags = CLFLAGS_INPORT;
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -428,15 +428,15 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		return -1;
 
 	if (strcasecmp(argv[2], "userfilter") == 0) {
-	  clflags = CLFLAGS_USERFILTEROK;
+	  clflags |= CLFLAGS_USERFILTEROK;
 	} else if (strcasecmp(argv[2], "fullfeed") == 0) {
-	  clflags = CLFLAGS_FULLFEED;
+	  clflags |= CLFLAGS_FULLFEED;
 	} else if (strcasecmp(argv[2], "dupefeed") == 0) {
-	  clflags = CLFLAGS_DUPEFEED;
+	  clflags |= CLFLAGS_DUPEFEED;
 	} else if (strcasecmp(argv[2], "messageonly") == 0) {
-	  clflags = CLFLAGS_MESSAGEONLY;
+	  clflags |= CLFLAGS_MESSAGEONLY;
 	} else if (strcasecmp(argv[2], "uplinksim") == 0) {
-	  clflags = CLFLAGS_UPLINKSIM;
+	  clflags = CLFLAGS_UPLINKSIM; /* _removes_ INPORT flag! */
 	} else {
 	  hlog(LOG_ERR, "Listen: unknown quality token: %s", argv[2]);
 	}

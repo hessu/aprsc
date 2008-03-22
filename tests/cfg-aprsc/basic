@@ -1,0 +1,117 @@
+#
+# USE RCS !!!
+# $Id$
+#
+
+# Configuration for aprsc, an APRS-IS server for core servers
+
+MyCall     NOCALL
+MyEmail    email@example.com
+MyAdmin    "My Name, MYCALL"
+MyHostname aprsc-1.example.com
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+# Log directory
+LogDir logs
+
+### Intervals #########
+# Interval specification format examples:
+# 600 (600 seconds), 5m, 2h, 1h30m, 1d3h15m24s, etc...
+
+# Statistics logging
+StatsInterval	1m
+
+# How often to scan the caches for old entries
+ExpiryInterval	30s
+
+# How long to cache last position of each station
+LastPositionCache	48h
+
+# How long to cache duplicate filter entries (practically all packets)
+DupeFilterCache	    	30s
+
+# When no data is received from an upstream server in N seconds, switch to
+# another server
+UpstreamTimeout		10s
+
+# When no data is received from a downstream server in N seconds, disconnect
+ClientTimeout		48h
+
+### TCP listener ##########
+# Listen <socketname> <porttype> tcp <address to bind> <port>
+#	socketname: any name you wish to show up in logs and statistics
+#	porttype: one of:
+#		fullfeed - everything, after dupe filtering
+#		dupefeed - everything that comes in - with dupes!
+#		msgonly - messages only
+#		userfilter - user-specified filters
+#
+# Feed controls are partially implemented with system specific filters.
+# Area-filters would be similar (like all of North America with a/// filters)
+#
+# Note: areas are not very precise definitions...
+#
+####### --- Feeds with no CWOP
+Listen "Full feed, no CWOP"                       fullfeed tcp 0.0.0.0 20152  t/*
+Listen "Full feed with duplicates, no CWOP"	  dupefeed tcp ::1     20160  t/*
+Listen "Usa only feed, no CWOP"                   fullfeed tcp 0.0.0.0 20154  -t/c a/90/-180/24/-30 a/25/-160/15/-150
+Listen "Europe only feed, no CWOP"                fullfeed tcp 0.0.0.0 20155  -t/c a/90/-30/30/60
+Listen "Stations within 350 km or your location"  fullfeed tcp 0.0.0.0 20156  -t/c m/350
+Listen "Stations within 100 km or your location"  fullfeed tcp 0.0.0.0 20157  -t/c m/100
+Listen "Stations within 1000 km or your location" fullfeed tcp 0.0.0.0 20158  -t/c m/1000
+Listen "Stations within 3000 km or your location" fullfeed tcp 0.0.0.0 20159  -t/c m/3000
+
+Listen "Regional East Coast US Only Feed"         fullfeed tcp 0.0.0.0 24579  -t/c a/90/-85/24/-30
+
+####### --- Feeds with CWOP
+
+#
+# Note: service on port 23 _requires_ this program to run as _root_
+#
+Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0     23   t/c*
+Listen "Messages only"                            messageonly tcp 0.0.0.0   1314   t/m
+Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152   t/c*
+Listen "Full feed with CWOP and duplicates"       dupefeed    tcp ::1      10160   t/c*
+Listen "User-specified filters"                   userfilter  tcp 0.0.0.0  14580
+
+Listen "Usa only feed, with CWOP"                           fullfeed tcp 0.0.0.0 10154  a/90/-180/24/-30 a/25/-160/15/-150
+Listen "Europe only feed, with CWOP"                        fullfeed tcp 0.0.0.0 10155  a/90/-30/30/60
+Listen "Stations within 350 km or your location with CWOP"  fullfeed tcp 0.0.0.0 10156  m/350
+Listen "Stations within 100 km or your location with CWOP"  fullfeed tcp 0.0.0.0 10157  m/100
+Listen "Stations within 1000 km or your location with CWOP" fullfeed tcp 0.0.0.0 10158  m/1000
+Listen "Stations within 3000 km or your location with CWOP" fullfeed tcp 0.0.0.0 10159  m/3000
+
+Listen "Regional 750 km @ Brady, Tx"		            fullfeed tcp 0.0.0.0 14578  r/31/-99/750
+Listen "Regional central USA: 49N 107W x 25N 86W"	    fullfeed tcp 0.0.0.0 14579  a/49/-107/25/-86
+
+#Uplink "Uplink" rw  tcp  finland.aprs2.net 10152
+Uplink "Uplink" ro  tcp  finland.aprs2.net 10152
+
+#Listen "uplinksim" uplinksim tcp 127.0.0.1 10190
+
+### Internals ############
+# The number of worker threads to run - set this to the number of
+# CPU cores you have. On a single-processor, single-core system, set this
+# to 1. On a server with two processors or a new dual-core single-CPU system,
+# set to 2. On a system with two dual-core processors, set to 4.
+##
+## Or set to about 1 per each 50 client connections, minimum 2..
+## The smaller set there is for poll(2) to transfer data from and
+## to the kernel, the less work each system call must do - search
+## for your balance, too much threads has its own penalties.
+##
+WorkerThreads 20
+
+# When running this server as super-user, the server can (in many systems)
+# increase several resource limits, and do other things that less privileged
+# server can not do.
+#
+# The FileLimit is resource limit on how many simultaneous connections and
+# some other internal resources the system can use at the same time.
+# If the server is not being run as super-user, this setting has no effect.
+#
+FileLimit        10000
+

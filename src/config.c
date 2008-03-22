@@ -530,9 +530,6 @@ int read_config(void)
 {
 	int failed = 0;
 	char *s;
-
-	myadmin    = hstrdup("undefined-myadmin");
-	myemail    = hstrdup("undefined-myemail");
 	
 	if (read_cfgfile(cfgfile, cfg_cmds))
 		return -1;
@@ -561,10 +558,10 @@ int read_config(void)
 	
 	/* mycall is only applied when running for the first time. */
 	if (mycall) {
-		if (new_mycall && strcasecmp(new_mycall, mycall)) {
+		if (new_mycall && strcasecmp(new_mycall, mycall) != 0)
 			hlog(LOG_WARNING, "Config: Not changing mycall while running.");
-		}
 		hfree(new_mycall);
+		new_mycall = NULL;
 	} else {
 		if (!new_mycall) {
 			hlog(LOG_CRIT, "Config: mycall is not defined.");
@@ -598,7 +595,7 @@ int read_config(void)
 		hlog(LOG_WARNING, "Config: myemail is not defined.");
 		failed = 1;
 	}
-
+	
 	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
 		/* Adjust process global fileno limit */
 		int e;
@@ -613,8 +610,6 @@ int read_config(void)
 		else
 			hlog(LOG_INFO, "After configuration FileLimit is %d", fileno_limit);
 	}
-
-
 	
 	if (workers_configured < 1) {
 		hlog(LOG_WARNING, "Configured less than 1 worker threads. Using 1.");

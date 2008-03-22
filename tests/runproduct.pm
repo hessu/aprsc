@@ -26,57 +26,58 @@ my %products = (
 		'binary' => '/usr/bin/java',
 		'stdargs' => '-server -cp ../../../javaprssrvr/javAPRSSrvr.jar javAPRSSrvr',
 		'cfgfileargs' => '',
-		'cfgdir' => 'cfg-javap'
+		'cfgdir' => 'cfg-javap',
+		'dieswith' => 15
 	}
 );
 
-my $prod;
-my $prod_name = 'aprsc';
-my $pid;
-my($stdin, $stdout, $stderr);
-
-sub init()
+sub new($$)
 {
-	$prod_name = $ENV{'TEST_PRODUCT'} if (defined $ENV{'TEST_PRODUCT'});
+	my($class, $config) = @_;
+	my $self = bless { @_ }, $class;
 	
-	if (!defined $products{$prod_name}) {
-		warn "No such product: " . $prod_name . "\n";
+	if (defined $ENV{'TEST_PRODUCT'}) {
+		$self->{'prod_name'} = $ENV{'TEST_PRODUCT'};
+	} else {
+		$self->{'prod_name'} = 'aprsc';
+	}
+	
+	if (!defined $products{$self->{'prod_name'}}) {
+		warn "No such product: " . $self->{'prod_name'} . "\n";
 		return undef;
 	}
 	
-	$prod = $products{$prod_name};
+	my $prod = $self->{'prod'} = $products{$self->{'prod_name'}};
 	
-	return 1;
+	my $cfgfile = $self->{'cfgfile'} = $prod->{'cfgdir'} . '/' . $config;
+	if (! -f $cfgfile) {
+		warn "No such configuration file: $cfgfile";
+		return undef;
+	}
+	
+	$self->{'cmdline'} = $prod->{'binary'} . ' ' . $prod->{'stdargs'} . ' '
+		. $prod->{'cfgfileargs'} . ' ' . $cfgfile;
+	
+	return $self;
 }
 
-sub readout()
+sub readout($)
 {
-	if (defined $stderr) {
-	}
-	
-	if (defined $stdout) {
-	}
+	my($self) = @_;
 }
 
 sub start($)
 {
-	my($config) = @_;
+	my($self) = @_;
 	
-	if (defined $pid) {
+	if (defined $self->{'pid'}) {
 		return "Product already running.";
 	}
 	
-	my $cfgfile = $prod->{'cfgdir'} . '/' . $config;
-	if (! -f $cfgfile) {
-		return "No such configuration file: $cfgfile";
-	}
+	warn "Product command line: $self->{cmdline}\n";
 	
-	my $cmdline = $prod->{'binary'} . ' ' . $prod->{'stdargs'} . ' '
-		. $prod->{'cfgfileargs'} . ' ' . $cfgfile;
-	
-	warn "Product command line: $cmdline\n";
-	
-	$pid = open3($stdin, $stdout, $stderr, $cmdline);
+	my($stdin, $stdout, $stderr);
+	my $pid = open3($stdin, $stdout, $stderr, $self->{'cmdline'});
 	
 	if (!defined $pid) {
 		return "Failed to run product: $!";
@@ -92,57 +93,86 @@ sub start($)
 		my $signal = $retval & 127;
 		$retval = $retval >> 8;
 		
-		readout();
-		discard();
+		$self->readout();
+		$self->discard();
 		return "Product quit after startup, signal $signal retcode $retval.";
 	}
+	
+	$self->{'pid'} = $pid;
+	$self->{'stdin'} = $stdin;
+	$self->{'stdout'} = $stdout;
+	$self->{'stderr'} = $stderr;
 	
 	return 1;
 }
 
-sub discard()
+sub discard($)
 {
-	close($stdin) if (defined $stdin);
-	close($stdout) if (defined $stdout);
-	close($stderr) if (defined $stderr);
-	undef $pid;
+	my($self) = @_;
+	
+	close($self->{'stdin'}) if (defined $self->{'stdin'});
+	close($self->{'stdout'}) if (defined $self->{'stdout'});
+	close($self->{'stderr'}) if (defined $self->{'stderr'});
+	
+	undef $self->{'stdin'};
+	undef $self->{'stdout'};
+	undef $self->{'stderr'};
+	undef $self->{'pid'};
 }
 
-sub stop()
+sub check($)
 {
-	if (!defined $pid) {
+	my($self) = @_;
+	
+	if (!defined $self->{'pid'}) {
 		return "Product not running.";
 	}
 	
-	my $kid = waitpid($pid, WNOHANG);
+	my $kid = waitpid($self->{'pid'}, WNOHANG);
 	
 	if ($kid) {
 		my $retval = $?;
 		my $signal = $retval & 127;
 		$retval = $retval >> 8;
 		
-		readout();
-		discard();
+		$self->readout();
+		$self->discard();
+		
 		return "Product has crashed, signal $signal retcode $retval.";
 	}
+	
+	return 1;
+}
+
+sub stop($)
+{
+	my($self) = @_;
+	
+	my $ret = $self->check();
+	return $ret if ($ret ne 1);
+	
+	my $pid = $self->{'pid'};
 	
 	my $hits = kill("TERM", $pid);
 	if ($hits < 1) {
 		return "Product is not running.";
-		discard();
+		$self->discard();
 		return undef;
 	}
 	
 	my $sleeptime = 0.2;
-	my $maxwait = 5;
+	my $maxwait = 6;
 	my $slept = 0;
 	my $rekilled = 0;
+	my $kid;
 	while (!($kid = waitpid($pid, WNOHANG))) {
-		$slept += select(undef, undef, undef, $sleeptime);
+		select(undef, undef, undef, $sleeptime);
+		$slept += $sleeptime;
 		if ($slept >= $maxwait) {
 			if ($rekilled) {
 				return "Product refuses to die!";
 			} else {
+				warn "Sending SIGKILL...\n";
 				$slept = 0;
 				$rekilled = 1;
 				kill("KILL", $pid);
@@ -155,14 +185,18 @@ sub stop()
 		my $signal = $retval & 127;
 		$retval = $retval >> 8;
 		
-		readout();
-		discard();
+		$self->readout();
+		$self->discard();
 		if ($retval ne 0 || $signal ne 0) {
-			return "Product has been terminated, signal $signal retcode $retval.";
+			if (defined $self->{'prod'}->{'dieswith'} && $self->{'prod'}->{'dieswith'} eq $signal) {
+				# fine
+			} else {
+				return "Product has been terminated, signal $signal retcode $retval.";
+			}
 		}
 	}
 	
-	discard();
+	$self->discard();
 	return 1;
 }
 

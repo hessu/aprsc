@@ -194,7 +194,7 @@ sub new {
 
     #$self->{select} = IO::Select->new( $self->{sock} );
 
-    $self->{aprsmycall} = uc( $mycall );
+    $self->{aprsmycall} = $mycall;
     $mycall =~ s/-.*//;
     $self->{aprspass}   = aprspass( uc($mycall) );
     if ($self->{aprsmycall} =~ m/CW\d{4}/o) {
@@ -296,8 +296,8 @@ sub sendline {
 package main;
 
 sub simspecs {
-my $simdata = "\
-   23      findu  
+my $simdata =
+"  23      findu  
 14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
 14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
 14580     VE9SJN  

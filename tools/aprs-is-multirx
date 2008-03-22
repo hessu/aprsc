@@ -75,7 +75,7 @@ sub mux_eof {
     my $mux     = shift;
     my $fh      = shift;
 
-    $MUX->shutdown($fh, 1);
+    $MUX->close($fh);
 }
 
 

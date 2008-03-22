@@ -110,7 +110,7 @@ sub new {
 
     $self->{select} = IO::Select->new( $self->{sock} );
 
-    $self->{aprsmycall} = uc( $mycall );
+    $self->{aprsmycall} = $mycall;
     $mycall =~ s/-.*//;
     $self->{aprspass}   = aprspass( uc($mycall) );
 

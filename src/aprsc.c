@@ -234,7 +234,7 @@ int main(int argc, char **argv)
 	
 	/* write pid file, now that we have our final pid... might fail, which is critical */
 	if (!writepid(pidfile))
-		exit(0);
+		exit(1);
 	
 	/* catch signals */
 	signal(SIGINT, (void *)sighandler);

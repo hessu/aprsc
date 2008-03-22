@@ -31,8 +31,8 @@
 #include <errno.h>
 #include "rwlock.h"
 
-#ifndef HAVE_PTHREAD_RWLOCK
-
+#ifndef PTHREAD_RWLOCK_INITIALIZER
+// #ifndef HAVE_PTHREAD_RWLOCK
 
 /*
  * Initialize a read-write lock

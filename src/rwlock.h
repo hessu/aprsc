@@ -23,7 +23,8 @@
 
 #include <pthread.h>
 
-#ifdef HAVE_PTHREAD_RWLOCK
+#ifdef PTHREAD_RWLOCK_INITIALIZER
+// #ifdef HAVE_PTHREAD_RWLOCK
 
 #define rwlock_t pthread_rwlock_t
 

@@ -19,13 +19,8 @@
  *	
  */
 
-/* ON THIS PROCESSING ALONE THE SYSTEM IS PUSHING AROUND 8-12 % OF CPU TIME!
- * ... but the previous top waster, the aprsc output filters, are optimized
- * to the hilt...
- *
- * There exists alternate implementations of CRC32 which are 1.7 - 2.3 times
- * faster than this one with an expense of using 4kB / 8 kB / 16 kB of tables,
- * which of course fill caches...
+/*
+ * Keyhash routines for the system.
  *
  * What is needed is _fast_ hash function.  Preferrably arithmethic one,
  * which does not need table lookups, and can work with aligned 32 bit
@@ -36,6 +31,9 @@
  *   http://www.ibiblio.org/pub/Linux/devel/lang/c/mph-1.2.tar.gz
  *   http://www.concentric.net/~Ttwang/tech/inthash.htm
  *   http://isthe.com/chongo/tech/comp/fnv/
+ *
+ * Currently using FNV-1a
+ *
  */
 
 /*
@@ -59,6 +57,19 @@
 //
 */
 
+
+/*
+ * ON THIS CRC32 HASH CALCULATION PROCESSING ALONE THE SYSTEM IS PUSHING
+ * AROUND 8-12 % OF CPU TIME!
+ *
+ * ... but the previous top waster, the aprsc output filters, are optimized
+ * to the hilt...
+ *
+ * There exists alternate implementations of CRC32 which are 1.7 - 2.3 times
+ * faster than this one with an expense of using 4kB / 8 kB / 16 kB of tables,
+ * which of course fill caches...
+ *
+ */
 
 /*
  * Oct 15, 2000 Matt Domsch <Matt_Domsch@dell.com>

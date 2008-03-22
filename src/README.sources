@@ -94,15 +94,12 @@ cfgfile.c
 	A configuration file parser written by Tomi Manninen, OH2BNS,
 	originally for the node(1) program in the ax25-utils package.
 
-splay.c
-spsymbol.c
-	splay tree functions written by David Brower, daveb@rtech.uucp 1/88,
-	obtained from the zmailer sources.
-
-crc32.c
-	CRC32 calculation routine by Rayan S. Zachariassen, originally
-	from the zmailer MTA software (maintained by Matti Aarnio,
-	OH2MQK). Used by spsymbol.c.
+keyhash.c
+	Various attempts at keyhashing.
+	Contains algorithms:
+	  - FNV-1a
+	  - CRC32
+	Currently using FNV-1a
 
 rwlock.c
 	A schoolbook pthread rwlock implementation for systems

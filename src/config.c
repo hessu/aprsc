@@ -603,18 +603,18 @@ int read_config(void)
 	}
 
 	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
-	  /* Adjust process global fileno limit */
-	  int e;
-	  struct rlimit rlim;
-	  e = getrlimit(RLIMIT_NOFILE, &rlim);
-	  rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
-	  e = setrlimit(RLIMIT_NOFILE, &rlim);
-	  e = getrlimit(RLIMIT_NOFILE, &rlim);
-	  fileno_limit = rlim.rlim_cur;
-	  if (fileno_limit < new_fileno_limit)
-	    hlog(LOG_WARNING, "CONFIGURATION COULD NOT RAISE FILENO LIMIT, it is now %d", fileno_limit);
-	  else
-	    hlog(LOG_INFO, "After configuration, fileno limit is now %d", fileno_limit);
+		/* Adjust process global fileno limit */
+		int e;
+		struct rlimit rlim;
+		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
+		e = setrlimit(RLIMIT_NOFILE, &rlim);
+		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		fileno_limit = rlim.rlim_cur;
+		if (fileno_limit < new_fileno_limit)
+			hlog(LOG_WARNING, "Configuration could not raise FileLimit (possibly not running as root), it is now %d", fileno_limit);
+		else
+			hlog(LOG_INFO, "After configuration FileLimit is %d", fileno_limit);
 	}
 
 

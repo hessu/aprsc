@@ -114,11 +114,52 @@ sub stop()
 		return "Product not running.";
 	}
 	
+	my $kid = waitpid($pid, WNOHANG);
+	
+	if ($kid) {
+		my $retval = $?;
+		my $signal = $retval & 127;
+		$retval = $retval >> 8;
+		
+		readout();
+		discard();
+		return "Product has crashed, signal $signal retcode $retval.";
+	}
+	
 	my $hits = kill("TERM", $pid);
 	if ($hits < 1) {
 		return "Product is not running.";
 		discard();
 		return undef;
+	}
+	
+	my $sleeptime = 0.2;
+	my $maxwait = 5;
+	my $slept = 0;
+	my $rekilled = 0;
+	while (!($kid = waitpid($pid, WNOHANG))) {
+		$slept += select(undef, undef, undef, $sleeptime);
+		if ($slept >= $maxwait) {
+			if ($rekilled) {
+				return "Product refuses to die!";
+			} else {
+				$slept = 0;
+				$rekilled = 1;
+				kill("KILL", $pid);
+			}
+		}
+	}
+	
+	if ($kid) {
+		my $retval = $?;
+		my $signal = $retval & 127;
+		$retval = $retval >> 8;
+		
+		readout();
+		discard();
+		if ($retval ne 0 || $signal ne 0) {
+			return "Product has been terminated, signal $signal retcode $retval.";
+		}
 	}
 	
 	discard();

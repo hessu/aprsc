@@ -55,7 +55,6 @@ char *logname = def_logname;	/* syslog entries use this program name */
 char *mycall;
 char *myemail;
 char *myadmin;
-char *myhostname;
 char *new_mycall;
 char *new_myemail;
 char *new_myadmin;
@@ -109,7 +108,6 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "logdir",		_CFUNC_ do_string,	&new_logdir		},
 	{ "mycall",		_CFUNC_ do_string,	&new_mycall		},
 	{ "myemail",		_CFUNC_ do_string,	&new_myemail		},
-	{ "myhostname",		_CFUNC_ do_string,	&myhostname		},
 	{ "myadmin",		_CFUNC_ do_string,	&new_myadmin		},
 	{ "workerthreads",	_CFUNC_ do_int,		&workers_configured	},
 	{ "statsinterval",	_CFUNC_ do_interval,	&stats_interval		},
@@ -533,7 +531,6 @@ int read_config(void)
 	int failed = 0;
 	char *s;
 
-	myhostname = hstrdup("undefined-hostname");
 	myadmin    = hstrdup("undefined-myadmin");
 	myemail    = hstrdup("undefined-myemail");
 	

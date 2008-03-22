@@ -173,7 +173,7 @@ void pthreads_profiling_reset(const char *name)
 	}
 
 	tid = syscall(SYS_gettid);
-	hlog(LOG_INFO, "Thread %s: Linux ThreadId: %d", name, tid);
+	hlog(LOG_DEBUG, "Thread %s: Linux ThreadId: %d", name, tid);
 #endif
 }
 

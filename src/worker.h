@@ -261,6 +261,8 @@ struct worker_t {
 	uint32_t	last_pbuf_dupe_seqnum;
 };
 
+extern int workers_running;
+
 extern void pbuf_init(void);
 extern void pbuf_free(struct worker_t *self, struct pbuf_t *p);
 extern void pbuf_free_many(struct pbuf_t **array, int numbufs);

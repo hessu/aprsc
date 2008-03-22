@@ -605,7 +605,7 @@ void worker_thread(struct worker_t *self)
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
-	hlog(LOG_INFO, "Worker %d started.", self->id);
+	hlog(LOG_DEBUG, "Worker %d started.", self->id);
 	
 	while (!self->shutting_down) {
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
@@ -679,7 +679,6 @@ void worker_thread(struct worker_t *self)
 		pbuf_free(NULL, p); // free to global pool
 	}
 
-	
 	hlog(LOG_DEBUG, "Worker %d shut down.", self->id);
 }
 
@@ -691,8 +690,11 @@ void workers_stop(int stop_all)
 {
 	struct worker_t *w;
 	int e;
+	int stopped = 0;
 	extern long incoming_count;
 	
+	hlog(LOG_INFO, "Stopping %d worker threads...",
+		(stop_all) ? workers_running : workers_configured - workers_running);
 	while (workers_running > workers_configured || (stop_all && workers_running > 0)) {
 		hlog(LOG_DEBUG, "Stopping a worker thread...");
 		/* find the last worker thread and shut it down...
@@ -709,17 +711,19 @@ void workers_stop(int stop_all)
 			w = w->next;
 		
 		w->shutting_down = 1;
-		if ((e = pthread_join(w->th, NULL)))
+		if ((e = pthread_join(w->th, NULL))) {
 			hlog(LOG_ERR, "Could not pthread_join worker %d: %s", w->id, strerror(e));
-		else
-			hlog(LOG_INFO, "Worker %d has terminated.", w->id);
+		} else {
+			hlog(LOG_DEBUG, "Worker %d has terminated.", w->id);
+			stopped++;
+		}
 
 		*(w->prevp) = NULL;
 		hfree(w);
 		
 		workers_running--;
 	}
-	hlog(LOG_INFO, "workers; incount=%ld", incoming_count);
+	hlog(LOG_INFO, "Stopped %d worker threads. (incoming_count=%ld)", stopped, incoming_count);
 	
 }
 
@@ -733,8 +737,11 @@ void workers_start(void)
 	struct worker_t * volatile w;
  	struct worker_t **prevp;
 	
-	workers_stop(0);
-
+	if (workers_running)
+		workers_stop(0);
+	
+	hlog(LOG_INFO, "Starting %d worker threads (configured: %d)...",
+		workers_configured - workers_running, workers_configured);
 	while (workers_running < workers_configured) {
 		hlog(LOG_DEBUG, "Starting a worker thread...");
 		i = 0;

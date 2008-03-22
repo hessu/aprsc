@@ -453,11 +453,13 @@ void accept_thread(void *asdf)
 			 * the amount of workers... they walk the worker list, and
 			 * might get confused when workers are stopped or started.
 			 */
-			uplink_stop();
-			dupecheck_stop();
-			workers_start();
-			dupecheck_start();
-			uplink_start();
+			if (workers_running != workers_configured) {
+				uplink_stop();
+				dupecheck_stop();
+				workers_start();
+				dupecheck_start();
+				uplink_start();
+			}
 		}
 		
 		/* check for new connections */

@@ -58,6 +58,8 @@ sub new($$)
 	$self->{'cmdline'} = $prod->{'binary'} . ' ' . $prod->{'stdargs'} . ' '
 		. $prod->{'cfgfileargs'} . ' ' . $cfgfile;
 	
+	$self->{'error'} = 'No errors yet';
+	
 	return $self;
 }
 

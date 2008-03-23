@@ -53,17 +53,9 @@ Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152
 Listen "User-specified filters"                   userfilter  tcp 0.0.0.0  14580
 
 ### Internals ############
-# The number of worker threads to run - set this to the number of
-# CPU cores you have. On a single-processor, single-core system, set this
-# to 1. On a server with two processors or a new dual-core single-CPU system,
-# set to 2. On a system with two dual-core processors, set to 4.
-##
-## Or set to about 1 per each 50 client connections, minimum 2..
-## The smaller set there is for poll(2) to transfer data from and
-## to the kernel, the less work each system call must do - search
-## for your balance, too much threads has its own penalties.
-##
-WorkerThreads 20
+# Only use 3 threads in these basic tests, to keep startup/shutdown times
+# short.
+WorkerThreads 3
 
 # When running this server as super-user, the server can (in many systems)
 # increase several resource limits, and do other things that less privileged

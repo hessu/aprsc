@@ -43,8 +43,8 @@ cellarena_t *historydb_cells;
 
 rwlock_t historydb_rwlock;
 
-struct history_cell_t **historydb_hash;
 #define HISTORYDB_HASH_MODULO 8192
+struct history_cell_t *historydb_hash[HISTORYDB_HASH_MODULO];
 
 // monitor counters and gauges
 long historydb_inserts;
@@ -68,10 +68,6 @@ void historydb_init(void)
 				    CELLMALLOC_POLICY_FIFO, 2048 /* 2 MB */,
 				    0 /* minfree */ );
 #endif
-
-	i = sizeof(struct history_cell_t *) * HISTORYDB_HASH_MODULO;
-	historydb_hash = hmalloc(i);
-	memset(historydb_hash, 0, i);
 }
 
 // Called only under WR-LOCK
@@ -100,6 +96,7 @@ void historydb_nopos(void) {}         // profiler call counter items
 void historydb_nointerest(void) {}
 void historydb_hashmatch(void) {}
 void historydb_keymatch(void) {}
+void historydb_dataupdate(void) {}
 
 /*
  *     The  historydb_atend()  does exist primarily to make valgrind
@@ -156,15 +153,14 @@ int historydb_load(FILE *fp)
 	// load the historydb in text format, ignore too old positions
 	int i;
 	time_t expirytime   = now - lastposition_storetime;
-	char bufline[2000]; // should be enough...
 	time_t t;
+	char bufline[2000];
 	char keybuf[20];
 	int packettype, flags;
 	float lat, lon;
 	int packetlen = 0;
 	int h1, h2, keylen;
-	struct history_cell_t **hpp;
-	struct history_cell_t *hp, *hp1;
+	struct history_cell_t *hp;
 	int linecount = 0;
 
 
@@ -187,15 +183,16 @@ int historydb_load(FILE *fp)
 
 	// now the loading...
 	while (!feof(fp)) {
-
-		*bufline = 0;
+		++linecount;
 
 		i = fscanf(fp, "%ld\t%9[^\t]\t%d\t%d\t%f\t%f\t%d\t",
 			   &t,    keybuf, &packettype, &flags,
 			   &lat, &lon,    &packetlen );
 
-		if (i != 7) {  // verify correct scan
-			hlog(LOG_ERR, "historybuf load, wrong parse on line %d", linecount);
+		if (i != 7) {  /* verify correct scan */
+			if (feof(fp)) break; /* errors on EOF */
+
+			hlog(LOG_ERR, "historybuf load, wrong parse on line %d, ret=%d", linecount, i);
 			break;
 		}
 		// FIXME: now several parameters may be invalid for us, like:
@@ -213,50 +210,25 @@ int historydb_load(FILE *fp)
 		h2 = h1;
 		h2 ^= (h2 >> 16); /* Fold hash bits.. */
 		i = h2 % HISTORYDB_HASH_MODULO;
+	
+		// Not found on this chain, insert it!
+		hp = historydb_alloc(packetlen);
+		hp->next = historydb_hash[i];
+		historydb_hash[i] = hp;
 
-		hp1 = NULL;
-		hpp = &historydb_hash[i];
+		hp->hash1 = h1;
+		strcpy(hp->key, keybuf);
+		hp->lat         = lat;
+		hp->coslat      = cosf(lat);
+		hp->lon         = lon;
+		hp->arrivaltime = t;
+		hp->packettype  = packettype;
+		hp->flags       = flags;
+		hp->packetlen   = packetlen;
+		if (packetlen > 300) packetlen = 300; // max to 300..
 
-		// scan the hash-bucket chain
-		while (( hp = *hpp )) {
-			if ( (hp->hash1 == h1) &&
-			       // Hash match, compare the key
-			       (strcmp(hp->key, keybuf) == 0) ) {
-			  	// Key match! -- should not happen while loading..
-				// Update the data content
-				hp1 = hp;
-				hp->lat         = lat;
-				hp->coslat      = cosf(lat);
-				hp->lon         = lon;
-				hp->arrivaltime = t;
-				hp->packettype  = packettype;
-				hp->flags       = flags;
-				hp->packetlen   = packetlen;
-				memcpy(hp->packet, bufline,
-				       packetlen > 300 ? 300 : packetlen);
-				break;
-			}
-			// advance hpp..
-			hpp = &(hp -> next);
-		}
-		if (!hp1) {
-			// Not found on this chain, insert it!
-			hp = historydb_alloc(packetlen);
-			hp->next = NULL;
-			hp->hash1 = h1;
-			strcpy(hp->key, keybuf);
-			hp->lat         = lat;
-			hp->coslat      = cosf(lat);
-			hp->lon         = lon;
-			hp->arrivaltime = t;
-			hp->packettype  = packettype;
-			hp->flags       = flags;
-			hp->packetlen   = packetlen;
-			if (packetlen > 300) packetlen = 300; // max to 300..
-			memcpy(hp->packet, bufline, packetlen);
+		memcpy(hp->packet, bufline, packetlen);
 
-			*hpp = hp;
-		}
 	} // .. while !feof ..
 
 	// Free the lock
@@ -371,6 +343,7 @@ int historydb_insert(struct pbuf_t *pb)
 				historydb_free(cp);
 				continue;
 			} else {
+				historydb_dataupdate(); // debug thing -- a profiling counter
 				// Update the data content
 				cp1 = cp;
 				cp->lat         = pb->lat;

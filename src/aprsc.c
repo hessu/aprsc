@@ -188,6 +188,8 @@ int main(int argc, char **argv)
 	int e;
 	struct rlimit rlim;
 	time_t cleanup_tick;
+	FILE *fp;
+	char path[500];
 	
 	/* close stdin */
 	close(0);
@@ -255,6 +257,27 @@ int main(int argc, char **argv)
 	dupecheck_init();
 	historydb_init();
 
+
+	sprintf(path, "%s/historydb.dump", rundir);
+	fp = fopen(path,"r");
+	if (fp) {
+		historydb_load(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/filter.wx.dump", rundir);
+	fp = fopen(path,"r");
+	if (fp) {
+		filter_wx_load(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/filter.entry.dump", rundir);
+	fp = fopen(path,"r");
+	if (fp) {
+		filter_entrycall_load(fp);
+		fclose(fp);
+	}
+
+
 	time(&cleanup_tick);
 
 	/* start the accept thread, which will start server threads */
@@ -298,6 +321,25 @@ int main(int argc, char **argv)
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
 	// sp_free_freelist();
+	sprintf(path, "%s/historydb.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		historydb_dump(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/filter.wx.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		filter_wx_dump(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/filter.entry.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		filter_entrycall_dump(fp);
+		fclose(fp);
+	}
+
 
 	free_config();
 	dupecheck_atend();

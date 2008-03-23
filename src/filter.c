@@ -173,7 +173,6 @@ struct filter_entrycall_t {
 	uint32_t hash;
 	int	len;
 	char	callsign[CALLSIGNLEN_MAX+1];
-	char	qcode;	/* q-construct code */
 };
 
 struct filter_wx_t {
@@ -320,7 +319,6 @@ pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
 				int cmp = memcmp(f->callsign, key, keylen);
 				if (cmp == 0) { /* Have key match */
 					f->expirytime = now + filter_entrycall_maxage;
-					f->qcode      = qcons;
 					f2 = f;
 					break;
 				}
@@ -347,7 +345,6 @@ pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
 			f->len   = keylen;
 			memcpy(f->callsign, key, keylen);
 			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
-			f->qcode = qcons;
 
 			*fp = f2 = f;
 		}
@@ -464,6 +461,82 @@ void filter_entrycall_atend(void)
 
 	rwl_wrunlock(&filter_entrycall_rwlock);
 }
+
+
+void filter_entrycall_dump(FILE *fp)
+{
+	int k;
+	struct filter_entrycall_t *f;
+
+	for (k = 0; k < FILTER_ENTRYCALL_HASHSIZE; ++k) {
+		f = filter_entrycall_hash[k];
+
+		for ( ; f; f = f->next ) {
+			fprintf( fp, "%ld\t%s\n",
+				 (long)f->expirytime, f->callsign );
+		}
+	}
+}
+
+void filter_entrycall_load(FILE *fp)
+{
+	char buf[500];
+	struct filter_entrycall_t *f, *f2, **fpp;
+	int idx, i, len;
+	long t;
+	uint32_t hash;
+	char call[20];
+	char *p;
+
+	/* No need to have locks -- yet.. */
+
+	while (!feof(fp)) {
+		p = fgets(buf, sizeof(buf), fp);
+		if (!p) break; /* EOF? */
+		i = sscanf( buf, "%ld\t%18[^\n]\n", &t, call );
+		if (i != 2) {
+			hlog(LOG_INFO, "Filter_entrycall_load: sscanf->%d, bad input: %s", i, buf);
+			continue;
+		}
+
+		if (t < now)
+			continue; /* Too old */
+
+		len = strlen(call);
+		hash = keyhash(call, len, 0);
+		idx = ( hash ^                /* Fold the hashbits.. */
+			(hash >> 11) ^
+			(hash >> 22)
+			) % FILTER_ENTRYCALL_HASHSIZE;
+
+		fpp = &filter_entrycall_hash[idx];
+		f2  = NULL;
+
+		/* There should not be key collisions..
+		   .. nor it exactly matters if reload gets
+		   items in reverse order.                  */
+
+#ifndef _FOR_VALGRIND_
+		f = cellmalloc(filter_entrycall_cells);
+#else
+		f = hmalloc(sizeof(*f));
+#endif
+		if (!f) break;
+
+		f->next = *fpp;
+		f->expirytime = t;
+		f->hash       = hash;
+		f->len        = len;
+
+		memcpy(f->callsign, call, len);
+		memset(f->callsign+len, 0, sizeof(f->callsign)-len);
+
+		*fpp = f;
+	}
+}
+
+
+/* ================================================================ */
 
 
 
@@ -641,6 +714,84 @@ void filter_wx_atend(void)
 
 	rwl_wrunlock(&filter_wx_rwlock);
 }
+
+
+void filter_wx_dump(FILE *fp)
+{
+	int k;
+	struct filter_wx_t *f;
+
+	/* No need to have locks -- anymore.. */
+
+	for (k = 0; k < FILTER_WX_HASHSIZE; ++k) {
+		f = filter_wx_hash[k];
+
+		for ( ; f; f = f->next ) {
+			fprintf( fp, "%ld\t%s\n",
+				 (long)f->expirytime, f->callsign );
+		}
+	}
+}
+
+void filter_wx_load(FILE *fp)
+{
+	char buf[500];
+	struct filter_wx_t *f, *f2, **fpp;
+	int idx, i, len;
+	long t;
+	uint32_t hash;
+	char call[20];
+	char *p;
+
+	/* No need to have locks -- yet.. */
+
+	while (!feof(fp)) {
+		p = fgets(buf, sizeof(buf), fp);
+		if (!p) break; /* EOF? */
+		i = sscanf( buf, "%ld\t%18[^\n]\n", &t, call );
+		if (i != 2) {
+			hlog(LOG_INFO, "Filter_wx_load: sscanf->%d, bad input: %s", i, buf);
+			continue;
+		}
+
+		if (t < now)
+			continue; /* Too old */
+
+		len = strlen(call);
+		hash = keyhash(call, len, 0);
+		idx = ( hash ^                /* Fold the hashbits.. */
+			(hash >> 11) ^
+			(hash >> 22)
+			) % FILTER_WX_HASHSIZE;
+
+		fpp = &filter_wx_hash[idx];
+		f2 = NULL;
+
+		/* There should not be key collisions..
+		   .. nor it exactly matters if reload gets
+		   items in reverse order.                  */
+
+#ifndef _FOR_VALGRIND_
+		f = cellmalloc(filter_wx_cells);
+#else
+		f = hmalloc(sizeof(*f));
+#endif
+		if (!f) break;
+
+		f->next = *fpp;
+		f->expirytime = t;
+		f->hash       = hash;
+		f->len        = len;
+
+		memcpy(f->callsign, call, len);
+		memset(f->callsign+len, 0, sizeof(f->callsign)-len);
+
+		*fpp = f;
+	}
+}
+
+/* ================================================================ */
+
 
 
 /*

@@ -257,7 +257,11 @@ int main(int argc, char **argv)
 	dupecheck_init();
 	historydb_init();
 
-
+#if 0
+	/*
+	 *    As a general rule, loading of databases is not a Good Idea in
+	 *    operational system.  Development time debugging on other hand..
+	 */
 	sprintf(path, "%s/historydb.dump", rundir);
 	fp = fopen(path,"r");
 	if (fp) {
@@ -276,7 +280,7 @@ int main(int argc, char **argv)
 		filter_entrycall_load(fp);
 		fclose(fp);
 	}
-
+#endif
 
 	time(&cleanup_tick);
 
@@ -320,7 +324,11 @@ int main(int argc, char **argv)
 	else
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
-	// sp_free_freelist();
+#if 0
+	/*
+	 *    As a general rule, dumping of databases is not a Good Idea in
+	 *    operational system.  Development time debugging on other hand..
+	 */
 	sprintf(path, "%s/historydb.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
@@ -339,7 +347,7 @@ int main(int argc, char **argv)
 		filter_entrycall_dump(fp);
 		fclose(fp);
 	}
-
+#endif
 
 	free_config();
 	dupecheck_atend();

@@ -32,7 +32,7 @@ my @specdata = simspecs();
 if ($N > 1) {
     for $n (1..$N) {
 	my $pid = fork();
-	if ($pid > 0) { # Client
+	if ($pid == 0) { # Client
 	    work($n % $N,$N);
 	    exit 0;
 	}
@@ -176,7 +176,7 @@ sub new {
 	my $u = undef;
 	my $p = undef;
 	$u = IO::Socket::INET->new( Proto => 'udp',
-				    PeerAddr => $url,
+				    PeerAddr => $uurl,
 				    Blocking => 0 );
 	if (defined($u)) {
 	    $self->{socku} = $u;
@@ -237,20 +237,20 @@ sub new {
 
     $self->{sock}->blocking(1);
     if (defined($self->{filterre})) {
-	$self->{sock}->printf( "user %s pass %s".$udp." vers %s filter %s\r\n",
+	$self->{sock}->printf( "user %s pass %s vers %s filter %s".$udp."\r\n",
 			       $self->{aprsmycall},
 			       $self->{aprspass}, # -- but we are read-only !
 			       $main::VERSION, $self->{filterre} );
-	printf( "user %s pass %s vers %s filter %s\n",
+	printf( "user %s pass %s vers %s".$udp." filter %s\n",
 		$self->{aprsmycall},
 		$self->{aprspass}, # -- but we are read-only !
 		$main::VERSION, $self->{filterre} );
     } else {
-	$self->{sock}->printf( "user %s pass %s".$udp." vers %s\r\n",
+	$self->{sock}->printf( "user %s pass %s vers %s".$udp."\r\n",
 			       $self->{aprsmycall},
 			       $self->{aprspass}, # -- but we are read-only !
 			       $main::VERSION );
-	printf( "user %s pass %s vers %s\n",
+	printf( "user %s pass %s vers %s".$udp."\n",
 		$self->{aprsmycall},
 		$self->{aprspass}, # -- but we are read-only !
 		$main::VERSION );

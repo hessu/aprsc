@@ -47,6 +47,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "login.h"
+#include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 
 extern int uplink_simulator;
@@ -115,7 +116,7 @@ int accept_sighandler(int signum)
 }
 
 /*
- *	Open the TCP listening socket
+ *	Open the TCP/SCTP listening socket
  */
 
 int open_tcp_listener(struct listen_t *l)
@@ -131,10 +132,9 @@ int open_tcp_listener(struct listen_t *l)
 	}
 	
 	arg = 1;
+	setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
 #ifdef SO_REUSEPORT
 	setsockopt(f, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg));
-#else
-	setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
 #endif
 	
 	if (bind(f, l->ai->ai_addr, l->ai->ai_addrlen)) {
@@ -154,6 +154,144 @@ int open_tcp_listener(struct listen_t *l)
 	return f;
 }
 
+/*
+ *	Open the UDP receiving socket
+ */
+
+int open_udp_listener(struct listen_t *l)
+{
+	int arg;
+	int fd, i;
+	struct client_t *c;
+	union sockaddr_u sa; /* large enough for also IPv6 address */
+	socklen_t addr_len = sizeof(sa);
+	char eb[200];
+	char sbuf[20];
+	char *s;
+
+if (udpclient) {
+	hlog(LOG_ERR, "Multiple UDP client listeners defined! %s  %s", l->name, l->addr_s);
+	return -1;
+}
+	
+	hlog(LOG_INFO, "Binding listening UDP socket: %s", l->addr_s);
+	
+	if ((fd = socket(l->ai->ai_family, l->ai->ai_socktype, l->ai->ai_protocol)) < 0) {
+		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
+		return -1;
+	}
+	
+	arg = 1;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
+#ifdef SO_REUSEPORT
+	setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg));
+#endif
+
+	memcpy( &sa, l->ai->ai_addr,  l->ai->ai_addrlen );
+	
+	if (bind(fd, l->ai->ai_addr, l->ai->ai_addrlen)) {
+		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
+		close(fd);
+		return -1;
+	}
+
+	eb[0] = '[';
+	eb[1] = 0;
+	*sbuf = 0;
+
+	getnameinfo( (struct sockaddr *)&sa, addr_len,
+		     eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV );
+	s = eb + strlen(eb);
+	sprintf(s, "]:%s", sbuf);
+	
+	c = client_alloc();
+	c->fd        = fd;
+	c->addr      = sa;
+	c->state     = CSTATE_UDP;
+	c->addr_s    = hstrdup(eb);
+	c->keepalive = tick;
+	c->flags     = l->clientflags;
+	/* use the default login handler */
+	c->handler = &incoming_handler; /* Not really used.. */
+
+	if (1) {
+		int len, arg;
+		/* Set bigger RCVBUF and SNDBUF size for the UDP port..  */
+		len = sizeof(arg);
+		arg = 128*1024;
+		i = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &arg, len);
+		i = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, len);
+	}
+
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		if (l->filters[i])
+			if (filter_parse(c, l->filters[i], 0) < 0) { /* system filters */
+				hlog(LOG_ERR, "Bad system filter definition: %s", l->filters[i]);
+			}
+	}
+	
+	/* set non-blocking mode */
+	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
+		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
+		goto err;
+	}
+
+
+	// FIXME: Add this on special list of UDP sockets!
+	udpclient = c;
+
+
+#if 0	// At this point in time, we do not have workers running!
+
+	static int next_receiving_worker;
+	struct worker_t *w;
+	struct worker_t *wc;
+
+	/* Use simple round-robin on client feeding.  Least clients is
+	 * quite attractive idea, but when clients arrive at huge bursts
+	 * they tend to move in big bunches, and it takes quite some while
+	 * before the worker updates its client-counters.
+	 */
+	for (i = 0, w = worker_threads; w ;  w = w->next, ++i) {
+	  if ( i >= next_receiving_worker) break;
+	}
+	wc = w;
+	if (! w) {
+		wc = worker_threads;       // ran out of the worker chain, back to the first..
+		next_receiving_worker = 0; // and reset the index too
+	}
+	// in every case, increment the next receiver index for the next call.
+	++next_receiving_worker;
+
+	/* ok, found it... lock the new client queue */
+	hlog(LOG_DEBUG, "... passing UDP rx to thread %d", wc->id);
+
+	if ((i = pthread_mutex_lock(&wc->new_clients_mutex))) {
+		hlog(LOG_ERR, "open_udp_listener(): could not lock new_clients_mutex: %s", strerror(i));
+		goto err;
+	}
+	/* push the client in the worker's queue */
+	c->next = wc->new_clients;
+	c->prevp = &wc->new_clients;
+	if (c->next)
+		c->next->prevp = &c->next;
+	wc->new_clients = c;
+
+
+	/* unlock the queue */
+	if ((i = pthread_mutex_unlock(&wc->new_clients_mutex))) {
+		hlog(LOG_ERR, "open_udp_listener(): could not unlock new_clients_mutex: %s", strerror(i));
+		goto err;
+	}
+#endif
+	
+	return fd;
+	
+err:
+	client_free(c);
+	return -1;
+}
+
 int open_listeners(void)
 {
 	struct listen_config_t *lc;
@@ -163,6 +301,8 @@ int open_listeners(void)
 	int opened = 0, i;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
+
+
 		l = listener_alloc();
 		l->clientflags = lc->client_flags;
 
@@ -182,7 +322,15 @@ int open_listeners(void)
 		l->addr_s = hstrdup(eb);
 		l->name   = hstrdup(lc->name);
 		
-		if (open_tcp_listener(l) >= 0) {
+		if (l->ai->ai_socktype == SOCK_DGRAM &&
+		    l->ai->ai_protocol == IPPROTO_UDP) {
+			/* UDP listenting is not quite same as TCP listening.. */
+			i = open_udp_listener(l);
+		} else {
+			/* TCP listenting... */
+			i = open_tcp_listener(l);
+		}
+		if (i >= 0) {
 			opened++;
 			hlog(LOG_DEBUG, "... ok, bound");
 		} else {
@@ -244,7 +392,6 @@ struct client_t *do_accept(struct listen_t *l)
 	static int next_receiving_worker;
 	struct worker_t *w;
 	struct worker_t *wc;
-	int client_min = -1;
 	static time_t last_EMFILE_report;
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
@@ -359,6 +506,7 @@ struct client_t *do_accept(struct listen_t *l)
 	 * is _exactly_ fair.
 	 */
 	
+	int client_min = -1;
 	for (wc = w = worker_threads; (w); w = w->next)
 		if (w->client_count < client_min || client_min == -1) {
 			wc = w;

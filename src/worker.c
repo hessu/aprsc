@@ -46,8 +46,11 @@ time_t tick;	/* real monotonous clock, may or may not be wallclock */
 
 extern int ibuf_size;
 
-struct worker_t *worker_threads = NULL;
-int workers_running = 0;
+struct worker_t *worker_threads;
+struct client_t *udpclient;	/* single listening/receiving UDP client socket */
+struct client_t *udppeer;	/* single listening/receiving UDP peer socket */
+
+int workers_running;
 int sock_write_expire  = 60;    /* 60 seconds OK ?       */
 int keepalive_interval = 20;    /* 20 seconds for individual socket, NOT all in sync! */
 int keepalive_poll_freq = 2;	/* keepalive analysis scan interval */
@@ -171,6 +174,21 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	   Buffer flushing is done every keepalive_poll_freq (2) seconds.
 	*/
 	c->obuf_writes++;
+
+	if (c->udp_port && udpclient && len > 0) {
+		int i;
+		i = sendto( udpclient->fd, p, len, MSG_DONTWAIT,
+			    (struct sockaddr *)&c->udpaddr, c->udpaddrlen );
+
+		hlog(LOG_DEBUG, "UDP to client port %d, sendto rc=%d, errno %s",
+		     c->udp_port, i, strerror(errno));
+		// FIXME: UDP write statistics !
+
+		if (*p != '#') // Send keepalive also through the tcp control socket..
+			return i;
+	}
+	if (c->state == CSTATE_UDP)
+		return 0;
 
 	if (c->obuf_end + len > c->obuf_size) {
 		/* Oops, cannot append the data to the output buffer.
@@ -337,8 +355,20 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		close_client(self, c);
 		return -1;
 	}
-	
-	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
+
+	if (c->state == CSTATE_UDP) {
+		union sockaddr_u sa;
+		socklen_t fromlen = sizeof(sa);
+		int freelen = c->ibuf_size - c->ibuf_end;
+		// FIXME: verify: freelen > X (512 ?)
+		r = recvfrom( c->fd, c->ibuf + c->ibuf_end, freelen, MSG_DONTWAIT,
+			      (struct sockaddr *) & sa, & fromlen );
+
+		// FIXME: received via UDP, now verify source IP address and port!
+		// FIXME: verify that received packet had CRLF at the tail!
+	} else {
+		r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
+	}
 	if (r == 0) {
 		hlog(LOG_DEBUG, "read: EOF from client fd %d (%s)", c->fd, c->addr_s);
 		close_client(self, c);
@@ -551,7 +581,7 @@ void send_keepalives(struct worker_t *self)
 			rc = client_write(self, c, buf, 0);
 			if (rc < -2) continue; // destroyed..
 		}
-		if (c->obuf_wtime < w_expire) {
+		if (c->obuf_wtime < w_expire && c->state != CSTATE_UDP) {
 			// TOO OLD!  Shutdown the client
 			hlog( LOG_DEBUG,"Closing client %p fd %d (%s) due to obuf wtime timeout",
 			      c, c->fd, c->addr_s );
@@ -606,7 +636,27 @@ void worker_thread(struct worker_t *self)
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
 	hlog(LOG_DEBUG, "Worker %d started.", self->id);
+
+	if (self->id == 1 && udpclient) {  /* Worker ZERO picks up the udpclient, if any */
+	  int pe;
+	  /* lock the queue */
+	  if ((pe = pthread_mutex_lock(&self->new_clients_mutex))) {
+	    hlog(LOG_ERR, "collect_new_clients(worker %d): could not lock new_clients_mutex: %s", self->id, strerror(pe));
+	    return;
+	  }
 	
+	  /* Put the udp-client on head of the new client list.. */
+	  udpclient->next = self->new_clients;
+	  self->new_clients = udpclient;
+
+	  /* unlock */
+	  if ((pe = pthread_mutex_unlock(&self->new_clients_mutex))) {
+	    hlog(LOG_ERR, "collect_new_clients(worker %d): could not unlock new_clients_mutex: %s", self->id, strerror(pe));
+	    /* we'd going to deadlock here... */
+	    exit(1);
+	  }
+	}
+
 	while (!self->shutting_down) {
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
 		t1 = tick;

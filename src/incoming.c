@@ -312,7 +312,8 @@ void incoming_flush(struct worker_t *self)
 	self->pbuf_incoming_count += self->pbuf_incoming_local_count;
 	pthread_mutex_unlock(&self->pbuf_incoming_mutex);
 
-	// hlog(LOG_DEBUG, "incoming_flush() sent out %d packets, incoming_count %d", self->pbuf_incoming_local_count, incoming_count);
+	// hlog( LOG_DEBUG, "incoming_flush() sent out %d packets, incoming_count %d",
+	//       self->pbuf_incoming_local_count, incoming_count );
 	
 	/* clean the local lockfree queue */
 	self->pbuf_incoming_local = NULL;

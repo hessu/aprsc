@@ -129,6 +129,7 @@ extern struct pbuf_t **pbuf_global_dupe_prevp;
 
 /* a network client */
 typedef enum {
+	CSTATE_UDP,
 	CSTATE_LOGIN,
 	CSTATE_CONNECTED,
 	CSTATE_COREPEER
@@ -151,6 +152,9 @@ struct client_t {
 	struct client_t **prevp;
 	
 	union sockaddr_u addr;
+	union sockaddr_u udpaddr;
+	int   udpaddrlen;
+
 	int    fd;
 	int    udp_port;
 	char  *addr_s;	    /* client IP address in text format */
@@ -279,5 +283,7 @@ extern void workers_start(void);
 
 extern int keepalive_interval;
 extern int fileno_limit;
+
+extern struct client_t *udpclient;
 
 #endif

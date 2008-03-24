@@ -121,10 +121,23 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 				break;
 			}
 			c->udp_port = atoi(argv[i]);
-			if (c->udp_port < 1 || c->udp_port > 65535 || c->udp_port == 53) {
+			if (c->udp_port < 1024 || c->udp_port > 65535) {
 				hlog(LOG_WARNING, "%s (%s): UDP port number %s is out of range", c->addr_s, username, argv[i]);
 				c->udp_port = 0;
 			}
+
+			c->udpaddr = c->addr;
+			if (c->udpaddr.sa.sa_family == AF_INET) {
+				c->udpaddr.si.sin_port = htons(c->udp_port);
+				c->udpaddrlen = sizeof(c->udpaddr.si);
+			} else {
+				c->udpaddr.si6.sin6_port = htons(c->udp_port);
+				c->udpaddrlen = sizeof(c->udpaddr.si6);
+			}
+
+			// FIXME: Find the client UDP service socket ??
+			// FIXME: or is it always the same ?   udpclient  ??
+
 		} else if (strcasecmp(argv[i], "filter") == 0) {
 			if (!(c->flags & CLFLAGS_USERFILTEROK)) {
 				return client_printf(self, c, "# No user-specified filters on this port\r\n");

@@ -170,21 +170,25 @@ sub new {
     bless ($self, $class);
 
     # parse attrs
-    if ($url eq 'localhost:23000') {
-	$self->{sock} = IO::Socket::INET->new('localhost:10152');
+    if ($url =~ m/(.+?):(\d+?)u/) {
+	my $uurl = $1.":".$2;
+	$self->{sock} = IO::Socket::INET->new($uurl);
 	my $u = undef;
 	my $p = undef;
-	for ( $p = 30000; $p <= 64000; ++$p ) {
-	    $u = IO::Socket::INET->new( Proto => 'udp',
-					PeerAddr => $url,
-					LocalAddr => 'localhost',
-					LocalPort => $p,
-					Blocking => 0 );
-	    last if (defined($u));
-	}
+	$u = IO::Socket::INET->new( Proto => 'udp',
+				    PeerAddr => $url,
+				    Blocking => 0 );
 	if (defined($u)) {
-	    $udp = " udp ".$p;
 	    $self->{socku} = $u;
+	    # Open local firewall...
+	    $u->send("# pim\r\n");
+	    $u->send("# pim\r\n");
+	    # ..all right..  something was sent,
+	    # and thus our udp socket was given
+	    # a source address.  Find it, and add
+	    # on login message.
+	    $p = $u->sockport();
+	    $udp = " udp ".$p;
 	}
     } else {
 	$self->{sock} = IO::Socket::INET->new($url);
@@ -303,7 +307,7 @@ package main;
 
 sub simspecs {
 my $simdata =			
-"23000  jFindU-JS
+"10152u  jFindU-JS
    23      findu  
 14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ
 14580  OH2KKU-RO  a/72/16/58/34 p/OF/OG/OH/OI/OJ

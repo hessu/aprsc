@@ -1305,6 +1305,9 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			case 'u': case 'U':
 				f0.h.bitflags |= T_USERDEF;
 				break;
+			case 'w': case 'W':
+				f0.h.bitflags |= T_WX;
+				break;
 			default:
 				hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 				return -1;

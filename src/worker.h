@@ -147,17 +147,51 @@ union sockaddr_u {
 #define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
 
 
+struct portaccount_t {		/* Port accounter tracks port usage, and traffic
+				   Reporting looks up these via listener list. */
+	pthread_mutex_t mutex;	/* mutex to protect counters, refcount especially */
+
+	long	counter;
+	long	gauge;
+	long	gauge_max;
+
+  // FIXME: traffic accounting codes missing
+	long long  rxbytes,   txbytes;
+	long long  rxpackets, txpackets;
+
+	/* record usage references */
+	int	refcount;	/* listener = 1, clients ++ */
+};
+
+
+struct client_udp_t {			/* UDP services can be available at multiple
+					   client ports.  This is shared refcounted
+					   file descriptor for them. */
+	struct client_udp_t *next;
+	struct client_udp_t **prevp;
+	struct portaccount_t *portaccount;
+	int    fd;			/* file descriptor */
+	int    refcount;		/* Reference count */
+	uint16_t portnum;		/* Server UDP port */
+	char	configured;		/* if not zero, refcount == 0 will not kill this */
+};
+
+
 struct client_t {
 	struct client_t *next;
 	struct client_t **prevp;
 	
 	union sockaddr_u addr;
-	union sockaddr_u udpaddr;
-	int   udpaddrlen;
+	struct portaccount_t *portaccount;
+
+	struct client_udp_t *udpclient;	/* */
+	int    udp_port;		/* client udp port */
+	int    udpaddrlen;		/* ready to use sockaddr length */
+	union sockaddr_u udpaddr;	/* ready to use sockaddr data   */
 
 	int    fd;
-	int    udp_port;
 	char  *addr_s;	    /* client IP address in text format */
+	char  *addr_ss;	    /* server IP address in text format */
 	int    portnum;
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t logintimeout; /* when the login wait times out */
@@ -284,6 +318,17 @@ extern void workers_start(void);
 extern int keepalive_interval;
 extern int fileno_limit;
 
-extern struct client_t *udpclient;
+extern struct client_udp_t *udpclient;
+extern void client_udp_free(struct client_udp_t *u);
+extern struct client_udp_t *client_udp_alloc(int fd, int portnum);
+extern struct client_udp_t *client_udp_find(int portnum);
+
+extern void inbound_connects_account(const int add, struct portaccount_t *p);
+
+extern struct portaccount_t *port_accounter_alloc(void);
+extern void port_accounter_add(struct portaccount_t *p);
+extern void port_accounter_drop(struct portaccount_t *p);
+
+extern char *strsockaddr(const union sockaddr_u *sa, const int addr_len);
 
 #endif

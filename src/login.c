@@ -126,17 +126,19 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 				c->udp_port = 0;
 			}
 
-			c->udpaddr = c->addr;
-			if (c->udpaddr.sa.sa_family == AF_INET) {
-				c->udpaddr.si.sin_port = htons(c->udp_port);
-				c->udpaddrlen = sizeof(c->udpaddr.si);
+			if (c->udpclient) {
+				c->udpaddr = c->addr;
+				if (c->udpaddr.sa.sa_family == AF_INET) {
+					c->udpaddr.si.sin_port = htons(c->udp_port);
+					c->udpaddrlen = sizeof(c->udpaddr.si);
+				} else {
+					c->udpaddr.si6.sin6_port = htons(c->udp_port);
+					c->udpaddrlen = sizeof(c->udpaddr.si6);
+				}
 			} else {
-				c->udpaddr.si6.sin6_port = htons(c->udp_port);
-				c->udpaddrlen = sizeof(c->udpaddr.si6);
+				/* Sorry, no UDP service for this port.. */
+				c->udp_port = 0;
 			}
-
-			// FIXME: Find the client UDP service socket ??
-			// FIXME: or is it always the same ?   udpclient  ??
 
 		} else if (strcasecmp(argv[i], "filter") == 0) {
 			if (!(c->flags & CLFLAGS_USERFILTEROK)) {

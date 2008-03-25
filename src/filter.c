@@ -149,7 +149,7 @@ struct filter_head_t {
 
 struct filter_t {
 	struct filter_head_t h;
-#define FILT_TEXTBUFSIZE (128-sizeof(struct filter_head_t))
+#define FILT_TEXTBUFSIZE (512-sizeof(struct filter_head_t))
 	char textbuf[FILT_TEXTBUFSIZE];
 };
 
@@ -277,7 +277,7 @@ static void filter_entrycall_free(struct filter_entrycall_t *f)
  *	values, thus this database keeps info about entry igate that
  *	have shown such capability in recent past.
  *
- *	FIXME: This must be called by the incoming_parse() in every case
+ *	This must be called by the incoming_parse() in every case
  *	(or at least when qcons is either 'r' or 'R'.)
  *
  *	The key has no guaranteed alignment, no way to play tricks
@@ -467,6 +467,8 @@ void filter_entrycall_dump(FILE *fp)
 {
 	int k;
 	struct filter_entrycall_t *f;
+
+	/* No need to have locks -- anymore.. */
 
 	for (k = 0; k < FILTER_ENTRYCALL_HASHSIZE; ++k) {
 		f = filter_entrycall_hash[k];
@@ -2198,15 +2200,19 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 		   injected on this connection.  */
 		f = c->userfilters;
 		c->userfilters = NULL;
+		// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
+		// FIXME: there is a danger of SEGV-blowing filter processing...
 		filter_free(f);
 		return client_printf(self, c, "# User filters reset to default\r\n");
 	}
 
-	/* new filter definitions to supercede previous ones */
+	/* new filter definitions to supersede previous ones */
 
 	/* Discard old ones. */
 	f = c->userfilters;
 	c->userfilters = NULL;
+	// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
+	// FIXME: there is a danger of SEGV-blowing filter processing...
 	filter_free(f);
 
 	b = alloca(len+2);

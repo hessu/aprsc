@@ -155,12 +155,9 @@ int make_uplink(struct uplink_config_t *l)
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len;
-	char eb[200];
-	char sbuf[20];
-	char *s;
 	struct addrinfo *ai, *a;
 	struct addrinfo req;
-	char addr_s[80];
+	char addr_s[180];
 	int port;
 	int pe;
 	struct worker_t *wc;
@@ -232,6 +229,8 @@ int make_uplink(struct uplink_config_t *l)
 		return -3;
 	}
 
+	freeaddrinfo(ai); /* Not needed anymore.. */
+
 	addr_len = sizeof(sa);
 	if (getpeername(fd, (struct sockaddr *)&sa, &addr_len) != 0) {
 		hlog(LOG_CRIT, "getpeername(%s): %s", addr_s, strerror(errno));
@@ -239,29 +238,18 @@ int make_uplink(struct uplink_config_t *l)
 		return -3;
 	}
 
-	
-	eb[0] = '[';
-	eb[1] = 0;
-	*sbuf = 0;
-
-	getnameinfo((struct sockaddr *)&sa, addr_len,
-		    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
-	s = eb + strlen(eb);
-	sprintf(s, "]:%s", sbuf);
-
-
 	c = client_alloc();
 	c->fd    = fd;
 	c->addr  = sa;
 	c->state = CSTATE_CONNECTED;
-	c->addr_s = hstrdup(eb);
+	c->addr_s = strsockaddr( &sa, addr_len );
 	c->keepalive = now;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;
 	c->username = hstrdup(mycall);
 	c->flags    = l->client_flags;
 
-	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", addr_s, c->fd, eb);
+	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", addr_s, c->fd, c->addr_s);
 
 	uplink_client = c;
 

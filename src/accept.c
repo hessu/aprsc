@@ -59,7 +59,10 @@ struct listen_t {
 	struct addrinfo *ai;
 	int fd;
 	int clientflags;
-	
+	int portnum;
+	struct client_udp_t *udp;
+	struct portaccount_t *portaccount;
+
 	char *name;
 	char *addr_s;
 	char *filters[10]; // up to 10 filter definitions
@@ -76,7 +79,7 @@ int accept_shutting_down = 0;
 struct listen_t *listener_alloc(void)
 {
 	struct listen_t *l = hmalloc(sizeof(*l));
-	memset((void *)l, 0, sizeof(*l));
+	memset( l, 0, sizeof(*l) );
 	l->fd = -1;
 
 	return l;
@@ -86,6 +89,15 @@ void listener_free(struct listen_t *l)
 {
 	int i;
 
+	if (l->udp) {
+		l->udp->configured = 0;
+		l->fd = -1;
+
+		client_udp_free(l->udp);
+	}
+
+	port_accounter_drop(l->portaccount); /* The last reference, perhaps. */
+
 	if (l->fd >= 0)	close(l->fd);
 	if (l->addr_s)	hfree(l->addr_s);
 	if (l->name)	hfree(l->name);
@@ -93,6 +105,7 @@ void listener_free(struct listen_t *l)
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i)
 		if (l->filters[i])
 			hfree(l->filters[i]);
+
 
 	hfree(l);
 }
@@ -162,18 +175,9 @@ int open_udp_listener(struct listen_t *l)
 {
 	int arg;
 	int fd, i;
-	struct client_t *c;
+	struct client_udp_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
-	socklen_t addr_len = sizeof(sa);
-	char eb[200];
-	char sbuf[20];
-	char *s;
 
-if (udpclient) {
-	hlog(LOG_ERR, "Multiple UDP client listeners defined! %s  %s", l->name, l->addr_s);
-	return -1;
-}
-	
 	hlog(LOG_INFO, "Binding listening UDP socket: %s", l->addr_s);
 	
 	if ((fd = socket(l->ai->ai_family, l->ai->ai_socktype, l->ai->ai_protocol)) < 0) {
@@ -195,109 +199,34 @@ if (udpclient) {
 		return -1;
 	}
 
-	eb[0] = '[';
-	eb[1] = 0;
-	*sbuf = 0;
-
-	getnameinfo( (struct sockaddr *)&sa, addr_len,
-		     eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV );
-	s = eb + strlen(eb);
-	sprintf(s, "]:%s", sbuf);
-	
-	c = client_alloc();
-	c->fd        = fd;
-	c->addr      = sa;
-	c->state     = CSTATE_UDP;
-	c->addr_s    = hstrdup(eb);
-	c->keepalive = tick;
-	c->flags     = l->clientflags;
-	/* use the default login handler */
-	c->handler = &incoming_handler; /* Not really used.. */
+	c = client_udp_alloc(fd, l->portnum);
+	c->portaccount = l->portaccount;
+	inbound_connects_account(3, c->portaccount); /* "3" = udp, not listening.. 
+							account all ports + port-specifics */
 
 	if (1) {
 		int len, arg;
-		/* Set bigger RCVBUF and SNDBUF size for the UDP port..  */
+		/* Set bigger SNDBUF size for the UDP port..  */
 		len = sizeof(arg);
 		arg = 128*1024;
-		i = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &arg, len);
+		/* i = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &arg, len); */
 		i = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, len);
 	}
 
-	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-		if (l->filters[i])
-			if (filter_parse(c, l->filters[i], 0) < 0) { /* system filters */
-				hlog(LOG_ERR, "Bad system filter definition: %s", l->filters[i]);
-			}
-	}
-	
 	/* set non-blocking mode */
-	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
-		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
-		goto err;
-	}
+	fcntl(c->fd, F_SETFL, O_NONBLOCK);
+	/* it really can't fail.. and socket usage is  sendto(... MSG_DONTWAIT),
+	   so it doesn't really even matter if it fails. */
 
-
-	// FIXME: Add this on special list of UDP sockets!
-	udpclient = c;
-
-
-#if 0	// At this point in time, we do not have workers running!
-
-	static int next_receiving_worker;
-	struct worker_t *w;
-	struct worker_t *wc;
-
-	/* Use simple round-robin on client feeding.  Least clients is
-	 * quite attractive idea, but when clients arrive at huge bursts
-	 * they tend to move in big bunches, and it takes quite some while
-	 * before the worker updates its client-counters.
-	 */
-	for (i = 0, w = worker_threads; w ;  w = w->next, ++i) {
-	  if ( i >= next_receiving_worker) break;
-	}
-	wc = w;
-	if (! w) {
-		wc = worker_threads;       // ran out of the worker chain, back to the first..
-		next_receiving_worker = 0; // and reset the index too
-	}
-	// in every case, increment the next receiver index for the next call.
-	++next_receiving_worker;
-
-	/* ok, found it... lock the new client queue */
-	hlog(LOG_DEBUG, "... passing UDP rx to thread %d", wc->id);
-
-	if ((i = pthread_mutex_lock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "open_udp_listener(): could not lock new_clients_mutex: %s", strerror(i));
-		goto err;
-	}
-	/* push the client in the worker's queue */
-	c->next = wc->new_clients;
-	c->prevp = &wc->new_clients;
-	if (c->next)
-		c->next->prevp = &c->next;
-	wc->new_clients = c;
-
-
-	/* unlock the queue */
-	if ((i = pthread_mutex_unlock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "open_udp_listener(): could not unlock new_clients_mutex: %s", strerror(i));
-		goto err;
-	}
-#endif
+	l->udp = c;
 	
 	return fd;
-	
-err:
-	client_free(c);
-	return -1;
 }
 
 int open_listeners(void)
 {
 	struct listen_config_t *lc;
 	struct listen_t *l;
-	char eb[120], *s;
-	char sbuf[20];
 	int opened = 0, i;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
@@ -306,20 +235,11 @@ int open_listeners(void)
 		l = listener_alloc();
 		l->clientflags = lc->client_flags;
 
+		l->portaccount = port_accounter_alloc();
+
 		/* Pick first of the AIs for this listen definition */
-		
-		eb[0] = '[';
-		eb[1] = 0;
-		*sbuf = 0;
 
-		l->ai = lc->ai;
-
-		getnameinfo(l->ai->ai_addr, l->ai->ai_addrlen,
-			    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
-		s = eb + strlen(eb);
-		sprintf(s, "]:%s", sbuf);
-
-		l->addr_s = hstrdup(eb);
+		l->addr_s = strsockaddr( (void*)l->ai->ai_addr, l->ai->ai_addrlen );
 		l->name   = hstrdup(lc->name);
 		
 		if (l->ai->ai_socktype == SOCK_DGRAM &&
@@ -347,7 +267,7 @@ int open_listeners(void)
 				l->filters[i] = NULL;
 		}
 
-		hlog(LOG_DEBUG, "... adding %s to listened sockets", eb);
+		hlog(LOG_DEBUG, "... adding %s to listened sockets", l->addr_s);
 		// put (first) in the list of listening sockets
 		l->next = listen_list;
 		l->prevp = &listen_list;
@@ -393,6 +313,18 @@ struct client_t *do_accept(struct listen_t *l)
 	struct worker_t *w;
 	struct worker_t *wc;
 	static time_t last_EMFILE_report;
+
+
+	if (l->udp) {
+		union sockaddr_u sa;
+		socklen_t fromlen = sizeof(sa);
+		/* Received data will be discarded, so receiving it  */
+		/* TRUNCATED is just fine                            */
+		i = recvfrom( l->udp->fd, eb, sizeof(eb),
+			      MSG_DONTWAIT|MSG_TRUNC,
+			      & sa.sa, & fromlen );
+		return 0;
+	}
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
 		int e = errno;
@@ -432,24 +364,41 @@ struct client_t *do_accept(struct listen_t *l)
 		}
 	}
 	
-	eb[0] = '[';
-	eb[1] = 0;
-	*sbuf = 0;
-
-	getnameinfo((struct sockaddr *)&sa, addr_len,
-		    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
-	s = eb + strlen(eb);
-	sprintf(s, "]:%s", sbuf);
-
 	c = client_alloc();
 	c->fd    = fd;
 	c->addr  = sa;
+	c->portnum = l->portnum;
 	c->state = CSTATE_LOGIN;
-	c->addr_s = hstrdup(eb);
 	c->keepalive = tick;
 	c->flags     = l->clientflags;
 	/* use the default login handler */
 	c->handler = &login_handler;
+	c->udpclient = client_udp_find(l->portnum);
+	c->portaccount = l->portaccount;
+	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
+
+	/* text format of client's IP address + port */
+
+	c->addr_s = strsockaddr( &sa, addr_len );
+
+	/* text format of servers' connected IP address + port */
+
+	addr_len = sizeof(sa);
+	if (getsockname(fd, &sa.sa, &addr_len) == 0) {
+	  eb[0] = '[';
+	  eb[1] = 0;
+	  *sbuf = 0;
+
+	  getnameinfo( & sa.sa, addr_len,
+		       eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
+	  s = eb + strlen(eb);
+	  sprintf(s, "]:%s", sbuf);
+
+	  c->addr_ss = hstrdup(eb); /* Server's bound IP address */
+	} else {
+	  c->addr_ss = hstrdup(l->addr_s); /* Server's bound IP address */
+	}
+
 
 #if WBUF_ADJUSTER
 	{
@@ -536,6 +485,8 @@ struct client_t *do_accept(struct listen_t *l)
 	return c;
 	
 err:
+
+	inbound_connects_account(0, c->portaccount); /* something failed, remove this from accounts.. */
 	client_free(c);
 	return 0;
 }

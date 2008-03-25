@@ -47,8 +47,11 @@ time_t tick;	/* real monotonous clock, may or may not be wallclock */
 extern int ibuf_size;
 
 struct worker_t *worker_threads;
-struct client_t *udpclient;	/* single listening/receiving UDP client socket */
-struct client_t *udppeer;	/* single listening/receiving UDP peer socket */
+struct client_udp_t *udppeer;	/* list of listening/receiving UDP peer sockets */
+
+struct client_udp_t *udpclient;	/* list of listening/receiving UDP client sockets */
+/* mutex to protect udpclient chain refcounts */
+pthread_mutex_t udpclient_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int workers_running;
 int sock_write_expire  = 60;    /* 60 seconds OK ?       */
@@ -66,7 +69,177 @@ struct pbuf_t  *pbuf_global_dupe       = NULL;
 struct pbuf_t  *pbuf_global_dupe_last  = NULL;
 struct pbuf_t **pbuf_global_dupe_prevp = &pbuf_global_dupe;
 
+
+/* port accounters */
+struct portaccount_t *port_accounter_alloc(void)
+{
+	struct portaccount_t *p;
+
+	return NULL;
+
+	p = hmalloc(sizeof(*p));
+	memset(p, 0, sizeof(*p));
+
+	p->refcount = 1;
+	pthread_mutex_init( & p->mutex, NULL );
+
+	hlog(LOG_DEBUG, "new port_accounter %p", p);
+
+	return p;
+}
+
+void port_accounter_add(struct portaccount_t *p)
+{
+	int i, r;
+	if (!p) return;
+
+	i = pthread_mutex_lock( & p->mutex );
+	p->counter ++;
+	p->gauge ++;
+	if (p->gauge > p->gauge_max)
+		p->gauge_max = p->gauge;
+	p->refcount ++;
+	r = p->refcount;
+	i = pthread_mutex_unlock( & p->mutex );
+	hlog(LOG_DEBUG, "port_accounter_add(%p) refcount=%d", p, r);
+}
+
+void port_accounter_drop(struct portaccount_t *p)
+{
+	int i, r;
+	if (!p) return;
+
+	i = pthread_mutex_lock( & p->mutex );
+
+	if (p->gauge > 0)
+		p->gauge --;
+
+	p->refcount --;
+
+	r = p->refcount;
+
+	i = pthread_mutex_unlock( & p->mutex );
+
+	hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
+
+	if (p->refcount == 0) {
+		/* Last reference is being destroyed */
+		hfree(p);
+	}
+}
+
+/* inbound connects counters */
+pthread_mutex_t inbound_connects_mutex = PTHREAD_MUTEX_INITIALIZER;
+long inbound_connects_count;
+long inbound_connects_gauge;
+long inbound_connects_gauge_max;
+
+void inbound_connects_account(const int add, struct portaccount_t *p) 
+{	/* add == 2/3  --> UDP "client" socket drop/add */
+	int i;
+	if (add < 2) {
+		i = pthread_mutex_lock(& inbound_connects_mutex );
+
+		if (add) {
+			++inbound_connects_count;
+			++inbound_connects_gauge;
+			if (inbound_connects_gauge > inbound_connects_gauge_max)
+				inbound_connects_gauge_max = inbound_connects_gauge;
+		} else {
+			--inbound_connects_gauge;
+		}
+
+		i = pthread_mutex_unlock(& inbound_connects_mutex );
+	}
+
+	if ( p ) {
+		if ( add & 1 ) {
+			port_accounter_add( p );
+		} else {
+			port_accounter_drop( p );
+		}
+	}
+
+	hlog( LOG_DEBUG, "inbound_connects_account(), count=%d gauge=%d max=%d", 
+	      inbound_connects_count, inbound_connects_gauge, inbound_connects_gauge_max );
+}
+
 /* object alloc/free */
+
+void client_udp_free(struct client_udp_t *u)
+{
+	int i;
+
+	if (!u) return;
+
+	i = pthread_mutex_lock(& udpclient_mutex );
+
+	u->refcount -= 1;
+
+	// if (u)
+	//  hlog(LOG_DEBUG, "udpclient free port# %d refcount: %d", u->portnum, u->refcount);
+
+	if ( // u->configured == 0 &&
+	     u->refcount   == 0 ) {
+		/* Unchain, and destroy.. */
+		if (u->next)
+			u->next->prevp = u->prevp;
+		*u->prevp = u->next;
+
+		close(u->fd);
+
+		hfree(u);
+	}
+
+	i = pthread_mutex_unlock(& udpclient_mutex );
+}
+
+struct client_udp_t *client_udp_find(const int portnum)
+{
+	struct client_udp_t *u = udpclient;
+	int i;
+
+	i = pthread_mutex_lock(& udpclient_mutex );
+
+	for ( ; u ; u = u->next ) {
+		if (u->portnum == portnum) {
+			u->refcount += 1;
+			break;
+		}
+	}
+
+	// if (u)
+	//   hlog(LOG_DEBUG, "udpclient find port# %d refcount: %d", u->portnum, u->refcount);
+
+	i = pthread_mutex_unlock(& udpclient_mutex );
+
+	return u;
+}
+
+
+struct client_udp_t *client_udp_alloc(int fd, int portnum)
+{
+	struct client_udp_t *c;
+	int i;
+
+	i = pthread_mutex_lock(& udpclient_mutex );
+
+	c = hmalloc(sizeof(*c));
+	c->configured = 1;
+	c->fd         = fd;
+	c->refcount   = 1; /* One reference already on creation */
+	c->portnum    = portnum;
+
+	/* Add this to special list of UDP sockets */
+	c->next  =   udpclient;
+	c->prevp = & udpclient;
+	udpclient = c;
+
+	i = pthread_mutex_unlock(& udpclient_mutex );
+
+	return c;
+}
+
 
 struct client_t *client_alloc(void)
 {
@@ -94,14 +267,39 @@ void client_free(struct client_t *c)
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
 	if (c->addr_s)   hfree(c->addr_s);
+	if (c->addr_ss)  hfree(c->addr_ss);
 	if (c->username) hfree(c->username);
+	if (c->app_name) hfree(c->app_name);
+	if (c->app_version) hfree(c->app_version);
 
 	filter_free(c->defaultfilters);
 	filter_free(c->userfilters);
 
+	client_udp_free(c->udpclient);
+
 	memset(c, 0, sizeof(*c));
 	hfree(c);
 }
+
+
+char *strsockaddr(const union sockaddr_u *sa, const int addr_len)
+{
+	char eb[200], *s;
+	char sbuf[20];
+
+	eb[0] = '[';
+	eb[1] = 0;
+	*sbuf = 0;
+
+	getnameinfo((struct sockaddr *)&sa, addr_len,
+		    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
+	s = eb + strlen(eb);
+
+	sprintf(s, "]:%s", sbuf);
+
+	return hstrdup(eb);
+}
+
 
 
 /*
@@ -138,6 +336,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 		/* remove from polling list */
 		if (self->xp)
 			xpoll_remove(self->xp, c->xfd);
+
 	}
 
 	c->fd = -1;
@@ -148,11 +347,18 @@ void close_client(struct worker_t *self, struct client_t *c)
 		c->next->prevp = c->prevp;
 	*c->prevp = c->next;
 
-	/* if this happens to be the uplink, tell the uplink module that the
-	 * connection has gone away
+	/* If this happens to be the uplink, tell the uplink connection
+	 * setup module that the connection has gone away.
 	 */
 	if (c->flags & CLFLAGS_UPLINKPORT)
 		uplink_close(c);
+	else {
+		/* Else if it is an inbound connection, handle their
+		 * population accounting...
+		 */
+		inbound_connects_account(0, c->portaccount);
+		c->portaccount = NULL;
+	}
 
 	/* free it up */
 	client_free(c);
@@ -168,6 +374,8 @@ void close_client(struct worker_t *self, struct client_t *c)
 
 int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
+	int i, e;
+
 	/* Count the number of writes towards this client,  the keepalive
 	   manager monitors this counter to determine if the socket should be
 	   kept in BUFFERED mode, or written immediately every time.
@@ -175,13 +383,14 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	*/
 	c->obuf_writes++;
 
-	if (c->udp_port && udpclient && len > 0) {
-		int i;
-		i = sendto( udpclient->fd, p, len, MSG_DONTWAIT,
-			    (struct sockaddr *)&c->udpaddr, c->udpaddrlen );
+	if (c->udp_port && c->udpclient && len > 0) {
+		/* Every packet ends with CRLF, but they are not sent over UDP ! */
+		i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
+			    &c->udpaddr.sa, c->udpaddrlen );
 
-		hlog(LOG_DEBUG, "UDP to client port %d, sendto rc=%d, errno %s",
-		     c->udp_port, i, strerror(errno));
+		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d",
+		//       c->udpclient->portnum, c->udp_port, i );
+
 		// FIXME: UDP write statistics !
 
 		if (*p != '#') // Send keepalive also through the tcp control socket..
@@ -198,7 +407,6 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 			/* Oh crap, the data will not fit even if we move stuff.
 			   Lets try writing.. */
-			int i, e;
 		write_retry:;
 			i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 			e = errno;
@@ -261,7 +469,6 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
-		int i, e;
 	write_retry_2:;
 		i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 		e = errno;
@@ -356,19 +563,10 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 
-	if (c->state == CSTATE_UDP) {
-		union sockaddr_u sa;
-		socklen_t fromlen = sizeof(sa);
-		int freelen = c->ibuf_size - c->ibuf_end;
-		// FIXME: verify: freelen > X (512 ?)
-		r = recvfrom( c->fd, c->ibuf + c->ibuf_end, freelen, MSG_DONTWAIT,
-			      (struct sockaddr *) & sa, & fromlen );
+	/* WORKER never reads from UDP client sockets, ACCEPT does that.. */
 
-		// FIXME: received via UDP, now verify source IP address and port!
-		// FIXME: verify that received packet had CRLF at the tail!
-	} else {
-		r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
-	}
+	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
+
 	if (r == 0) {
 		hlog(LOG_DEBUG, "read: EOF from client fd %d (%s)", c->fd, c->addr_s);
 		close_client(self, c);
@@ -533,8 +731,8 @@ void send_keepalives(struct worker_t *self)
 {
 	struct client_t *c, *cnext;
 	struct tm t;
-	char buf[130], *s;
-	int len, rc;
+	char buf[230], *s;
+	int len0, len, rc;
 	static const char *monthname[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 	time_t w_expire    = tick - sock_write_expire;
 	time_t w_keepalive = tick - keepalive_interval;
@@ -553,9 +751,9 @@ void send_keepalives(struct worker_t *self)
 		     t.tm_mday, monthname[t.tm_mon], t.tm_year + 1900,
 		     t.tm_hour, t.tm_min, t.tm_sec);
 
-	s += sprintf(s, " %s serverIP:serverPORT\r\n", mycall);
+	s += sprintf(s, " %s ", mycall);
 
-	len = (s - buf);
+	len0 = (s - buf);
 
 	for (c = self->clients; (c); c = cnext) {
 		// the  c  may get destroyed from underneath of ourselves!
@@ -570,6 +768,8 @@ void send_keepalives(struct worker_t *self)
 		if (c->keepalive <= tick && c->obuf_wtime < w_keepalive) {
 			int flushlevel = c->obuf_flushsize;
 			c->keepalive = tick + keepalive_interval;
+
+			len = len0 + sprintf(s, "%s\r\n", c->addr_ss);
 
 			c->obuf_flushsize = 0;
 			/* Write out immediately */
@@ -636,26 +836,6 @@ void worker_thread(struct worker_t *self)
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
 	hlog(LOG_DEBUG, "Worker %d started.", self->id);
-
-	if (self->id == 1 && udpclient) {  /* Worker ZERO picks up the udpclient, if any */
-	  int pe;
-	  /* lock the queue */
-	  if ((pe = pthread_mutex_lock(&self->new_clients_mutex))) {
-	    hlog(LOG_ERR, "collect_new_clients(worker %d): could not lock new_clients_mutex: %s", self->id, strerror(pe));
-	    return;
-	  }
-	
-	  /* Put the udp-client on head of the new client list.. */
-	  udpclient->next = self->new_clients;
-	  self->new_clients = udpclient;
-
-	  /* unlock */
-	  if ((pe = pthread_mutex_unlock(&self->new_clients_mutex))) {
-	    hlog(LOG_ERR, "collect_new_clients(worker %d): could not unlock new_clients_mutex: %s", self->id, strerror(pe));
-	    /* we'd going to deadlock here... */
-	    exit(1);
-	  }
-	}
 
 	while (!self->shutting_down) {
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);

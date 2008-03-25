@@ -72,8 +72,8 @@ struct dupe_record_t {
 #endif
 };
 
-struct dupe_record_t **dupecheck_db; /* Hash index table      */
 #define DUPECHECK_DB_SIZE 8192        /* Hash index table size */
+struct dupe_record_t *dupecheck_db[DUPECHECK_DB_SIZE]; /* Hash index table      */
 
 #ifndef _FOR_VALGRIND_
 struct dupe_record_t *dupecheck_free;
@@ -199,9 +199,6 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 
 void dupecheck_init(void)
 {
-	dupecheck_db  = hmalloc(sizeof(void*) * DUPECHECK_DB_SIZE);
-	memset(dupecheck_db, 0, sizeof(void*) * DUPECHECK_DB_SIZE);
-
 #ifndef _FOR_VALGRIND_
 	dupecheck_cells = cellinit( sizeof(struct dupe_record_t),
 				    __alignof__(struct dupe_record_t),
@@ -631,6 +628,7 @@ void dupecheck_atend(void)
 			dupecheck_db_free(dp);
 			dp = dp2;
 		}
+		dupecheck_db[i] = NULL;
 	}
 #if 0 /* Well, not really...  valgrind did hfree() the dupecells,
 	 and without valgrind we really are not interested of freeup of

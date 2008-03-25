@@ -409,7 +409,7 @@ struct client_t *do_accept(struct listen_t *l)
 	if (c->flags & CLFLAGS_UPLINKSIM)
 		uplink_simulator = 1;
 
-	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, c->addr_ss);
+	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", c->addr_ss, c->fd, c->addr_s);
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i])

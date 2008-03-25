@@ -56,7 +56,6 @@ struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
 	
-	struct addrinfo *ai;
 	int fd;
 	int clientflags;
 	int portnum;
@@ -115,7 +114,7 @@ void listener_free(struct listen_t *l)
  *	signal handler
  */
  
-int accept_sighandler(int signum)
+static int accept_sighandler(int signum)
 {
 	switch (signum) {
 		
@@ -132,14 +131,14 @@ int accept_sighandler(int signum)
  *	Open the TCP/SCTP listening socket
  */
 
-int open_tcp_listener(struct listen_t *l)
+static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai)
 {
 	int arg;
 	int f;
 	
 	hlog(LOG_INFO, "Binding listening TCP socket: %s", l->addr_s);
 	
-	if ((f = socket(l->ai->ai_family, l->ai->ai_socktype, l->ai->ai_protocol)) < 0) {
+	if ((f = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
 		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
 		return -1;
 	}
@@ -150,7 +149,7 @@ int open_tcp_listener(struct listen_t *l)
 	setsockopt(f, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg));
 #endif
 	
-	if (bind(f, l->ai->ai_addr, l->ai->ai_addrlen)) {
+	if (bind(f, ai->ai_addr, ai->ai_addrlen)) {
 		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
 		close(f);
 		return -1;
@@ -171,7 +170,7 @@ int open_tcp_listener(struct listen_t *l)
  *	Open the UDP receiving socket
  */
 
-int open_udp_listener(struct listen_t *l)
+int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 {
 	int arg;
 	int fd, i;
@@ -180,7 +179,7 @@ int open_udp_listener(struct listen_t *l)
 
 	hlog(LOG_INFO, "Binding listening UDP socket: %s", l->addr_s);
 	
-	if ((fd = socket(l->ai->ai_family, l->ai->ai_socktype, l->ai->ai_protocol)) < 0) {
+	if ((fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
 		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
 		return -1;
 	}
@@ -191,9 +190,9 @@ int open_udp_listener(struct listen_t *l)
 	setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg));
 #endif
 
-	memcpy( &sa, l->ai->ai_addr,  l->ai->ai_addrlen );
+	memcpy( &sa, ai->ai_addr,  ai->ai_addrlen );
 	
-	if (bind(fd, l->ai->ai_addr, l->ai->ai_addrlen)) {
+	if (bind(fd, ai->ai_addr, ai->ai_addrlen)) {
 		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
 		close(fd);
 		return -1;
@@ -233,23 +232,25 @@ int open_listeners(void)
 
 
 		l = listener_alloc();
+
 		l->clientflags = lc->client_flags;
 
 		l->portaccount = port_accounter_alloc();
 
 		/* Pick first of the AIs for this listen definition */
 
-		l->addr_s = strsockaddr( (void*)l->ai->ai_addr, l->ai->ai_addrlen );
+		l->addr_s = strsockaddr( (void*)lc->ai->ai_addr, lc->ai->ai_addrlen );
 		l->name   = hstrdup(lc->name);
 		
-		if (l->ai->ai_socktype == SOCK_DGRAM &&
-		    l->ai->ai_protocol == IPPROTO_UDP) {
+		if (lc->ai->ai_socktype == SOCK_DGRAM &&
+		    lc->ai->ai_protocol == IPPROTO_UDP) {
 			/* UDP listenting is not quite same as TCP listening.. */
-			i = open_udp_listener(l);
+			i = open_udp_listener(l, lc->ai);
 		} else {
 			/* TCP listenting... */
-			i = open_tcp_listener(l);
+			i = open_tcp_listener(l, lc->ai);
 		}
+
 		if (i >= 0) {
 			opened++;
 			hlog(LOG_DEBUG, "... ok, bound");

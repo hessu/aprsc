@@ -75,15 +75,13 @@ struct portaccount_t *port_accounter_alloc(void)
 {
 	struct portaccount_t *p;
 
-	return NULL;
-
 	p = hmalloc(sizeof(*p));
 	memset(p, 0, sizeof(*p));
 
 	p->refcount = 1;
 	pthread_mutex_init( & p->mutex, NULL );
 
-	hlog(LOG_DEBUG, "new port_accounter %p", p);
+	// hlog(LOG_DEBUG, "new port_accounter %p", p);
 
 	return p;
 }
@@ -94,14 +92,18 @@ void port_accounter_add(struct portaccount_t *p)
 	if (!p) return;
 
 	i = pthread_mutex_lock( & p->mutex );
-	p->counter ++;
-	p->gauge ++;
+
+	++ p->refcount;
+	++ p->counter;
+	++ p->gauge;
+
 	if (p->gauge > p->gauge_max)
 		p->gauge_max = p->gauge;
-	p->refcount ++;
+
 	r = p->refcount;
 	i = pthread_mutex_unlock( & p->mutex );
-	hlog(LOG_DEBUG, "port_accounter_add(%p) refcount=%d", p, r);
+
+	// hlog(LOG_DEBUG, "port_accounter_add(%p) refcount=%d", p, r);
 }
 
 void port_accounter_drop(struct portaccount_t *p)
@@ -111,28 +113,30 @@ void port_accounter_drop(struct portaccount_t *p)
 
 	i = pthread_mutex_lock( & p->mutex );
 
-	if (p->gauge > 0)
-		p->gauge --;
-
-	p->refcount --;
+	-- p->refcount;
+	-- p->gauge;
 
 	r = p->refcount;
 
 	i = pthread_mutex_unlock( & p->mutex );
 
-	hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
+	// hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
 
-	if (p->refcount == 0) {
+	if (r == 0) {
 		/* Last reference is being destroyed */
 		hfree(p);
 	}
 }
 
-/* inbound connects counters */
+/* global inbound connects counters */
 pthread_mutex_t inbound_connects_mutex = PTHREAD_MUTEX_INITIALIZER;
 long inbound_connects_count;
 long inbound_connects_gauge;
 long inbound_connects_gauge_max;
+
+/*
+ *	Global and port specific port usage counters
+ */
 
 void inbound_connects_account(const int add, struct portaccount_t *p) 
 {	/* add == 2/3  --> UDP "client" socket drop/add */
@@ -160,8 +164,8 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 		}
 	}
 
-	hlog( LOG_DEBUG, "inbound_connects_account(), count=%d gauge=%d max=%d", 
-	      inbound_connects_count, inbound_connects_gauge, inbound_connects_gauge_max );
+	// hlog( LOG_DEBUG, "inbound_connects_account(), count=%d gauge=%d max=%d", 
+	//       inbound_connects_count, inbound_connects_gauge, inbound_connects_gauge_max );
 }
 
 /* object alloc/free */
@@ -174,7 +178,7 @@ void client_udp_free(struct client_udp_t *u)
 
 	i = pthread_mutex_lock(& udpclient_mutex );
 
-	u->refcount -= 1;
+	-- u->refcount;
 
 	// if (u)
 	//  hlog(LOG_DEBUG, "udpclient free port# %d refcount: %d", u->portnum, u->refcount);
@@ -203,7 +207,7 @@ struct client_udp_t *client_udp_find(const int portnum)
 
 	for ( ; u ; u = u->next ) {
 		if (u->portnum == portnum) {
-			u->refcount += 1;
+			++ u->refcount;
 			break;
 		}
 	}

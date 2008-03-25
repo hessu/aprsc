@@ -200,6 +200,7 @@ int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 
 	c = client_udp_alloc(fd, l->portnum);
 	c->portaccount = l->portaccount;
+
 	inbound_connects_account(3, c->portaccount); /* "3" = udp, not listening.. 
 							account all ports + port-specifics */
 
@@ -218,6 +219,7 @@ int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	   so it doesn't really even matter if it fails. */
 
 	l->udp = c;
+	/* l->fd = fd -- except that close on it will kill working client setups.. */
 	
 	return fd;
 }
@@ -239,7 +241,7 @@ int open_listeners(void)
 
 		/* Pick first of the AIs for this listen definition */
 
-		l->addr_s = strsockaddr( (void*)lc->ai->ai_addr, lc->ai->ai_addrlen );
+		l->addr_s = strsockaddr( lc->ai->ai_addr, lc->ai->ai_addrlen );
 		l->name   = hstrdup(lc->name);
 		
 		if (lc->ai->ai_socktype == SOCK_DGRAM &&
@@ -307,24 +309,22 @@ struct client_t *do_accept(struct listen_t *l)
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len = sizeof(sa);
-	char eb[200];
-	char sbuf[20];
-	char *s;
+	char buf[2000];
 	static int next_receiving_worker;
 	struct worker_t *w;
 	struct worker_t *wc;
 	static time_t last_EMFILE_report;
 
 
-	if (l->udp) {
-		union sockaddr_u sa;
-		socklen_t fromlen = sizeof(sa);
+	while (l->udp) {
 		/* Received data will be discarded, so receiving it  */
-		/* TRUNCATED is just fine                            */
-		i = recvfrom( l->udp->fd, eb, sizeof(eb),
-			      MSG_DONTWAIT|MSG_TRUNC,
-			      & sa.sa, & fromlen );
-		return 0;
+		/* TRUNCATED is just fine.  Sender isn't interesting either.  */
+		/* Receive as much as there is -- that is, LOOP...  */
+
+		i = recv( l->udp->fd, buf, sizeof(buf), MSG_DONTWAIT|MSG_TRUNC );
+
+		if (i < 0)
+			return 0;  /* no more data */
 	}
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
@@ -380,24 +380,16 @@ struct client_t *do_accept(struct listen_t *l)
 
 	/* text format of client's IP address + port */
 
-	c->addr_s = strsockaddr( &sa, addr_len );
+	c->addr_s = strsockaddr( &sa.sa, addr_len );
 
 	/* text format of servers' connected IP address + port */
 
 	addr_len = sizeof(sa);
-	if (getsockname(fd, &sa.sa, &addr_len) == 0) {
-	  eb[0] = '[';
-	  eb[1] = 0;
-	  *sbuf = 0;
-
-	  getnameinfo( & sa.sa, addr_len,
-		       eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
-	  s = eb + strlen(eb);
-	  sprintf(s, "]:%s", sbuf);
-
-	  c->addr_ss = hstrdup(eb); /* Server's bound IP address */
+	if (getsockname(fd, &sa.sa, &addr_len) == 0) { /* Fails very rarely.. */
+	  /* present my socket end address as a malloced string... */
+	  c->addr_ss = strsockaddr( &sa.sa, addr_len );
 	} else {
-	  c->addr_ss = hstrdup(l->addr_s); /* Server's bound IP address */
+	  c->addr_ss = hstrdup( l->addr_s ); /* Server's bound IP address */
 	}
 
 
@@ -417,7 +409,7 @@ struct client_t *do_accept(struct listen_t *l)
 	if (c->flags & CLFLAGS_UPLINKSIM)
 		uplink_simulator = 1;
 
-	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, eb);
+	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", l->addr_s, c->fd, c->addr_ss);
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i])
@@ -538,8 +530,9 @@ void accept_thread(void *asdf)
 			acceptpfd = hmalloc(listen_n * sizeof(*acceptpfd));
 			n = 0;
 			for (l = listen_list; (l); l = l->next) {
-				hlog(LOG_DEBUG, "... %d: fd %d (%s)", n, l->fd, l->addr_s);
-				acceptpfd[n].fd = l->fd;
+				int fd = l->udp ? l->udp->fd : l->fd;
+				hlog(LOG_DEBUG, "... %d: fd %d (%s)", n, fd, l->addr_s);
+				acceptpfd[n].fd = fd;
 				acceptpfd[n].events = POLLIN|POLLPRI|POLLERR|POLLHUP;
 				n++;
 			}
@@ -572,7 +565,7 @@ void accept_thread(void *asdf)
 		/* now, which socket was that on? */
 		l = listen_list;
 		for (n = 0; n < listen_n; n++) {
-			if (!(l) || l->fd != acceptpfd[n].fd) {
+			if (!(l) || (l->udp ? l->udp->fd : l->fd) != acceptpfd[n].fd) {
 				hlog(LOG_CRIT, "accept_thread: polling list and listener list do mot match!");
 				exit(1);
 			}

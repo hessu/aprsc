@@ -329,6 +329,6 @@ extern struct portaccount_t *port_accounter_alloc(void);
 extern void port_accounter_add(struct portaccount_t *p);
 extern void port_accounter_drop(struct portaccount_t *p);
 
-extern char *strsockaddr(const union sockaddr_u *sa, const int addr_len);
+extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 
 #endif

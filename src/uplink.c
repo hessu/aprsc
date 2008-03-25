@@ -242,7 +242,7 @@ int make_uplink(struct uplink_config_t *l)
 	c->fd    = fd;
 	c->addr  = sa;
 	c->state = CSTATE_CONNECTED;
-	c->addr_s = strsockaddr( &sa, addr_len );
+	c->addr_s = strsockaddr( &sa.sa, addr_len );
 	c->keepalive = now;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;

@@ -282,20 +282,52 @@ void client_free(struct client_t *c)
 }
 
 
-char *strsockaddr(const union sockaddr_u *sa, const int addr_len)
+char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 {
 	char eb[200], *s;
 	char sbuf[20];
+	union sockaddr_u su, *sup;
 
-	eb[0] = '[';
-	eb[1] = 0;
-	*sbuf = 0;
+	sup = (union sockaddr_u *)sa;
+#ifdef IN6_IS_ADDR_V4MAPPED
+	if ( sa->sa_family == AF_INET6 && 
+	     ( IN6_IS_ADDR_V4MAPPED(&(sup->si6.sin6_addr)) ||
+	       IN6_IS_ADDR_V4COMPAT(&(sup->si6.sin6_addr)) ) ) {
 
-	getnameinfo((struct sockaddr *)&sa, addr_len,
-		    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
-	s = eb + strlen(eb);
+		memset(&su, 0, sizeof(su));
+		su.si.sin_family = AF_INET;
+		su.si.sin_port   = sup->si6.sin6_port;
+		memcpy(& su.si.sin_addr, &((uint32_t*)(&(sup->si6.sin6_addr)))[3], 4);
+		sa = &su.sa;
+		sup = NULL;
+		hlog(LOG_DEBUG, "Translating v4 mapped/compat address..");
+	}
+#endif
 
-	sprintf(s, "]:%s", sbuf);
+
+	if ( sa->sa_family == AF_INET ) {
+		eb[0] = 0;
+		sbuf[0] = 0;
+
+		getnameinfo( sa, addr_len,
+			    eb, sizeof(eb), sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
+		s = eb + strlen(eb);
+
+		sprintf(s, ":%s", sbuf);
+	} else {
+		/* presumption: IPv6 */
+		eb[0] = '[';
+		eb[1] = 0;
+		sbuf[0] = 0;
+
+		getnameinfo( sa, addr_len,
+			    eb+1, sizeof(eb)-1, sbuf, sizeof(sbuf), NI_NUMERICHOST|NI_NUMERICSERV);
+		s = eb + strlen(eb);
+
+		sprintf(s, "]:%s", sbuf);
+	}
+
+	if (!sup) hlog(LOG_DEBUG, "... to: %s", eb);
 
 	return hstrdup(eb);
 }

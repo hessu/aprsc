@@ -257,31 +257,6 @@ int main(int argc, char **argv)
 	dupecheck_init();
 	historydb_init();
 
-#if 0
-	/*
-	 *    As a general rule, loading of databases is not a Good Idea in
-	 *    operational system.  Development time debugging on other hand..
-	 */
-	sprintf(path, "%s/historydb.dump", rundir);
-	fp = fopen(path,"r");
-	if (fp) {
-		historydb_load(fp);
-		fclose(fp);
-	}
-	sprintf(path, "%s/filter.wx.dump", rundir);
-	fp = fopen(path,"r");
-	if (fp) {
-		filter_wx_load(fp);
-		fclose(fp);
-	}
-	sprintf(path, "%s/filter.entry.dump", rundir);
-	fp = fopen(path,"r");
-	if (fp) {
-		filter_entrycall_load(fp);
-		fclose(fp);
-	}
-#endif
-
 	time(&cleanup_tick);
 
 	/* start the accept thread, which will start server threads */

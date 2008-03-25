@@ -116,7 +116,6 @@ void historydb_atend(void)
 	}
 }
 
-
 void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
 	fprintf(fp, "%ld\t", hp->arrivaltime);
@@ -147,96 +146,6 @@ void historydb_dump(FILE *fp)
 	// Free the lock
 	rwl_rdunlock(&historydb_rwlock);
 }
-
-int historydb_load(FILE *fp)
-{
-	// load the historydb in text format, ignore too old positions
-	int i;
-	time_t expirytime   = now - lastposition_storetime;
-	time_t t;
-	char bufline[2000];
-	char keybuf[20];
-	int packettype, flags;
-	float lat, lon;
-	int packetlen = 0;
-	int h1, h2, keylen;
-	struct history_cell_t *hp;
-	int linecount = 0;
-
-
-	// multiple locks ? one for each bucket, or for a subset of buckets ?
-	rwl_wrlock(&historydb_rwlock);
-
-	// discard previous content
-	for ( i = 0; i < HISTORYDB_HASH_MODULO; ++i ) {
-		struct history_cell_t *hp, *nhp;
-
-		hp = historydb_hash[i];
-		nhp = NULL;
-		for ( ; hp ; hp = nhp ) {
-			// the 'next' will get freed from underneath of us..
-			nhp = hp->next;
-			historydb_free(hp);
-		}
-		historydb_hash[i] = NULL;
-	}
-
-	// now the loading...
-	while (!feof(fp)) {
-		++linecount;
-
-		i = fscanf(fp, "%ld\t%9[^\t]\t%d\t%d\t%f\t%f\t%d\t",
-			   &t,    keybuf, &packettype, &flags,
-			   &lat, &lon,    &packetlen );
-
-		if (i != 7) {  /* verify correct scan */
-			if (feof(fp)) break; /* errors on EOF */
-
-			hlog(LOG_ERR, "historybuf load, wrong parse on line %d, ret=%d", linecount, i);
-			break;
-		}
-		// FIXME: now several parameters may be invalid for us, like:
-		//   if packetlen >= sizeof(bufline)  ??
-
-		i = fread( bufline, packetlen, 1, fp);
-
-		// i == packetlen ??
-
-		if (t <= expirytime)
-			continue;	// Too old, forget it.
-		
-		keylen = strlen(keybuf);
-		h1 = keyhash(keybuf, keylen, 0);
-		h2 = h1;
-		h2 ^= (h2 >> 16); /* Fold hash bits.. */
-		i = h2 % HISTORYDB_HASH_MODULO;
-	
-		// Not found on this chain, insert it!
-		hp = historydb_alloc(packetlen);
-		hp->next = historydb_hash[i];
-		historydb_hash[i] = hp;
-
-		hp->hash1 = h1;
-		strcpy(hp->key, keybuf);
-		hp->lat         = lat;
-		hp->coslat      = cosf(lat);
-		hp->lon         = lon;
-		hp->arrivaltime = t;
-		hp->packettype  = packettype;
-		hp->flags       = flags;
-		hp->packetlen   = packetlen;
-		if (packetlen > 300) packetlen = 300; // max to 300..
-
-		memcpy(hp->packet, bufline, packetlen);
-
-	} // .. while !feof ..
-
-	// Free the lock
-	rwl_wrunlock(&historydb_rwlock);
-
-	return 0;
-}
-
 
 /* insert... */
 

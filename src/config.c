@@ -472,7 +472,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	l = hmalloc(sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
-	l->portnum      = port;;
+	l->portnum      = port;
 	l->client_flags = clflags;
 	l->ai = ai;
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {

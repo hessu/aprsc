@@ -299,8 +299,8 @@ char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 		su.si.sin_port   = sup->si6.sin6_port;
 		memcpy(& su.si.sin_addr, &((uint32_t*)(&(sup->si6.sin6_addr)))[3], 4);
 		sa = &su.sa;
-		sup = NULL;
-		hlog(LOG_DEBUG, "Translating v4 mapped/compat address..");
+		// sup = NULL;
+		// hlog(LOG_DEBUG, "Translating v4 mapped/compat address..");
 	}
 #endif
 
@@ -327,7 +327,7 @@ char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 		sprintf(s, "]:%s", sbuf);
 	}
 
-	if (!sup) hlog(LOG_DEBUG, "... to: %s", eb);
+	// if (!sup) hlog(LOG_DEBUG, "... to: %s", eb);
 
 	return hstrdup(eb);
 }

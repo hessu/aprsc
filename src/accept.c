@@ -376,6 +376,7 @@ struct client_t *do_accept(struct listen_t *l)
 	c->handler = &login_handler;
 	c->udpclient = client_udp_find(l->portnum);
 	c->portaccount = l->portaccount;
+	c->connect_time = now;
 	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
 
 	/* text format of client's IP address + port */

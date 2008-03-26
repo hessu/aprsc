@@ -283,7 +283,8 @@ static void dupecheck_cleanup(void)
 			dpp = &dp->next;
 		}
 	}
-	hlog(LOG_DEBUG, "dupecheck_cleanup() removed %d entries", cleancount);
+	hlog( LOG_DEBUG, "dupecheck_cleanup() removed %d entries, count now %ld",
+	      cleancount, dupecheck_cellgauge );
 }
 
 /*

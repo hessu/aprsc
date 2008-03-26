@@ -266,6 +266,7 @@ static void filter_entrycall_free(struct filter_entrycall_t *f)
 #else
 	hfree(f);
 #endif
+	-- filter_entrycall_cellgauge;
 }
 
 /*
@@ -346,6 +347,8 @@ pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
 			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
 
 			*fp = f2 = f;
+
+			++ filter_entrycall_cellgauge;
 		}
 	}
 
@@ -434,7 +437,8 @@ void filter_entrycall_cleanup(void)
 
 	rwl_wrunlock(&filter_entrycall_rwlock);
 
-	hlog(LOG_DEBUG, "filter_entrycall_cleanup() removed %d entries", cleancount);
+	hlog( LOG_DEBUG, "filter_entrycall_cleanup() removed %d entries, count now: %ld",
+	      cleancount, filter_entrycall_cellgauge );
 }
 
 /* 
@@ -632,7 +636,8 @@ void filter_wx_cleanup(void)
 
 	rwl_wrunlock(&filter_wx_rwlock);
 
-	hlog(LOG_DEBUG, "filter_wx_cleanup() removed %d entries", cleancount);
+	hlog( LOG_DEBUG, "filter_wx_cleanup() removed %d entries, count now: %ld",
+	      cleancount, filter_wx_cellgauge );
 }
 
 /* 

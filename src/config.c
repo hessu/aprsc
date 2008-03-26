@@ -336,7 +336,6 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_PORT_RO;
 	} // FIXME: other tokens ??
 
-
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
 	req.ai_socktype = SOCK_STREAM;
@@ -365,15 +364,15 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 		return -2;
 	}
 
+#if 0
 	i = getaddrinfo(argv[4], argv[5], &req, &ai);
 	if (i != 0) {
-		hlog(LOG_ERR,"Uplink: address parse failure of '%s' '%s'",argv[4],argv[5]);
-		return i;
+		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'",argv[4],argv[5]);
+		/* But do continue, this is perhaps a temporary glitch ? */
 	}
 	if (ai)
 		freeaddrinfo(ai);
-
-
+#endif
 	l = hmalloc(sizeof(*l));
 
 	l->name  = hstrdup(argv[1]);

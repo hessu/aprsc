@@ -53,6 +53,13 @@ struct client_t *uplink_client;
 int uplink_running;
 pthread_t uplink_th;
 
+/* global uplink connects, and protocol traffic accounters */
+
+struct portaccount_t uplink_connects = {
+  .mutex    = PTHREAD_MUTEX_INITIALIZER,
+  .refcount = 99,	/* Global static blocks have extra-high initial refcount */
+};
+
 
 /*
  *	signal handler
@@ -106,6 +113,8 @@ void uplink_close(struct client_t *c)
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
 		return;
 	}
+
+	-- uplink_connects.gauge;
 
 	uplink_client = NULL; // there can be only one!
 
@@ -180,19 +189,19 @@ int make_uplink(struct uplink_config_t *l)
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		fprintf(stderr, "Uplink: Unsupported protocol '%s'\n", l->proto);
+		hlog(LOG_ERR, "Uplink: Unsupported protocol '%s'\n", l->proto);
 		return -2;
 	}
 	
 	port = atoi(l->port);
 	if (port < 1 || port > 65535) {
-		fprintf(stderr, "Uplink: unsupported port number '%s'\n", l->port);
+		hlog(LOG_ERR, "Uplink: unsupported port number '%s'\n", l->port);
 		return -2;
 	}
 
 	i = getaddrinfo(l->host, l->port, &req, &ai);
 	if (i != 0) {
-		fprintf(stderr,"Uplink: address parse failure of '%s' '%s'",l->host,l->port);
+		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'",l->host,l->port);
 		return i;
 	}
 
@@ -286,6 +295,12 @@ int make_uplink(struct uplink_config_t *l)
 		hlog(LOG_ERR, "make_uplink(): could not unlock new_clients_mutex: %s", strerror(pe));
 		goto err;
 	}
+
+	++ uplink_connects.gauge;
+	++ uplink_connects.counter;
+	++ uplink_connects.refcount;
+
+	c->portaccount = & uplink_connects;
 	
 	return 0;
 	

@@ -34,19 +34,15 @@ extern int  filter_commands(struct worker_t *self, struct client_t *c, const cha
 extern void filter_preprocess_dupefilter(struct pbuf_t *pb);
 extern void filter_postprocess_dupefilter(struct pbuf_t *pb);
 
-extern int  filter_entrycall_insert(struct pbuf_t *pb);
 extern void filter_entrycall_cleanup(void);
 extern void filter_entrycall_atend(void);
 extern int  filter_entrycall_cellgauge;
 extern void filter_entrycall_dump(FILE *fp);
-extern void filter_entrycall_load(FILE *fp);
 
-extern int  filter_wx_insert(struct pbuf_t *pb);
 extern void filter_wx_cleanup(void);
 extern void filter_wx_atend(void);
 extern int  filter_wx_cellgauge;
 extern void filter_wx_dump(FILE *fp);
-extern void filter_wx_load(FILE *fp);
 
 extern float filter_lat2rad(float lat);
 extern float filter_lon2rad(float lon);

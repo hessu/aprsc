@@ -55,8 +55,6 @@ long historydb_cellgauge;
 
 void historydb_init(void)
 {
-	int i;
-
 	rwl_init(&historydb_rwlock);
 
 	// printf("historydb_init() sizeof(mutex)=%d sizeof(rwlock)=%d\n",
@@ -162,7 +160,7 @@ int historydb_insert(struct pbuf_t *pb)
 	char *s;
 
 	if (!(pb->flags & F_HASPOS)) {
-	  historydb_nopos(); // debug thing -- profiling counter
+		historydb_nopos(); // debug thing -- profiling counter
 		return -1; // No positional data...
 	}
 
@@ -212,7 +210,7 @@ int historydb_insert(struct pbuf_t *pb)
 		s = strchr(keybuf, '>');
 		if (s) *s = 0;
 	} else {
-	  historydb_nointerest(); // debug thing -- a profiling counter
+		historydb_nointerest(); // debug thing -- a profiling counter
 		return -1; // Not a packet with positional data, not interested in...
 	}
 	keylen = strlen(keybuf);

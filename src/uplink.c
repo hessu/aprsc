@@ -240,25 +240,34 @@ int make_uplink(struct uplink_config_t *l)
 
 	freeaddrinfo(ai); /* Not needed anymore.. */
 
-	addr_len = sizeof(sa);
-	if (getpeername(fd, (struct sockaddr *)&sa, &addr_len) != 0) {
-		hlog(LOG_CRIT, "getpeername(%s): %s", addr_s, strerror(errno));
-		close(fd);
-		return -3;
-	}
-
 	c = client_alloc();
 	c->fd    = fd;
 	c->addr  = sa;
 	c->state = CSTATE_CONNECTED;
-	c->addr_s = strsockaddr( &sa.sa, addr_len );
 	c->keepalive = now;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;
 	c->username = hstrdup(mycall);
 	c->flags    = l->client_flags;
 
-	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", addr_s, c->fd, c->addr_s);
+
+
+	/* These peer/sock name calls can not fail -- or the socket closed
+	   on us in which case it gets abandoned a bit further below. */
+
+	addr_len = sizeof(sa);
+	getpeername(fd, (struct sockaddr *)&sa, &addr_len);
+	c->addr_ss = strsockaddr( &sa.sa, addr_len ); /* server side address */
+
+	addr_len = sizeof(sa);
+	getsockname(fd, (struct sockaddr *)&sa, &addr_len);
+	c->addr_s = strsockaddr( &sa.sa, addr_len ); /* client side address */
+
+	/* Above the addr_s / addr_ss are in REVERSE order compared with normal
+	   incoming clients!  It makes certain error reporting much more sensible
+	   looking.  */
+
+	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", c->addr_ss, c->fd, c->addr_s);
 
 	uplink_client = c;
 
@@ -270,7 +279,7 @@ int make_uplink(struct uplink_config_t *l)
 
 	/* set non-blocking mode */
 	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
-		hlog(LOG_ERR, "Uplink: %s - Failed to set non-blocking mode on socket: %s", addr_s, strerror(errno));
+		hlog(LOG_ERR, "Uplink: %s - Failed to set non-blocking mode on socket: %s", c->addr_ss, strerror(errno));
 		goto err;
 	}
 	
@@ -298,9 +307,9 @@ int make_uplink(struct uplink_config_t *l)
 
 	++ uplink_connects.gauge;
 	++ uplink_connects.counter;
-	++ uplink_connects.refcount;
+	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */
 
-	c->portaccount = & uplink_connects;
+	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
 	
 	return 0;
 	

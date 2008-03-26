@@ -601,6 +601,9 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	/* note: len does not include CRLF, it's reconstructed here... we accept
 	 * CR, LF or CRLF on input but make sure to use CRLF on output.
 	 */
+
+	clientaccount_add(c, 0, 1, 0, 0); /* one packet, bytes were accounted previously */
+
 	
 	/* Make sure it looks somewhat like an APRS-IS packet... len is without CRLF.
 	 * Do not do PACKETLEN_MIN test here, since it would drop the 'filter'
@@ -610,7 +613,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		hlog(LOG_WARNING, "Packet too long (%d): %.*s", len, len, s);
 		return 0;
 	}
-		
+
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#')
 		return 0;

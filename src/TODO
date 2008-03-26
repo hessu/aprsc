@@ -4,23 +4,34 @@ TODO ITEMS LIST
       to 9 or A to F as this would indicate a server generated IP address
       for the q construct.
 
-    - permit only one logged in socket from any given userid
+    - Permit only one logged in socket from any given userid.
+      The "more than one -> kick previous" is neat denial-of-service way on
+      third parties...
 
-    - core-peer communication
+    - CORE-PEER communication
 
-    - udp communication
+    - UDP communication
+	- "Client" version exists -- unidirectional data flow from server to client,
+	  server discards all data sent to it
+	- Future todo:
+	    - network performance buffering of data into UDP packets is needed
+	    - client traffic flow in UDP form ?
 
     - complete output filters
+	- s-filter is still missing
 
-    - timeout processing client vs. uplink vs. core vs. history dumpping client
+    - Timeout processing client vs. uplink vs. core vs. history dumpping client
 
-    - global packet queue expiration  (done, but..)
+    - Global packet queue expiration  (done, but needs review..)
 
     - remove the UPLINKSIM code (svn diff -r 99:100) before release and
       final testing
 
-    - filter parse and error reporting for  aprsc.conf  defined filters
-      (e.g.  "t/*" meaning "full feed"), sysadmin wants to see that info.
+    - Filter parse and error reporting for  aprsc.conf  defined filters
+      (e.g.  "t/c*" meaning "full feed"), sysadmin wants to see that info.
+		done -- goes to log as ERROR level message.
+
+    - Smarter 
 
 To Consider:
 
@@ -29,6 +40,13 @@ To Consider:
       if used with full feeds)
 
     - SCTP sockets
+
+    - UDP with multiple messages in same datagram (up to about 1400 bytes
+      in single UDP frame), AND with timestamp telling how long a message
+      has been in transit, AND binary transparency capability...
+      ( network byte order 32-bit value telling seconds since 2000-01-01 ? )
+
+    - IPv6 support (core-peer encodes IP address in hex into delivery path..)
 
     - history dumps
 	- Turn around the idea of worker scanning onwards the pbuf chain,

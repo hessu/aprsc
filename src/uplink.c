@@ -249,7 +249,7 @@ int make_uplink(struct uplink_config_t *l)
 	c->handler  = & uplink_login_handler;
 	c->username = hstrdup(mycall);
 	c->flags    = l->client_flags;
-
+	c->connect_time = now;
 
 
 	/* These peer/sock name calls can not fail -- or the socket closed

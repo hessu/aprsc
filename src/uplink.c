@@ -207,9 +207,8 @@ int make_uplink(struct uplink_config_t *l)
 
 
 	i = 0;
-	for (a = ai; a ; a = a->ai_next) {
-	  if (i < 20) ap[i] = a; /* Up to 20 first addresses */
-	  ++i;
+	for (a = ai; a && i < 20 ; a = a->ai_next, ++i) {
+		ap[i] = a; /* Up to 20 first addresses */
 	}
 	ap[i] = NULL;
 	/* If more than one, pick one at random, and place it as list leader */
@@ -223,6 +222,7 @@ int make_uplink(struct uplink_config_t *l)
 	}
 	i = 0;
 
+	/* Then lets try making socket and connection in address order */
 	fd = -1;
 	while (( a = ap[i++] )) {
 

@@ -37,6 +37,7 @@
 #include "hmalloc.h"
 #include "cellmalloc.h"
 #include "keyhash.h"
+#include "filter.h"
 #include "historydb.h"
 
 extern int uplink_simulator;
@@ -357,6 +358,7 @@ static int dupecheck(struct pbuf_t *pb)
 			    memcmp(data, dp->packet,    datalen) == 0) {
 				// PACKET MATCH!
 				pb->flags |= F_DUPE;
+				filter_postprocess_dupefilter(pb);
 				return F_DUPE;
 			}
 			// no packet match.. check next
@@ -369,6 +371,7 @@ static int dupecheck(struct pbuf_t *pb)
 	//    .. and historydb wants also copy..
 
 	historydb_insert(pb);
+	filter_postprocess_dupefilter(pb);
 
 	dp = dupecheck_db_alloc(addrlen, datalen);
 	if (!dp) return -1; // alloc error!

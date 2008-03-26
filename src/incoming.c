@@ -517,10 +517,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
 
-	if (rc >= 0) {
-		filter_entrycall_insert(pb);
-		filter_wx_insert(pb);
-	}
+	/* Filter preprocessing before sending this to dupefilter.. */
+	filter_preprocess_dupefilter(pb);
 
 	/* put the buffer in the thread's incoming queue */
 	*self->pbuf_incoming_local_last = pb;

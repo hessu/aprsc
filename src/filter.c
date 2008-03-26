@@ -232,6 +232,32 @@ float filter_lon2rad(float lon)
 	return (lon * (M_PI / 180.0));
 }
 
+void filter_preprocess_dupefilter(struct pbuf_t *pbuf)
+{
+	filter_entrycall_insert(pbuf);
+	filter_wx_insert(pbuf);
+}
+
+void filter_postprocess_dupefilter(struct pbuf_t *pbuf)
+{
+	/*
+	 *    If there is no position at this packet from earlier
+	 *    processing, try now to find one by the callsign of
+	 *    the packet sender.
+	 *    
+	 */
+	if (!(pbuf->flags & F_HASPOS)) {
+		struct history_cell_t *hist;
+		int rc = historydb_lookup(pbuf->srcname, pbuf->srcname_len, &hist);
+		if (rc > 0) {
+			pbuf->lat     = hist->lat;
+			pbuf->lng     = hist->lon;
+			pbuf->cos_lat = hist->coslat;
+
+			pbuf->flags  |= F_HASPOS;
+		}
+	}
+}
 
 
 void filter_init(void)

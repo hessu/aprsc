@@ -17,10 +17,14 @@ my $mycall = 'OH2MQK-RR';
 #$filter = 'p/OH';
 
 #$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
+#$APRSIS = APRS::IS->new('finland.aprs2.net:10152u', $mycall, $filter);
+#$APRSIS = APRS::IS->new('finland.aprs2.net:14580u', $mycall, $filter);
 #$APRSIS = APRS::IS->new('rotate.aprs.net:23', $mycall, $filter);
 $APRSIS = APRS::IS->new('first.aprs.net:10152u', $mycall, $filter );
+#$APRSIS = APRS::IS->new('first.aprs.net:24579', $mycall, undef );
 #$APRSIS = APRS::IS->new('localhost:10152u', $mycall, $filter );
 #$APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter );
+#$APRSIS = APRS::IS->new('localhost:14580u', $mycall, $filter );
 
 if (!defined($APRSIS)) {
     printf "aprsazel: Failed to open APRS-IS socket!\n";
@@ -43,29 +47,40 @@ exit 0;
 
 sub mux_input {
     my $package = shift;
-    my $mux     = shift;
+    my $MUX     = shift;
     my $fh      = shift;
     my $data    = shift;
 
-    if (fileno($fh) == fileno($Uclient)) {
+    if ($MUX->is_udp($fh)) {
 	printf "%d\t%s\n", time, $$data;
 	$$data = '';
+
+    } else {
+
+	# Process each line in the input, leaving partial lines
+	# in the input buffer
+	while ($$data =~ s/^(.*?)\n//) {
+	    printf "%d\t%s\n", time, $1;
+	}
     }
 
-    # Process each line in the input, leaving partial lines
-    # in the input buffer
-    while ($$data =~ s/^(.*?)\n//) {
-	printf "%d\t%s\n", time, $1;
+    if (time > $last) {
+	$MUX->close($fh);
+	$MUX->remove($fh);
+	$MUX->endloop();
+	exit 0;
     }
 }
 
 
 sub mux_eof {
     my $package = shift;
-    my $mux     = shift;
+    my $MUX     = shift;
     my $fh      = shift;
 
     $MUX->close($fh);
+    $MUX->remove($fh);
+    $MUX->endloop();
 }
 
 

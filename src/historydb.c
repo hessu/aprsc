@@ -261,7 +261,7 @@ int historydb_insert(struct pbuf_t *pb)
 				cp->flags       = pb->flags;
 				cp->packetlen   = pb->packet_len;
 				memcpy(cp->packet, pb->data,
-				       cp->packetlen > 300 ? 300 : cp->packetlen);
+				       cp->packetlen > 510 ? 510 : cp->packetlen);
 				// Continue scanning the whole chain for possibly
 				// obsolete items
 			}

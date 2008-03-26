@@ -136,13 +136,13 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 
 	passcode = aprs_passcode(c->username);
 
-	hlog(LOG_DEBUG, "%s: server string: '%.*s'", c->addr_s, len, s);
+	hlog(LOG_DEBUG, "%s: server string: '%.*s'", c->addr_ss, len, s);
 
 	// FIXME: Send the login string... (filters ???)
 
 	len = sprintf(buf, "user %s pass %d vers %s\r\n", c->username, passcode, VERSTR);
 
-	hlog(LOG_DEBUG, "%s: my login string: '%.*s'", c->addr_s, len-2, buf, len);
+	hlog(LOG_DEBUG, "%s: my login string: '%.*s'", c->addr_ss, len-2, buf, len);
 
 	rc = client_write(self, c, buf, len);
 	if (rc < -2) return rc;
@@ -164,7 +164,7 @@ int make_uplink(struct uplink_config_t *l)
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len;
-	struct addrinfo *ai, *a;
+	struct addrinfo *ai, *a, *ap[21];
 	struct addrinfo req;
 	char addr_s[180];
 	int port;
@@ -207,38 +207,54 @@ int make_uplink(struct uplink_config_t *l)
 
 
 	i = 0;
-	for (a = ai; a ; a = a->ai_next)
+	for (a = ai; a ; a = a->ai_next) {
+	  if (i < 20) ap[i] = a; /* Up to 20 first addresses */
 	  ++i;
-	if (i > 0)
-	  i = random() % i;
-	else
-	  i = -1;
-
-	for (a = ai; a && i > 0; a = a->ai_next, --i)
-	  ;
-	if (!a) a = ai;
-
-	// FIXME: format socket IP address to text
-	sprintf(addr_s, "%s:%s", l->host, l->port);
-
-
-	hlog(LOG_INFO, "Making uplink TCP socket: %s  %s", l->host, l->port);
-	
-	if ((fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
-		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
-		return -3;
 	}
+	ap[i] = NULL;
+	/* If more than one, pick one at random, and place it as list leader */
+	if (i > 0)
+		i = random() % i;
 
-	arg = 1;
-	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
+	if (i > 0) {
+		a = ap[i];
+		ap[i] = ap[0];
+		ap[0] = a;
+	}
+	i = 0;
+
+	fd = -1;
+	while (( a = ap[i++] )) {
+
+		// FIXME: format socket IP address to text
+		sprintf(addr_s, "%s:%s", l->host, l->port);
+
+
+		hlog(LOG_INFO, "Making uplink TCP socket: %s  %s", l->host, l->port);
 	
-	if (connect(fd, ai->ai_addr, ai->ai_addrlen)) {
-		hlog(LOG_CRIT, "connect(%s): %s", addr_s, strerror(errno));
-		close(fd);
-		return -3;
+		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
+			hlog(LOG_CRIT, "Uplink: socket(): %s\n", strerror(errno));
+			continue;
+		}
+
+		arg = 1;
+		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
+	
+		if (connect(fd, a->ai_addr, a->ai_addrlen)) {
+			hlog(LOG_CRIT, "Uplink: connect(%s): %s", addr_s, strerror(errno));
+			close(fd);
+			fd = -1;
+			continue;
+		}
+		if (fd >= 0)
+			break; /* Successfull connect! */
 	}
 
 	freeaddrinfo(ai); /* Not needed anymore.. */
+
+	if (fd < 0) {
+		return -3; /* No successfull connection at any address.. */
+	}
 
 	c = client_alloc();
 	c->fd    = fd;

@@ -151,11 +151,10 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 				   Reporting looks up these via listener list. */
 	pthread_mutex_t mutex;	/* mutex to protect counters, refcount especially */
 
-	long	counter;
-	long	gauge;
-	long	gauge_max;
+	long	counter;	/* New arroving connects count */
+	long	gauge;		/* Number of current connects */
+	long	gauge_max;	/* Maximum of the current connects */
 
-  // FIXME: traffic accounting codes missing
 	long long  rxbytes,   txbytes;
 	long long  rxpackets, txpackets;
 
@@ -182,10 +181,11 @@ struct client_t {
 	struct client_t **prevp;
 	
 	union sockaddr_u addr;
-	struct portaccount_t *portaccount;
+	struct portaccount_t *portaccount; /* port specific global account accumulator */
+	struct portaccount_t localaccount; /* client connection specific account accumulator */
 
-	struct client_udp_t *udpclient;	/* */
-	int    udp_port;		/* client udp port */
+	struct client_udp_t *udpclient;	/* pointer to udp service socket, if available */
+	int    udp_port;		/* client udp port - if client has requested it */
 	int    udpaddrlen;		/* ready to use sockaddr length */
 	union sockaddr_u udpaddr;	/* ready to use sockaddr data   */
 
@@ -193,6 +193,8 @@ struct client_t {
 	char  *addr_s;	    /* client IP address in text format */
 	char  *addr_ss;	    /* server IP address in text format */
 	int    portnum;
+	time_t connect_time;/* Time of connection */
+	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t logintimeout; /* when the login wait times out */
 
@@ -330,5 +332,6 @@ extern void port_accounter_add(struct portaccount_t *p);
 extern void port_accounter_drop(struct portaccount_t *p);
 
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
+extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets);
 
 #endif

@@ -70,6 +70,29 @@ struct pbuf_t  *pbuf_global_dupe_last  = NULL;
 struct pbuf_t **pbuf_global_dupe_prevp = &pbuf_global_dupe;
 
 
+/* global inbound connects, and protocol traffic accounters */
+
+struct portaccount_t inbound_connects = {
+  .mutex    = PTHREAD_MUTEX_INITIALIZER,
+  .refcount = 99,	/* Global static blocks have extra-high initial refcount */
+};
+
+/* global byte/packet counters per protocol */
+struct portaccount_t client_connects_tcp = {
+  .mutex    = PTHREAD_MUTEX_INITIALIZER,
+  .refcount = 99,	/* Global static blocks have extra-high initial refcount */
+};
+struct portaccount_t client_connects_udp = {
+  .mutex    = PTHREAD_MUTEX_INITIALIZER,
+  .refcount = 99,	/* Global static blocks have extra-high initial refcount */
+};
+struct portaccount_t client_connects_sctp = {
+  .mutex    = PTHREAD_MUTEX_INITIALIZER,
+  .refcount = 99,	/* Global static blocks have extra-high initial refcount */
+};
+
+
+
 /* port accounters */
 struct portaccount_t *port_accounter_alloc(void)
 {
@@ -128,12 +151,6 @@ void port_accounter_drop(struct portaccount_t *p)
 	}
 }
 
-/* global inbound connects counters */
-pthread_mutex_t inbound_connects_mutex = PTHREAD_MUTEX_INITIALIZER;
-long inbound_connects_count;
-long inbound_connects_gauge;
-long inbound_connects_gauge_max;
-
 /*
  *	Global and port specific port usage counters
  */
@@ -142,18 +159,18 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 {	/* add == 2/3  --> UDP "client" socket drop/add */
 	int i;
 	if (add < 2) {
-		i = pthread_mutex_lock(& inbound_connects_mutex );
+		i = pthread_mutex_lock(& inbound_connects.mutex );
 
 		if (add) {
-			++inbound_connects_count;
-			++inbound_connects_gauge;
-			if (inbound_connects_gauge > inbound_connects_gauge_max)
-				inbound_connects_gauge_max = inbound_connects_gauge;
+			++ inbound_connects.counter;
+			++ inbound_connects.gauge;
+			if (inbound_connects.gauge > inbound_connects.gauge_max)
+				inbound_connects.gauge_max = inbound_connects.gauge;
 		} else {
-			--inbound_connects_gauge;
+			-- inbound_connects.gauge;
 		}
 
-		i = pthread_mutex_unlock(& inbound_connects_mutex );
+		i = pthread_mutex_unlock(& inbound_connects.mutex );
 	}
 
 	if ( p ) {
@@ -165,7 +182,7 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 	}
 
 	// hlog( LOG_DEBUG, "inbound_connects_account(), count=%d gauge=%d max=%d", 
-	//       inbound_connects_count, inbound_connects_gauge, inbound_connects_gauge_max );
+	//       inbound_connects.count, inbound_connects.gauge, inbound_connects.gauge_max );
 }
 
 /* object alloc/free */
@@ -336,7 +353,56 @@ char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 	return hstrdup(eb);
 }
 
+void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets)
+{
+	/* worker local accounters do not need locks */
+	c->localaccount.rxbytes   += rxbytes;
+	c->localaccount.txbytes   += txbytes;
+	c->localaccount.rxpackets += rxpackets;
+	c->localaccount.txpackets += txpackets;
 
+	if (c->portaccount) {
+		// FIXME: MUTEX !! -- this may or may not need locks..
+		c->portaccount->rxbytes   += rxbytes;
+		c->portaccount->txbytes   += txbytes;
+		c->portaccount->rxpackets += rxpackets;
+		c->portaccount->txpackets += txpackets;
+	}
+
+	if (!(c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))) {
+		// FIXME: MUTEX !! -- this may or may not need locks..
+		client_connects_tcp.rxbytes   += rxbytes;
+		client_connects_tcp.txbytes   += txbytes;
+		client_connects_tcp.rxpackets += rxpackets;
+		client_connects_tcp.txpackets += txpackets;
+	}
+}
+
+void clientaccount_add_udp(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets)
+{
+	/* Note: client traffic does not RECEIVE UDP data per se. */
+
+	// c->localaccount.rxbytes   += rxbytes;
+	c->localaccount.txbytes   += txbytes;
+	// c->localaccount.rxpackets += rxpackets;
+	c->localaccount.txpackets += txpackets;
+
+	if (c->portaccount) {
+		// FIXME: MUTEX !! -- this may or may not need locks..
+		// c->portaccount->rxbytes   += rxbytes;
+		c->portaccount->txbytes   += txbytes;
+		// c->portaccount->rxpackets += rxpackets;
+		c->portaccount->txpackets += txpackets;
+	}
+
+	// FIXME: MUTEX !! -- this may or may not need locks..
+	// client_connects_udp.rxbytes   += rxbytes;
+	client_connects_udp.txbytes   += txbytes;
+	// client_connects_udp.rxpackets += rxpackets;
+	client_connects_udp.txpackets += txpackets;
+
+	// FIXME: global UDP write statistics - or shall reporter make summaries ?
+}
 
 /*
  *	signal handler
@@ -419,22 +485,25 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	*/
 	c->obuf_writes++;
 
-	if (c->udp_port && c->udpclient && len > 0) {
+	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
 		/* Every packet ends with CRLF, but they are not sent over UDP ! */
+		/* Existing system doesn't send keepalives via UDP.. */
 		i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
 			    &c->udpaddr.sa, c->udpaddrlen );
 
 		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d",
 		//       c->udpclient->portnum, c->udp_port, i );
 
-		// FIXME: UDP write statistics !
-
-		if (*p != '#') // Send keepalive also through the tcp control socket..
-			return i;
+		if (i > 0)
+			clientaccount_add_udp( c, 0, 0, i, 1);
 	}
 	if (c->state == CSTATE_UDP)
 		return 0;
 
+	if (len > 0) {
+		clientaccount_add( c, 0, 0, len, 1); /* this will be written.. 
+							.. failures ignored. */
+	}
 	if (c->obuf_end + len > c->obuf_size) {
 		/* Oops, cannot append the data to the output buffer.
 		 * Check if we can make space for it by moving data
@@ -604,7 +673,8 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 
 	if (r == 0) {
-		hlog(LOG_DEBUG, "read: EOF from client fd %d (%s)", c->fd, c->addr_s);
+		hlog( LOG_DEBUG, "read: EOF from client fd %d (%s @ %s)",
+		      c->fd, c->addr_s, c->addr_ss );
 		close_client(self, c);
 		return -1;
 	}
@@ -612,13 +682,22 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		if (errno == EINTR || errno == EAGAIN)
 			return 0; /* D'oh..  return again latter */
 
-		hlog(LOG_DEBUG, "read: Error from client fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
-		hlog(LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d", c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
+		hlog( LOG_DEBUG, "read: Error from client fd %d (%s): %s",
+		      c->fd, c->addr_s, strerror(errno));
+		hlog( LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d",
+		      c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
 		close_client(self, c);
 		return -1;
 	}
+
+	clientaccount_add(c, r, 0, 0, 0); /* Number of packets is now unknown,
+					     byte count is collected.
+					     The incoming_handler() will account
+					     packets. */
+
 	c->ibuf_end += r;
-	//hlog(LOG_DEBUG, "read: %d bytes from client fd %d (%s) - %d in ibuf", r, c->fd, c->addr_s, c->ibuf_end);
+	// hlog( LOG_DEBUG, "read: %d bytes from client fd %d (%s) - %d in ibuf",
+	//       r, c->fd, c->addr_s, c->ibuf_end);
 	
 	/* parse out rows ending in CR and/or LF and pass them to the handler
 	 * without the CRLF (we accept either CR or LF or both, but make sure
@@ -626,6 +705,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	 */
 	ibuf_end = c->ibuf + c->ibuf_end;
 	row_start = c->ibuf;
+	c->last_read = tick; /* not simulated time */
 
 	for (s = c->ibuf; s < ibuf_end; s++) {
 		if (*s == '\r' || *s == '\n') {

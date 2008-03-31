@@ -130,21 +130,28 @@ struct filter_head_t {
 	struct filter_t *next;
 	const char *text; /* filter text as is		*/
 	float   f_latN, f_lonE, f_latS, f_lonW;
+	time_t  hist_age;
 			/* parsed floats, if any	*/
 #define f_dist   f_latS /* for R filter */
 #define f_coslat f_lonW /* for R filter */
 
 	char	type;	  /* 1 char			*/
 	int16_t	negation; /* boolean flag		*/
-	int16_t	numnames; /* used as named, and as cache validity flag */
-	int16_t bitflags; /* used as bit-set on T_*** enumerations */
 	union {
+	  int16_t numnames; /* used as named, and as cache validity flag */
+	  int16_t len1s;    /*  or len1 of s-filter */
+	}; /* ANONYMOUS UNION */
+	union {
+	  int16_t bitflags; /* used as bit-set on T_*** enumerations */
+	  int16_t len1;     /*  or as len2 of s-filter */
+	}; /* ANONYMOUS UNION */
+	union {
+		int16_t len2s, len2, len3s, len3; /* of s-filter */
 		/* for cases where there is only one.. */
 		struct filter_refcallsign_t  refcallsign;
 		/*  hmalloc()ed array, alignment important! */
 		struct filter_refcallsign_t *refcallsigns;
 	}; /* ANONYMOUS UNION */
-	time_t  hist_age;
 };
 
 struct filter_t {
@@ -471,7 +478,7 @@ void filter_entrycall_dump(FILE *fp)
 	int k;
 	struct filter_entrycall_t *f;
 
-	/* No need to have locks -- anymore.. */
+	rwl_rdlock(&filter_entrycall_rwlock);
 
 	for (k = 0; k < FILTER_ENTRYCALL_HASHSIZE; ++k) {
 		f = filter_entrycall_hash[k];
@@ -481,6 +488,8 @@ void filter_entrycall_dump(FILE *fp)
 				 (long)f->expirytime, f->callsign );
 		}
 	}
+
+	rwl_rdunlock(&filter_entrycall_rwlock);
 }
 
 
@@ -670,7 +679,7 @@ void filter_wx_dump(FILE *fp)
 	int k;
 	struct filter_wx_t *f;
 
-	/* No need to have locks -- anymore.. */
+	rwl_rdlock(&filter_wx_rwlock);
 
 	for (k = 0; k < FILTER_WX_HASHSIZE; ++k) {
 		f = filter_wx_hash[k];
@@ -680,6 +689,8 @@ void filter_wx_dump(FILE *fp)
 				 (long)f->expirytime, f->callsign );
 		}
 	}
+
+	rwl_rdunlock(&filter_wx_rwlock);
 }
 
 
@@ -882,6 +893,83 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	/* If not extending existing filter item, let main parser do the finalizations */
 
 	return extend;
+}
+
+int filter_parse_one_s(struct client_t *c, const char *filt0, struct filter_t *f0, struct filter_t *ff, struct filter_t **ffp)
+{
+	/* s/pri/alt/over  	Symbol filter
+
+	   pri = symbols in primary table
+	   alt = symbols in alternate table
+	   over = overlay character (case sensitive)
+
+	   For example:
+	   s/->   This will pass all House and Car symbols (primary table)
+	   s//#   This will pass all Digi with or without overlay
+	   s//#/T This will pass all Digi with overlay of capital T
+
+	   About 10-15 s-filters in entire APRS-IS core at any given time.
+	   Up to 520 invocations per second at peak.
+	*/
+	const char *s = filt0;
+	int len1, len2, len3, len4, len5, len6;
+
+	if (*s == '-')
+		++s;
+	if (*s == 's' || *s == 'S')
+		++s;
+	if (*s != '/')
+		return -1; 
+	++s;
+
+	len1 = len2 = len3 = len4 = len5 = len6 = 0;
+
+	while (1) {
+
+		len1 = s - filt0;
+		while (*s && *s != '/') ++s;
+		len2 = s - filt0;
+
+		f0->h.len1s = len1;
+		f0->h.len1  = len2 - len1;
+		f0->h.len2s = f0->h.len2 = f0->h.len3s = f0->h.len3 = 0;
+
+		if (!*s) break;
+
+		if (*s == '/') ++s;
+		len3 = s - filt0;
+		while (*s && *s != '/') ++s;
+		len4 = s - filt0;
+
+		f0->h.len2s = len3;
+		f0->h.len2  = len4 - len3;
+
+		if (!*s) break;
+
+		if (*s == '/') ++s;
+		len5 = s - filt0;
+		while (*s) ++s;
+		len6 = s - filt0;
+
+		f0->h.len3s = len5;
+		f0->h.len3  = len6 - len5;
+
+		break;
+	}
+
+	if ((len6-len5 > 0) && (len4-len3 == 0)) {
+		/* overlay but no secondary table.. */
+		return -1; /* bad parse */
+	}
+#if 0
+	{
+	  const char  *s1 = filt0+len1, *s2 = filt0+len3, *s3 = filt0+len5;
+	  int l1 = len2-len1, l2 = len4-len3, l3 = len6-len5;
+
+	  hlog( LOG_DEBUG, "parse s-filter:  '%.*s'  '%.*s'  '%.*s'", l1, s1, l2, s2, l3, s3 );
+	}
+#endif
+	return 0;
 }
 
 
@@ -1172,8 +1260,14 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 's':
 	case 'S':
 		/* s/pri/alt/over  	Symbol filter  */
-	
-		return -1;	// FIXME: S-filter pre-parser
+
+		i = filter_parse_one_s( c, filt0, &f0, ff, ffp );
+		if (i < 0) {
+			hlog(LOG_DEBUG, "Bad s-filter syntax: %s", filt0);
+			return i;
+		}
+		if (i > 0) /* extended previous */
+			return 0;
 		break;
 
 	case 't':
@@ -1796,8 +1890,9 @@ static int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct fi
 
 static int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
-	/* s/pri/alt/over  	Symbol filter  	pri = symbols in primary table
+	/* s/pri/alt/over  	Symbol filter
 
+	   pri = symbols in primary table
 	   alt = symbols in alternate table
 	   over = overlay character (case sensitive)
 
@@ -1809,15 +1904,35 @@ static int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct fi
 	   About 10-15 s-filters in entire APRS-IS core at any given time.
 	   Up to 520 invocations per second at peak.
 	*/
-	const char *s = f->h.text;
-	int rc = 0;
+	const char symtable = (pb->symbol[0] == '/') ? '/' : '\\';
+	const char symcode  = pb->symbol[1];
+	const char symolay  = (pb->symbol[0] != symtable) ? pb->symbol[0] : 0;
 
-	if (*s == '-') ++s;
-	s += 2;
+	// hlog( LOG_DEBUG, "s-filt %c|%c|%c  %s", symtable, symcode, symolay ? symolay : '-', f->h.text );
 
-	// FIXME: s-filter
-
-	//	return f->h.negation ? 2 : 1;
+	if (f->h.len1 != 0) {
+		/* Primary table symbols */
+		if ( symtable == '/' &&
+		     memchr(f->h.text+f->h.len1s, symcode, f->h.len1) != NULL )
+			return f->h.negation ? 2 : 1;
+		// return 0;
+	}
+	if (f->h.len3 != 0) {
+		/* Secondary table with overlay */
+		if ( memchr(f->h.text+f->h.len3s, symolay, f->h.len3) == NULL )
+			return 0; // No match on overlay
+		if ( memchr(f->h.text+f->h.len2s, symcode, f->h.len2) == NULL )
+			return 0; // No match on overlay
+		return f->h.negation ? 2 : 1;
+	}
+	/* OK, no overlay... */
+	if (f->h.len2 != 0) {
+		/* Secondary table symbols */
+		if ( symtable != '\\' &&
+		     memchr(f->h.text+f->h.len2s, symcode, f->h.len2) != NULL )
+			return f->h.negation ? 2 : 1;
+	}
+	/* No match */
 	return 0;
 }
 

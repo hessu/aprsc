@@ -87,17 +87,17 @@ void close_uplinkers(void)
 	int rc;
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
-		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
+		hlog( LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc) );
 		return;
 	}
 
 	if (uplink_client && uplink_client->fd >= 0) {
-		hlog(LOG_DEBUG, "Closing uplinking socket....");
+		hlog( LOG_DEBUG, "Closing uplinking socket .. fd %d ...", uplink_client->fd );
 		shutdown(uplink_client->fd, SHUT_RDWR);
 	}
 
 	if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
-		hlog(LOG_ERR, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc));
+		hlog( LOG_ERR, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc) );
 		return;
 	}
 	return;

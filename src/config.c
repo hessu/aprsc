@@ -93,7 +93,7 @@ int verbose;
 struct listen_config_t *listen_config = NULL, *listen_config_new = NULL;
 
 int do_listen(struct listen_config_t **lq, int argc, char **argv);
-int do_interval(time_t *dest, int argc, char **argv);
+int do_interval(int *dest, int argc, char **argv);
 int do_peerip(struct peerip_config_t **lq, int argc, char **argv);
 int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 
@@ -232,7 +232,7 @@ time_t parse_interval(char *origs)
  *	Parse an interval configuration entry
  */
 
-int do_interval(time_t *dest, int argc, char **argv)
+int do_interval(int *dest, int argc, char **argv)
 {
 	if (argc < 2)
 		return -1;

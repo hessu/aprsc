@@ -25,6 +25,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 
 #include "cellmalloc.h"
 #include "hmalloc.h"
@@ -46,6 +47,8 @@ struct cellarena_t {
   	int	minfree;
 	int	use_mutex;
 
+	const char *arenaname;
+
 	pthread_mutex_t mutex;
 
   	struct cellhead *free_head;
@@ -55,7 +58,7 @@ struct cellarena_t {
 	int	 createsize;
 
 	int	 cellblocks_count;
-#define CELLBLOCKS_MAX 1000
+#define CELLBLOCKS_MAX 20
 	char	*cellblocks[CELLBLOCKS_MAX];	/* ref as 'char pointer' for pointer arithmetics... */
 };
 
@@ -79,7 +82,31 @@ int new_cellblock(cellarena_t *ca)
 	int i;
 	char *cb;
 
+#ifdef MEMDEBUG /* External backing-store files, unique ones for each cellblock,
+		   which at Linux names memory blocks in  /proc/nnn/smaps "file"
+		   with this filename.. */
+	int fd;
+	char name[2048];
+
+	sprintf(name, "/tmp/.-%d-%s-%d.mmap", getpid(), ca->arenaname, ca->cellblocks_count );
+	unlink(name);
+	fd = open(name, O_RDWR|O_CREAT, 644);
+	unlink(name);
+	if (fd >= 0) {
+	  memset(name, 0, sizeof(name));
+	  i = 0;
+	  while (i < ca->createsize) {
+	    int rc = write(fd, name, sizeof(name));
+	    if (rc < 0) break;
+	    i += rc;
+	  }
+	}
+
+	cb = mmap( NULL, ca->createsize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	close(fd);
+#else
 	cb = mmap( NULL, ca->createsize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+#endif
 	if (cb == NULL || cb == (char*)-1)
 	  return -1;
 
@@ -118,10 +145,12 @@ int new_cellblock(cellarena_t *ca)
  */
 
 
-cellarena_t *cellinit(int cellsize, int alignment, int policy, int createkb, int minfree)
+cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree )
 {
 	cellarena_t *ca = hmalloc(sizeof(*ca));
 	memset(ca, 0, sizeof(*ca));
+
+	ca->arenaname = arenaname;
 
 #if CELLHEAD_DEBUG == 1
 	if (alignment < __alignof__(void*))

@@ -51,9 +51,9 @@ int dupecheck_cellgauge;
 int pbuf_global_count;
 int pbuf_global_dupe_count;
 
-int pbuf_global_count_limit      = 90000; // FIXME: real criteria should be expirer..
-int pbuf_global_dupe_count_limit =  9000; // FIXME: .. but in simulation our timers are not useful.
-					  // FIXME: .. or these should be global configurable parameters.
+int pbuf_global_count_limit      =  5000; /* Real criteria is expirer..		 */
+int pbuf_global_dupe_count_limit =   100; /* .. but we set some minimum packet counts
+					     into the global pbuf queue anyway.  */
 
 long long dupecheck_outcount;  /* 64 bit counters for statistics */
 long long dupecheck_dupecount;
@@ -66,11 +66,7 @@ struct dupe_record_t {
 	int	 plen;	// Payload length
 	char	 addresses[20];
 	char	*packet;
-#ifndef _FOR_VALGRIND_
-	char	 packetbuf[200];
-#else
-	char	 packetbuf[1];
-#endif
+	char	 packetbuf[200]; /* 99.9+ % of time this is enough.. */
 };
 
 #define DUPECHECK_DB_SIZE 8192        /* Hash index table size */
@@ -112,9 +108,10 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[2002];
 	int n, n1, n2, lag;
+	time_t lastage1 = 0, lastage2 = 0;
 
-	time_t expire1 = now - pbuf_global_expiration;
 	time_t expire2 = now - pbuf_global_dupe_expiration;
+	time_t expire1 = now - pbuf_global_expiration;
 
 	static int show_zeros = 1;
 
@@ -125,11 +122,13 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global;
+	if (pb) lastage1 = pb->t;
 	n = 0;
 	n1 = 0;
 	while ( pbuf_global_count > pbuf_global_count_limit && pb ) {
 
-		if (pb->t > expire1)
+		lastage1 = pb->t;
+		if (pb->t >= expire1)
 			break; // stop at newer than expire1
 		lag = pbuf_seqnum_lag(dupecheck_seqnum, pb->seqnum);
 		if (pbuf_lag >= lag)
@@ -151,11 +150,13 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global_dupe;
+	if (pb) lastage2 = pb->t;
 	n = 0;
 	n2 = 0;
 	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb ) {
 
-		if (pb->t > expire2)
+		lastage2 = pb->t;
+		if (pb->t >= expire2)
 			break; // stop at newer than expire2
 		lag = pbuf_seqnum_lag(dupecheck_dupe_seqnum, pb->seqnum);
 		if (pbuf_dupe_lag >= lag)
@@ -181,10 +182,16 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
 	if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
 
+	if (lastage1 == 0) lastage1 = now+2; // makes printout of "-2" (or "-1")
+	if (lastage2 == 0) lastage2 = now+2;
+
 	if (show_zeros || n1 || n2 || pbuf_lag  || pbuf_dupe_lag) {
 		// report only when there is something to report...
-		hlog( LOG_DEBUG, "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs, lags: %d/%d",
-		      n1, pbuf_global_count, n2, pbuf_global_dupe_count, pbuf_lag, pbuf_dupe_lag );
+		hlog( LOG_DEBUG,
+		      "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs, lags: %d/%d  Ages: %d/%d",
+		      n1, pbuf_global_count, n2, pbuf_global_dupe_count, pbuf_lag, pbuf_dupe_lag,
+		      (int)(now-lastage1), (int)(now-lastage2) );
+
 		if (!(n1 || n2 || pbuf_lag || pbuf_dupe_lag))
 			show_zeros = 0;
 		else
@@ -201,10 +208,11 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 void dupecheck_init(void)
 {
 #ifndef _FOR_VALGRIND_
-	dupecheck_cells = cellinit( sizeof(struct dupe_record_t),
+	dupecheck_cells = cellinit( "dupecheck",
+				    sizeof(struct dupe_record_t),
 				    __alignof__(struct dupe_record_t),
 				    CELLMALLOC_POLICY_LIFO | CELLMALLOC_POLICY_NOMUTEX,
-				    512 /* 512 kB at the time */,
+				    2048 /* 2 MB at the time */,
 				    0 /* minfree */);
 #endif
 }
@@ -220,21 +228,15 @@ static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 		dp = cellmalloc(dupecheck_cells);
 	if (!dp)
 		return NULL;
-	dp->alen = alen;
-	dp->plen = pktlen;
-	dp->next = NULL;
-	if (pktlen > sizeof(dp->packetbuf))
-		dp->packet = hmalloc(pktlen+1);
-	else
-		dp->packet = dp->packetbuf;
-
 #else
 	dp = hmalloc(pktlen + sizeof(*dp));
+#endif
 	memset(dp, 0, sizeof(*dp));
 	dp->alen = alen;
 	dp->plen = pktlen;
 	dp->packet = dp->packetbuf;
-#endif
+	if (pktlen > sizeof(dp->packetbuf))
+		dp->packet = hmalloc(pktlen+1);
 
 	++dupecheck_cellgauge;
 
@@ -334,6 +336,7 @@ static int dupecheck(struct pbuf_t *pb)
 	while (datalen > 0 && data[datalen-1] == ' ')
 	  --datalen;
 
+
 	// there are no 3rd-party frames in APRS-IS ...
 
 	// 2) calculate checksum (from disjoint memory areas)
@@ -345,7 +348,8 @@ static int dupecheck(struct pbuf_t *pb)
 	// 3) lookup if same checksum is in some hash bucket chain
 	//  3b) compare packet...
 	//    3b1) flag as F_DUPE if so
-	idx ^= (idx >> 16); /* fold the bits.. */
+	idx ^= (idx >> 13); /* fold the hash bits.. */
+	idx ^= (idx >> 26); /* fold the hash bits.. */
 	i = idx % DUPECHECK_DB_SIZE;
 	dpp = &dupecheck_db[i];
 	while (*dpp) {
@@ -597,7 +601,7 @@ void dupecheck_start(void)
 	
 	dupecheck_shutting_down = 0;
 	
-	if (pthread_create(&dupecheck_th, NULL, (void *)dupecheck_thread, NULL))
+	if (pthread_create(&dupecheck_th, &pthr_attrs, (void *)dupecheck_thread, NULL))
 		perror("pthread_create failed for dupecheck_thread");
 		
 	dupecheck_running = 1;

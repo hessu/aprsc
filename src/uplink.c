@@ -132,7 +132,12 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	int passcode, rc;
 
 
+#ifndef FIXED_IOBUFS
 	if (!c->username) c->username = hstrdup("simulator");
+#else
+	if (!*c->username)
+		strcpy(c->username, "simulator");
+#endif
 
 	passcode = aprs_passcode(c->username);
 
@@ -167,6 +172,7 @@ int make_uplink(struct uplink_config_t *l)
 	struct addrinfo *ai, *a, *ap[21];
 	struct addrinfo req;
 	char addr_s[180];
+	char *s;
 	int port;
 	int pe;
 	struct worker_t *wc;
@@ -263,9 +269,14 @@ int make_uplink(struct uplink_config_t *l)
 	c->keepalive = now;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;
-	c->username = hstrdup(mycall);
 	c->flags    = l->client_flags;
 	c->connect_time = now;
+#ifndef FIXED_IOBUFS
+	c->username = hstrdup(mycall);
+#else
+	strncpy(c->username, mycall, sizeof(c->username));
+	c->username[sizeof(c->username)-1] = 0;
+#endif
 
 
 	/* These peer/sock name calls can not fail -- or the socket closed
@@ -273,11 +284,25 @@ int make_uplink(struct uplink_config_t *l)
 
 	addr_len = sizeof(sa);
 	getpeername(fd, (struct sockaddr *)&sa, &addr_len);
-	c->addr_ss = strsockaddr( &sa.sa, addr_len ); /* server side address */
+	s = strsockaddr( &sa.sa, addr_len ); /* server side address */
+#ifndef FIXED_IOBUFS
+	c->addr_ss = s;
+#else
+	strncpy(c->addr_ss, s, sizeof(c->addr_ss));
+	c->addr_ss[sizeof(c->addr_ss)-1] = 0;
+	hfree(s);
+#endif
 
 	addr_len = sizeof(sa);
 	getsockname(fd, (struct sockaddr *)&sa, &addr_len);
-	c->addr_s = strsockaddr( &sa.sa, addr_len ); /* client side address */
+	s = strsockaddr( &sa.sa, addr_len ); /* client side address */
+#ifndef FIXED_IOBUFS
+	c->addr_s = s;
+#else
+	strncpy(c->addr_s, s, sizeof(c->addr_s));
+	c->addr_s[sizeof(c->addr_s)-1] = 0;
+	hfree(s);
+#endif
 
 	/* Above the addr_s / addr_ss are in REVERSE order compared with normal
 	   incoming clients!  It makes certain error reporting much more sensible
@@ -415,7 +440,7 @@ void uplink_start(void)
 	
 	uplink_shutting_down = 0;
 	
-	if (pthread_create(&uplink_th, NULL, (void *)uplink_thread, NULL))
+	if (pthread_create(&uplink_th, &pthr_attrs, (void *)uplink_thread, NULL))
 		perror("pthread_create failed for uplink_thread");
 		
 	uplink_running = 1;

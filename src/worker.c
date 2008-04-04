@@ -40,6 +40,7 @@
 #include "outgoing.h"
 #include "filter.h"
 #include "dupecheck.h"
+#include "cellmalloc.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
 time_t tick;	/* real monotonous clock, may or may not be wallclock */
@@ -91,6 +92,9 @@ struct portaccount_t client_connects_sctp = {
   .refcount = 99,	/* Global static blocks have extra-high initial refcount */
 };
 
+#ifndef _FOR_VALGRIND_
+cellarena_t *client_cells;
+#endif
 
 
 /* port accounters */
@@ -262,22 +266,38 @@ struct client_udp_t *client_udp_alloc(int fd, int portnum)
 }
 
 
+void client_init(void)
+{
+#ifndef _FOR_VALGRIND_
+	client_cells  = cellinit( "clients",
+				  sizeof(struct client_t),
+				  __alignof__(struct client_t), CELLMALLOC_POLICY_FIFO,
+				  4096 /* 4 MB at the time */, 0 /* minfree */ );
+#endif
+}
+
 struct client_t *client_alloc(void)
 {
-	// TODO:  use cellmalloc ?
-
+	int i;
+#ifndef _FOR_VALGRIND_
+	struct client_t *c = cellmalloc(client_cells);
+#else
 	struct client_t *c = hmalloc(sizeof(*c));
+#endif
+
 	memset((void *)c, 0, sizeof(*c));
 	c->fd = -1;
 
-	// Sometimes the ibuf_size initializes as zero..
-	if (!ibuf_size) ibuf_size = 8100;
-
+#ifdef FIXED_IOBUFS
+	c->ibuf_size = sizeof(c->ibuf);
+	c->obuf_size = sizeof(c->obuf);
+#else
 	c->ibuf_size = ibuf_size;
-	c->ibuf      = hmalloc(c->ibuf_size);
-
 	c->obuf_size = obuf_size;
+
+	c->ibuf      = hmalloc(c->ibuf_size);
 	c->obuf      = hmalloc(c->obuf_size);
+#endif
 
 	return c;
 }
@@ -285,6 +305,7 @@ struct client_t *client_alloc(void)
 void client_free(struct client_t *c)
 {
 	if (c->fd >= 0)	 close(c->fd);
+#ifndef FIXED_IOBUFS
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
 	if (c->addr_s)   hfree(c->addr_s);
@@ -292,6 +313,7 @@ void client_free(struct client_t *c)
 	if (c->username) hfree(c->username);
 	if (c->app_name) hfree(c->app_name);
 	if (c->app_version) hfree(c->app_version);
+#endif
 
 	filter_free(c->defaultfilters);
 	filter_free(c->userfilters);
@@ -299,7 +321,12 @@ void client_free(struct client_t *c)
 	client_udp_free(c->udpclient);
 
 	memset(c, 0, sizeof(*c));
+
+#ifndef _FOR_VALGRIND_
+	cellfree(client_cells, c);
+#else
 	hfree(c);
+#endif
 }
 
 
@@ -429,7 +456,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 {
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
 	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
-			  ? "client":"uplink" ), c->fd, c->addr_s);
+			  ? "uplink":"client" ), c->fd, c->addr_s);
 
 	/* close */
 	if (c->fd >= 0) {
@@ -1016,11 +1043,11 @@ void worker_thread(struct worker_t *self)
 		pn = p->next;
 		pbuf_free(NULL, p); // free to global pool
 	}
-	for (p = self->pbuf_free_large; p; p = pn) {
+	for (p = self->pbuf_free_medium; p; p = pn) {
 		pn = p->next;
 		pbuf_free(NULL, p); // free to global pool
 	}
-	for (p = self->pbuf_free_huge; p; p = pn) {
+	for (p = self->pbuf_free_large; p; p = pn) {
 		pn = p->next;
 		pbuf_free(NULL, p); // free to global pool
 	}
@@ -1120,7 +1147,7 @@ void workers_start(void)
 		w->pbuf_global_dupe_prevp = pbuf_global_dupe_prevp;
 
 		/* start the worker thread */
-		if (pthread_create(&w->th, NULL, (void *)worker_thread, w))
+		if (pthread_create(&w->th, &pthr_attrs, (void *)worker_thread, w))
 			perror("pthread_create failed for worker_thread");
 		
 		workers_running++;

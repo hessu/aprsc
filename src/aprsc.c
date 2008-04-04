@@ -55,6 +55,9 @@ int reopen_logs;		// should we reopen log files now?
 int reconfiguring;		// should we reconfigure now?
 int uplink_simulator;
 int fileno_limit;
+int dbdump_at_exit;
+
+pthread_attr_t pthr_attrs;
 
 /*
  *	Parse arguments
@@ -65,7 +68,7 @@ void parse_cmdline(int argc, char *argv[])
 	int s, i;
 	int failed = 0;
 	
-	while ((s = getopt(argc, argv, "c:fn:r:d:e:o:?h")) != -1) {
+	while ((s = getopt(argc, argv, "c:fn:r:d:De:o:?h")) != -1) {
 	switch (s) {
 		case 'c':
 			cfgfile = hstrdup(optarg);
@@ -88,6 +91,9 @@ void parse_cmdline(int argc, char *argv[])
 				fprintf(stderr, "Unknown -d parameter: %s\n", optarg);
 				failed = 1;
 			}
+			break;
+		case 'D':
+			dbdump_at_exit = 1;
 			break;
 		case 'e':
 			i = pick_loglevel(optarg, log_levelnames);
@@ -256,11 +262,17 @@ int main(int argc, char **argv)
 	pbuf_init();
 	dupecheck_init();
 	historydb_init();
+	client_init();
 
 	time(&cleanup_tick);
 
+	pthread_attr_init(&pthr_attrs);
+	/* 128 kB stack is enough for each thread,
+	   default of 10 MB is way too much...*/
+	pthread_attr_setstacksize(&pthr_attrs, 128*1024);
+
 	/* start the accept thread, which will start server threads */
-	if (pthread_create(&accept_th, NULL, (void *)accept_thread, NULL))
+	if (pthread_create(&accept_th, &pthr_attrs, (void *)accept_thread, NULL))
 		perror("pthread_create failed for accept_thread");
 
 	/* act as statistics and housekeeping thread from now on */
@@ -299,30 +311,42 @@ int main(int argc, char **argv)
 	else
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
-#if 0
-	/*
-	 *    As a general rule, dumping of databases is not a Good Idea in
-	 *    operational system.  Development time debugging on other hand..
-	 */
-	sprintf(path, "%s/historydb.dump", rundir);
-	fp = fopen(path,"w");
-	if (fp) {
-		historydb_dump(fp);
-		fclose(fp);
+	if (dbdump_at_exit) {
+		/*
+		 *    As a general rule, dumping of databases is not a Good Idea in
+		 *    operational system.  Development time debugging on other hand..
+		 */
+		sprintf(path, "%s/historydb.dump", rundir);
+		fp = fopen(path,"w");
+		if (fp) {
+			historydb_dump(fp);
+			fclose(fp);
+		}
+		sprintf(path, "%s/filter.wx.dump", rundir);
+		fp = fopen(path,"w");
+		if (fp) {
+			filter_wx_dump(fp);
+			fclose(fp);
+		}
+		sprintf(path, "%s/filter.entry.dump", rundir);
+		fp = fopen(path,"w");
+		if (fp) {
+			filter_entrycall_dump(fp);
+			fclose(fp);
+		}
+		sprintf(path, "%s/pbuf.dump", rundir);
+		fp = fopen(path,"w");
+		if (fp) {
+			pbuf_dump(fp);
+			fclose(fp);
+		}
+		sprintf(path, "%s/pbuf.dupe.dump", rundir);
+		fp = fopen(path,"w");
+		if (fp) {
+			pbuf_dupe_dump(fp);
+			fclose(fp);
+		}
 	}
-	sprintf(path, "%s/filter.wx.dump", rundir);
-	fp = fopen(path,"w");
-	if (fp) {
-		filter_wx_dump(fp);
-		fclose(fp);
-	}
-	sprintf(path, "%s/filter.entry.dump", rundir);
-	fp = fopen(path,"w");
-	if (fp) {
-		filter_entrycall_dump(fp);
-		fclose(fp);
-	}
-#endif
 
 	free_config();
 	dupecheck_atend();

@@ -19,8 +19,6 @@
  *	
  */
 
-// FIXME: write filters: s
-
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
@@ -243,25 +241,35 @@ float filter_lon2rad(float lon)
 void filter_init(void)
 {
 #ifndef _FOR_VALGRIND_
-	filter_cells = cellinit( sizeof(struct filter_t),
+	/* A few hundred... */
+
+	filter_cells = cellinit( "filter",
+				 sizeof(struct filter_t),
 				 __alignof__(struct filter_t),
 				 CELLMALLOC_POLICY_LIFO,
-				 128 /* 128 kB at the time */,
+				 512 /* 512 kB at the time,
+					should be enough forever.. */,
 				 0 /* minfree */ );
 
 	/* printf("filter: sizeof=%d alignof=%d\n",
 	   sizeof(struct filter_t),__alignof__(struct filter_t)); */
 
-	filter_entrycall_cells = cellinit( sizeof(struct filter_entrycall_t),
+	/* Couple thousand */
+
+	filter_entrycall_cells = cellinit( "entrycall",
+					   sizeof(struct filter_entrycall_t),
 					   __alignof__(struct filter_entrycall_t),
 					   CELLMALLOC_POLICY_FIFO,
-					   32 /* 32 kB at the time */,
+					   128 /* 128 kB at the time */,
 					   0 /* minfree */ );
 
-	filter_wx_cells = cellinit( sizeof(struct filter_wx_t),
+	/* Under 1 thousand.. */
+
+	filter_wx_cells = cellinit( "wxcalls",
+				    sizeof(struct filter_wx_t),
 				    __alignof__(struct filter_wx_t),
 				    CELLMALLOC_POLICY_FIFO,
-				    32 /* 32 kB at the time */,
+				    64 /* 64 kB at the time */,
 				    0 /* minfree */ );
 #endif
 }
@@ -314,7 +322,7 @@ pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
 	if (qcons != 'r' && qcons != 'R') return 0;
 
 	hash = keyhash(key, keylen, 0);
-	idx = (hash ^ (hash >> 16)) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
+	idx = (hash ^ (hash >> 11) ^ (hash >> 22) ) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
 
 	rwl_wrlock(&filter_entrycall_rwlock);
 
@@ -383,10 +391,7 @@ static int filter_entrycall_lookup(const struct pbuf_t *pb)
 	const int keylen = pb->entrycall_len;
 
 	uint32_t  hash   = keyhash(key, keylen, 0);
-	int idx = ( hash ^                /* Fold the hashbits.. */
-		    (hash >> 11) ^
-		    (hash >> 22)
-		    ) % FILTER_ENTRYCALL_HASHSIZE;
+	int idx = ( hash ^ (hash >> 11) ^ (hash >> 22) ) % FILTER_ENTRYCALL_HASHSIZE;   /* fold the hashbits.. */
 
 	f2 = NULL;
 
@@ -527,10 +532,7 @@ int filter_wx_insert(struct pbuf_t *pb)
 		return 0;
 
 	hash = keyhash(key, keylen, 0);
-	idx = ( hash ^                /* Fold the hashbits.. */
-		(hash >> 10) ^
-		(hash >> 20)
-		) % FILTER_WX_HASHSIZE;
+	idx = ( hash ^ (hash >> 10) ^ (hash >> 20) ) % FILTER_WX_HASHSIZE; /* fold the hashbits.. */
 
 	rwl_wrlock(&filter_wx_rwlock);
 
@@ -586,7 +588,7 @@ static int filter_wx_lookup(const struct pbuf_t *pb)
 	const int keylen = pb->srccall_end - key;
 
 	uint32_t  hash   = keyhash(key, keylen, 0);
-	int idx = (hash ^ (hash >> 16)) % FILTER_WX_HASHSIZE; /* Fold the hashbits.. */
+	int idx = ( hash ^ (hash >> 10) ^ (hash >> 20) ) % FILTER_WX_HASHSIZE; /* fold the hashbits.. */
 
 	f2 = NULL;
 
@@ -714,6 +716,8 @@ void filter_postprocess_dupefilter(struct pbuf_t *pbuf)
 	if (!(pbuf->flags & F_HASPOS)) {
 		struct history_cell_t *hist;
 		int rc = historydb_lookup(pbuf->srcname, pbuf->srcname_len, &hist);
+		hlog( LOG_DEBUG, "postprocess_dupefilter: no pos, looking up '%.*s', rc=%d",
+		      pbuf->srcname_len, pbuf->srcname, rc );
 		if (rc > 0) {
 			pbuf->lat     = hist->lat;
 			pbuf->lng     = hist->lon;

@@ -37,21 +37,30 @@ cellarena_t *historydb_cells;
 #endif
 
 
-// FIXME: Possibly multiple parallel locks (like 1000 ?) that keep
-// control on a subset of historydb hash bucket chains ???
+/* FIXME: Possibly multiple parallel locks (like 1000 ?) that keep
+//control on a subset of historydb hash bucket chains ???
 // Note: mutex lock size is about 1/4 of rwlock size...
+*/
 
 rwlock_t historydb_rwlock;
 
-#define HISTORYDB_HASH_MODULO 8192
+#define HISTORYDB_HASH_MODULO 8192 /* fold bits: 13 / 26 */
 struct history_cell_t *historydb_hash[HISTORYDB_HASH_MODULO];
 
-// monitor counters and gauges
+/* monitor counters and gauges */
 long historydb_inserts;
 long historydb_lookups;
 long historydb_hashmatches;
 long historydb_keymatches;
 long historydb_cellgauge;
+long historydb_noposcount;
+
+void historydb_nopos(void) {}         /* profiler call counter items */
+void historydb_nointerest(void) {}
+void historydb_hashmatch(void) {}
+void historydb_keymatch(void) {}
+void historydb_dataupdate(void) {}
+
 
 void historydb_init(void)
 {
@@ -61,16 +70,21 @@ void historydb_init(void)
 	//       sizeof(pthread_mutex_t), sizeof(rwlock_t));
 
 #ifndef _FOR_VALGRIND_
-	historydb_cells = cellinit( sizeof(struct history_cell_t),
+	historydb_cells = cellinit( "historydb",
+				    sizeof(struct history_cell_t),
 				    __alignof__(struct history_cell_t), 
-				    CELLMALLOC_POLICY_FIFO, 2048 /* 2 MB */,
+				    CELLMALLOC_POLICY_FIFO,
+				    2048 /* 2 MB */,
 				    0 /* minfree */ );
 #endif
 }
 
-// Called only under WR-LOCK
+/* Called only under WR-LOCK */
 void historydb_free(struct history_cell_t *p)
 {
+	if (p->packet != p->packetbuf)
+		hfree(p->packet);
+
 #ifndef _FOR_VALGRIND_
 	cellfree( historydb_cells, p );
 #else
@@ -79,7 +93,7 @@ void historydb_free(struct history_cell_t *p)
 	--historydb_cellgauge;
 }
 
-// Called only under WR-LOCK
+/* Called only under WR-LOCK */
 struct history_cell_t *historydb_alloc(int packet_len)
 {
 	++historydb_cellgauge;
@@ -89,12 +103,6 @@ struct history_cell_t *historydb_alloc(int packet_len)
 	return hmalloc(sizeof(struct history_cell_t)+packet_len);
 #endif
 }
-
-void historydb_nopos(void) {}         // profiler call counter items
-void historydb_nointerest(void) {}
-void historydb_hashmatch(void) {}
-void historydb_keymatch(void) {}
-void historydb_dataupdate(void) {}
 
 /*
  *     The  historydb_atend()  does exist primarily to make valgrind
@@ -121,17 +129,17 @@ void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 	fprintf(fp, "%d\t%d\t", hp->packettype, hp->flags);
 	fprintf(fp, "%f\t%f\t", hp->lat, hp->lon);
 	fprintf(fp, "%d\t", hp->packetlen);
-	fwrite(hp->packet, hp->packetlen, 1, fp); // with terminating CRLF
+	fwrite(hp->packet, hp->packetlen, 1, fp); /* with terminating CRLF */
 }
 
 void historydb_dump(FILE *fp)
 {
-	// Dump the historydb out on text format for possible latter reload
+	/* Dump the historydb out on text format */
 	int i;
 	struct history_cell_t *hp;
 	time_t expirytime   = now - lastposition_storetime;
 
-	// multiple locks ? one for each bucket, or for a subset of buckets ?
+	/* multiple locks ? one for each bucket, or for a subset of buckets ? */
 	rwl_rdlock(&historydb_rwlock);
 
 	for ( i = 0; i < HISTORYDB_HASH_MODULO; ++i ) {
@@ -141,7 +149,7 @@ void historydb_dump(FILE *fp)
 				historydb_dump_entry(fp, hp);
 	}
 
-	// Free the lock
+	/* Free the lock */
 	rwl_rdunlock(&historydb_rwlock);
 }
 
@@ -160,20 +168,25 @@ int historydb_insert(struct pbuf_t *pb)
 	char *s;
 
 	if (!(pb->flags & F_HASPOS)) {
-		historydb_nopos(); // debug thing -- profiling counter
-		return -1; // No positional data...
+		++historydb_noposcount;
+		historydb_nopos(); /* debug thing -- profiling counter */
+		return -1; /* No positional data... */
 	}
 
-	// NOTE: Parser does set on MESSAGES the RECIPIENTS
-	//       location if such is known! We do not want them...
+	/* NOTE: Parser does set on MESSAGES the RECIPIENTS
+	**       location if such is known! We do not want them...
+	**       .. and several other cases where packet has no
+	**       positional data in it, but source callsign may
+	**       have previous entry with data.
+	*/
 
-	// FIXME: if (pb->packet_len > 300)  ???
-	// FIXME: have parser to fill  pb->objnamelen  so this needs not to scan the buffer again.
-
+	/* NOTE2: We could use pb->srcname, and pb->srcname_len here,
+	**        but then we would not know if this is a "kill-item"
+	*/
 
 	keybuf[CALLSIGNLEN_MAX] = 0;
 	if (pb->packettype & T_OBJECT) {
-		// Pick object name  ";item  *"
+		/* Pick object name  ";item  *" */
 		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX+1);
 		keybuf[CALLSIGNLEN_MAX+1] = 0;
 		s = strchr(keybuf, '*');
@@ -218,8 +231,7 @@ int historydb_insert(struct pbuf_t *pb)
 	++historydb_inserts;
 
 	h1 = keyhash(keybuf, keylen, 0);
-	h2 = h1;
-	h2 ^= (h2 >> 16); /* Fold hash bits.. */
+	h2 = h1 ^ (h1 >> 13) ^ (h1 >> 26); /* fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
 
 	cp = cp1 = NULL;
@@ -240,9 +252,11 @@ int historydb_insert(struct pbuf_t *pb)
 		if ( (cp->hash1 == h1)) {
 		       // Hash match, compare the key
 		    historydb_hashmatch(); // debug thing -- a profiling counter
+		    ++historydb_hashmatches;
 		    if ((strcmp(cp->key, keybuf) == 0) ) {
 		  	// Key match!
-		      historydb_keymatch(); // debug thing -- a profiling counter
+		    	historydb_keymatch(); // debug thing -- a profiling counter
+			++historydb_keymatches;
 			if (isdead) {
 				// Remove this key..
 				*hp = cp->next;
@@ -260,10 +274,15 @@ int historydb_insert(struct pbuf_t *pb)
 				cp->packettype  = pb->packettype;
 				cp->flags       = pb->flags;
 				cp->packetlen   = pb->packet_len;
-				memcpy(cp->packet, pb->data,
-				       cp->packetlen > 510 ? 510 : cp->packetlen);
-				// Continue scanning the whole chain for possibly
-				// obsolete items
+
+				if ( cp->packet != cp->packetbuf )
+					hfree( cp->packet );
+				cp->packet = cp->packetbuf; /* default case */
+				if ( cp->packetlen > sizeof(cp->packetbuf) ) {
+					/* Needs bigger buffer */
+					cp->packet = hmalloc( cp->packetlen );
+				}
+				memcpy( cp->packet, pb->data, cp->packetlen );
 			}
 		    }
 		} // .. else no match, advance hp..
@@ -284,7 +303,13 @@ int historydb_insert(struct pbuf_t *pb)
 		cp->packettype  = pb->packettype;
 		cp->flags       = pb->flags;
 		cp->packetlen   = pb->packet_len;
-		memcpy(cp->packet, pb->data, cp->packetlen);
+		cp->packet      = cp->packetbuf; /* default case */
+		if (cp->packetlen > sizeof(cp->packetbuf)) {
+			/* Needs bigger buffer */
+			cp->packet = hmalloc( cp->packetlen );
+		}
+		memcpy( cp->packet, pb->data, cp->packetlen );
+
 		*hp = cp; 
 	}
 
@@ -300,51 +325,43 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 {
 	int i;
 	uint32_t h1, h2;
-	struct history_cell_t **hp, *cp, *cp1;
+	struct history_cell_t *cp;
 
 	// validity is 5 minutes shorter than expiration time..
-	time_t validitytime   = now - lastposition_storetime - 5*60;
+	time_t validitytime   = now - lastposition_storetime + 5*60;
 
 	++historydb_lookups;
 
 	h1 = keyhash(keybuf, keylen, 0);
-	h2 = h1;
-	h2 ^= (h2 >> 16); /* Fold hash bits.. */
+	h2 = h1 ^ (h1 >> 13) ^ (h1 >> 26); /* fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
 
-	cp1 = NULL;
-	hp = &historydb_hash[i];
+	cp = historydb_hash[i];
 
 	// multiple locks ? one for each bucket, or for a subset of buckets ?
 	rwl_rdlock(&historydb_rwlock);
 
-	if (*hp) {
-		while (( cp = *hp )) {
-			if ( (cp->hash1 == h1) &&
-			     ++historydb_hashmatches &&
-			     // Hash match, compare the key
-			     (strcmp(cp->key, keybuf) == 0)  &&
-			     ++historydb_keymatches &&
-			     // Key match!
-			     (cp->arrivaltime > validitytime)
-			     // NOT too old..
-			     ) {
-				cp1 = cp;
-				break;
-			}
-			// Pick next possible item in hash chain
-			hp = &(cp -> next);
+	while ( cp ) {
+		if ( (cp->hash1 == h1) &&
+		     // Hash match, compare the key
+		     (strcmp(cp->key, keybuf) == 0)  &&
+		     // Key match!
+		     (cp->arrivaltime > validitytime)
+		     // NOT too old..
+		     ) {
+			break;
 		}
+		// Pick next possible item in hash chain
+		cp = cp->next;
 	}
-
 
 	// Free the lock
 	rwl_rdunlock(&historydb_rwlock);
 
-	// cp1 variable has the result
-	*result = cp1;
+	// cp variable has the result
+	*result = cp;
 
-	if (!cp1) return 0;  // Not found anything
+	if (!cp) return 0;  // Not found anything
 
 	return 1;
 }
@@ -388,5 +405,6 @@ void historydb_cleanup(void)
 		// Free the lock
 		rwl_wrunlock(&historydb_rwlock);
 	}
-	hlog(LOG_DEBUG, "historydb_cleanup() removed %d entries", cleancount);
+	hlog( LOG_DEBUG, "historydb_cleanup() removed %d entries, count now %ld",
+	      cleancount, historydb_cellgauge );
 }

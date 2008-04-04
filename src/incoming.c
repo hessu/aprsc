@@ -48,10 +48,10 @@ typedef struct cellarena_t {
 /* global packet buffer freelists */
 
 cellarena_t *pbuf_cells_small;
+cellarena_t *pbuf_cells_medium;
 cellarena_t *pbuf_cells_large;
-cellarena_t *pbuf_cells_huge;
 
-int pbuf_cells_kb = 1024; // 1M bunches is faster for system than 16M !
+int pbuf_cells_kb = 4096; /* 4M bunches is faster for system than 16M ! */
 
 
 /*
@@ -64,15 +64,18 @@ int pbuf_cells_kb = 1024; // 1M bunches is faster for system than 16M !
 void pbuf_init(void)
 {
 #ifndef _FOR_VALGRIND_
-	pbuf_cells_small = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
-				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
-	pbuf_cells_large = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
-				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
-	pbuf_cells_huge  = cellinit(sizeof(struct pbuf_t) + PACKETLEN_MAX_HUGE,
-				    __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				    pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */);
+	pbuf_cells_small  = cellinit( "pbuf small",
+				      sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
+				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
+				      pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */ );
+	pbuf_cells_medium = cellinit( "pbuf medium",
+				      sizeof(struct pbuf_t) + PACKETLEN_MAX_MEDIUM,
+				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
+				      pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */ );
+	pbuf_cells_large  = cellinit( "pbuf large",
+				      sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
+				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
+				      pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */ );
 #endif
 }
 
@@ -93,13 +96,13 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 			p->next = self->pbuf_free_small;
 			self->pbuf_free_small = p;
 			break;
+		case PACKETLEN_MAX_MEDIUM:
+			p->next = self->pbuf_free_medium;
+			self->pbuf_free_medium = p;
+			break;
 		case PACKETLEN_MAX_LARGE:
 			p->next = self->pbuf_free_large;
 			self->pbuf_free_large = p;
-			break;
-		case PACKETLEN_MAX_HUGE:
-			p->next = self->pbuf_free_huge;
-			self->pbuf_free_huge = p;
 			break;
 		default:
 			hlog(LOG_ERR, "pbuf_free(%p) for worker %p - packet length not known: %d", p, self, p->buf_len);
@@ -118,11 +121,11 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 	case PACKETLEN_MAX_SMALL:
 		cellfree(pbuf_cells_small, p);
 		break;
+	case PACKETLEN_MAX_MEDIUM:
+		cellfree(pbuf_cells_medium, p);
+		break;
 	case PACKETLEN_MAX_LARGE:
 		cellfree(pbuf_cells_large, p);
-		break;
-	case PACKETLEN_MAX_HUGE:
-		cellfree(pbuf_cells_huge, p);
 		break;
 	default:
 		hlog(LOG_ERR, "pbuf_free(%p) - packet length not known: %d", p, p->buf_len);
@@ -144,21 +147,21 @@ void pbuf_free(struct worker_t *self, struct pbuf_t *p)
 void pbuf_free_many(struct pbuf_t **array, int numbufs)
 {
 	int i;
-	void **arraysmall  = alloca(sizeof(void*)*numbufs);
-	void **arraylarge  = alloca(sizeof(void*)*numbufs);
-	void **arrayhuge   = alloca(sizeof(void*)*numbufs);
-	int smallcnt = 0, largecnt = 0, hugecnt = 0;
+	void **arraysmall   = alloca(sizeof(void*)*numbufs);
+	void **arraymedium  = alloca(sizeof(void*)*numbufs);
+	void **arraylarge   = alloca(sizeof(void*)*numbufs);
+	int smallcnt = 0, mediumcnt = 0, largecnt = 0;
 
 	for (i = 0; i < numbufs; ++i) {
 		switch (array[i]->buf_len) {
 		case PACKETLEN_MAX_SMALL:
-			arraysmall[smallcnt++] = array[i];
+			arraysmall [smallcnt++]  = array[i];
+			break;
+		case PACKETLEN_MAX_MEDIUM:
+			arraymedium[mediumcnt++] = array[i];
 			break;
 		case PACKETLEN_MAX_LARGE:
-			arraylarge[largecnt++] = array[i];
-			break;
-		case PACKETLEN_MAX_HUGE:
-			arrayhuge[hugecnt++]   = array[i];
+			arraylarge [largecnt++]  = array[i];
 			break;
 		default:
 		  hlog( LOG_ERR, "pbuf_free_many(%p) - packet length not known: %d :%d",
@@ -167,15 +170,15 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 		}
 	}
 
-	// hlog( LOG_DEBUG, "pbuf_free_many(); counts: small %d large %d huge %d", smallcnt, largecnt, hugecnt );
+	// hlog( LOG_DEBUG, "pbuf_free_many(); counts: small %d large %d huge %d", smallcnt, mediumcnt, largecnt );
 
 #ifndef _FOR_VALGRIND_
 	if (smallcnt > 0)
-		cellfreemany(pbuf_cells_small, arraysmall, smallcnt);
+		cellfreemany(pbuf_cells_small,  arraysmall,  smallcnt);
+	if (mediumcnt > 0)
+		cellfreemany(pbuf_cells_medium, arraymedium, mediumcnt);
 	if (largecnt > 0)
-		cellfreemany(pbuf_cells_large, arraylarge, largecnt);
-	if (hugecnt > 0)
-		cellfreemany(pbuf_cells_huge,  arrayhuge,   hugecnt);
+		cellfreemany(pbuf_cells_large,  arraylarge,  largecnt);
 
 #else
 	for (i = 0; i < numbufs; ++i) {
@@ -183,6 +186,38 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 	}
 #endif
 }
+
+
+static void pbuf_dump_entry(FILE *fp, struct pbuf_t *pb)
+{
+	fprintf(fp, "%ld\t",	pb->t); /* arrival time */
+	fprintf(fp, "%x\t",	pb->packettype);
+	fprintf(fp, "%x\t",	pb->flags);
+	fprintf(fp, "%f\t%f\t",	pb->lat, pb->lng);
+	fprintf(fp, "%d\t",     pb->packet_len);
+	fwrite(pb->data, pb->packet_len, 1, fp); /* with terminating CRLF */
+}
+
+void pbuf_dump(FILE *fp)
+{
+	/* Dump the pbuf queue out on text format */
+	struct pbuf_t *pb = pbuf_global;
+	
+	for ( ; pb ; pb = pb->next ) {
+		pbuf_dump_entry(fp, pb);
+	}
+}
+
+void pbuf_dupe_dump(FILE *fp)
+{
+	/* Dump the pbuf queue out on text format */
+	struct pbuf_t *pb = pbuf_global_dupe;
+	
+	for ( ; pb ; pb = pb->next ) {
+		pbuf_dump_entry(fp, pb);
+	}
+}
+
 
 struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 {
@@ -200,18 +235,18 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 		global_pool = pbuf_cells_small;
 		len         = PACKETLEN_MAX_SMALL;
 		bunchlen    = PBUF_ALLOCATE_BUNCH_SMALL;
-	} else if (len <= PACKETLEN_MAX_LARGE) {
+	} else if (len <= PACKETLEN_MAX_MEDIUM) {
 		//hlog(LOG_DEBUG, "pbuf_get: Allocating large buffer for a packet of %d bytes", len);
+		pool        = &self->pbuf_free_medium;
+		global_pool = pbuf_cells_medium;
+		len         = PACKETLEN_MAX_MEDIUM;
+		bunchlen    = PBUF_ALLOCATE_BUNCH_MEDIUM;
+	} else if (len <= PACKETLEN_MAX_LARGE) {
+		//hlog(LOG_DEBUG, "pbuf_get: Allocating huge buffer for a packet of %d bytes", len);
 		pool        = &self->pbuf_free_large;
 		global_pool = pbuf_cells_large;
 		len         = PACKETLEN_MAX_LARGE;
 		bunchlen    = PBUF_ALLOCATE_BUNCH_LARGE;
-	} else if (len <= PACKETLEN_MAX_HUGE) {
-		//hlog(LOG_DEBUG, "pbuf_get: Allocating huge buffer for a packet of %d bytes", len);
-		pool        = &self->pbuf_free_huge;
-		global_pool = pbuf_cells_huge;
-		len         = PACKETLEN_MAX_HUGE;
-		bunchlen    = PBUF_ALLOCATE_BUNCH_HUGE;
 	} else { /* too large! */
 		hlog(LOG_ERR, "pbuf_get: Not allocating a buffer for a packet of %d bytes!", len);
 		return NULL;
@@ -613,8 +648,10 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	}
 
 	/* starts with '#' => a comment packet, timestamp or something */
-	if (*s == '#')
+	if (*s == '#') {
+		hlog(LOG_DEBUG, "#-in: '%.*s'", len, s);
 		return 0;
+	}
 
 	/* do some parsing */
 	if (len < PACKETLEN_MIN-2)

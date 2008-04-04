@@ -89,7 +89,12 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (strlen(username) > 9) /* limit length */
 		username[9] = 0;
 	c->state = CSTATE_CONNECTED;
+#ifndef FIXED_IOBUFS
 	c->username = hstrdup(username);
+#else
+	strncpy(c->username, username, sizeof(c->username));
+	c->username[sizeof(c->username)-1] = 0;
+#endif
 	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
 	if (c->flags & CLFLAGS_UPLINKSIM)
 		c->handler = &incoming_uplinksim_handler;
@@ -113,8 +118,15 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 				break;
 			}
 			
+#ifndef FIXED_IOBUFS
 			c->app_name = hstrdup(argv[++i]);
 			c->app_version = hstrdup(argv[++i]);
+#else
+			strncpy(c->app_name,    argv[++i], sizeof(c->app_name));
+			c->app_name[sizeof(c->app_name)-1] = 0;
+			strncpy(c->app_version, argv[++i], sizeof(c->app_version));
+			c->app_version[sizeof(c->app_version)-1] = 0;
+#endif
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {
 				hlog(LOG_WARNING, "%s (%s): Missing UDP port number after UDP command", c->addr_s, username);

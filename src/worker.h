@@ -40,6 +40,8 @@ extern time_t tick;	/* clocktick - monotonously increasing, never in simulator *
 
 extern void pthreads_profiling_reset(const char *name);
 
+extern pthread_attr_t pthr_attrs;  /* used to setup new threads */
+
 /* minimum and maximum length of a callsign on APRS-IS */
 #define CALLSIGNLEN_MIN 3
 #define CALLSIGNLEN_MAX 9
@@ -48,14 +50,27 @@ extern void pthreads_profiling_reset(const char *name);
 #define PACKETLEN_MIN 10	/* minimum length for a valid APRS-IS packet: "A1A>B1B:\r\n" */
 #define PACKETLEN_MAX 512	/* maximum length for a valid APRS-IS packet (incl. CRLF) */
 
-#define PACKETLEN_MAX_SMALL 130
-#define PACKETLEN_MAX_LARGE 300
-#define PACKETLEN_MAX_HUGE PACKETLEN_MAX
+/*
+ *  Packet length statistics:
+ *
+ *   <=  80:  about  25%
+ *   <=  90:  about  36%
+ *   <= 100:  about  73%
+ *   <= 110:  about  89%
+ *   <= 120:  about  94%
+ *   <= 130:  about  97%
+ *   <= 140:  about  98.7%
+ *   <= 150:  about  99.4%
+ */
+
+#define PACKETLEN_MAX_SMALL  100 
+#define PACKETLEN_MAX_MEDIUM 180 /* about 99.5% are smaller than this */
+#define PACKETLEN_MAX_LARGE  PACKETLEN_MAX
 
 /* number of pbuf_t structures to allocate at a time */
-#define PBUF_ALLOCATE_BUNCH_SMALL 2000 /* grow to 2000 in production use - it's now small for debugging */
-#define PBUF_ALLOCATE_BUNCH_LARGE 2000 /* grow to 2000 in production use - it's now small for debugging */
-#define PBUF_ALLOCATE_BUNCH_HUGE    50 /* grow to 50 in production use - it's now small for debugging */
+#define PBUF_ALLOCATE_BUNCH_SMALL  2000 /* grow to 2000 in production use */
+#define PBUF_ALLOCATE_BUNCH_MEDIUM 2000 /* grow to 2000 in production use */
+#define PBUF_ALLOCATE_BUNCH_LARGE    50 /* grow to 50 in production use */
 
 /* a packet buffer */
 /* Type flags -- some can happen in combinations: T_CWOP + T_WX / T_CWOP + T_POSITION ... */
@@ -70,6 +85,7 @@ extern void pthreads_profiling_reset(const char *name);
 #define T_STATUS    (1 << 8) // packet is status 
 #define T_USERDEF   (1 << 9) // packet is userdefined
 #define T_CWOP      (1 << 10) // packet is recognized as CWOP
+#define T_ALL	    (1 << 15) // set on _all_ packets
 
 #define F_DUPE    1	/* Duplicate of a previously seen packet */
 #define F_HASPOS  2	/* This packet has valid parsed position */
@@ -87,7 +103,7 @@ struct pbuf_t {
 		   point to reused connection entry, but even that does
 		   not matter much -- a few packets may be left unrelayed
 		   to the a client in some situations, but packets sent
-		   a few minutes latter will go through just fine. 
+		   a few seconds latter will go through just fine. 
 		   In case of "dump history" (if we ever do) this pointer
 		   is ignored while history dumping is being done.
 		*/
@@ -176,6 +192,12 @@ struct client_udp_t {			/* UDP services can be available at multiple
 };
 
 
+#define FIXED_IOBUFS 1
+#ifdef FIXED_IOBUFS
+#define OBUF_SIZE 32000
+#define IBUF_SIZE  8000
+#endif
+
 struct client_t {
 	struct client_t *next;
 	struct client_t **prevp;
@@ -190,8 +212,10 @@ struct client_t {
 	union sockaddr_u udpaddr;	/* ready to use sockaddr data   */
 
 	int    fd;
+#ifndef FIXED_IOBUFS
 	char  *addr_s;	    /* client IP address in text format */
 	char  *addr_ss;	    /* server IP address in text format */
+#endif
 	int    portnum;
 	time_t connect_time;/* Time of connection */
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
@@ -199,14 +223,18 @@ struct client_t {
 	time_t logintimeout; /* when the login wait times out */
 
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
-	
+
 	/* first stage read buffer - used to crunch out lines to packet buffers */
+#ifndef FIXED_IOBUFS
 	char *ibuf;
+#endif
 	int   ibuf_size;      /* size of buffer */
 	int   ibuf_end;       /* where data in buffer ends */
 	
 	/* output buffer */
+#ifndef FIXED_IOBUFS
 	char *obuf;
+#endif
 	int   obuf_size;      /* size of buffer */
 	int   obuf_start;     /* where data in buffer starts */
 	int   obuf_end;       /* where data in buffer ends */
@@ -229,11 +257,12 @@ struct client_t {
 
 	CStateEnum state;   /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */
+	char  validated;    /* did the client provide a valid passcode */
+#ifndef FIXED_IOBUFS
 	char *username;     /* The callsign */
 	char *app_name;     /* application name, from 'user' command */
 	char *app_version;  /* application version, from 'user' command */
-
-	char  validated;    /* did the client provide a valid passcode */
+#endif
 	
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);
@@ -252,6 +281,19 @@ struct client_t {
 
 	uint32_t	last_pbuf_seqnum;
 	uint32_t	last_pbuf_dupe_seqnum;
+
+#ifdef FIXED_IOBUFS
+	char  username[16];     /* The callsign */
+	char  app_name[32];     /* application name, from 'user' command */
+	char  app_version[16];  /* application version, from 'user' command */
+
+	char  addr_s[80];	    /* client IP address in text format */
+	char  addr_ss[80];	    /* server IP address in text format */
+
+
+	char	ibuf[IBUF_SIZE];
+	char	obuf[OBUF_SIZE];
+#endif
 };
 
 extern struct client_t *client_alloc(void);
@@ -277,9 +319,9 @@ struct worker_t {
 	struct xpoll_t *xp;			/* poll/epoll/select wrapper */
 	
 	/* thread-local packet buffer freelist */
-	struct pbuf_t *pbuf_free_small; /* <= 130 bytes */
-	struct pbuf_t *pbuf_free_large; /* 131 >= x <= 300 */
-	struct pbuf_t *pbuf_free_huge; /* 301 >= x <= 600 */
+	struct pbuf_t *pbuf_free_small;  /* <= 130 bytes */
+	struct pbuf_t *pbuf_free_medium; /* 131 >= x <= 300 */
+	struct pbuf_t *pbuf_free_large;  /* 301 >= x <= 600 */
 	
 	/* packets which have been parsed, waiting to be moved into
 	 * pbuf_incoming
@@ -308,10 +350,13 @@ extern int workers_running;
 extern void pbuf_init(void);
 extern void pbuf_free(struct worker_t *self, struct pbuf_t *p);
 extern void pbuf_free_many(struct pbuf_t **array, int numbufs);
+extern void pbuf_dump(FILE *fp);
+extern void pbuf_dupe_dump(FILE *fp);
 
 extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
 extern int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
+extern void client_init(void);
 
 extern struct worker_t *worker_threads;
 extern void workers_stop(int stop_all);

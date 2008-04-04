@@ -314,6 +314,7 @@ struct client_t *do_accept(struct listen_t *l)
 	struct worker_t *w;
 	struct worker_t *wc;
 	static time_t last_EMFILE_report;
+	char *s;
 
 
 	while (l->udp) {
@@ -381,18 +382,31 @@ struct client_t *do_accept(struct listen_t *l)
 
 	/* text format of client's IP address + port */
 
-	c->addr_s = strsockaddr( &sa.sa, addr_len );
+	s = strsockaddr( &sa.sa, addr_len );
+#ifndef FIXED_IOBUFS
+	c->addr_s = s;
+#else
+	strncpy(c->addr_s, s, sizeof(c->addr_s));
+	c->addr_s[sizeof(c->addr_s)-1] = 0;
+	hfree(s);
+#endif
 
 	/* text format of servers' connected IP address + port */
 
 	addr_len = sizeof(sa);
 	if (getsockname(fd, &sa.sa, &addr_len) == 0) { /* Fails very rarely.. */
 	  /* present my socket end address as a malloced string... */
-	  c->addr_ss = strsockaddr( &sa.sa, addr_len );
+	  s = strsockaddr( &sa.sa, addr_len );
 	} else {
-	  c->addr_ss = hstrdup( l->addr_s ); /* Server's bound IP address */
+	  s = hstrdup( l->addr_s ); /* Server's bound IP address */
 	}
-
+#ifndef FIXED_IOBUFS
+	c->addr_ss = s;
+#else
+	strncpy(c->addr_ss, s, sizeof(c->addr_ss));
+	c->addr_ss[sizeof(c->addr_ss)-1] = 0;
+	hfree(s);
+#endif
 
 #if WBUF_ADJUSTER
 	{

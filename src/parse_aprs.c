@@ -81,7 +81,29 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 		pb->packettype |= T_WX;
 	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
 		pb->packettype |= T_WX;	/* Hurricane */
-	
+
+	if (lat < -89.9 && -0.0001 <= lng && lng <= 0.0001) {
+#ifdef DEBUG_PARSE_APRS
+		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
+#endif
+		return 0; /* out of range */
+	}
+
+	if (lat > 89.9 && -0.0001 <= lng && lng <= 0.0001) {
+#ifdef DEBUG_PARSE_APRS
+		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
+#endif
+		return 0; /* out of range */
+	}
+
+	if (-0.0001 <= lat && lat <= 0.0001 && -0.0001 <= lng && lng <= 0.0001) {
+#ifdef DEBUG_PARSE_APRS
+		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
+#endif
+		return 0; /* out of range */
+	}
+
+
 	if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
 #ifdef DEBUG_PARSE_APRS
 		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
@@ -754,7 +776,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	if (!pb->info_start)
 		return 0;
 
-	pb->packettype = 0;
+	pb->packettype = T_ALL;
 	pb->flags      = 0;
 
 	if (pb->data[0] == 'C' && /* Perhaps CWOP ? */
@@ -855,6 +877,24 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			pb->packettype |= T_NWS;
 		if (memcmp(body,"SKY",3) == 0)  // as seen on specification
 			pb->packettype |= T_NWS;
+
+		// Is it perhaps TELEMETRY related "message" ?
+		if ( body[9] == ':' &&
+		     ( memcmp( body+9, ":PARM.", 6 ) == 0 ||
+		       memcmp( body+9, ":UNIT.", 6 ) == 0 ||
+		       memcmp( body+9, ":EQNS.", 6 ) == 0 ||
+		       memcmp( body+9, ":BITS.", 6 ) == 0    )) {
+			pb->packettype &= ~T_MESSAGE;
+			pb->packettype |=  T_TELEMETRY;
+			// Fall through to recipient location lookup
+		}
+
+		// Or perhaps a DIRECTED QUERY ?
+		if (body[9] == ':' && body[10] == '?') {
+			pb->packettype &= ~T_MESSAGE;
+			pb->packettype |=  T_QUERY;
+			// Fall through to recipient location lookup
+		}
 
 		// Now find out if the message RECIPIENT address is known
 		// to have some location data ?  Because then we can treat

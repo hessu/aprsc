@@ -195,7 +195,8 @@ static void pbuf_dump_entry(FILE *fp, struct pbuf_t *pb)
 	fprintf(fp, "%x\t",	pb->flags);
 	fprintf(fp, "%f\t%f\t",	pb->lat, pb->lng);
 	fprintf(fp, "%d\t",     pb->packet_len);
-	fwrite(pb->data, pb->packet_len, 1, fp); /* with terminating CRLF */
+	fwrite(pb->data, pb->packet_len-2, 1, fp); /* without terminating CRLF */
+	fprintf(fp, "\n");
 }
 
 void pbuf_dump(FILE *fp)

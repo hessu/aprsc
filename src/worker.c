@@ -825,7 +825,7 @@ void collect_new_clients(struct worker_t *self)
 	
 	/* lock the queue */
 	if ((pe = pthread_mutex_lock(&self->new_clients_mutex))) {
-		hlog(LOG_ERR, "do_accept(worker %d): could not lock new_clients_mutex: %s", self->id, strerror(pe));
+		hlog(LOG_ERR, "collect_new_clients(worker %d): could not lock new_clients_mutex: %s", self->id, strerror(pe));
 		return;
 	}
 	
@@ -835,7 +835,7 @@ void collect_new_clients(struct worker_t *self)
 	
 	/* unlock */
 	if ((pe = pthread_mutex_unlock(&self->new_clients_mutex))) {
-		hlog(LOG_ERR, "do_accept(worker %d): could not unlock new_clients_mutex: %s", self->id, strerror(pe));
+		hlog(LOG_ERR, "collect_new_clients(worker %d): could not unlock new_clients_mutex: %s", self->id, strerror(pe));
 		/* we'd going to deadlock here... */
 		exit(1);
 	}
@@ -847,7 +847,7 @@ void collect_new_clients(struct worker_t *self)
 		new_clients = c->next;
 		
 		self->client_count++;
-		// hlog(LOG_DEBUG, "do_accept(worker %d): got client fd %d", self->id, c->fd);
+		// hlog(LOG_DEBUG, "collect_new_clients(worker %d): got client fd %d", self->id, c->fd);
 		c->next = self->clients;
 		if (c->next)
 			c->next->prevp = &c->next;

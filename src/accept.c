@@ -65,17 +65,19 @@ struct listen_t {
 	char *name;
 	char *addr_s;
 	char *filters[10]; // up to 10 filter definitions
-} *listen_list = NULL;
+};
 
-pthread_mutex_t mt_servercount = PTHREAD_MUTEX_INITIALIZER;
+static struct listen_t *listen_list;
 
-int accept_reconfiguring = 0;
-int accept_shutting_down = 0;
+//  pthread_mutex_t mt_servercount = PTHREAD_MUTEX_INITIALIZER;
+
+int accept_shutting_down;
+int accept_reconfiguring;
 
 
 /* structure allocator/free */
 
-struct listen_t *listener_alloc(void)
+static struct listen_t *listener_alloc(void)
 {
 	struct listen_t *l = hmalloc(sizeof(*l));
 	memset( l, 0, sizeof(*l) );
@@ -84,7 +86,7 @@ struct listen_t *listener_alloc(void)
 	return l;
 }
 
-void listener_free(struct listen_t *l)
+static void listener_free(struct listen_t *l)
 {
 	int i;
 
@@ -110,6 +112,7 @@ void listener_free(struct listen_t *l)
 }
 
 
+#if 0
 /*
  *	signal handler
  */
@@ -126,6 +129,7 @@ static int accept_sighandler(int signum)
 	signal(signum, (void *)accept_sighandler);	/* restore handler */
 	return 0;
 }
+#endif
 
 /*
  *	Open the TCP/SCTP listening socket
@@ -170,7 +174,7 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai)
  *	Open the UDP receiving socket
  */
 
-int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
+static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 {
 	int arg;
 	int fd, i;
@@ -224,7 +228,7 @@ int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	return fd;
 }
 
-int open_listeners(void)
+static int open_listeners(void)
 {
 	struct listen_config_t *lc;
 	struct listen_t *l;
@@ -282,7 +286,7 @@ int open_listeners(void)
 	return opened;
 }
 
-void close_listeners(void)
+static void close_listeners(void)
 {
 	if (!listen_list)
 		return;
@@ -302,7 +306,7 @@ void close_listeners(void)
  *	Accept a single connection
  */
 
-struct client_t *do_accept(struct listen_t *l)
+static struct client_t *do_accept(struct listen_t *l)
 {
 	int fd, i;
 	int pe;

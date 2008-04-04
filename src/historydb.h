@@ -37,8 +37,7 @@
  *	In APRS-IS there are about 25 000 distinct callsigns or
  *	item or object names with position information PER WEEK.
  *	DB lifetime of 48 hours cuts that down a bit more.
- *	With 300 byte packet buffer in the entry (most of which is
- *	never used), the history-db size is around 8-9 MB in memory.
+ *	Memory usage is around 3-4 MB
  */
 
 #ifndef __HISTORYDB_H__
@@ -58,17 +57,15 @@ struct history_cell_t {
 	int  flags;
 
 	int  packetlen;
-	char packet[512];
-
-	/* FIXME: is this enough, or should there be two different
-	   sizes of cells ?  See  pbuf_t cells... */
+	char *packet;
+	char packetbuf[170]; /* Maybe a dozen packets are bigger than
+				170 bytes long out of some 17 000 .. */
 };
 
 
 extern void historydb_init(void);
 
 extern void historydb_dump(FILE *fp);
-extern int  historydb_load(FILE *fp);
 
 extern void historydb_cleanup(void);
 extern void historydb_atend(void);

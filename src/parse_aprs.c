@@ -71,6 +71,7 @@ static int valid_sym_table_uncompressed(char c)
 
 static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, const char sym_table, const char sym_code)
 {
+	int bad = 0;
 	/* symbol table and code */
 	pb->symbol[0] = sym_table;
 	pb->symbol[1] = sym_code;
@@ -82,29 +83,17 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
 		pb->packettype |= T_WX;	/* Hurricane */
 
-	if (lat < -89.9 && -0.0001 <= lng && lng <= 0.0001) {
-#ifdef DEBUG_PARSE_APRS
-		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
-#endif
-		return 0; /* out of range */
-	}
+	bad |= (lat < -89.9 && -0.0001 <= lng && lng <= 0.0001);
+	bad |= (lat >  89.9 && -0.0001 <= lng && lng <= 0.0001);
 
-	if (lat > 89.9 && -0.0001 <= lng && lng <= 0.0001) {
-#ifdef DEBUG_PARSE_APRS
-		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
-#endif
-		return 0; /* out of range */
-	}
-
-	if (-0.0001 <= lat && lat <= 0.0001 && -0.0001 <= lng && lng <= 0.0001) {
-#ifdef DEBUG_PARSE_APRS
-		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
-#endif
-		return 0; /* out of range */
+	if (-0.0001 <= lat && lat <= 0.0001) {
+	  bad |= ( -0.0001 <= lng && lng <= 0.0001);
+	  bad |= ( -90.01  <= lng && lng <= -89.99);
+	  bad |= (  89.99  <= lng && lng <=  90.01);
 	}
 
 
-	if (lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
+	if (bad || lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
 #ifdef DEBUG_PARSE_APRS
 		hlog(LOG_DEBUG, "\tposition out of range: lat %.3f lng %.3f", lat, lng);
 #endif

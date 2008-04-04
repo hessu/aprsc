@@ -56,6 +56,7 @@ int reconfiguring;		// should we reconfigure now?
 int uplink_simulator;
 int fileno_limit;
 int dbdump_at_exit;
+int want_dbdump;
 
 pthread_attr_t pthr_attrs;
 
@@ -156,6 +157,11 @@ int sighandler(int signum)
 		reconfiguring = 1;
 		break;
 		
+	case SIGUSR2:
+		hlog(LOG_INFO, "SIGUSR2 received: reconfiguring");
+		want_dbdump = 1;
+		break;
+		
 	default:
 		hlog(LOG_WARNING, "* SIG %d ignored", signum);
 		break;
@@ -184,6 +190,48 @@ void pthreads_profiling_reset(const char *name)
 }
 
 
+static void dbdump_all(void)
+{
+	FILE *fp;
+	char path[500];
+
+	/*
+	 *    As a general rule, dumping of databases is not a Good Idea in
+	 *    operational system.  Development time debugging on other hand..
+	 */
+
+	sprintf(path, "%s/historydb.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		historydb_dump(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/filter.wx.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		filter_wx_dump(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/filter.entry.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		filter_entrycall_dump(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/pbuf.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		pbuf_dump(fp);
+		fclose(fp);
+	}
+	sprintf(path, "%s/pbuf.dupe.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		pbuf_dupe_dump(fp);
+		fclose(fp);
+	}
+}
+
 /*
  *	Main
  */
@@ -194,8 +242,6 @@ int main(int argc, char **argv)
 	int e;
 	struct rlimit rlim;
 	time_t cleanup_tick;
-	FILE *fp;
-	char path[500];
 	
 	/* close stdin */
 	close(0);
@@ -281,6 +327,11 @@ int main(int argc, char **argv)
 		time(&tick);
 		if (!uplink_simulator)
 			now = tick;
+
+		if (want_dbdump) {
+			dbdump_all();
+			want_dbdump = 0;
+		}
 		
 		if (reopen_logs) {
 			reopen_logs = 0;
@@ -312,40 +363,7 @@ int main(int argc, char **argv)
 		hlog(LOG_INFO, "Accept thread has terminated.");
 	
 	if (dbdump_at_exit) {
-		/*
-		 *    As a general rule, dumping of databases is not a Good Idea in
-		 *    operational system.  Development time debugging on other hand..
-		 */
-		sprintf(path, "%s/historydb.dump", rundir);
-		fp = fopen(path,"w");
-		if (fp) {
-			historydb_dump(fp);
-			fclose(fp);
-		}
-		sprintf(path, "%s/filter.wx.dump", rundir);
-		fp = fopen(path,"w");
-		if (fp) {
-			filter_wx_dump(fp);
-			fclose(fp);
-		}
-		sprintf(path, "%s/filter.entry.dump", rundir);
-		fp = fopen(path,"w");
-		if (fp) {
-			filter_entrycall_dump(fp);
-			fclose(fp);
-		}
-		sprintf(path, "%s/pbuf.dump", rundir);
-		fp = fopen(path,"w");
-		if (fp) {
-			pbuf_dump(fp);
-			fclose(fp);
-		}
-		sprintf(path, "%s/pbuf.dupe.dump", rundir);
-		fp = fopen(path,"w");
-		if (fp) {
-			pbuf_dupe_dump(fp);
-			fclose(fp);
-		}
+		dbdump_all();
 	}
 
 	free_config();

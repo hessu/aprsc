@@ -48,6 +48,7 @@ struct history_cell_t {
 	struct history_cell_t *next;
 
 	time_t   arrivaltime;
+	int	 keylen;
 	char     key[CALLSIGNLEN_MAX+2];
 	uint32_t hash1;
 

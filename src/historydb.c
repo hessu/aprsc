@@ -125,11 +125,13 @@ void historydb_atend(void)
 void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
 	fprintf(fp, "%ld\t", hp->arrivaltime);
-	fprintf(fp, "%s\t", hp->key);
+	fwrite(hp->key, hp->keylen, 1, fp);
+	fprintf(fp, "\t");
 	fprintf(fp, "%d\t%d\t", hp->packettype, hp->flags);
 	fprintf(fp, "%f\t%f\t", hp->lat, hp->lon);
 	fprintf(fp, "%d\t", hp->packetlen);
-	fwrite(hp->packet, hp->packetlen, 1, fp); /* with terminating CRLF */
+	fwrite(hp->packet, hp->packetlen-2, 1, fp); /* without terminating CRLF */
+	fprintf(fp, "\n"); /* newline */
 }
 
 void historydb_dump(FILE *fp)
@@ -253,7 +255,8 @@ int historydb_insert(struct pbuf_t *pb)
 		       // Hash match, compare the key
 		    historydb_hashmatch(); // debug thing -- a profiling counter
 		    ++historydb_hashmatches;
-		    if ((strcmp(cp->key, keybuf) == 0) ) {
+		    if ( cp->keylen == keylen &&
+			 (memcmp(cp->key, keybuf, keylen) == 0) ) {
 		  	// Key match!
 		    	historydb_keymatch(); // debug thing -- a profiling counter
 			++historydb_keymatches;
@@ -293,7 +296,9 @@ int historydb_insert(struct pbuf_t *pb)
 		// Not found on this chain, append it!
 		cp = historydb_alloc(pb->packet_len);
 		cp->next = NULL;
-		strcpy(cp->key, keybuf);
+		memcpy(cp->key, keybuf, keylen);
+		cp->key[keylen] = 0; /* zero terminate */
+		cp->keylen = keylen;
 		cp->hash1 = h1;
 
 		cp->lat         = pb->lat;
@@ -344,7 +349,8 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	while ( cp ) {
 		if ( (cp->hash1 == h1) &&
 		     // Hash match, compare the key
-		     (strcmp(cp->key, keybuf) == 0)  &&
+		     (cp->keylen == keylen) &&
+		     (memcmp(cp->key, keybuf, keylen) == 0)  &&
 		     // Key match!
 		     (cp->arrivaltime > validitytime)
 		     // NOT too old..

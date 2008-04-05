@@ -140,11 +140,13 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	   $GPRMC  Remommended Minimum Specific GPS/Transit Data
 	   $GPWPT  Way Point Location ?? (bug in APRS specs ?)
 	   $GPWPL  Waypoint Load (not in APRS specs, but in NMEA specs)
-	   $PNTS   seen on APRS-IS, private sentense based on NMEA..
+	   $PNTS   Seen on APRS-IS, private sentense based on NMEA..
+	   $xxTLL  Not seen on radio network, usually $RATLL - Target positions
+	           reported by RAdar.
 	 */
 	 
 	if (memcmp(body, "GPGGA,", 6) == 0) {
-		// GPGGA,175059,3347.4969,N,11805.7319,W,2,12,1.0,6.8,M,-32.1,M,,*7D
+		/* GPGGA,175059,3347.4969,N,11805.7319,W,2,12,1.0,6.8,M,-32.1,M,,*7D
 		//   v=1, looks fine
 		// GPGGA,000000,5132.038,N,11310.221,W,1,09,0.8,940.0,M,-17.7,,
 		//   v=1, timestamp odd, coords look fine
@@ -155,6 +157,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		// GPGGA,193115.00,3302.50182,N,11651.22581,W,1,08,01.6,00465.90,M,-32.891,M,,*5F
 		// $GPGGA,hhmmss.dd,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,v,
 		//        ss,d.d,h.h,M,g.g,M,a.a,xxxx*hh<CR><LF>
+		*/
 		
 		latp = body+6; // over the keyword
 		while (latp < body_end && *latp != ',')
@@ -171,11 +174,12 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		if (*lngp == ',')
 			lngp++;
 			
-		// latp, and lngp  point to start of latitude and longitude substrings
-		// respectively.  Should we check the validity ?
+		/* latp, and lngp  point to start of latitude and longitude substrings
+		// respectively.
+		*/
 	
 	} else if (memcmp(body, "GPGLL,", 6) == 0) {
-		// $GPGLL,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,hhmmss.dd,S,M*hh<CR><LF>
+		/* $GPGLL,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,hhmmss.dd,S,M*hh<CR><LF>  */
 		latp = body+6; // over the keyword
 		lngp = latp;
 		while (lngp < body_end && *lngp != ',') // over latitude
@@ -186,10 +190,11 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 			lngp++; // and lat designator
 		if (*lngp == ',')
 			lngp++;
-		// latp, and lngp  point to start of latitude and longitude substrings
+		/* latp, and lngp  point to start of latitude and longitude substrings
 		// respectively
+		*/
 	} else if (memcmp(body, "GPRMC,", 6) == 0) {
-		// $GPRMC,hhmmss.dd,S,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,s.s,h.h,ddmmyy,d.d, <E|W>,M*hh<CR><LF>
+		/* $GPRMC,hhmmss.dd,S,xxmm.dddd,<N|S>,yyymm.dddd,<E|W>,s.s,h.h,ddmmyy,d.d, <E|W>,M*hh<CR><LF>
 		// ,S, = Status:  'A' = Valid, 'V' = Invalid
 		// 
 		// GPRMC,175050,A,4117.8935,N,10535.0871,W,0.0,324.3,100208,10.0,E,A*3B
@@ -198,20 +203,21 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		// GPRMC,000043,V,4411.7761,N,07927.0448,W,0.000,0.0,290697,10.7,W*57
 		// GPRMC,003803,A,3347.1727,N,11812.7184,W,000.0,000.0,140208,013.7,E*67
 		// GPRMC,050058,A,4609.1143,N,12258.8184,W,0.000,0.0,100208,18.0,E*5B
+		*/
 		
 		latp = body+6; // over the keyword
 		while (latp < body_end && *latp != ',')
 			latp++; // scan over the timestamp
 		if (*latp == ',')
 			latp++; // .. and into VALIDITY
-		if (*latp != 'A')
+		if (*latp != 'A' && *latp != 'V')
 			return 0; // INVALID !
 		if (*latp != ',')
 			latp++;
 		if (*latp == ',')
 			latp++;
 		
-		// now it points to latitude substring
+		/* now it points to latitude substring */
 		lngp = latp;
 		while (lngp < body_end && *lngp != ',')
 			lngp++;
@@ -223,16 +229,18 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		if (*lngp == ',')
 			lngp++;
 		
-		// latp, and lngp  point to start of latitude and longitude substrings
+		/* latp, and lngp  point to start of latitude and longitude substrings
 		// respectively.
+		*/
 		
 	} else if (memcmp(body, "GPWPL,", 6) == 0) {
-		// $GPWPL,4610.586,N,00607.754,E,4*70
+		/* $GPWPL,4610.586,N,00607.754,E,4*70
 		// $GPWPL,4610.452,N,00607.759,E,5*74
+		*/
 		latp = body+6;
 		
-	} else if (memcmp(body, "PNTS,", 5) == 0) {
-		// $PNTS,1,0,11,01,2002,231932,3539.687,N,13944.480,E,0,000,5,Roppongi UID RELAY,000,1*35
+	} else if (memcmp(body, "PNTS,1,", 7) == 0) { /* PNTS version 1 */
+		/* $PNTS,1,0,11,01,2002,231932,3539.687,N,13944.480,E,0,000,5,Roppongi UID RELAY,000,1*35
 		// $PNTS,1,0,14,01,2007,131449,3535.182,N,13941.200,E,0,0.0,6,Oota-Ku KissUIDigi,000,1*1D
 		// $PNTS,1,0,17,02,2008,120824,3117.165,N,13036.481,E,49,059,1,Kagoshima,000,1*71
 		// $PNTS,1,0,17,02,2008,120948,3504.283,N,13657.933,E,00,000.0,6,,000,1*36
@@ -254,7 +262,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		//    registration [A]=check data when the automatic position transmission
 		//    is set OFF [R]=check data when the course data or check point data is
 		//    received.
-		//  l Dd/mm/yyyy/hh/mm/ss: Date and time indication.
+		//  l dd,mm,yyyy,hhmmss: Date and time indication.
 		//  l Latitude in DMD followed by N or S
 		//  l Longitude in DMD followed by E or W
 		//  l Direction: Shown with the number 360 degrees divided by 64.
@@ -266,9 +274,37 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		//    Use NTSGRP command to determine.
 		//  l Status: [1] for usable information, [0] for non-usable information.
 		//  l *hh<CR><LF> the check-sum and end of PNTS sentence.
+		*/
+
+		if (body+55 > body_end) return 0; /* Too short.. */
+		latp = body+7; /* Over the keyword */
+		/* Accept any registered information code */
+		if (*latp++ == ',') return 0;
+		if (*latp++ != ',') return 0;
+		/* Scan over date+time info */
+		while (*latp != ',' && latp <= body_end) ++latp;
+		if (*latp == ',') ++latp;
+		while (*latp != ',' && latp <= body_end) ++latp;
+		if (*latp == ',') ++latp;
+		while (*latp != ',' && latp <= body_end) ++latp;
+		if (*latp == ',') ++latp;
+		while (*latp != ',' && latp <= body_end) ++latp;
+		if (*latp == ',') ++latp;
+		/* now it points to latitude substring */
+		lngp = latp;
+		while (lngp < body_end && *lngp != ',')
+			lngp++;
 		
-		// FIXME: NMEA $PNTS sentence parser!
+		if (*lngp == ',')
+			lngp++;
+		if (*lngp != ',')
+			lngp++;
+		if (*lngp == ',')
+			lngp++;
 		
+		/* latp, and lngp  point to start of latitude and longitude substrings
+		// respectively.
+		*/
 	} else {
 		// Not a supported format.
 		return 0;
@@ -924,6 +960,10 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 
 	case '>':
 		pb->packettype |= T_STATUS;
+		return 0;
+
+	case '<':
+		pb->packettype |= T_STATCAPA;
 		return 0;
 
 	case '?':

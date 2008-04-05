@@ -158,7 +158,7 @@ int sighandler(int signum)
 		break;
 		
 	case SIGUSR2:
-		hlog(LOG_INFO, "SIGUSR2 received: reconfiguring");
+		hlog(LOG_INFO, "SIGUSR2 received: database dumping");
 		want_dbdump = 1;
 		break;
 		

@@ -85,6 +85,7 @@ extern pthread_attr_t pthr_attrs;  /* used to setup new threads */
 #define T_STATUS    (1 << 8) // packet is status 
 #define T_USERDEF   (1 << 9) // packet is userdefined
 #define T_CWOP      (1 << 10) // packet is recognized as CWOP
+#define T_STATCAPA  (1 << 11) // packet is station capability response
 #define T_ALL	    (1 << 15) // set on _all_ packets
 
 #define F_DUPE    1	/* Duplicate of a previously seen packet */

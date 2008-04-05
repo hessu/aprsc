@@ -716,8 +716,8 @@ void filter_postprocess_dupefilter(struct pbuf_t *pbuf)
 	if (!(pbuf->flags & F_HASPOS)) {
 		struct history_cell_t *hist;
 		int rc = historydb_lookup(pbuf->srcname, pbuf->srcname_len, &hist);
-		hlog( LOG_DEBUG, "postprocess_dupefilter: no pos, looking up '%.*s', rc=%d",
-		      pbuf->srcname_len, pbuf->srcname, rc );
+		// hlog( LOG_DEBUG, "postprocess_dupefilter: no pos, looking up '%.*s', rc=%d",
+		//       pbuf->srcname_len, pbuf->srcname, rc );
 		if (rc > 0) {
 			pbuf->lat     = hist->lat;
 			pbuf->lng     = hist->lon;
@@ -1952,16 +1952,16 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 	   c = CWOP (local extension)
 	   * = ALL  (local extension)
 
-	   p = Position packets
-	   o = Objects
 	   i = Items
 	   m = Message
 	   n = NWS Weather & Weather Objects
-	   w = Weather
-	   t = Telemetry
+	   o = Objects
+	   p = Position packets
 	   q = Query
 	   s = Status
+	   t = Telemetry
 	   u = User-defined
+	   w = Weather
 
 	   Note: The weather type filter also passes positions packets
 	   for positionless weather packets.

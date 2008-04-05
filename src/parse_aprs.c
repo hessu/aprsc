@@ -305,13 +305,16 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		/* latp, and lngp  point to start of latitude and longitude substrings
 		// respectively.
 		*/
-	} else {
-		// Not a supported format.
+#if 1
+	} else if (memcmp(body, "GPGSA,", 6) == 0 ||
+		   memcmp(body, "GPGSV,", 6) == 0) {
+		/* Recognized but ignored */
 		return 0;
+#endif
 	}
 	
 	if (!latp || !lngp) {
-		hlog(LOG_DEBUG, "Unknown NMEA: %.*s", (int)(body_end - body), body);
+		hlog(LOG_DEBUG, "Unknown NMEA: '%.11s' %.*s", pb->data, (int)(body_end - body), body);
 		return 0; /* Well..  Not NMEA frame */
 	}
 

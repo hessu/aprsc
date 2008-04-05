@@ -52,7 +52,7 @@ int pbuf_global_count;
 int pbuf_global_dupe_count;
 
 int pbuf_global_count_limit      =  5000; /* Real criteria is expirer..		 */
-int pbuf_global_dupe_count_limit =   100; /* .. but we set some minimum packet counts
+int pbuf_global_dupe_count_limit =     1; /* .. but we set some minimum packet counts
 					     into the global pbuf queue anyway.  */
 
 long long dupecheck_outcount;  /* 64 bit counters for statistics */

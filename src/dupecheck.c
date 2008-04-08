@@ -441,7 +441,6 @@ static void dupecheck_thread(void)
 	int pb_out_count, pb_out_dupe_count;
 	int worker_pbuf_lag;
 	int worker_pbuf_dupe_lag;
-	time_t purge_tick = tick;
 	time_t cleanup_tick = now;
 	
 	pthreads_profiling_reset("dupecheck");
@@ -565,14 +564,10 @@ static void dupecheck_thread(void)
 		dupecheck_outcount  += pb_out_count;
 		dupecheck_dupecount += pb_out_dupe_count;
 
-		if (purge_tick <= tick) { // once per 10 seconds..
-			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
-			purge_tick = tick + 10;
-		}
-
 		if (cleanup_tick <= now) { // once in a (simulated) minute or so..
 			cleanup_tick = now + 60;
 
+			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
 			dupecheck_cleanup();
 		}
 

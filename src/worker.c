@@ -902,10 +902,12 @@ void send_keepalives(struct worker_t *self)
 		// the  c  may get destroyed from underneath of ourselves!
 		cnext = c->next;
 
+#if 0  /* Or perhaps we should ? */
 		if ( c->flags & (CLFLAGS_UPLINKSIM|CLFLAGS_UPLINKPORT) ||
 		     c->state == CSTATE_COREPEER )
 			continue;
 		/* No keepalives on UPLINK or PEER links.. */
+#endif
 
 		/* Is it time for keepalive ? */
 		if (c->keepalive <= tick && c->obuf_wtime < w_keepalive) {
@@ -1015,13 +1017,14 @@ void worker_thread(struct worker_t *self)
 			send_keepalives(self);
 		}
 		t6 = tick;
-
+#if 0
 		if (tick > next_lag_query) {
 			int lag, lag1, lag2;
 			next_lag_query += 10; // every 10 seconds..
 			lag = outgoing_lag_report(self, &lag1, &lag2);
 			hlog(LOG_DEBUG, "Thread %d  pbuf lag %d,  dupelag %d", self->id, lag1, lag2);
 		}
+#endif
 		t7 = tick;
 
 		if (t7-t1 > 1) // only report if the delay is over 1 seconds.  they are a LOT rarer

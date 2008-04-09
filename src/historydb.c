@@ -411,6 +411,6 @@ void historydb_cleanup(void)
 		// Free the lock
 		rwl_wrunlock(&historydb_rwlock);
 	}
-	hlog( LOG_DEBUG, "historydb_cleanup() removed %d entries, count now %ld",
-	      cleancount, historydb_cellgauge );
+	// hlog( LOG_DEBUG, "historydb_cleanup() removed %d entries, count now %ld",
+	//       cleancount, historydb_cellgauge );
 }

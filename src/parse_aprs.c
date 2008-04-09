@@ -307,6 +307,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		*/
 #if 1
 	} else if (memcmp(body, "GPGSA,", 6) == 0 ||
+		   memcmp(body, "GPVTG,", 6) == 0 ||
 		   memcmp(body, "GPGSV,", 6) == 0) {
 		/* Recognized but ignored */
 		return 0;

@@ -148,6 +148,8 @@ int new_cellblock(cellarena_t *ca)
 cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree )
 {
 	cellarena_t *ca = hmalloc(sizeof(*ca));
+	int n;
+
 	memset(ca, 0, sizeof(*ca));
 
 	ca->arenaname = arenaname;
@@ -173,6 +175,8 @@ cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alig
 
 	ca->createsize = createkb * 1024;
 
+	n = ca->createsize / ca->increment;
+	hlog( LOG_DEBUG, "cellinit: %-12s block size %4d kB, cells/block: %d", arenaname, createkb, n );
 
 	pthread_mutex_init(&ca->mutex, NULL);
 

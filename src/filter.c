@@ -260,7 +260,7 @@ void filter_init(void)
 					   sizeof(struct filter_entrycall_t),
 					   __alignof__(struct filter_entrycall_t),
 					   CELLMALLOC_POLICY_FIFO,
-					   128 /* 128 kB at the time */,
+					   32 /* 32 kB at the time */,
 					   0 /* minfree */ );
 
 	/* Under 1 thousand.. */
@@ -269,7 +269,7 @@ void filter_init(void)
 				    sizeof(struct filter_wx_t),
 				    __alignof__(struct filter_wx_t),
 				    CELLMALLOC_POLICY_FIFO,
-				    64 /* 64 kB at the time */,
+				    32 /* 32 kB at the time */,
 				    0 /* minfree */ );
 #endif
 }
@@ -449,8 +449,8 @@ void filter_entrycall_cleanup(void)
 
 	rwl_wrunlock(&filter_entrycall_rwlock);
 
-	hlog( LOG_DEBUG, "filter_entrycall_cleanup() removed %d entries, count now: %ld",
-	      cleancount, filter_entrycall_cellgauge );
+	// hlog( LOG_DEBUG, "filter_entrycall_cleanup() removed %d entries, count now: %ld",
+	//       cleancount, filter_entrycall_cellgauge );
 }
 
 /* 
@@ -647,8 +647,8 @@ void filter_wx_cleanup(void)
 
 	rwl_wrunlock(&filter_wx_rwlock);
 
-	hlog( LOG_DEBUG, "filter_wx_cleanup() removed %d entries, count now: %ld",
-	      cleancount, filter_wx_cellgauge );
+	// hlog( LOG_DEBUG, "filter_wx_cleanup() removed %d entries, count now: %ld",
+	//       cleancount, filter_wx_cellgauge );
 }
 
 /* 

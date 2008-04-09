@@ -51,7 +51,7 @@ cellarena_t *pbuf_cells_small;
 cellarena_t *pbuf_cells_medium;
 cellarena_t *pbuf_cells_large;
 
-int pbuf_cells_kb = 4096; /* 4M bunches is faster for system than 16M ! */
+int pbuf_cells_kb = 2048; /* 2M bunches is faster for system than 16M ! */
 
 
 /*
@@ -67,15 +67,15 @@ void pbuf_init(void)
 	pbuf_cells_small  = cellinit( "pbuf small",
 				      sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
 				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				      pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */ );
+				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */ );
 	pbuf_cells_medium = cellinit( "pbuf medium",
 				      sizeof(struct pbuf_t) + PACKETLEN_MAX_MEDIUM,
 				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				      pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */ );
+				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */ );
 	pbuf_cells_large  = cellinit( "pbuf large",
 				      sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
 				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				      pbuf_cells_kb /* 1 MB at the time */, 0 /* minfree */ );
+				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */ );
 #endif
 }
 
@@ -193,6 +193,7 @@ static void pbuf_dump_entry(FILE *fp, struct pbuf_t *pb)
 	fprintf(fp, "%ld\t",	pb->t); /* arrival time */
 	fprintf(fp, "%x\t",	pb->packettype);
 	fprintf(fp, "%x\t",	pb->flags);
+      	fprintf(fp, "%.*s\t",	pb->srcname_len, pb->srcname);
 	fprintf(fp, "%f\t%f\t",	pb->lat, pb->lng);
 	fprintf(fp, "%d\t",     pb->packet_len);
 	fwrite(pb->data, pb->packet_len-2, 1, fp); /* without terminating CRLF */

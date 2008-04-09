@@ -272,7 +272,7 @@ void client_init(void)
 	client_cells  = cellinit( "clients",
 				  sizeof(struct client_t),
 				  __alignof__(struct client_t), CELLMALLOC_POLICY_FIFO,
-				  4096 /* 4 MB at the time */, 0 /* minfree */ );
+				  2048 /* 2 MB at the time */, 0 /* minfree */ );
 #endif
 }
 

@@ -5,6 +5,7 @@ use 5.006;
 use strict;
 use warnings;
 
+use Time::HiRes qw( time sleep );
 use IO::Handle '_IOFBF';
 use IO::Socket::INET;
 use IO::Select;
@@ -13,37 +14,38 @@ our $VERSION = '0.01';
 
 our $aprs_appid = "IS $VERSION";
 
-=head1 new(hostport, mycall, filter)
+=head1 new(hostport, mycall, optionshash)
 
 Initializes a new Ham::APRS::IS socket. Takes two mandatory arguments,
 the host:port pair to connect to and your client's callsign, and one optional
 argument, the filter string to be sent with the login command.
 
   my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL');
-  my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL', 'f/*');
+  my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL', 'filter' => 'f/*');
+  my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL', 'nopass' => 1);
 
 =cut
 
-sub new($$$;$)
+sub new($$$;%)
 {
 	my $that = shift;
 	my $class = ref($that) || $that;
 	my $self = { };
 	bless ($self, $class);
 	
-	my($host_port, $mycall, $filter) = @_;
+	my($host_port, $mycall, %options) = @_;
 	
 	$self->{'host_port'} = $host_port;
 	$self->{'mycall'} = $mycall;
-	$self->{'filter'} = $filter if defined($filter);
+	$self->{'filter'} = $options{'filter'} if (defined $options{'filter'});
 	
-	if ($self->{'mycall'} =~ /^CW\d+/i) {
+	if ($options{'nopass'}) {
 		$self->{'aprspass'} = -1;
 	} else {
 		$self->{'aprspass'} = aprspass($self->{'mycall'});
 	}
 	
-	# warn "aprspass for $self->{mycall} is $self->{aprspass}\n";
+	#warn "aprspass for $self->{mycall} is $self->{aprspass}\n";
 	
 	$self->{'state'} = 'init';
 	$self->{'error'} = "No errors yet.";
@@ -167,6 +169,15 @@ sub connect($;%)
 	
 	$self->{'sock'}->blocking(0);
 	
+	my $t = time();
+	while (my $l = $self->getline()) {
+		return 1 if ($l =~ /^#\s+logresp\s+/);
+		if (time() - $t > 5) {
+			$self->{'error'} = "Login command timed out";
+			return 0;
+		}
+	}
+	
 	return 1;
 }
 
@@ -178,13 +189,28 @@ sub getline($)
 	my $self = shift;
 	
 	return undef if ($self->{'state'} ne 'connected');
-	return $self->{'sock'}->getline;
+	$self->{'sock'}->blocking(1);
+	my $l = $self->{'sock'}->getline();
+	$self->{'sock'}->blocking(0);
+	$l =~ s/[\r\n]+$//sg if defined $l;
+	warn "got: $l\n";
+	return $l;
+}
+
+sub getline_noncomment($)
+{
+	my $self = shift;
+	
+	return undef if ($self->{'state'} ne 'connected');
+	while (my $l = $self->getline()) {
+		return $l if !defined $l;
+		return $l if ($l !~ /^#/);
+	}
 }
 
 sub sendline($$)
 {
 	my($self, $line) = @_;
-	
 	return undef if ($self->{'state'} ne 'connected');
 	
 	$self->{'sock'}->blocking(1);
@@ -192,6 +218,8 @@ sub sendline($$)
 	$self->{'sock'}->flush;
 	
 	$self->{'sock'}->blocking(0);
+	
+	return 1;
 }
 
 =head1 aprspass($callsign)
@@ -199,7 +227,7 @@ sub sendline($$)
 Calculates the APRS passcode for a given callsign. Ignores SSID
 and converts the callsign to uppercase as required. Returns an integer.
 
-  my $passcode = Ham::APRS::IS($callsign);
+  my $passcode = Ham::APRS::IS::aprspass($callsign);
 
 =cut
 

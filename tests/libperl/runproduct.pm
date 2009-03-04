@@ -27,7 +27,8 @@ my %products = (
 		'stdargs' => '-server -cp ../../../javaprssrvr/javAPRSSrvr.jar javAPRSSrvr',
 		'cfgfileargs' => '',
 		'cfgdir' => 'cfg-javap',
-		'dieswith' => 15
+		'dieswith' => 15,
+		'exitcode' => 143
 	}
 );
 
@@ -190,7 +191,9 @@ sub stop($)
 		$self->readout();
 		$self->discard();
 		if ($retval ne 0 || $signal ne 0) {
-			if (defined $self->{'prod'}->{'dieswith'} && $self->{'prod'}->{'dieswith'} eq $signal) {
+			if (defined $self->{'prod'}->{'exitcode'} && $self->{'prod'}->{'exitcode'} eq $retval) {
+				# fine
+			} elsif (defined $self->{'prod'}->{'dieswith'} && $self->{'prod'}->{'dieswith'} eq $signal) {
 				# fine
 			} else {
 				return "Product has been terminated, signal $signal retcode $retval.";

@@ -7,6 +7,7 @@ stderr=logs/err.log
 #
 excludeCalls=NITRUS;N0CALL;NOCALL
 useHistoryQueue=false
+disallowUnverified=false
 #
 # Server Adjunct
 #
@@ -28,11 +29,12 @@ TNCLogPorts=127.0.0.1:14508
 #
 statusPorts=14501
 plainStatusPorts=14511
-portTable=10152;Full APRS-IS Feed;14580;User-defined Filtered Feed;1314;Message-only Feed
+portTable=10152;Full APRS-IS Feed;14580;User-defined Filtered Feed;14581;User-defined Filtered Feed;1314;Message-only Feed
 #
 # Client Port Properties
 #
 noEchoPorts=10152u
 msgOnlyPorts=1314u
 IGatePorts=14580u
+clientOnlyPorts=14581u
 #

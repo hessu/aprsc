@@ -219,6 +219,7 @@ sub sendline($$)
 	
 	$self->{'sock'}->blocking(0);
 	
+	warn "sent: $line\n";
 	return 1;
 }
 

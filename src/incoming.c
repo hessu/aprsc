@@ -518,10 +518,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 * path_append. If it points somewhere in the header, then fine,
 	 * it points to an existing Q construct.
 	 */
-	if (q_start == NULL && path_append_len > 0)
+	if (q_start == NULL && path_append_len > 0) {
 		pb->qconst_start = p + 1;
-	else if (q_start > s && q_start < path_end)
+	} else if (q_start > s && q_start < path_end) {
 		pb->qconst_start = pb->data + (q_start - s);
+	} else {
+		fprintf(stderr, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
+		return -1;
+	}
 	
 	/* Copy the modified or appended part of the packet header -- qcons */
 	memcpy(p, path_append, path_append_len);

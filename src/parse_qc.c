@@ -162,7 +162,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
 			return -2;
 		}
 	}
-		
+	
 	/*
 	 * If trace is on, the q construct is qAI, or the FROMCALL is on the server's trace list:
 	 * {
@@ -174,6 +174,8 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
 	 *	Append ,SERVERLOGIN
 	 * }
 	 */
+	
+	/* TODO: implement qAI tracing here */
 	
 	return new_q_len;
 }
@@ -344,8 +346,9 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		 *		Append ,qAO,login
 		 *	Skip to "All packets with q constructs"
 		 * }
+		 *
 		 */
-		if (c->validated && !originated_by_client) {
+		if (c->validated && (c->flags & CLFLAGS_CLIENTONLY) && !originated_by_client) {
 			// FIXME: what is a "verified client-only connection?"
 			// fprintf(stderr, "\tvalidated client sends sends packet originated by someone else\n");
 			/* if a q construct exists in the packet */
@@ -358,6 +361,9 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 					*(q_start + 3) = 'o';
 					q_type = 'o';
 					// fprintf(stderr, "\treplaced qAR with qAo\n");
+					/* Not going to modify the construct, update pointer to it */
+					*new_q_start = q_start + 1;
+				} else {
 					/* Not going to modify the construct, update pointer to it */
 					*new_q_start = q_start + 1;
 				}
@@ -464,7 +470,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			}
 		} else if (originated_by_client) {
 			/* FROMCALL matches the login */
-			return snprintf(new_q, new_q_size, ",qAC,%s", mycall);
+			return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", mycall);
 		} else {
 			/* Append ,qAS,login */
 			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->username);

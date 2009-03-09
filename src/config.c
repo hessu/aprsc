@@ -434,13 +434,19 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_DUPEFEED;
 	} else if (strcasecmp(argv[2], "messageonly") == 0) {
 	  clflags |= CLFLAGS_MESSAGEONLY;
+	} else if (strcasecmp(argv[2], "clientonly") == 0) {
+	  clflags |= CLFLAGS_MESSAGEONLY;
+	  clflags |= CLFLAGS_CLIENTONLY;
+	} else if (strcasecmp(argv[2], "igate") == 0) {
+	  clflags |= CLFLAGS_MESSAGEONLY;
+	  clflags |= CLFLAGS_CLIENTONLY;
+	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "uplinksim") == 0) {
 	  clflags = CLFLAGS_UPLINKSIM; /* _removes_ INPORT flag! */
 	} else {
 	  hlog(LOG_ERR, "Listen: unknown quality token: %s", argv[2]);
 	}
-
-
+	
 	if (strcasecmp(argv[3], "tcp") == 0) {
 		/* well, do nothing for now. */
 	} else if (strcasecmp(argv[3], "udp") == 0) {

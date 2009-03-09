@@ -255,6 +255,8 @@ struct client_t {
 #define CLFLAGS_FULLFEED       0x100 /* Together with filter t/c* -- which really implements it */
 #define CLFLAGS_DUPEFEED       0x200 /* Duplicates are also sent to client */
 #define CLFLAGS_MESSAGEONLY    0x400 /* Together with filter t/m   -- which really implements it */
+#define CLFLAGS_CLIENTONLY     0x800 /* Client connected on client-only port */
+#define CLFLAGS_IGATE          0x1000 /* Igate port */
 
 	CStateEnum state;   /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */

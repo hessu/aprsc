@@ -98,6 +98,8 @@ sub connect($;%)
 		return 0;
 	}
 	
+	$self->{'ibuf'} = '';
+	
 	my $retryuntil = defined $options{'retryuntil'} ? $options{'retryuntil'} : 0;
 	my $starttime = time();
 	
@@ -157,6 +159,7 @@ sub connect($;%)
 			$aprs_appid );
 	}
 	
+	warn "login: $s\n";
 	if (!$self->{'sock'}->print($s)) {
 		$self->{'error'} = "Failed to write login command to $self->{host_port}: $!";
 		return 0;
@@ -184,22 +187,56 @@ sub connect($;%)
 # -------------------------------------------------------------------------
 # Get a line (blocking)
 
-sub getline($)
+sub getline($;$)
 {
-	my $self = shift;
+	my($self, $timeout) = @_;
 	
 	return undef if ($self->{'state'} ne 'connected');
-	$self->{'sock'}->blocking(1);
-	my $l = $self->{'sock'}->getline();
-	$self->{'sock'}->blocking(0);
-	$l =~ s/[\r\n]+$//sg if defined $l;
-	warn "got: $l\n";
-	return $l;
+	
+	$timeout = 5 if (!defined $timeout);
+	
+	my $end_t = time() + $timeout;
+	my $sock = $self->{'sock'};
+	
+	while (1) {
+		if ($self->{'ibuf'} =~ s/^(.*?)[\r\n]+//s) {
+			warn "got: $1\n";
+			return $1;
+		}
+		
+		if (time() > $end_t) {
+			warn "getline: timeout\n";
+			return undef;
+		}
+		
+		my($rin, $rout, $ein, $eout) = ('', '', '', '');
+		vec($rin, fileno($sock), 1) = 1;
+		$ein = $rin;
+		my $nfound = select($rout = $rin, undef, $eout = $ein, 1);
+		
+		if (($nfound) && ($rout)) {
+			my $rbuf;
+			my $nread = sysread($sock, $rbuf, 1024);
+			if ($nread > 0) {
+				$self->{'ibuf'} .= $rbuf;
+			} elsif ($nread < 1) {
+				$self->{'error'} = "Failed to read from server: $!";
+				warn "getline: read error (on read)\n";
+				$self->disconnect();
+				return undef;
+			}
+		} elsif (($nfound) && ($eout)) {
+			$self->{'error'} = "Failed to read from server (select returned errors): $!";
+			warn "getline: read error (on select)\n";
+			$self->disconnect();
+			return undef;
+		}
+	}
 }
 
-sub getline_noncomment($)
+sub getline_noncomment($;$)
 {
-	my $self = shift;
+	my($self, $timeout) = @_;
 	
 	return undef if ($self->{'state'} ne 'connected');
 	while (my $l = $self->getline()) {
@@ -213,14 +250,23 @@ sub sendline($$)
 	my($self, $line) = @_;
 	return undef if ($self->{'state'} ne 'connected');
 	
-	$self->{'sock'}->blocking(1);
-	$self->{'sock'}->printf( "%s\r\n", $line);
-	$self->{'sock'}->flush;
+	if (!defined $self->{'sock'}->blocking(1)) {
+		warn "sendline: blocking(1) failed: $!\n";
+		return undef;
+	}
+	my $ret = $self->{'sock'}->printf( "%s\r\n", $line);
+	if (!$self->{'sock'}->flush) {
+		warn "sendline: flush() failed: $!\n";
+		return undef;
+	}
 	
-	$self->{'sock'}->blocking(0);
+	if (!defined $self->{'sock'}->blocking(0)) {
+		warn "sendline: blocking(1) failed: $!\n";
+		return undef;
+	}
 	
-	warn "sent: $line\n";
-	return 1;
+	warn "sent ($ret): $line\n";
+	return $ret;
 }
 
 =head1 aprspass($callsign)

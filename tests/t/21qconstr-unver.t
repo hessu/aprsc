@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 14 };
+BEGIN { plan tests => 17 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -38,15 +38,19 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
 # basic packet with no Q construct
 my $position = "!6028.52N/02505.61E# Testing";
-$i_tx->sendline("OH7LZB>DST:$position");
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"OH7LZB>DST:$position", # should drop
+	"$tx_call>DST,qAR,BLAH:$position"); # helper
 
 # basic packet with Q construct inserted by normal igate
-$position .= "."; # make unique
-$i_tx->sendline("OH7LZB-1>DST,qAR,$tx_call:$position");
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"OH7LZB-1>DST,qAR,$tx_call:$position", # should drop
+	"$tx_call>DST,qAR,BLAH:$position"); # helper
 
 # basic packet with old-style ,I construct inserted by igate
-$position .= "."; # make unique
-$i_tx->sendline("OH7LZB-2>DST,$tx_call,I:$position");
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"OH7LZB-2>DST,$tx_call,I:$position", # should drop
+	"$tx_call>DST,qAR,BLAH:$position"); # helper
 
 #
 #    If the packet entered the server from an unverified connection AND the FROMCALL
@@ -77,8 +81,9 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 # (2) should be dropped, so don't expect anything 
 # if it's not dropped, the *next* test will fail
 # NOTE: javaprssrvr seems to forward with ,qAX,SERVERLOGIN
-#$position .= '.'; # make it unique
-#$i_tx->sendline("$tx_call>DST,qAR,CALL1,CALL2:$position");
+#istest::should_drop(\&ok, $i_tx, $i_rx,
+#	"$tx_call>DST,qAR,CALL1,CALL2:$position", # should drop
+#	"$tx_call>DST,qAR,BLAH:$position"); # helper
 
 # (3)
 $position .= '.'; # make it unique

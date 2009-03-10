@@ -200,7 +200,7 @@ sub getline($;$)
 	
 	while (1) {
 		if ($self->{'ibuf'} =~ s/^(.*?)[\r\n]+//s) {
-			warn "got: $1\n";
+			#warn "got: $1\n";
 			return $1;
 		}
 		
@@ -265,7 +265,7 @@ sub sendline($$)
 		return undef;
 	}
 	
-	warn "sent ($ret): $line\n";
+	#warn "sent ($ret): $line\n";
 	return $ret;
 }
 

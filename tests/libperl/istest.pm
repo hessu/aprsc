@@ -78,13 +78,13 @@ sub should_drop($$$$$)
 	}
 	
 	if ($received =~ /$drop_key/) {
-		&$ok($received, $helper, "Server did not drop the packet it should have dropped");
+		&$ok($received, $helper, "Server forwarded packet it should have dropped");
+	} else {
+		&$ok($received, $helper, "Server returned completely unexpected packet");
 	}
 	
 	# get one more
 	$i_rx->getline_noncomment();
-	
-	&$ok(1, 1, "ok");
 }
 
 

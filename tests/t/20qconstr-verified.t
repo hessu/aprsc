@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 27 };
+BEGIN { plan tests => 32 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;

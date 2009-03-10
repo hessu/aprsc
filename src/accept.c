@@ -383,6 +383,17 @@ static struct client_t *do_accept(struct listen_t *l)
 	hfree(s);
 #endif
 
+	/* hex format of client's IP address + port */
+
+	s = hexsockaddr( &sa.sa, addr_len );
+#ifndef FIXED_IOBUFS
+	c->addr_h = s;
+#else
+	strncpy(c->addr_h, s, sizeof(c->addr_h));
+	c->addr_h[sizeof(c->addr_h)-1] = 0;
+	hfree(s);
+#endif
+
 	/* text format of servers' connected IP address + port */
 
 	addr_len = sizeof(sa);

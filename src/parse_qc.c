@@ -40,12 +40,13 @@ int is_verified_client_login(char *s, int len)
 
 static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
 			int new_q_len, char q_proto, char q_type, char *q_start,
-			char *path_end )
+			int *q_replace, char *path_end )
 {
 	char *qcallv[MAX_Q_CALLS+1];
 	int qcallc;
 	char *p;
 	int mycall_len, username_len;
+	int login_in_path = 0;
 	int i, j, l;
 	
 	/*
@@ -137,6 +138,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
 		/* 2) */
 		if (l == username_len && strncasecmp(qcallv[i], c->username, username_len) == 0) {
 			/* ok, login is client's login, handle step 3) */
+			login_in_path = 1;
 			if (c->state == CSTATE_CONNECTED &&
 			    (c->flags & CLFLAGS_INPORT) &&
 			    (i != qcallc - 1)) {
@@ -164,7 +166,31 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
 	 * }
 	 */
 	
-	/* TODO: implement qAI tracing here */
+	if (q_proto == 'A' && q_type == 'I') {
+		/* we replace the existing Q construct with a regenerated one */
+		*q_replace = 1;
+		
+		/* copy over existing qAI trace */
+		new_q_len = path_end - q_start - 1;
+		if (new_q_len > new_q_size) {
+			/* ouch, memcpy would run over the buffer */
+			return -2;
+		}
+		memcpy(new_q, q_start+1, new_q_len);
+		
+		/* If the packet is from a verified port where the login is not found after the q construct */
+		if (c->validated && !login_in_path) {
+			/* Append ,login */
+			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
+		} else if (!(c->flags & CLFLAGS_INPORT)) {
+			/* from an outbound connection, append client's hexaddr */
+			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->addr_h);
+		}
+		
+		/* Append ,SERVERLOGIN */
+		new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", mycall);
+		
+	}
 	
 	return new_q_len;
 }
@@ -189,7 +215,8 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
  */
 
 int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
-              char **path_end, int pathlen, char **new_q_start, int originated_by_client)
+              char **path_end, int pathlen, char **new_q_start, int *q_replace,
+              int originated_by_client)
 {
 	char *q_start = NULL; /* points to the , before the Q construct */
 	char *q_nextcall = NULL; /* points to the , after the Q construct */ 
@@ -392,7 +419,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			}
 			
 			/* Skip to "All packets with q constructs" */
-			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
+			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
 		/*
@@ -404,7 +431,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			/* Not going to modify the construct, update pointer to it */
 			*new_q_start = q_start + 1;
 			/* Skip to "All packets with q constructs" */
-			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
+			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
 		/* At this point we have packets which do not have Q constructs, and
@@ -467,7 +494,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			q_type = 'S';
 		}
 		/* Skip to "All packets with q constructs" */
-		return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
+		return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 	}
 	
 	/*
@@ -521,6 +548,6 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 	if (!new_q_len)
 		*new_q_start = q_start + 1;
 	
-	return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, *path_end);
+	return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 }
 

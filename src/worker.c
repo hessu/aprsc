@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <time.h>
 #include <stdlib.h>
+#include <netinet/in.h>
 
 #include "worker.h"
 
@@ -362,6 +363,47 @@ char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 		s = eb + strlen(eb);
 
 		sprintf(s, "]:%s", sbuf);
+	}
+
+	// if (!sup) hlog(LOG_DEBUG, "... to: %s", eb);
+
+	return hstrdup(eb);
+}
+
+char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
+{
+	char eb[200];
+	union sockaddr_u su, *sup;
+	struct sockaddr_in *sa_in;
+
+	sup = (union sockaddr_u *)sa;
+#ifdef IN6_IS_ADDR_V4MAPPED
+	if ( sa->sa_family == AF_INET6 && 
+	     ( IN6_IS_ADDR_V4MAPPED(&(sup->si6.sin6_addr)) ||
+	       IN6_IS_ADDR_V4COMPAT(&(sup->si6.sin6_addr)) ) ) {
+
+		memset(&su, 0, sizeof(su));
+		su.si.sin_family = AF_INET;
+		su.si.sin_port   = sup->si6.sin6_port;
+		memcpy(& su.si.sin_addr, &((uint32_t*)(&(sup->si6.sin6_addr)))[3], 4);
+		sa = &su.sa;
+		// sup = NULL;
+		// hlog(LOG_DEBUG, "Translating v4 mapped/compat address..");
+	}
+#endif
+
+	if ( sa->sa_family == AF_INET ) {
+		sa_in = (struct sockaddr_in *)sa;
+		sprintf(eb, "%02x%02x%02x%02x",
+			sa_in->sin_addr.s_addr & 0xff,
+			(sa_in->sin_addr.s_addr >> 8) & 0xff,
+			(sa_in->sin_addr.s_addr >> 16) & 0xff,
+			(sa_in->sin_addr.s_addr >> 24) & 0xff
+			);
+	} else {
+		/* presumption: IPv6 */
+		/* TODO: figure out what should be put in qAI Q construct's IP address when IPv6 is used! */
+		sprintf(eb, "ipv6");
 	}
 
 	// if (!sup) hlog(LOG_DEBUG, "... to: %s", eb);

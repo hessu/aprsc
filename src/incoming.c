@@ -405,6 +405,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	char *dstcall_end; /* end of dstcall ([:,]) */
 	char *via_start; /* start of the digipeater path (after dstcall,) */
 	char *q_start = NULL; /* start of the Q construct (points to the 'q') */
+	int q_replace = 0; /* whether the existing Q construct is replaced */
 	const char *data;	  /* points to original incoming path/payload separating ':' character */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
@@ -475,7 +476,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 */
 	path_append_len = q_process( c, path_append, sizeof(path_append),
 					via_start, &path_end, pathlen, &q_start,
-					originated_by_client );
+					&q_replace, originated_by_client );
 	
 	if (path_append_len < 0) {
 		/* the q construct algorithm decided to drop the packet */
@@ -497,10 +498,16 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	/* when it was received ? */
 	pb->t = now;
-
+	
 	/* Copy the unmodified part of the packet header */
-	memcpy(pb->data, s, path_end - s);
-	p = pb->data + (path_end - s);
+	if (q_replace && q_start) {
+		/* if we're replacing the Q construct, we don't copy the old one */
+		memcpy(pb->data, s, q_start - s);
+		p = pb->data + (q_start - s);
+	} else {
+		memcpy(pb->data, s, path_end - s);
+		p = pb->data + (path_end - s);
+	}
 	
 	/* If q_process left q_start unmodified (as NULL), it wants to say
 	 * that it produced a new Q construct, which is returned in

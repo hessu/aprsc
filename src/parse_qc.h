@@ -14,6 +14,7 @@
 #include "worker.h" /* struct client_t */
 
 extern int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
-                     char **path_end, int pathlen, char **new_q_start, int originated_by_client);
+                     char **path_end, int pathlen, char **new_q_start, int *q_replace,
+                     int originated_by_client);
 
 #endif

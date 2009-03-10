@@ -165,7 +165,9 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 #     }
 #
 
-$i_tx->sendline("SRCCALL>DST,DIGI1*,qAZ,$login:testing (qAZ)");
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,DIGI1*,qAZ,$login:testing (qAZ)", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 #
 #     If ,SERVERLOGIN is found after the q construct:
@@ -174,7 +176,9 @@ $i_tx->sendline("SRCCALL>DST,DIGI1*,qAZ,$login:testing (qAZ)");
 #         Quit processing the packet
 #     }
 
-$i_tx->sendline("SRCCALL>DST,DIGI1*,qAZ,$login:testing (,SERVERLOGIN)");
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,DIGI1*,qAR,$server_call:testing (,SERVERLOGIN)", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 #
 #    If a callsign-SSID is found twice in the q construct:
@@ -184,7 +188,9 @@ $i_tx->sendline("SRCCALL>DST,DIGI1*,qAZ,$login:testing (,SERVERLOGIN)");
 #    }
 #
 
-$i_tx->sendline("SRCCALL>DST,DIGI1*,qAI,FOOBAR,ASDF,ASDF,BARFOO:testing (dup call)");
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,DIGI1*,qAI,FOOBAR,ASDF,ASDF,BARFOO:testing (dup call)", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 #
 #    If a verified login other than this login is found in the q construct
@@ -196,7 +202,10 @@ $i_tx->sendline("SRCCALL>DST,DIGI1*,qAI,FOOBAR,ASDF,ASDF,BARFOO:testing (dup cal
 #    }
 #
 # (to test this, we made a second connection using call $login_second)
-$i_tx->sendline("SRCCALL>DST,DIGI*,qAI,$login_second,$login:testing (verified call loop)");
+
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,DIGI*,qAI,$login_second,$login:testing (verified call loop)", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 #
 #    If the packet is from an inbound port and the login is found after the q construct but is not the LAST VIACALL:
@@ -205,7 +214,10 @@ $i_tx->sendline("SRCCALL>DST,DIGI*,qAI,$login_second,$login:testing (verified ca
 #        Quit processing the packet
 #    }
 #
-$i_tx->sendline("SRCCALL>DST,DIGI*,qAI,$login,M0RE:testing (login not last viacall)");
+
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,DIGI*,qAI,$login,M0RE:testing (login not last viacall)", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 #
 #    If trace is on, the q construct is qAI, or the FROMCALL is on the server's trace list:

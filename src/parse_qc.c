@@ -17,18 +17,8 @@
 
 #include "parse_qc.h"
 #include "incoming.h"
+#include "clientlist.h"
 #include "config.h"
-
-/*
- *	Check if the given callsign (of given length) belongs to a verified
- *	client.
- */
-
-int is_verified_client_login(char *s, int len)
-{
-	// FIXME: does nothing.
-	return 0;
-}
 
 /*
  *	q_dropcheck contains the last big block of the Q construct algorithm
@@ -148,7 +138,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
 				 */
 				return -2;
 			}
-		} else if (is_verified_client_login(qcallv[i], l)) {
+		} else if (clientlist_check_if_validated_client(qcallv[i], l)) {
 			/* 2) hits: TODO: should dump to a loop log */
 			return -2;
 		}

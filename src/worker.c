@@ -30,6 +30,7 @@
 #include "outgoing.h"
 #include "filter.h"
 #include "dupecheck.h"
+#include "clientlist.h"
 #include "cellmalloc.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
@@ -236,7 +237,8 @@ struct client_udp_t *client_udp_alloc(int fd, int portnum)
 {
 	struct client_udp_t *c;
 	int i;
-
+	
+	/* TODO: hm, could maybe lock a bit later, just before adding to the udpclient list? */
 	i = pthread_mutex_lock(& udpclient_mutex );
 
 	c = hmalloc(sizeof(*c));
@@ -309,6 +311,7 @@ void client_free(struct client_t *c)
 	filter_free(c->userfilters);
 
 	client_udp_free(c->udpclient);
+	clientlist_remove(c);
 
 	memset(c, 0, sizeof(*c));
 

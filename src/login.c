@@ -19,6 +19,7 @@
 #include "incoming.h"
 #include "config.h"
 #include "filter.h"
+#include "clientlist.h"
 
 /*
  *	Parse a command line to argv, not honoring quotes or such
@@ -179,6 +180,9 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	     (c->app_version) ? " ver " : "",
 	     (c->app_version) ? c->app_version : ""
 	);
+	
+	/* add the client to the client list */
+	clientlist_add(c);
 	
 	return 0;
 }

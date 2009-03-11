@@ -13,6 +13,11 @@
   *	verification status. It is updated when clients connect or disconnect,
   *	and lookups are made more often by the Q construct algorithm.
   *
+  *	This list is maintained so that the login handler can find duplicate
+  *	verified logins, and that the Q construct handler can lookup
+  *	verified logins without locking and walking the other worker thread's
+  *	client list.
+  *
   *	TODO: the clientlist should use a hash for quick lookups
   */
 

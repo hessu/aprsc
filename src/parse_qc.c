@@ -28,7 +28,7 @@
 
 #define MAX_Q_CALLS 64
 
-static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size,
+static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			int new_q_len, char q_proto, char q_type, char *q_start,
 			int *q_replace, char *path_end )
 {
@@ -271,10 +271,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		/*
 		 * If the packet entered the server from an UDP port:
 		 * {
-		 *    if a q construct with a single call exists in the packet
+		 *    if a q construct exists in the packet
 		 *        Replace the q construct with ,qAU,SERVERLOGIN
-		 *    else if more than a single call exists after the q construct
-		 *        Invalid header, drop packet as error
 		 *    else
 		 *        Append ,qAU,SERVERLOGIN
 		 *    Quit q processing
@@ -282,17 +280,12 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		 */
 		if (c->udp_port) {
 			fprintf(stderr, "\tUDP packet\n");
-			if (q_proto && q_nextcall_end == *path_end) {
-				/* a q construct with a single call exists in the packet,
+			if (q_proto) {
+				/* a q construct with a exists in the packet,
 				 * Replace the q construct with ,qAU,SERVERLOGIN
 				 */
 				*path_end = q_start;
 				return snprintf(new_q, new_q_size, ",qAU,%s", mycall);
-			} else if (q_proto && q_nextcall_end < *path_end) {
-				/* more than a single call exists after the q construct,
-				 * invalid header, drop the packet as error
-				 */
-				return -1;
 			} else {
 				/* Append ,qAU,SERVERLOGIN */
 				return snprintf(new_q, new_q_size, ",qAU,%s", mycall);
@@ -321,16 +314,17 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 				/* a q construct with a single call exists in the packet,
 				 * Replace the q construct with ,qAX,SERVERLOGIN
 				 */
-				*path_end = q_start;
-				return snprintf(new_q, new_q_size, ",qAX,%s", mycall);
+				*path_end = via_start;
+				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", mycall);
 			} else if (q_proto && q_nextcall_end < *path_end) {
 				/* more than a single call exists after the q construct,
 				 * invalid header, drop the packet as error
 				 */
 				return -1;
 			} else {
-				/* Append ,qAX,SERVERLOGIN */
-				return snprintf(new_q, new_q_size, ",qAX,%s", mycall);
+				/* Append ,qAX,SERVERLOGIN (well, javaprssrvr replaces the via path too) */
+				*path_end = via_start;
+				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", mycall);
 			}
 		}
 		
@@ -341,13 +335,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		 *	if a q construct exists in the packet
 		 *		if the q construct is at the end of the path AND it equals ,qAR,login
 		 *			Replace qAR with qAo
-		 *	else if the path is terminated with ,I
-		 *	{
-		 *		if the path is terminated with ,login,I
-		 *			Replace ,login,I with qAo,login
-		 *		else
-		 *			Replace ,VIACALL,I with qAr,VIACALL
-		 *	}
+		 *      else if the path is terminated with ,login,I
+		 *      	Replace ,login,I with qAo,login
 		 *	else
 		 *		Append ,qAO,login
 		 *	Skip to "All packets with q constructs"
@@ -355,15 +344,14 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		 *
 		 */
 		if (c->validated && (c->flags & CLFLAGS_CLIENTONLY) && !originated_by_client) {
-			// FIXME: what is a "verified client-only connection?"
 			// fprintf(stderr, "\tvalidated client sends sends packet originated by someone else\n");
 			/* if a q construct exists in the packet */
+			int add_qAO = 1;
 			if (q_proto) {
 				// fprintf(stderr, "\thas q construct\n");
 				/* if the q construct is at the end of the path AND it equals ,qAR,login */
 				if (q_proto == 'A' && q_type == 'R' && q_nextcall_end == *path_end) {
 					/* Replace qAR with qAo */
-					q_type = 'o';
 					*(q_start + 3) = 'o';
 					q_type = 'o';
 					// fprintf(stderr, "\treplaced qAR with qAo\n");
@@ -373,6 +361,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 					/* Not going to modify the construct, update pointer to it */
 					*new_q_start = q_start + 1;
 				}
+				add_qAO = 0;
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
 				// fprintf(stderr, "\tpath has ,I in the end\n");
 				/* the path is terminated with ,I - lookup previous callsign in path */
@@ -390,18 +379,12 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 						new_q_len = snprintf(new_q, new_q_size, ",qAo,%s", c->username);
 						q_proto = 'A';
 						q_type = 'o';
-					} else {
-						/* Replace ,VIACALL,I with qAr,VIACALL */
-						*path_end = p;
-						new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", (int)(prevcall_end - prevcall), prevcall);
-						q_proto = 'A';
-						q_type = 'r';
+						add_qAO = 0;
 					}
-				} else {
-					/* Undefined by the algorithm - there was no VIACALL */
-					return -1;
 				}
-			} else {
+			}
+			
+			if (add_qAO) {
 				/* Append ,qAO,login */
 				new_q_len = snprintf(new_q, new_q_size, ",qAO,%s", c->username);
 				q_proto = 'A';
@@ -409,7 +392,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			}
 			
 			/* Skip to "All packets with q constructs" */
-			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+			return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
 		/*
@@ -421,7 +404,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			/* Not going to modify the construct, update pointer to it */
 			*new_q_start = q_start + 1;
 			/* Skip to "All packets with q constructs" */
-			return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+			return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
 		/* At this point we have packets which do not have Q constructs, and
@@ -484,7 +467,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			q_type = 'S';
 		}
 		/* Skip to "All packets with q constructs" */
-		return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+		return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 	}
 	
 	/*
@@ -538,6 +521,6 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 	if (!new_q_len)
 		*new_q_start = q_start + 1;
 	
-	return q_dropcheck(c, new_q, new_q_size, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+	return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 }
 

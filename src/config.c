@@ -431,7 +431,6 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_CLIENTONLY;
 	} else if (strcasecmp(argv[2], "igate") == 0) {
 	  clflags |= CLFLAGS_MESSAGEONLY;
-	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "uplinksim") == 0) {
 	  clflags = CLFLAGS_UPLINKSIM; /* _removes_ INPORT flag! */

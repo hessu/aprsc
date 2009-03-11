@@ -68,6 +68,32 @@ int do_int(int *dest, int argc, char **argv)
 	return 0;
 }
 
+int do_boolean(int *dest, int argc, char **argv)
+{
+	if (argc < 2)
+		return -1;
+	
+	if (strcasecmp(argv[1], "yes") == 0
+		|| strcasecmp(argv[1], "true") == 0
+		|| strcasecmp(argv[1], "on") == 0
+		|| strcasecmp(argv[1], "enable") == 0
+		|| strcasecmp(argv[1], "enabled") == 0) {
+			*dest = 1;
+			return 0;
+	}
+	
+	if (strcasecmp(argv[1], "no") == 0
+		|| strcasecmp(argv[1], "false") == 0
+		|| strcasecmp(argv[1], "off") == 0
+		|| strcasecmp(argv[1], "disable") == 0
+		|| strcasecmp(argv[1], "disabled") == 0) {
+			*dest = 0;
+			return 0;
+	}
+	
+	return -1;
+}
+
  /* ***************************************************************** */
 
 /*

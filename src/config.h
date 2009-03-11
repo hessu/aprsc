@@ -51,6 +51,8 @@ extern int dupefilter_storetime;
 extern int upstream_timeout;
 extern int client_timeout;
 
+extern int disallow_unverified;		/* don't allow unverified clients to transmit packets with srccall != login */
+
 extern int verbose;
 
 extern char *mycall;

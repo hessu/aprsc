@@ -76,6 +76,8 @@ int obuf_size = 32*1024;		/* size of output buffer for clients */
 
 int new_fileno_limit;
 
+int disallow_unverified = 1;		/* don't allow unverified clients to transmit packets with srccall != login */
+
 int verbose;
 
 /* address:port pairs being listened */
@@ -109,6 +111,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peerip",		_CFUNC_ do_peerip,	&new_peerip_config	},
+	{ "disallow_unverified",	_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ NULL,			NULL,			NULL			}
 };
 

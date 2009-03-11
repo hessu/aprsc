@@ -41,12 +41,13 @@ sub txrx($$$$$)
 	&$ok(1, 1, "ok");
 }
 
-sub should_drop($$$$$)
+sub should_drop($$$$$;$)
 {
-	my($ok, $i_tx, $i_rx, $tx, $helper) = @_;
+	my($ok, $i_tx, $i_rx, $tx, $helper, $no_random_drop) = @_;
 	
-	my $drop_key = 'drop.' . int(rand(1000000));
-	my $sent = $i_tx->sendline($tx . ' ' . $drop_key);
+	my $drop_key = '';
+	$drop_key .= ' drop.' . int(rand(1000000)) if (!$no_random_drop);
+	my $sent = $i_tx->sendline($tx . $drop_key);
 	
 	if (!$sent) {
 		&$ok($sent, 1, "Failed to send line to server: '$tx'");

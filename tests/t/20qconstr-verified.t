@@ -79,7 +79,7 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 # (3)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*,IGATE,I:testing (3)",
-	"SRCCALL>DST,DIGI1*,qAr,IGATE:testing (3)");
+	"SRCCALL>DST,DIGI1*,IGATE,I,qAO,$login:testing (3)");
 # (4)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*:testing (4)",

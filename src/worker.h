@@ -319,9 +319,9 @@ struct worker_t {
 	/* packets which have been parsed, waiting to be moved into
 	 * pbuf_incoming
 	 */
-  int pbuf_incoming_local_count; // debug stuff
-  int pbuf_incoming_count;       // debug stuff
-
+	int pbuf_incoming_local_count; // debug stuff
+	int pbuf_incoming_count;       // debug stuff
+	
 	struct pbuf_t *pbuf_incoming_local;
 	struct pbuf_t **pbuf_incoming_local_last;
 	

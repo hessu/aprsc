@@ -47,7 +47,7 @@ struct cellarena_t {
 	int	 createsize;
 
 	int	 cellblocks_count;
-#define CELLBLOCKS_MAX 20
+#define CELLBLOCKS_MAX 40 /* track client cell allocator limit! */
 	char	*cellblocks[CELLBLOCKS_MAX];	/* ref as 'char pointer' for pointer arithmetics... */
 };
 
@@ -94,7 +94,11 @@ int new_cellblock(cellarena_t *ca)
 	cb = mmap( NULL, ca->createsize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
 	close(fd);
 #else
-	cb = mmap( NULL, ca->createsize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+
+#ifndef MAP_ANON
+#  define MAP_ANON 0
+#endif
+	cb = mmap( NULL, ca->createsize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, -1, 0);
 #endif
 	if (cb == NULL || cb == (char*)-1)
 	  return -1;

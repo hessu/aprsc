@@ -105,7 +105,6 @@ void process_outgoing(struct worker_t *self)
 static int process_outgoing_client(struct worker_t *self, struct client_t *c)
 {
 	struct pbuf_t *pb;
-	int e;
 	
 	while ((pb = *c->pbuf_global_prevp)) {
 		c->last_pbuf_seqnum = pb->seqnum;
@@ -168,9 +167,11 @@ static int process_outgoing_client(struct worker_t *self, struct client_t *c)
 }
 
 
-static void process_outgoing(struct worker_t *self)
+void process_outgoing(struct worker_t *self)  // inactive experimental code
 {
 	struct client_t *c, *cnext;
+	struct pbuf_t *pb;
+	int e;
 	
 	if ((e = rwl_rdlock(&pbuf_global_rwlock))) {
 		hlog(LOG_CRIT, "worker: Failed to rdlock pbuf_global_rwlock!");
@@ -185,10 +186,22 @@ static void process_outgoing(struct worker_t *self)
 			continue;
 		if ( c->flags & CLFLAGS_PORT_RO ) // not to r/o ports..
 			continue;
+
+		/* FIXME: these should be at client creation... */
+		if (!c->pbuf_global_prevp)
+			c->pbuf_global_prevp = pbuf_global_prevp;
+		if (!c->pbuf_global_dupe_prevp)
+			c->pbuf_global_dupe_prevp = pbuf_global_dupe_prevp;
+
 		if ( process_outgoing_client(self, c) < 0 )
 			continue; // Maybe the client got destroyed
 		// FIXME: self->pbuf_last_(dupe_)seqnum tracking - largest lag
 	}
+	/* FIXME: Following is WRONG method.. */
+	pb = *self->pbuf_global_prevp;
+	self->last_pbuf_seqnum      = pb ? pb->seqnum : 0;
+	pb = *self->pbuf_global_dupe_prevp;
+	self->last_pbuf_dupe_seqnum = pb ? pb->seqnum : 0;
 
 	if ((e = rwl_rdunlock(&pbuf_global_rwlock))) {
 		hlog(LOG_CRIT, "worker: Failed to rdunlock pbuf_global_rwlock!");

@@ -1033,9 +1033,9 @@ void worker_thread(struct worker_t *self)
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
 		t1 = tick;
 
-		/* if we have new stuff in the global packet buffer, process it */
-		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
-			process_outgoing(self);
+		// /* if we have new stuff in the global packet buffer, process it */
+		// if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
+		// 	process_outgoing(self);
 
 		t2 = tick;
 

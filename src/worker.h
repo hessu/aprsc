@@ -261,8 +261,10 @@ struct client_t {
 	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);
 
 	/* outbound filter chain head */
-	struct filter_t *defaultfilters;
-	struct filter_t *userfilters;
+	struct filter_t *posdefaultfilters;
+	struct filter_t *negdefaultfilters;
+	struct filter_t *posuserfilters;
+	struct filter_t *neguserfilters;
 
 
 	// Maybe we use these four items, or maybe not.

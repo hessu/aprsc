@@ -264,13 +264,14 @@ void client_init(void)
 	client_cells  = cellinit( "clients",
 				  sizeof(struct client_t),
 				  __alignof__(struct client_t), CELLMALLOC_POLICY_FIFO,
-				  2048 /* 2 MB at the time */, 0 /* minfree */ );
+				  4096 /* 4 MB at the time */, 0 /* minfree */ );
+	/* 4 MB arena size -> about 100 clients per single arena
+	   .. with 40 arenas -> 4000 clients max. */
 #endif
 }
 
 struct client_t *client_alloc(void)
 {
-	int i;
 #ifndef _FOR_VALGRIND_
 	struct client_t *c = cellmalloc(client_cells);
 #else
@@ -307,8 +308,10 @@ void client_free(struct client_t *c)
 	if (c->app_version) hfree(c->app_version);
 #endif
 
-	filter_free(c->defaultfilters);
-	filter_free(c->userfilters);
+	filter_free(c->posdefaultfilters);
+	filter_free(c->negdefaultfilters);
+	filter_free(c->posuserfilters);
+	filter_free(c->neguserfilters);
 
 	client_udp_free(c->udpclient);
 	clientlist_remove(c);
@@ -546,6 +549,8 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	*/
 	c->obuf_writes++;
 
+	hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
+
 	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
 		/* Every packet ends with CRLF, but they are not sent over UDP ! */
 		/* Existing system doesn't send keepalives via UDP.. */
@@ -771,10 +776,16 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	for (s = c->ibuf; s < ibuf_end; s++) {
 		if (*s == '\r' || *s == '\n') {
 			/* found EOL */
-			if (s - row_start > 0)
+			if (s - row_start > 0) {
+			  // int ch = *s;
+			  // *s = 0;
+			  // hlog( LOG_DEBUG, "got: %s\n", row_start );
+			  // *s = ch;
+
 			  /* NOTE: handler call CAN destroy the c-> object ! */
 			  if (c->handler(self, c, row_start, s - row_start) < 0)
 			    return -1;
+			}
 			/* skip the rest of EOL (it might have been zeroed by the handler) */
 			while (s < ibuf_end && (*s == '\r' || *s == '\n' || *s == 0))
 				s++;
@@ -996,7 +1007,9 @@ void worker_thread(struct worker_t *self)
 	time_t next_keepalive = tick + 2;
 	char myname[20];
 	struct pbuf_t *p, *pn;
+#if 0
 	time_t next_lag_query = tick + 10;
+#endif
 	time_t t1, t2, t3, t4, t5, t6, t7;
 
 	sprintf(myname,"worker %d", self->id);

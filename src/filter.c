@@ -24,6 +24,8 @@
 #include "cfgfile.h"
 #include "keyhash.h"
 
+// static double rad2deg(double a) { return a * (180.0 * M_1_PI); }
+
 /*
   See:  http://www.aprs-is.net/javaprssrvr/javaprsfilter.htm
 
@@ -973,7 +975,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	const char *filt0 = filt;
 	const char *s;
 	char dummyc;
-	struct filter_t *ff, **ffp;
+	struct filter_t *fp, *fn, *ff, **fff, **ffp, **ffn;
 
 	if (is_user_filter && c && (!(c->flags & CLFLAGS_USERFILTEROK))) {
 		hlog(LOG_DEBUG, "No user-specified filters permitted");
@@ -982,23 +984,34 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 	if (!c) { /* built-in configuration scanning filter parsing */
 		ffp = &f;
+		ffn = &f;
 		f = NULL;
 	} else if (is_user_filter) {
-		ffp = &c->userfilters;
+		ffn = &c->neguserfilters;
+		ffp = &c->posuserfilters;
 	} else {
-		ffp = &c->defaultfilters;
+		ffn = &c->negdefaultfilters;
+		ffp = &c->posdefaultfilters;
 	}
 
-	ff = *ffp;
-	for ( ; ff && ff->h.next; ff = ff->h.next)
+	fp = *ffp;
+	fn = *ffn;
+	for ( ; fp && fp->h.next; fp = fp->h.next)
 	  ;
-	/* ff  points to last so far accumulated filter,
+	for ( ; fn && fn->h.next; fn = fn->h.next)
+	  ;
+	/* f[np]  points to last so far accumulated filter,
 	   if none were previously received, it is NULL.. */
 
 	memset(&f0, 0, sizeof(f0));
 	if (*filt == '-') {
-		f0.h.negation = 1;
+		// f0.h.negation = 1;
 		++filt;
+		ff  = fn;
+		fff = ffn;
+	} else {
+		ff  = fp;
+		fff = ffp;
 	}
 	f0.h.type = *filt;
 
@@ -1059,13 +1072,15 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		f0.h.f_latS = filter_lat2rad(f0.h.f_latS);
 		f0.h.f_lonE = filter_lon2rad(f0.h.f_lonE);
 
+		
+
 		break;
 
 	case 'b':
 	case 'B':
 		/*  b/call1/call2...   Budlist filter (*) */
 
-		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
 		if (i < 0)
 			return i;
 		if (i > 0) /* extended previous */
@@ -1078,7 +1093,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'D':
 		/* d/digi1/digi2...  	Digipeater filter (*)	*/
 
-		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
 		if (i < 0)
 			return i;
 		if (i > 0) /* extended previous */
@@ -1227,7 +1242,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/*  r/lat/lon/dist            Range filter  */
 
 		i = sscanf(filt+1, "/%f/%f/%f",
-			 &f0.h.f_latN, &f0.h.f_lonW, &f0.h.f_dist);
+			 &f0.h.f_latN, &f0.h.f_lonE, &f0.h.f_dist);
 		if (i != 3 || f0.h.f_dist < 0.1) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
@@ -1237,7 +1252,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			hlog(LOG_DEBUG, "Bad filter lat value: %s", filt0);
 			return -2;
 		}
-		if (!(-180.01 < f0.h.f_lonW && f0.h.f_lonW < 180.01)) {
+		if (!(-180.01 < f0.h.f_lonE && f0.h.f_lonE < 180.01)) {
 			hlog(LOG_DEBUG, "Bad filter lon value: %s", filt0);
 			return -2;
 		}
@@ -1245,7 +1260,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		// hlog(LOG_DEBUG, "Filter: %s -> R %.3f %.3f %.3f", filt0, f0.h.f_latN, f0.h.f_lonW, f0.h.f_dist);
 
 		f0.h.f_latN = filter_lat2rad(f0.h.f_latN);
-		f0.h.f_lonW = filter_lon2rad(f0.h.f_lonW);
+		f0.h.f_lonE = filter_lon2rad(f0.h.f_lonE);
 
 		f0.h.f_coslat = cosf( f0.h.f_latN ); /* Store pre-calculated COS of LAT */
 		break;
@@ -1373,7 +1388,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	strcpy(f->textbuf, filt); /* and copy of filter text */
 #endif
 
-	/* hlog(LOG_DEBUG, "parsed filter: t=%c n=%d '%s'", f->h.type, f->h.negation, f->h.text); */
+	hlog(LOG_DEBUG, "parsed filter: t=%c n=%d '%s'", f->h.type, f->h.negation, f->h.text);
 
 	/* link to the tail.. */
 	if (ff)
@@ -1875,6 +1890,8 @@ static int filter_process_one_r(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
 
+	// hlog(LOG_DEBUG, "r: lalo: %.4f %.4f / reflalo: %.4f %.4f / dist: %.2f", rad2deg(lat2),rad2deg(lon2), rad2deg(lat1), rad2deg(lon1), r);
+
 	if (r < f->h.f_dist)  /* Range is less than given limit */
 		return (f->h.negation) ? 2 : 1;
 
@@ -2153,25 +2170,32 @@ static int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filt
 		rc = -1;
 		break;
 	}
-	/* hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc); */
+	hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
 
 	return rc;
 }
 
 int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	struct filter_t *f = c->defaultfilters;
+	struct filter_t *f;
 
+	f = c->negdefaultfilters;
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
 		/* no reports to user about bad filters.. */
 		if (rc > 0)
-			return (rc == 1);
-			/* "2" reply means: "match, but don't pass.." */
+			return rc;
 	}
 
-	f = c->userfilters;
+	f = c->posdefaultfilters;
+	for ( ; f; f = f->h.next ) {
+		int rc = filter_process_one(c, pb, f);
+		/* no reports to user about bad filters.. */
+		if (rc > 0)
+			return rc;
+	}
 
+	f = c->neguserfilters;
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
 		if (rc < 0) {
@@ -2180,9 +2204,21 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 				return rc;
 		}
 		if (rc > 0)
-			return (rc == 1);
-			/* "2" reply means: "match, but don't pass.." */
+			return rc;
 	}
+
+	f = c->posuserfilters;
+	for ( ; f; f = f->h.next ) {
+		int rc = filter_process_one(c, pb, f);
+		if (rc < 0) {
+			rc = client_bad_filter_notify(self, c, f->h.text);
+			if (rc < 0) /* possibly the client got destroyed here! */
+				return rc;
+		}
+		if (rc > 0)
+			return rc;
+	}
+
 	return 0;
 }
 
@@ -2205,15 +2241,20 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	if ( *s == '?' && len == 1 ) {
 		/* Query current filters */
 		int lensum = 0;
-
 		
-		for (f = c->userfilters; f; f = f->h.next) {
+		for (f = c->neguserfilters; f; f = f->h.next) {
+			lensum += 2 + strlen(f->h.text);
+		}
+		for (f = c->posuserfilters; f; f = f->h.next) {
 			lensum += 2 + strlen(f->h.text);
 		}
 
 		p = b = alloca(lensum+20);
 		p += sprintf(b, "# filters: ");
-		for (f = c->userfilters; f; f = f->h.next) {
+		for (f = c->neguserfilters; f; f = f->h.next) {
+			p += sprintf(p, "%s ", f->h.text);
+		}
+		for (f = c->posuserfilters; f; f = f->h.next) {
 			p += sprintf(p, "%s ", f->h.text);
 		}
 		p += sprintf(p, "\r\n");
@@ -2229,22 +2270,30 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	if ( strncasecmp(s, "default", 7) == 0 && len == 7 ) {
 		/* discard any user defined filters that possibly were
 		   injected on this connection.  */
-		f = c->userfilters;
-		c->userfilters = NULL;
+		f = c->neguserfilters;
+		filter_free(f);
+		c->neguserfilters = NULL;
+
+		f = c->posuserfilters;
+		filter_free(f);
+		c->posuserfilters = NULL;
 		// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
 		// FIXME: there is a danger of SEGV-blowing filter processing...
-		filter_free(f);
 		return client_printf(self, c, "# User filters reset to default\r\n");
 	}
 
 	/* new filter definitions to supersede previous ones */
 
 	/* Discard old ones. */
-	f = c->userfilters;
-	c->userfilters = NULL;
+	f = c->neguserfilters;
+	filter_free(f);
+	c->neguserfilters = NULL;
+
+	f = c->posuserfilters;
+	c->posuserfilters = NULL;
+	filter_free(f);
 	// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
 	// FIXME: there is a danger of SEGV-blowing filter processing...
-	filter_free(f);
 
 	b = alloca(len+2);
 	memcpy(b, s, len);

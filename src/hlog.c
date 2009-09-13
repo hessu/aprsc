@@ -221,13 +221,13 @@ int hlog(int priority, const char *fmt, ...)
 	
 	if (log_dest == L_STDERR) {
 		rwl_rdlock(&log_file_lock);
-		fprintf(stderr, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lu] %s: %s\n",
+		fprintf(stderr, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			(log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
 		rwl_rdunlock(&log_file_lock);
 		
 	} else if ((log_dest == L_FILE) && (log_file >= 0)) {
-		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%ld] %s: %s\n",
+		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			       (log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
 		wb[LOG_LEN-1] = 0;

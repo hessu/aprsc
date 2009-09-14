@@ -2184,7 +2184,7 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		int rc = filter_process_one(c, pb, f);
 		/* no reports to user about bad filters.. */
 		if (rc > 0)
-			return rc;
+			return 0; // match on filter - no output on client
 	}
 
 	f = c->posdefaultfilters;
@@ -2204,7 +2204,7 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 				return rc;
 		}
 		if (rc > 0)
-			return rc;
+			return 0; // match on filter - no output on client
 	}
 
 	f = c->posuserfilters;

@@ -22,11 +22,25 @@
 #include "xpoll.h"
 #include "hmalloc.h"
 #include "hlog.h"
+#include "cellmalloc.h"
 
-struct xpoll_t *xpoll_init(void *tp, int (*handler) (struct xpoll_t *xp, struct xpoll_fd_t *xfd))
+#ifndef _FOR_VALGRIND_
+cellarena_t *xpoll_fd_pool;
+#endif
+
+void xpoll_init(void) {
+#ifndef _FOR_VALGRIND_
+	xpoll_fd_pool = cellinit( "xpollfd",
+				  sizeof(struct xpoll_fd_t),
+				  __alignof__(struct xpoll_fd_t),
+				  CELLMALLOC_POLICY_FIFO,
+				  128 /* 128 kB */,
+				  0 /* minfree */ );
+#endif
+}
+
+struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (struct xpoll_t *xp, struct xpoll_fd_t *xfd))
 {
-	struct xpoll_t *xp = hmalloc(sizeof(*xp));
-	
 	xp->fds = NULL;
 	xp->tp = tp;
  	xp->handler = handler;
@@ -34,33 +48,41 @@ struct xpoll_t *xpoll_init(void *tp, int (*handler) (struct xpoll_t *xp, struct 
 #ifdef XP_USE_POLL
 	xp->pollfd_len = XP_INCREMENT;
 	xp->pollfd_used = 0;
-	xp->pollfd = hmalloc(sizeof(*xp->pollfd) * xp->pollfd_len);
+	xp->pollfd = hmalloc(sizeof(struct pollfd) * xp->pollfd_len);
 #endif
 	
 	return xp;
 }
 
-int xpoll_close(struct xpoll_t *xp)
+int xpoll_free(struct xpoll_t *xp)
 {
 	struct xpoll_fd_t *xfd;
 	
 	while (xp->fds) {
 		xfd = xp->fds->next;
+#ifndef _FOR_VALGRIND_
+		cellfree( xpoll_fd_pool, xp->fds );
+#else
 		hfree(xp->fds);
+#endif
 		xp->fds = xfd;
 	}
 
 #ifdef XP_USE_POLL
 	hfree(xp->pollfd);
 #endif
-	
-	hfree(xp);
 	return 0;
 }
 
 struct xpoll_fd_t *xpoll_add(struct xpoll_t *xp, int fd, void *p)
 {
-	struct xpoll_fd_t *xfd = hmalloc(sizeof(*xfd));
+	struct xpoll_fd_t *xfd;
+
+#ifndef _FOR_VALGRIND_
+	xfd = (struct xpoll_fd_t*) cellmalloc( xpoll_fd_pool );
+#else
+	xfd = (struct xpoll_fd_t*) hmalloc(sizeof(struct xpoll_fd_t));
+#endif
 	
 	xfd->fd = fd;
 	xfd->p = p;
@@ -71,10 +93,10 @@ struct xpoll_fd_t *xpoll_add(struct xpoll_t *xp, int fd, void *p)
 	xp->fds = xfd;
 
 #ifdef XP_USE_POLL
-	if (xp->pollfd_used == xp->pollfd_len) {
+	if (xp->pollfd_used >= xp->pollfd_len) {
 		/* make the struct longer */
 		xp->pollfd_len += XP_INCREMENT;
-		xp->pollfd = hrealloc(xp->pollfd, sizeof(*xp->pollfd) * xp->pollfd_len);
+		xp->pollfd = hrealloc(xp->pollfd, sizeof(struct pollfd) * xp->pollfd_len);
 	}
 	/* append the new fd to the struct */
 	xp->pollfd[xp->pollfd_used].fd = fd;
@@ -92,11 +114,13 @@ int xpoll_remove(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 	/* remove the fd from the pollfd struct by moving the tail of the struct
 	 * to the left
 	 */
-	void *to = (void *)xp->pollfd + xfd->pollfd_n * sizeof(struct pollfd);
-	void *from = to + sizeof(struct pollfd);
+    if (xp->pollfd != NULL) {
+	void *to = (char *)xp->pollfd + (xfd->pollfd_n * sizeof(struct pollfd));
+	void *from = (char*)to + sizeof(struct pollfd);
 	int len = (xp->pollfd_used - xfd->pollfd_n - 1) * sizeof(struct pollfd);
 	//hlog(LOG_DEBUG, "xpoll_remove fd %d pollfd_n %d sizeof %d: 0x%x -> 0x%x len %d", xfd->fd, xfd->pollfd_n, sizeof(struct pollfd), (unsigned long)from, (unsigned long)to, len);
 	memmove(to, from, len);
+    }
 	/* reduce pollfd_n for fds which where moved */
 	struct xpoll_fd_t *xf;
 	for (xf = xp->fds; (xf); xf = xf->next)
@@ -111,8 +135,12 @@ int xpoll_remove(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 	if (xfd->next)
 		xfd->next->prevp = xfd->prevp;
 		
+#ifndef _FOR_VALGRIND_
+	cellfree( xpoll_fd_pool, xfd );
+#else
 	hfree(xfd);
-	
+#endif
+
 	return 0;
 }
 

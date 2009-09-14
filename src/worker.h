@@ -311,7 +311,7 @@ struct worker_t {
 	pthread_mutex_t new_clients_mutex;	/* mutex to protect *new_clients */
 	int client_count;			/* modified by worker thread only! */
 	
-	struct xpoll_t *xp;			/* poll/epoll/select wrapper */
+	struct xpoll_t xp;			/* poll/epoll/select wrapper */
 	
 	/* thread-local packet buffer freelist */
 	struct pbuf_t *pbuf_free_small;  /* <= 130 bytes */

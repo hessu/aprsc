@@ -500,8 +500,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 		close(c->fd);
 	
 		/* remove from polling list */
-		if (self->xp)
-			xpoll_remove(self->xp, c->xfd);
+		xpoll_remove(&self->xp, c->xfd);
 
 	}
 
@@ -656,7 +655,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		  // FIXME: WHAT TO DO ?
 		  // USE WBUF_ADJUSTER ?
 		  /* tell the poller that we have outgoing data */
-		  xpoll_outgoing(self->xp, c->xfd, 1);
+		  xpoll_outgoing(&self->xp, c->xfd, 1);
 		  return 0; // but could not write it at this time..
 		}
 		if (i < 0 && len != 0) {
@@ -676,7 +675,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	}
 
 	/* tell the poller that we have outgoing data */
-	xpoll_outgoing(self->xp, c->xfd, 1);
+	xpoll_outgoing(&self->xp, c->xfd, 1);
 	
 	return len; 
 }
@@ -812,7 +811,7 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	if (c->obuf_start == c->obuf_end) {
 		/* there is nothing to write any more */
 		//hlog(LOG_DEBUG, "write: nothing to write on fd %d", c->fd);
-		xpoll_outgoing(self->xp, c->xfd, 0);
+		xpoll_outgoing(&self->xp, c->xfd, 0);
 		c->obuf_start = c->obuf_end = 0;
 		return 0;
 	}
@@ -830,7 +829,7 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	c->obuf_start += r;
 	//hlog(LOG_DEBUG, "write: %d bytes to client fd %d (%s) - %d in obuf", r, c->fd, c->addr_s, c->obuf_end - c->obuf_start);
 	if (c->obuf_start == c->obuf_end) {
-		xpoll_outgoing(self->xp, c->xfd, 0);
+		xpoll_outgoing(&self->xp, c->xfd, 0);
 		c->obuf_start = c->obuf_end = 0;
 	}
 	
@@ -886,7 +885,7 @@ void collect_new_clients(struct worker_t *self)
 	}
 	
 	/* move the new clients to the thread local client list */
-	n = self->xp->pollfd_used;
+	n = self->xp.pollfd_used;
 	while (new_clients) {
 		c = new_clients;
 		new_clients = c->next;
@@ -900,13 +899,13 @@ void collect_new_clients(struct worker_t *self)
 		c->prevp = &self->clients;
 		
 		/* add to polling list */
-		c->xfd = xpoll_add(self->xp, c->fd, (void *)c);
+		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
 
 		/* the new client may end up destroyed right away, never mind it here... */
 		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
 	}
 	hlog( LOG_DEBUG, "Worker %d accepted %d new clients, now total %d",
-	      self->id, self->xp->pollfd_used - n, self->xp->pollfd_used );
+	      self->id, self->xp.pollfd_used - n, self->xp.pollfd_used );
 }
 
 /* 
@@ -1041,7 +1040,7 @@ void worker_thread(struct worker_t *self)
 
 		// TODO: calculate different delay based on outgoing lag ?
 		/* poll for incoming traffic */
-		xpoll(self->xp, 200);
+		xpoll(&self->xp, 200);
 		
 		/* if we have stuff in the local queue, try to flush it and make
 		 * it available to the dupecheck thread
@@ -1081,13 +1080,13 @@ void worker_thread(struct worker_t *self)
 #endif
 	}
 	
-	/* stop polling */
-	xpoll_close(self->xp);
-	self->xp = NULL;
-	
 	/* close all clients */
 	while (self->clients)
 		close_client(self, self->clients);
+	
+	/* stop polling */
+	xpoll_free(&self->xp);
+	memset(&self->xp,0,sizeof(self->xp));
 	
 	/* clean up thread-local pbuf pools */
 
@@ -1186,7 +1185,7 @@ void workers_start(void)
 
 		w->id = i;
 		pthread_mutex_init(&w->new_clients_mutex, NULL);
-		w->xp = xpoll_init((void *)w, &handle_client_event);
+		xpoll_initialize(&w->xp, (void *)w, &handle_client_event);
 		
 		w->pbuf_incoming_local = NULL;
 		w->pbuf_incoming_local_last = &w->pbuf_incoming_local;

@@ -298,6 +298,7 @@ int main(int argc, char **argv)
 	dupecheck_init();
 	historydb_init();
 	client_init();
+	xpoll_init();
 
 	time(&cleanup_tick);
 

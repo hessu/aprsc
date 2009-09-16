@@ -159,7 +159,7 @@ sub connect($;%)
 			$aprs_appid );
 	}
 	
-	warn "login: $s\n";
+	#warn "login: $s\n";
 	if (!$self->{'sock'}->print($s)) {
 		$self->{'error'} = "Failed to write login command to $self->{host_port}: $!";
 		return 0;

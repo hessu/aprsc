@@ -402,7 +402,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	const char *packet_end; /* pointer to the end of the packet */
 	const char *info_start; /* pointer to the beginning of the info */
 	const char *info_end; /* end of the info */
-	char *dstcall_end; /* end of dstcall ([:,]) */
+	char *dstcall_end_or_ssid; /* end of dstcall, before SSID ([-:,]) */
+	char *dstcall_end; /* end of dstcall including SSID ([:,]) */
 	char *via_start; /* start of the digipeater path (after dstcall,) */
 	char *q_start = NULL; /* start of the Q construct (points to the 'q') */
 	int q_replace = 0; /* whether the existing Q construct is replaced */
@@ -457,6 +458,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 
 	dstcall_end = path_start;
 	while (dstcall_end < path_end && *dstcall_end != '-' && *dstcall_end != ',' && *dstcall_end != ':')
+		dstcall_end++;
+	dstcall_end_or_ssid = dstcall_end; // OK, SSID is here (or the dstcall end), go for the real end
+	while (dstcall_end < path_end && *dstcall_end != ',' && *dstcall_end != ':')
 		dstcall_end++;
 	
 	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
@@ -551,6 +555,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->srcname = pb->data;
 	pb->srcname_len = src_end - s;
 	pb->srccall_end = pb->data + (src_end - s);
+	pb->dstcall_end_or_ssid = pb->data + (dstcall_end_or_ssid - s);
 	pb->dstcall_end = pb->data + (dstcall_end - s);
 	pb->dstcall_len = via_start - src_end - 1;
 	pb->info_start  = info_start;

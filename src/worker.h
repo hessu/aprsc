@@ -110,7 +110,8 @@ struct pbuf_t {
 	int buf_len;		/* the length of this buffer */
 	
 	const char *srccall_end;   /* source callsign with SSID */
-	const char *dstcall_end;   /* end of dest callsign SSID */
+	const char *dstcall_end_or_ssid;   /* end of dest callsign (without SSID) */
+	const char *dstcall_end;   /* end of dest callsign with SSID */
 	const char *qconst_start;  /* "qAX,incomingSSID:"	-- for q and e filters  */
 	const char *info_start;    /* pointer to start of info field */
 	const char *srcname;       /* source's name (either srccall or object/item name) */

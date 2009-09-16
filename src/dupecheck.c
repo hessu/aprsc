@@ -315,7 +315,7 @@ static int dupecheck(struct pbuf_t *pb)
 
 	// 1) collect canonic rep of the packet
 	addr    = pb->data;
-	addrlen = pb->dstcall_end - addr;
+	addrlen = pb->dstcall_end_or_ssid - addr;
 
 	data    = pb->info_start;
 	datalen = pb->packet_len - (data - pb->data);

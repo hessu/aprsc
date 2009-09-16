@@ -21,12 +21,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <ctype.h>
 
 #include "parse_aprs.h"
 #include "hlog.h"
 #include "filter.h"
 #include "historydb.h"
 
+#define DEBUG_PARSE_APRS 1
 #ifdef DEBUG_PARSE_APRS
 #define DEBUG_LOG(a) { hlog(LOG_DEBUG, a); }
 #else
@@ -104,6 +106,207 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 }
 
 /*
+ *	Parse symbol from destination callsign
+ */
+
+int get_symbol_from_dstcall_twochar(const char c1, const char c2, char *sym_table, char *sym_code)
+{
+	//hlog(LOG_DEBUG, "\ttwochar %c %c", c1, c2);
+	if (c1 == 'B') {
+		if (c2 >= 'B' && c2 <= 'P') {
+			*sym_table = '/';
+			*sym_code = c2 - 'B' + '!';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'P') {
+		if (c2 >= '0' && c2 <= 9) {
+			*sym_table = '/';
+			*sym_code = c2;
+			return 1;
+		}
+		if (c2 >= 'A' && c2 <= 'Z') {
+			*sym_table = '/';
+			*sym_code = c2;
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'M') {
+		if (c2 >= 'R' && c2 <= 'X') {
+			*sym_table = '/';
+			*sym_code = c2 - 'R' + ':';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'H') {
+		if (c2 >= 'S' && c2 <= 'X') {
+			*sym_table = '/';
+			*sym_code = c2 - 'S' + '[';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'L') {
+		if (c2 >= 'A' && c2 <= 'Z') {
+			*sym_table = '/';
+			*sym_code = c2 - 'A' + 'a';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'J') {
+		if (c2 >= '1' && c2 <= '4') {
+			*sym_table = '/';
+			*sym_code = c2 - '1' + '{';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'O') {
+		if (c2 >= 'B' && c2 <= 'P') {
+			*sym_table = '\\';
+			*sym_code = c2 - 'B' + '!';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'A') {
+		if (c2 >= '0' && c2 <= '9') {
+			*sym_table = '\\';
+			*sym_code = c2;
+			return 1;
+		}
+		if (c2 >= 'A' && c2 <= 'Z') {
+			*sym_table = '\\';
+			*sym_code = c2;
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'N') {
+		if (c2 >= 'R' && c2 <= 'X') {
+			*sym_table = '\\';
+			*sym_code = c2 - 'R' + ':';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'D') {
+		if (c2 >= 'S' && c2 <= 'X') {
+			*sym_table = '\\';
+			*sym_code = c2 - 'S' + '[';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'S') {
+		if (c2 >= 'A' && c2 <= 'Z') {
+			*sym_table = '\\';
+			*sym_code = c2 - 'A' + 'a';
+			return 1;
+		}
+		return 0;
+	}
+	
+	if (c1 == 'Q') {
+		if (c2 >= '1' && c2 <= '4') {
+			*sym_table = '\\';
+			*sym_code = c2 - '1' + '{';
+			return 1;
+		}
+		return 0;
+	}
+	
+	return 0;
+}
+
+int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym_code)
+{
+	const char *d_start;
+	char type;
+	char overlay;
+	int sublength;
+	int numberid;
+	
+	/* check that the destination call exists and is of the right size for symbol */
+	d_start = pb->srccall_end+1;
+	if (pb->dstcall_end_or_ssid - d_start < 5)
+		return 0; /* too short */
+	
+	/* length of the parsed string */
+	sublength = pb->dstcall_end_or_ssid - d_start - 3;
+	if (sublength > 3)
+		sublength = 3;
+	
+#ifdef DEBUG_PARSE_APRS
+	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s (%d)", (int)(pb->dstcall_end_or_ssid - d_start), d_start, sublength);
+#endif
+	
+	if (strncmp(d_start, "GPS", 3) != 0 && strncmp(d_start, "SPC", 3) != 0 && strncmp(d_start, "SYM", 3) != 0)
+		return 0;
+	
+	// hlog(LOG_DEBUG, "\ttesting %c %c %c", d_start[3], d_start[4], d_start[5]);
+	if (!isalnum(d_start[3]) || !isalnum(d_start[4]))
+		return 0;
+	
+	if (sublength == 3 && !isalnum(d_start[5]))
+		return 0;
+	
+	type = d_start[3];
+	
+	if (sublength == 3) {
+		if (type == 'C' || type == 'E') {
+			if (!isdigit(d_start[4]))
+				return 0;
+			if (!isdigit(d_start[5]))
+				return 0;
+			numberid = (d_start[4] - 48) * 10 + (d_start[5] - 48);
+			
+			*sym_code = numberid + 32;
+			if (type == 'C')
+				*sym_table = '/';
+			else
+				*sym_table = '\\';
+		
+#ifdef DEBUG_PARSE_APRS
+			hlog(LOG_DEBUG, "\tnumeric symbol id in dstcall: %.*s: table %c code %c",
+				(int)(pb->dstcall_end_or_ssid - d_start - 3), d_start + 3, *sym_table, *sym_code);
+#endif
+			return 1;
+		} else {
+			/* secondary symbol table, with overlay
+			 * Check first that we really are in the secondary symbol table
+			 */
+			overlay = d_start[5];
+			if ((type == 'O' || type == 'A' || type == 'N' ||
+				type == 'D' || type == 'S' || type == 'Q')
+				&& isalnum(overlay)) {
+				return get_symbol_from_dstcall_twochar(d_start[3], d_start[4], sym_table, sym_code);
+			}
+			return 0;
+		}
+	} else {
+		// primary or secondary table, no overlay
+		return get_symbol_from_dstcall_twochar(d_start[3], d_start[4], sym_table, sym_code);
+	}
+	
+	return 0;
+}
+
+/*
  *	Parse NMEA position packets.
  */
 
@@ -113,6 +316,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	const char *latp, *lngp;
 	int i, la, lo;
 	char lac, loc;
+	char sym_table, sym_code;
 	
 	if (memcmp(body,"ULT",3) == 0) {
 		/* Ah..  "$ULT..." - that is, Ultimeter 2000 weather instrument */
@@ -337,11 +541,17 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	
 	pb->packettype |= T_POSITION;
 	
-	// FIXME: Symbol ???
+	// Parse symbol from destination callsign
+	get_symbol_from_dstcall(pb, &sym_table, &sym_code);
+#ifdef DEBUG_PARSE_APRS
+	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s => %c%c",
+		 (int)(pb->dstcall_end_or_ssid - pb->srccall_end-1), pb->srccall_end+1, sym_table, sym_code);
+#endif
+	
 	// -- practically all SSIDs are used in source addresses,
 	//    including zero.
 
-	return pbuf_fill_pos(pb, lat, lng, 0, 0);
+	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 
 static int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *body_end)
@@ -379,7 +589,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	
 	/* check that the destination call exists and is of the right size for mic-e */
 	d_start = pb->srccall_end+1;
-	if (pb->dstcall_end - d_start != 6)
+	if (pb->dstcall_end_or_ssid - d_start != 6)
 		return 0; /* eh...? */
 	
 	/* validate destination call:

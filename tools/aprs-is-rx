@@ -9,8 +9,23 @@ select STDOUT; $| = 1;
 
 my $quit = 0;
 my $APRSIS;
-my $filter = undef;
-my $mycall = 'OH2MQK-RR';
+
+my @args;
+my $timestamp = 0;
+my $filter;
+foreach my $arg (@ARGV) {
+    if ($arg eq '-t') {
+        $timestamp = 1;
+    } elsif ($arg eq '-f') {
+        $filter = shift @ARGV;
+    } else {
+        push @args, $arg;
+    }
+}
+
+my($mycall, $server) = @args;
+
+#my $mycall = 'OH2MQK-RR';
 #$filter = 'p/OH2R -p/OH2 p/OH ';
 #$filter = 'p/OH2R';
 #$filter = 't/c*'; #'p/OH';
@@ -20,11 +35,19 @@ my $mycall = 'OH2MQK-RR';
 #$APRSIS = APRS::IS->new('finland.aprs2.net:10152u', $mycall, $filter);
 #$APRSIS = APRS::IS->new('finland.aprs2.net:14580u', $mycall, $filter);
 #$APRSIS = APRS::IS->new('rotate.aprs.net:23', $mycall, $filter);
-$APRSIS = APRS::IS->new('first.aprs.net:10152u', $mycall, $filter );
+#$APRSIS = APRS::IS->new('first.aprs.net:10152u', $mycall, $filter );
 #$APRSIS = APRS::IS->new('first.aprs.net:24579', $mycall, undef );
 #$APRSIS = APRS::IS->new('localhost:10152u', $mycall, $filter );
 #$APRSIS = APRS::IS->new('localhost:14580', $mycall, $filter );
 #$APRSIS = APRS::IS->new('localhost:14580u', $mycall, $filter );
+
+if (!defined $mycall || !defined $server) {
+    warn "Usage: aprs-is-rx [-t] [-f <filter>] <mycall> <server>\n"
+        . "\t-t\ttimestamp received packets\n";
+    exit 1;
+}
+
+$APRSIS = APRS::IS->new($server, $mycall, $filter);
 
 if (!defined($APRSIS)) {
     printf "aprsazel: Failed to open APRS-IS socket!\n";
@@ -60,7 +83,11 @@ sub mux_input {
 	# Process each line in the input, leaving partial lines
 	# in the input buffer
 	while ($$data =~ s/^(.*?)\n//) {
-	    printf "%d\t%s\n", time, $1;
+	    if ($timestamp) {
+	        printf "%d\t%s\n", time, $1;
+            } else {
+	        print "$1\n";
+            }
 	}
     }
 

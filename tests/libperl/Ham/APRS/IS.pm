@@ -239,7 +239,7 @@ sub getline_noncomment($;$)
 	my($self, $timeout) = @_;
 	
 	return undef if ($self->{'state'} ne 'connected');
-	while (my $l = $self->getline()) {
+	while (my $l = $self->getline($timeout)) {
 		return $l if !defined $l;
 		return $l if ($l !~ /^#/);
 	}
@@ -282,7 +282,7 @@ sub aprspass($)
 {
 	my($call) = @_;
 	
-	$call =~ s/-\d+$//;
+	$call =~ s/-([^\-]+)$//;
 	$call = uc($call);
 	
 	my ($a, $h) = (0, 0);

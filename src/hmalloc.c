@@ -11,8 +11,6 @@
 /*
  *	Replacements for malloc, realloc and free, which never fail,
  *	and might keep statistics on memory allocation...
- *
- *	GPL'ed, by Heikki Hannikainen <hessu@hes.iki.fi>
  */
 
 #include <pthread.h>

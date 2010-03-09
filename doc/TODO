@@ -1,3 +1,4 @@
 
 - (re)configuring filter using an APRS message
+- "#filter" from the client should be parsed, too, after login
 

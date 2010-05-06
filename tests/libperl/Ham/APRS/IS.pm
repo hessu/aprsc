@@ -184,6 +184,22 @@ sub connect($;%)
 	return 1;
 }
 
+=head1 connected()
+
+Checks whether we're connected currently. Returns 1 for connected, 0 for not connected.
+
+=cut
+
+sub connected($)
+{
+	my($self) = @_;
+	
+	return 1 if $self->{'state'} eq 'connected';
+	return 0;
+}
+
+
+
 # -------------------------------------------------------------------------
 # Get a line (blocking)
 

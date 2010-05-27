@@ -1026,6 +1026,8 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	
 	/* length of the info field: length of the packet - length of header - CRLF */
 	paclen = pb->packet_len - (pb->info_start - pb->data) - 2;
+	if (paclen < 1) return 0; /* Empty frame */
+
 	/* Check the first character of the packet and determine the packet type */
 	packettype = *pb->info_start;
 	
@@ -1134,7 +1136,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			int i;
 			struct history_cell_t *history;
 
-			p = body+1;
+			p = body;
 			for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
 				keybuf[i] = *p;
 				// the recipient address is space padded

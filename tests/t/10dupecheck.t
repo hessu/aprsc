@@ -9,10 +9,15 @@ use istest;
 use Ham::APRS::IS;
 ok(1); # If we made it this far, we're ok.
 
+# initialize and start the product up
 my $p = new runproduct('basic');
 
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
+
+# create two connections to the server:
+# - i_tx for transmitting packets
+# - i_rx for receiving packets
 
 my $login = "N0CALL-1";
 my $server_call = "TESTING";
@@ -32,12 +37,19 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
 my $data = 'foo';
 
-# first, send a packet and see that it goes through
+# First, send a non-APRS packet and see that it goes through.
+#
+# istest::txrx( $okref, $transmit_connection, $receive_connection,
+#	$transmitted_line, $expected_line_on_rx );
+#
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,qAR:$data",
 	"SRC>DST,qAS,$login:$data");
 
-# send the same packet again and see that it is dropped
+# Send the same packet again immediately and see that it is dropped.
+# The 1 in as the 6th parameter means that the dummy helper packet is
+# also transmitted after the second packet, and that it is the only
+# packet which should come out.
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST,qAR:$data", # should drop
 	"SRC>DST:dummy", 1); # will pass (helper packet)
@@ -58,7 +70,7 @@ istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST,$login,I:$data", # should drop
 	"SRC>DST:dummy", 1); # will pass (helper packet)
 
-# send the same packet with additional whitespace in the end, should pass
+# send the same packet with additional whitespace in the end, should pass umodified
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,$login,I:$data  ",
 	"SRC>DST,qAR,$login:$data  ");

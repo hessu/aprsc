@@ -23,8 +23,8 @@ my %products = (
 		'cfgdir' => 'cfg-aprsc'
 	},
 	'javap' => {
-		'binary' => '/usr/bin/java',
-		'stdargs' => '-server -cp ../../../javaprssrvr/javAPRSSrvr.jar javAPRSSrvr',
+		'binary' => './javaprssrvr/java',
+		'stdargs' => '-server -cp ./javaprssrvr/javAPRSSrvr.jar javAPRSSrvr',
 		'cfgfileargs' => '',
 		'cfgdir' => 'cfg-javap',
 		'dieswith' => 15,

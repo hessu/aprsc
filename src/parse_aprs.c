@@ -669,16 +669,30 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	if (d_start[3] <= 0x4c)
 		lat = 0 - lat;
 	
-	/* Decode the longitude, the first three bytes of the body after the data
-	 * type indicator. First longitude degrees, remember the longitude offset.
+	/* Decode the longitude, the first three bytes of the body
+	 * after the data type indicator. First longitude degrees,
+	 * remember the longitude offset.
 	 */
+	
+	/* F4FXL fixe starts here */
+
+	// sub 28 and offset
 	lng_deg = body[0] - 28;
-	if (body[4] >= 0x50)
+
+	// Degrees offset depending on encoded character
+	if ((118 <= body[0] && body[0] <= 127) ||
+	    (108 <= body[0] && body[0] <= 117) ||
+	    ( 38 <= body[0] && body[0] <= 107)) {
+
 		lng_deg += 100;
-	if (lng_deg >= 180 && lng_deg <= 189)
+	}
+
+	if (180 <= lng_deg && lng_deg <= 189) { // act like desscribed in the specs !
 		lng_deg -= 80;
-	else if (lng_deg >= 190 && lng_deg <= 199)
+	} else if (190 <= lng_deg && lng_deg <= 199) {
 		lng_deg -= 190;
+	}
+	/* F4FXL fixe ends here */
 	
 	/* Decode the longitude minutes */
 	lng_min = body[1] - 28;

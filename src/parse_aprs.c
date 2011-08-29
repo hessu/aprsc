@@ -97,7 +97,7 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 
 	/* Pre-calculations for A/R/F/M-filter tests */
 	pb->lat     = filter_lat2rad(lat);  /* deg-to-radians */
-	pb->cos_lat = cosf(lat);            /* used in range filters */
+	pb->cos_lat = cosf(pb->lat);        /* used in range filters */
 	pb->lng     = filter_lon2rad(lng);  /* deg-to-radians */
 	
 	pb->flags |= F_HASPOS;	/* the packet has positional data */
@@ -503,7 +503,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		   memcmp(body, "GPVTG,", 6) == 0 ||
 		   memcmp(body, "GPGSV,", 6) == 0) {
 		/* Recognized but ignored */
-		return 0;
+		return 1;
 #endif
 	}
 	
@@ -547,9 +547,6 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s => %c%c",
 		 (int)(pb->dstcall_end_or_ssid - pb->srccall_end-1), pb->srccall_end+1, sym_table, sym_code);
 #endif
-	
-	// -- practically all SSIDs are used in source addresses,
-	//    including zero.
 
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
@@ -663,7 +660,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 		DEBUG_LOG("\tsscanf failed");
 		return 0;
 	}
-	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 100.0 / 60.0;
+	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 6000.0;
 	
 	/* check the north/south direction and correct the latitude if necessary */
 	if (d_start[3] <= 0x4c)
@@ -707,12 +704,12 @@ static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body
 	case 0:
 		/* use everything */
 		lng = (float)lng_deg + (float)lng_min / 60.0
-			+ (float)lng_min_frag / 100.0 / 60.0;
+			+ (float)lng_min_frag / 6000.0;
 		break;
 	case 1:
 		/* ignore last number of lng_min_frag */
 		lng = (float)lng_deg + (float)lng_min / 60.0
-			+ (float)(lng_min_frag - lng_min_frag % 10 + 5) / 100.0 / 60.0;
+			+ (float)(lng_min_frag - lng_min_frag % 10 + 5) / 6000.0;
 		break;
 	case 2:
 		/* ignore lng_min_frag */
@@ -783,18 +780,24 @@ static int parse_aprs_compressed(struct pbuf_t *pb, const char *body, const char
 	// fprintf(stderr, "\tpassed length and format checks, sym %c%c\n", sym_table, sym_code);
 	
 	/* decode */
-	lat1 = body[1] - 33;
-	lat2 = body[2] - 33;
-	lat3 = body[3] - 33;
-	lat4 = body[4] - 33;
-	lng1 = body[5] - 33;
-	lng2 = body[6] - 33;
-	lng3 = body[7] - 33;
-	lng4 = body[8] - 33;
-	
+	lat1 = (body[1] - 33);
+	lat2 = (body[2] - 33);
+	lat3 = (body[3] - 33);
+	lat4 = (body[4] - 33);
+
+	lat1 = ((((lat1 * 91) + lat2) * 91) + lat3) * 91 + lat4;
+
+	lng1 = (body[5] - 33);
+	lng2 = (body[6] - 33);
+	lng3 = (body[7] - 33);
+	lng4 = (body[8] - 33);
+
+	lng1 = ((((lng1 * 91) + lng2) * 91) + lng3) * 91 + lng4;
+
 	/* calculate latitude and longitude */
-	lat = 90.0 - ((double)(lat1 * 91 * 91 * 91 + lat2 * 91 * 91 + lat3 * 91 + lat4) / (double)380926.0);
-	lng = -180.0 + ((double)(lng1 * 91 * 91 * 91 + lng2 * 91 * 91 + lng3 * 91 + lng4) / (double)190463.0);
+
+	lat =   90.0F - ((float)(lat1) / 380926.0F);
+	lng = -180.0F + ((float)(lng1) / 190463.0F);
 	
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
@@ -864,8 +867,8 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	if (lat_deg > 89 || lng_deg > 179)
 		return 0; /* too large values for lat/lng degrees */
 	
-	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 100.0 / 60.0;
-	lng = (float)lng_deg + (float)lng_min / 60.0 + (float)lng_min_frag / 100.0 / 60.0;
+	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 6000.0;
+	lng = (float)lng_deg + (float)lng_min / 60.0 + (float)lng_min_frag / 6000.0;
 	
 	/* Finally apply south/west indicators */
 	if (issouth)

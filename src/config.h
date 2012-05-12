@@ -107,7 +107,14 @@ struct uplink_config_t {
 	const char *filters[10];		/* up to 10 filters, NULL when not defined */
 
 	int client_flags;
+	int state;				/* the state of the uplink */
 };
+
+#define UPLINK_ST_UNKNOWN	-1
+#define UPLINK_ST_NOT_LINKED	0
+#define UPLINK_ST_CONNECTING	1
+#define UPLINK_ST_CONNECTED	2
+#define UPLINK_ST_LINKED	3
 
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;

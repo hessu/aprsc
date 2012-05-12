@@ -434,23 +434,23 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* look for the '>' */
 	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
 	if (!src_end)
-		return -1;	// No ">" in packet start..
+		return -2;	// No ">" in packet start..
 	
 	path_start = src_end+1;
 	if (path_start >= packet_end)
-		return -1;
+		return -3;
 	
 	if (src_end - s > CALLSIGNLEN_MAX || src_end - s < CALLSIGNLEN_MIN)
-		return -1; /* too long source callsign */
+		return -4; /* too long source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
 	if (info_start >= packet_end)
-		return -1;
+		return -5;
 	
 	/* see that there is at least some data in the packet */
 	info_end = packet_end;
 	if (info_end <= info_start)
-		return -1;
+		return -6;
 	
 	/* look up end of dstcall (excluding SSID - this is the way dupecheck and
 	 * mic-e parser wants it)
@@ -464,7 +464,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		dstcall_end++;
 	
 	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
-		return -1; /* too long for destination callsign */
+		return -7; /* too long for destination callsign */
 	
 	/* where does the digipeater path start? */
 	via_start = dstcall_end;
@@ -478,8 +478,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* if disallow_unverified is anabled, don't allow unverified clients
 	 * to send packets where srccall != login
 	 */
-	if (!c->validated && !originated_by_client && disallow_unverified)
-		return -1;
+	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))
+		return -8;
 	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
@@ -499,7 +499,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (!pb) {
 		// This should never happen...
 		hlog(LOG_INFO, "pbuf_get failed to get a block");
-		return -1; // No room :-(
+		return -9; // No room :-(
 	}
 	pb->next = NULL; // pbuf arrives pre-zeroed
 	
@@ -530,7 +530,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
 		fprintf(stderr, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
-		return -1;
+		return -10;
 	}
 	
 	/* Copy the modified or appended part of the packet header -- qcons */
@@ -560,7 +560,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->dstcall_len = via_start - src_end - 1;
 	pb->info_start  = info_start;
 	
-	// hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
+	//hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
 	
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
@@ -628,9 +628,9 @@ int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, char *
 		
 		/* failed parsing */
 		if (e == -42)
-			hlog(LOG_DEBUG, "Packet too short (%d): %.*s", len, len, s);
+			hlog(LOG_DEBUG, "Uplinksim: Packet too short (%d): %.*s", len, len, s);
 		else
-			hlog(LOG_DEBUG, "Failed parsing (%d): %.*s",e,len,s);
+			hlog(LOG_DEBUG, "Uplinksim: Failed parsing (%d): %.*s",e,len,s);
 	}
 	
 	return 0;

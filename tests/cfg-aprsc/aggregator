@@ -1,0 +1,73 @@
+#
+# USE RCS !!!
+# $Id$
+#
+
+# Configuration for aprsc, an APRS-IS server for core servers
+
+MyCall     TESTING
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+# Log directory
+LogDir logs
+
+### Intervals #########
+# Interval specification format examples:
+# 600 (600 seconds), 5m, 2h, 1h30m, 1d3h15m24s, etc...
+
+# Statistics logging
+StatsInterval	1m
+
+# How often to scan the caches for old entries
+ExpiryInterval	30s
+
+# How long to cache last position of each station
+LastPositionCache	48h
+
+# How long to cache duplicate filter entries (practically all packets)
+DupeFilterCache	    	30s
+
+# When no data is received from an upstream server in N seconds, switch to
+# another server
+UpstreamTimeout		10s
+
+# When no data is received from a downstream server in N seconds, disconnect
+ClientTimeout		48h
+
+### TCP listener ##########
+# Listen <socketname> <porttype> tcp <address to bind> <port>
+#	socketname: any name you wish to show up in logs and statistics
+#	porttype: one of:
+#		fullfeed - everything, after dupe filtering
+#		dupefeed - everything that comes in - with dupes!
+#		msgonly - messages only
+#		userfilter - user-specified filters
+#
+Listen "Messages only"                            messageonly tcp 0.0.0.0   1314   t/m
+Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152   t/c*
+Listen "Igate port"                               igate       tcp 0.0.0.0  14580
+Listen "Client-only port"                         clientonly  tcp 0.0.0.0  14581
+
+Uplink full1 multiro tcp 127.0.0.1 10153
+Uplink full2 multiro tcp 127.0.0.1 10154
+
+### Internals ############
+# Only use 3 threads in these basic tests, to keep startup/shutdown times
+# short.
+WorkerThreads 3
+
+# When running this server as super-user, the server can (in many systems)
+# increase several resource limits, and do other things that less privileged
+# server can not do.
+#
+# The FileLimit is resource limit on how many simultaneous connections and
+# some other internal resources the system can use at the same time.
+# If the server is not being run as super-user, this setting has no effect.
+#
+FileLimit        10000
+

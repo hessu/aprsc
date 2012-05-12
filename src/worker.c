@@ -728,7 +728,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	char *row_start;
 
 	if (c->fd < 0) {
-		hlog(LOG_DEBUG, "client no longer alive, closing (%s)", c->fd, c->addr_s);
+		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_s);
 		close_client(self, c);
 		return -1;
 	}
@@ -738,7 +738,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 
 	if (r == 0) {
-		hlog( LOG_DEBUG, "read: EOF from client fd %d (%s @ %s)",
+		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
 		      c->fd, c->addr_s, c->addr_ss );
 		close_client(self, c);
 		return -1;
@@ -747,7 +747,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		if (errno == EINTR || errno == EAGAIN)
 			return 0; /* D'oh..  return again latter */
 
-		hlog( LOG_DEBUG, "read: Error from client fd %d (%s): %s",
+		hlog( LOG_DEBUG, "read: Error from socket fd %d (%s): %s",
 		      c->fd, c->addr_s, strerror(errno));
 		hlog( LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d",
 		      c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
@@ -821,13 +821,13 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 		if (errno == EINTR || errno == EAGAIN)
 			return 0;
 
-		hlog(LOG_DEBUG, "write: Error from client fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
+		hlog(LOG_DEBUG, "write: Error from socket fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
 		close_client(self, c);
 		return -1;
 	}
 	
 	c->obuf_start += r;
-	//hlog(LOG_DEBUG, "write: %d bytes to client fd %d (%s) - %d in obuf", r, c->fd, c->addr_s, c->obuf_end - c->obuf_start);
+	//hlog(LOG_DEBUG, "write: %d bytes to socket fd %d (%s) - %d in obuf", r, c->fd, c->addr_s, c->obuf_end - c->obuf_start);
 	if (c->obuf_start == c->obuf_end) {
 		xpoll_outgoing(&self->xp, c->xfd, 0);
 		c->obuf_start = c->obuf_end = 0;

@@ -32,12 +32,13 @@
 #include "filter.h"
 #include "passcode.h"
 
+#define MAX_UPLINKS 32
 
 int uplink_reconfiguring;
 int uplink_shutting_down;
 
 pthread_mutex_t uplink_client_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct client_t *uplink_client;
+struct client_t *uplink_client[MAX_UPLINKS];
 
 int uplink_running;
 pthread_t uplink_th;
@@ -68,23 +69,28 @@ int uplink_sighandler(int signum)
 }
 
 /*
- *	Open the uplinking socket
+ *	Close uplinking sockets
  */
 
 void close_uplinkers(void)
 {
 	int rc;
+	
+	hlog(LOG_INFO, "Closing all uplinks");
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog( LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc) );
 		return;
 	}
-
-	if (uplink_client && uplink_client->fd >= 0) {
-		hlog( LOG_DEBUG, "Closing uplinking socket .. fd %d ...", uplink_client->fd );
-		shutdown(uplink_client->fd, SHUT_RDWR);
+	
+	int i;
+	for (i = 0; i < MAX_UPLINKS; i++) {
+		if ((uplink_client[i]) && uplink_client[i]->fd >= 0) {
+			hlog( LOG_DEBUG, "Closing uplinking socket %d (fd %d) %s ...", i, uplink_client[i]->fd, uplink_client[i]->addr_ss );
+			shutdown(uplink_client[i]->fd, SHUT_RDWR);
+		}
 	}
-
+	
 	if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
 		hlog( LOG_ERR, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc) );
 		return;
@@ -96,7 +102,7 @@ void uplink_close(struct client_t *c)
 {
 	int rc;
 
-	hlog(LOG_DEBUG, "Uplink socket has been closed.");
+	hlog(LOG_DEBUG, "Uplink to %s has been closed.", c->addr_ss);
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -105,7 +111,7 @@ void uplink_close(struct client_t *c)
 
 	-- uplink_connects.gauge;
 
-	uplink_client = NULL; // there can be only one!
+	uplink_client[c->uplink_index] = NULL; // there can be only one!
 
 	if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc));
@@ -120,9 +126,9 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	char buf[1000];
 	int passcode, rc;
 
-
 #ifndef FIXED_IOBUFS
-	if (!c->username) c->username = hstrdup("simulator");
+	if (!c->username)
+		c->username = hstrdup("simulator");
 #else
 	if (!*c->username)
 		strcpy(c->username, "simulator");
@@ -155,6 +161,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 int make_uplink(struct uplink_config_t *l)
 {
 	int fd, i, arg;
+	int uplink_index;
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len;
@@ -172,7 +179,17 @@ int make_uplink(struct uplink_config_t *l)
 	req.ai_protocol = IPPROTO_TCP;
 	req.ai_flags    = 0;
 	ai = NULL;
-
+	
+	/* find a free uplink slot */
+	for (uplink_index = 0; uplink_index < MAX_UPLINKS; uplink_index++) {
+		if (!uplink_client[uplink_index])
+			break;
+	}
+	if (uplink_index == MAX_UPLINKS) {
+		hlog(LOG_ERR, "Uplink: No available uplink slots, %d used", MAX_UPLINKS);
+		return -2;
+	}
+	
 	if (strcasecmp(l->proto, "tcp") == 0) {
 		// well, do nothing for now.
 	} else if (strcasecmp(l->proto, "udp") == 0) {
@@ -194,12 +211,13 @@ int make_uplink(struct uplink_config_t *l)
 		return -2;
 	}
 
+	l->state = UPLINK_ST_CONNECTING;
 	i = getaddrinfo(l->host, l->port, &req, &ai);
 	if (i != 0) {
-		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'",l->host,l->port);
+		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'", l->host, l->port);
+		l->state = UPLINK_ST_NOT_LINKED;
 		return i;
 	}
-
 
 	i = 0;
 	for (a = ai; a && i < 20 ; a = a->ai_next, ++i) {
@@ -224,8 +242,7 @@ int make_uplink(struct uplink_config_t *l)
 		// FIXME: format socket IP address to text
 		sprintf(addr_s, "%s:%s", l->host, l->port);
 
-
-		hlog(LOG_INFO, "Making uplink TCP socket: %s  %s", l->host, l->port);
+		hlog(LOG_INFO, "Uplink: Connecting to %s:%s", l->host, l->port);
 	
 		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
 			hlog(LOG_CRIT, "Uplink: socket(): %s\n", strerror(errno));
@@ -234,24 +251,72 @@ int make_uplink(struct uplink_config_t *l)
 
 		arg = 1;
 		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
-	
-		if (connect(fd, a->ai_addr, a->ai_addrlen)) {
-			hlog(LOG_CRIT, "Uplink: connect(%s): %s", addr_s, strerror(errno));
+		
+		/* set non-blocking mode at this point, so that we can make a
+		 * non-blocking connect() with a short timeout
+		 */
+		if (fcntl(fd, F_SETFL, O_NONBLOCK)) {
+			hlog(LOG_CRIT, "Uplink: Failed to set non-blocking mode on new socket: %s", strerror(errno));
 			close(fd);
 			fd = -1;
 			continue;
 		}
-		if (fd >= 0)
-			break; /* Successfull connect! */
+		
+		if (connect(fd, a->ai_addr, a->ai_addrlen) && errno != EINPROGRESS) {
+			hlog(LOG_ERR, "Uplink: connect(%s) failed: %s", addr_s, strerror(errno));
+			close(fd);
+			fd = -1;
+			continue;
+		}
+		
+		/* Only wait a few seconds for the connection to be created.
+		 * If the connection setup is very slow, it is unlikely to
+		 * perform well enough anyway.
+		 */
+		struct pollfd connect_fd;
+		connect_fd.fd = fd;
+		connect_fd.events = POLLOUT;
+		connect_fd.revents = 0;
+		
+		int r = poll(&connect_fd, 1, 3000);
+		hlog(LOG_DEBUG, "Uplink: poll after connect returned %d, revents %d", r, connect_fd.revents);
+		
+		if (r < 0) {
+			hlog(LOG_ERR, "Uplink: connect to %s: poll failed: %s", addr_s, strerror(errno));
+			close(fd);
+			fd = -1;
+			continue;
+		}
+		
+		if (r < 1) {
+			hlog(LOG_ERR, "Uplink: connect to %s timed out", addr_s);
+			close(fd);
+			fd = -1;
+			continue;
+		}
+		
+		socklen_t optlen = sizeof(arg);
+		getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&arg, &optlen);
+		if (arg == 0) {
+			/* Successful connect! */
+			hlog(LOG_DEBUG, "Uplink: successfull connect");
+			break;
+		}
+		
+		hlog(LOG_ERR, "Uplink: connect to %s failed: %s", addr_s, strerror(arg));
+		close(fd);
+		fd = -1;
 	}
 
 	freeaddrinfo(ai); /* Not needed anymore.. */
 
 	if (fd < 0) {
+		l->state = UPLINK_ST_NOT_LINKED;
 		return -3; /* No successfull connection at any address.. */
 	}
 
 	c = client_alloc();
+	c->uplink_index = uplink_index;
 	c->fd    = fd;
 	c->addr  = sa;
 	c->state = CSTATE_CONNECTED;
@@ -299,20 +364,14 @@ int make_uplink(struct uplink_config_t *l)
 
 	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", c->addr_ss, c->fd, c->addr_s);
 
-	uplink_client = c;
-
-
+	uplink_client[uplink_index] = c;
+	l->state = UPLINK_ST_CONNECTED;
+	
 	// for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 	// 	if (l->filters[i])
 	// 		filter_parse(c, l->filters[i], 0); /* system filters */
 	// }
 
-	/* set non-blocking mode */
-	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
-		hlog(LOG_ERR, "Uplink: %s - Failed to set non-blocking mode on socket: %s", c->addr_ss, strerror(errno));
-		goto err;
-	}
-	
 	/* Push it on the first worker, which ever it is..
 	 */
 
@@ -334,7 +393,7 @@ int make_uplink(struct uplink_config_t *l)
 		hlog(LOG_ERR, "make_uplink(): could not unlock new_clients_mutex: %s", strerror(pe));
 		goto err;
 	}
-
+	
 	++ uplink_connects.gauge;
 	++ uplink_connects.counter;
 	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */
@@ -345,7 +404,8 @@ int make_uplink(struct uplink_config_t *l)
 	
 err:
 	client_free(c);
-	uplink_client = NULL;
+	uplink_client[uplink_index] = NULL;
+	l->state = UPLINK_ST_NOT_LINKED;
 	return -1;
 }
 
@@ -358,7 +418,8 @@ void uplink_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
 	int rc;
-
+	int next_uplink = -1; /* the index to the next regular uplink candidate */
+	
 	pthreads_profiling_reset("uplink");
 	
 	sigemptyset(&sigs_to_block);
@@ -372,46 +433,80 @@ void uplink_thread(void *asdf)
 	sigaddset(&sigs_to_block, SIGUSR1);
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
-
-	hlog(LOG_INFO, "Uplink_thread starting...");
-		
+	
+	hlog(LOG_INFO, "Uplink thread starting...");
+	
 	uplink_reconfiguring = 1;
 	while (!uplink_shutting_down) {
 		if (uplink_reconfiguring) {
 			uplink_reconfiguring = 0;
 			close_uplinkers();
 
-			hlog(LOG_INFO, "Uplink thread ready.");
+			hlog(LOG_INFO, "Uplink thread configured.");
 		}
 		
 		/* sleep for 1 second */
 		poll(NULL, 0, 1000);
 		
+		/* speed up shutdown */
+		if (uplink_shutting_down)
+			continue;
+		
 		if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 			hlog(LOG_ERR, "uplink_thread(): could not lock uplink_client_mutex: %s", strerror(rc));
 			continue;
 		}
-
-		if (!uplink_client) {
-			int n = 0;
-			struct uplink_config_t *l = uplink_config;
-			for (; l ; l = l->next )
-			  ++n;
-			l = uplink_config;
-			if (n > 0) {
-				n = random() % n;
-				for (; l && n > 0; l = l->next, --n)
-				  ;
-				if (!l) l = uplink_config;
-				if (l)
+		
+		/* Check if all we have a single regular uplink connection up, out of all
+		 * the configured ones. Also, check that all the UPLINKMULTI links are
+		 * connected.
+		 */
+		
+		int has_uplink = 0; /* do we have a single regular uplink? */
+		int avail_uplink = 0; /* how many regular uplinks are configured? */
+		
+		struct uplink_config_t *l = uplink_config;
+		for (; l; l = l->next) {
+			if (l->client_flags & CLFLAGS_UPLINKMULTI) {
+				/* MULTI uplink, needs to be up */
+				if (l->state < UPLINK_ST_CONNECTING)
 					make_uplink(l);
+			} else {
+				/* regular uplink, need to have one connected */
+				if (l->state >= UPLINK_ST_CONNECTING)
+					has_uplink++;
+				avail_uplink++;
 			}
 		}
-
+		
+		if (avail_uplink && !has_uplink) {
+			hlog(LOG_INFO, "Uplink: %d uplinks configured, %d are connected, need to pick new", avail_uplink, has_uplink);
+			/* we have regular uplinks but none are connected,
+			 * pick the next one and connect */
+			next_uplink++;
+			if (next_uplink >= avail_uplink)
+				next_uplink = 0;
+			hlog(LOG_DEBUG, "Uplink: picked uplink index %d as the new candidate", next_uplink);
+			l = uplink_config;
+			int i = 0;
+			while ((l) && i < next_uplink) {
+				if (!(l->client_flags & CLFLAGS_UPLINKMULTI))
+					i++;
+				l = l->next;
+			}
+			if (l) {
+				hlog(LOG_DEBUG, "Uplink: trying %s (%s:%s)", l->name, l->host, l->port);
+				make_uplink(l);
+			}
+		}
+		
 		if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
-			hlog(LOG_ERR, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc));
+			hlog(LOG_CRIT, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc));
 			continue;
 		}
+		
+		/* sleep for 4 seconds between successful rounds */
+		poll(NULL, 0, 4000);
 	}
 	
 	hlog(LOG_DEBUG, "Uplinker thread shutting down uplinking sockets...");
@@ -420,8 +515,9 @@ void uplink_thread(void *asdf)
 
 
 /*
- *	Start / stop dupecheck
+ *	Start / stop the uplinks maintainer thread
  */
+ 
 void uplink_start(void)
 {
 	if (uplink_running)

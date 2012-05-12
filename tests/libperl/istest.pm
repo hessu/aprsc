@@ -88,5 +88,11 @@ sub should_drop($$$$$;$)
 	$i_rx->getline_noncomment();
 }
 
+sub read_and_disconnect($)
+{
+	my($i) = @_;
+	
+	
+}
 
 1;

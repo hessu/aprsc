@@ -486,8 +486,8 @@ static void dupecheck_thread(void)
 			w->pbuf_incoming_count = 0;
 			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 
-			// hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
-			//      c, w->id, dupecheck_seqnum);
+			hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
+			     c, w->id, dupecheck_seqnum);
 
 			for (pb = pb_list; (pb); pb = pbnext) {
 				int rc = dupecheck(pb);
@@ -505,6 +505,7 @@ static void dupecheck_thread(void)
 					 pb_out_dupe_last  = pb;
 					 pb->seqnum = ++dupecheck_dupe_seqnum;
 					++pb_out_dupe_count;
+					//hlog(LOG_DEBUG, "is duplicate");
 				}
 				n++;
 			}

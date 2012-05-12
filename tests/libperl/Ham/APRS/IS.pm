@@ -199,6 +199,23 @@ sub connected($)
 }
 
 
+=head1 accepted($socket)
+
+Accepts a socket
+
+=cut
+
+sub accepted($$)
+{
+	my($self, $sock) = @_;
+	
+	$self->{'sock'} = $sock;
+	$self->{'sock'}->blocking(0);
+	$self->{'state'} = 'connected';
+	$self->{'error'} = 'Accepted connection successfully';
+	$self->{'ibuf'} = '';
+}
+
 
 # -------------------------------------------------------------------------
 # Get a line (blocking)

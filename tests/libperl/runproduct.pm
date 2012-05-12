@@ -18,7 +18,7 @@ use Data::Dumper;
 my %products = (
 	'aprsc' => {
 		'binary' => '../src/aprsc',
-		'stdargs' => '',
+		'stdargs' => '-e debug -o file -r logs',
 		'cfgfileargs' => '-c',
 		'cfgdir' => 'cfg-aprsc'
 	},

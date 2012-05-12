@@ -324,9 +324,16 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 
 	/* argv[1] is  name label  for this uplink */
 
-	if (strcasecmp(argv[2],"ro")==0) {
-	  clflags |= CLFLAGS_PORT_RO;
-	} // FIXME: other tokens ??
+	if (strcasecmp(argv[2], "ro")==0) {
+		clflags |= CLFLAGS_PORT_RO;
+	} else if (strcasecmp(argv[2], "multiro")==0) {
+		clflags |= CLFLAGS_PORT_RO|CLFLAGS_UPLINKMULTI;
+	} else if (strcasecmp(argv[2], "full") == 0) {
+		/* regular */
+	} else {
+		hlog(LOG_ERR, "Uplink: Unsupported uplink type '%s'\n", argv[2]);
+		return -2;
+	}
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -372,6 +379,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	l->host  = hstrdup(argv[4]);
 	l->port  = hstrdup(argv[5]);
 	l->client_flags = clflags;
+	l->state = UPLINK_ST_UNKNOWN;
 
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
@@ -598,6 +606,31 @@ int read_config(void)
 		failed = 1;
 	}
 	
+	/* validate uplink config: if there is a single 'multiro' connection
+	 * configured, all of the uplinks must be 'multiro'
+	 */
+	int uplink_config_failed = 0;
+	int got_multiro = 0;
+	int got_non_multiro = 0;
+	struct uplink_config_t *up;
+	for (up = new_uplink_config; (up); up = up->next) {
+		if (up->client_flags & CLFLAGS_UPLINKMULTI)
+			got_multiro = 1;
+		else
+			got_non_multiro = 1;
+		if ((up->client_flags & CLFLAGS_UPLINKMULTI) && !(up->client_flags & CLFLAGS_PORT_RO)) {
+			uplink_config_failed = 1;
+			hlog(LOG_WARNING, "Config: uplink with non-RO MULTI uplink - would cause a loop, not allowed.");
+		}
+	}
+	if ((got_multiro) && (got_non_multiro)) {
+		hlog(LOG_WARNING, "Config: Configured both multiro and non-multiro uplinks - would cause a loop, not allowed.");
+		failed = 1;
+		free_uplink_config(&new_uplink_config);
+	}
+	if (uplink_config_failed)
+		free_uplink_config(&new_uplink_config);
+
 	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
 		/* Adjust process global fileno limit */
 		int e;

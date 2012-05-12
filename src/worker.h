@@ -208,6 +208,7 @@ struct client_t {
 	char  *addr_hex;    /* client IP address in hex format */
 	char  *addr_ss;	    /* server IP address in text format */
 #endif
+	int    uplink_index; /* uplink array index */
 	int    portnum;
 	time_t connect_time;/* Time of connection */
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
@@ -248,6 +249,7 @@ struct client_t {
 #define CLFLAGS_MESSAGEONLY    0x400 /* Together with filter t/m   -- which really implements it */
 #define CLFLAGS_CLIENTONLY     0x800 /* Client connected on client-only port */
 #define CLFLAGS_IGATE          0x1000 /* Igate port */
+#define CLFLAGS_UPLINKMULTI    0x2000 /* Allow multiple parallel outgoing connections */
 
 	CStateEnum state;   /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */

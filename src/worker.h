@@ -286,7 +286,7 @@ struct client_t {
 	char  app_version[16];  /* application version, from 'user' command */
 	
 	char  addr_s[80];	    /* client IP address in text format */
-	char  addr_h[36];	    /* client IP address in hex format */
+	char  addr_hex[36];	    /* client IP address in hex format */
 	char  addr_ss[80];	    /* server IP address in text format */
 	
 	char	ibuf[IBUF_SIZE];

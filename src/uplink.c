@@ -347,6 +347,17 @@ int make_uplink(struct uplink_config_t *l)
 	hfree(s);
 #endif
 
+	/* hex format of client's IP address + port */
+
+	s = hexsockaddr( &sa.sa, addr_len );
+#ifndef FIXED_IOBUFS
+	c->addr_hex = s;
+#else
+	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
+	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
+	hfree(s);
+#endif
+
 	addr_len = sizeof(sa);
 	getsockname(fd, (struct sockaddr *)&sa, &addr_len);
 	s = strsockaddr( &sa.sa, addr_len ); /* client side address */

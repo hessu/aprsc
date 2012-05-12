@@ -387,10 +387,10 @@ static struct client_t *do_accept(struct listen_t *l)
 
 	s = hexsockaddr( &sa.sa, addr_len );
 #ifndef FIXED_IOBUFS
-	c->addr_h = s;
+	c->addr_hex = s;
 #else
-	strncpy(c->addr_h, s, sizeof(c->addr_h));
-	c->addr_h[sizeof(c->addr_h)-1] = 0;
+	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
+	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
 	hfree(s);
 #endif
 

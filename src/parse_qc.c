@@ -19,6 +19,7 @@
 #include "incoming.h"
 #include "clientlist.h"
 #include "config.h"
+#include "hlog.h"
 
 /*
  *	q_dropcheck contains the last big block of the Q construct algorithm
@@ -48,7 +49,8 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 	 */
 	
 	if (q_proto == 'A' && q_type == 'Z') {
-		/* TODO: We could have a reject log here... */
+		/* TODO: The reject log should really log the offending packet */
+		hlog(LOG_DEBUG, "dropping for unknown Q construct %c%c", q_proto, q_type);
 		return -2; /* drop the packet */
 	}
 	
@@ -85,7 +87,8 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		mycall_len = strlen(mycall);
 		p = memstr(mycall, q_start+4, path_end);
 		if (p && *(p-1) == ',' && ( *(p+mycall_len) == ',' || p+mycall_len == path_end || *(p+mycall_len) == ':' )) {
-			/* TODO: Should dump to a loop log... */
+			/* TODO: The reject log should really log the offending packet */
+			hlog(LOG_DEBUG, "dropping due to my callsign appearing in path");
 			return -2; /* drop the packet */
 		}
 	}
@@ -120,12 +123,13 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		l = qcallv[i+1] - qcallv[i] - 1;
 		/* 1) */
 		for (j = i + 1; j < qcallc; j++) {
-			if (l == qcallv[j+1] - qcallv[j] - 1 && strncasecmp(qcallv[i], qcallv[j], l) == 0) {
-				/* TODO: should dump to a loop log */
+			/* this match is case sensitive in javaprssrvr, so that's what we'll do */
+			if (l == qcallv[j+1] - qcallv[j] - 1 && strncmp(qcallv[i], qcallv[j], l) == 0) {
+				/* TODO: The reject log should really log the offending packet */
+				hlog(LOG_DEBUG, "dropping due to callsign-SSID found twice after Q construct");
 			    	return -2;
 			}
 		}
-		/* 2) */
 		if (l == username_len && strncasecmp(qcallv[i], c->username, username_len) == 0) {
 			/* ok, login is client's login, handle step 3) */
 			login_in_path = 1;
@@ -136,10 +140,14 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 				 * but is not the last viacall
 				 * TODO: should dump...
 				 */
+				/* TODO: The reject log should really log the offending packet */
+				hlog(LOG_DEBUG, "dropping due to login callsign not being the last viacall after Q construct");
 				return -2;
 			}
 		} else if (clientlist_check_if_validated_client(qcallv[i], l)) {
 			/* 2) hits: TODO: should dump to a loop log */
+			/* TODO: The reject log should really log the offending packet */
+			hlog(LOG_DEBUG, "dropping due to callsign '%s' in Q construct being logged in on another socket", qcallv[i]);
 			return -2;
 		}
 	}
@@ -164,6 +172,8 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		new_q_len = path_end - q_start - 1;
 		if (new_q_len > new_q_size) {
 			/* ouch, memcpy would run over the buffer */
+			/* TODO: The reject log should really log the offending packet */
+			hlog(LOG_DEBUG, "dropping due to buffer being too tight");
 			return -2;
 		}
 		memcpy(new_q, q_start+1, new_q_len);
@@ -174,7 +184,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
 		} else if (!(c->flags & CLFLAGS_INPORT)) {
 			/* from an outbound connection, append client's hexaddr */
-			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->addr_h);
+			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->addr_hex);
 		}
 		
 		/* Append ,SERVERLOGIN */

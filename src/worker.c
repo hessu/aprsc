@@ -559,7 +559,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	*/
 	c->obuf_writes++;
 
-	hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
+	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
 
 	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
 		/* Every packet ends with CRLF, but they are not sent over UDP ! */

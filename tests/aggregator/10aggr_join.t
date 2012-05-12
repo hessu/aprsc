@@ -27,7 +27,7 @@ BEGIN {
 		push @packets, "$src>APZMDR,TRACE2-2,qAR,$test_igate:!/0(KBAD LAST BAD_$id";
 	}
 	
-	plan tests => 9 + 2 + ($#packets+1)*2 + 2 + 2 + 1
+	plan tests => 9 + 2 + ($#packets+1)*2 + 2 + 2 + 2 + 1
 };
 
 use Ham::APRS::IS_Fake;
@@ -83,9 +83,26 @@ $read2 = $is2->getline_noncomment(2);
 ok($read1, undef, "Ouch, received data from read-only upstream connection 1");
 ok($read2, undef, "Ouch, received data from read-only upstream connection 2");
 
+# read the packets from the client connection, validate that we get only
+# a single copy of each packet
+my %h;
+my %g;
+my $dupes_found = 0;
+my $unknowns_found = 0;
+foreach $i (@packets) { $h{$i} = 1; }
 while (my $l = $cl->getline_noncomment(1)) {
-	warn "got: $l\n";
+	if (!defined $h{$l}) {
+		$unknowns_found += 1;
+	} elsif (defined $g{$l}) {
+		$dupes_found += 1;
+	} else {
+		#warn "got line: $l\n";
+		$g{$l} = 1;
+	}
 }
+
+ok($dupes_found, 0, "found duplicate packets in output stream");
+ok($unknowns_found, 0, "found unknown packets in output stream");
 
 #my $read1 = istest::read_and_disconnect($sock1);
 #my $read2 = istest::read_and_disconnect($sock2);

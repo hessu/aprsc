@@ -67,8 +67,8 @@ cellarena_t *dupecheck_cells;
 #endif
 
 
-volatile uint32_t  dupecheck_seqnum      = -2000; // Explicite early wrap-around..
-volatile uint32_t  dupecheck_dupe_seqnum = -2000; // Explicite early wrap-around..
+volatile uint32_t  dupecheck_seqnum      = -2000; // Explicit early wrap-around..
+volatile uint32_t  dupecheck_dupe_seqnum = -2000; // Explicit early wrap-around..
 
 static int pbuf_seqnum_lag(const uint32_t seqnum, const uint32_t pbuf_seq)
 {

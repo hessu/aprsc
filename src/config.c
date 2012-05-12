@@ -59,17 +59,17 @@ int dump_splay;	/* print splay tree information */
 
 int workers_configured =  2;	/* number of workers to run */
 
-int expiry_interval    = 10;
+int expiry_interval    = 30;
 int stats_interval     = 1 * 60;
 
 int lastposition_storetime = 24*60*60;	/* how long the last position packet of each station is stored */
-int dupefilter_storetime   =     3*60;	/* how long to store information required for dupe filtering */
+int dupefilter_storetime   =     30;	/* how long to store information required for dupe filtering */
 
 int pbuf_global_expiration       = 35*60; /* 35 minutes */
 int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */
 
-int upstream_timeout =  5*60;		/* after N seconds of no input from an upstream, disconnect */
-int client_timeout   = 60*60;		/* after N seconds of no input from a client, disconnect */
+int upstream_timeout =  60;		/* after N seconds of no input from an upstream, disconnect */
+int client_timeout   = 30*60;		/* after N seconds of no input from a client, disconnect */
 
 int ibuf_size = 8100;			/* size of input buffer for clients */
 int obuf_size = 32*1024;		/* size of output buffer for clients */
@@ -104,7 +104,6 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "statsinterval",	_CFUNC_ do_interval,	&stats_interval		},
 	{ "expiryinterval",	_CFUNC_ do_interval,	&expiry_interval	},
 	{ "lastpositioncache",	_CFUNC_ do_interval,	&lastposition_storetime	},
-	{ "dupefiltercache",	_CFUNC_ do_interval,	&dupefilter_storetime	},
 	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout	},
 	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
 	{ "filelimit",		_CFUNC_ do_int,		&new_fileno_limit	},

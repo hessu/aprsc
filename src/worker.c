@@ -376,11 +376,17 @@ char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 	return hstrdup(eb);
 }
 
+/*
+ *	Generate a hexadecimal representation of the socket
+ *	address, as used in the APRS-IS Q construct.
+ */
+
 char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 {
 	char eb[200];
 	union sockaddr_u su, *sup;
 	struct sockaddr_in *sa_in;
+	u_int8_t *in6;
 
 	sup = (union sockaddr_u *)sa;
 #ifdef IN6_IS_ADDR_V4MAPPED
@@ -397,10 +403,13 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 		// hlog(LOG_DEBUG, "Translating v4 mapped/compat address..");
 	}
 #endif
-
+	
+	/* As per the original implementation's example, the hex address is in upper case.
+	 * For IPv6, there's simply more bytes in there.
+	 */
 	if ( sa->sa_family == AF_INET ) {
 		sa_in = (struct sockaddr_in *)sa;
-		sprintf(eb, "%02x%02x%02x%02x",
+		sprintf(eb, "%02X%02X%02X%02X",
 			sa_in->sin_addr.s_addr & 0xff,
 			(sa_in->sin_addr.s_addr >> 8) & 0xff,
 			(sa_in->sin_addr.s_addr >> 16) & 0xff,
@@ -408,8 +417,10 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 			);
 	} else {
 		/* presumption: IPv6 */
-		/* TODO: figure out what should be put in qAI Q construct's IP address when IPv6 is used! */
-		sprintf(eb, "ipv6");
+		in6 = (u_int8_t *)&sup->si6.sin6_addr.s6_addr;
+		sprintf(eb, "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
+			in6[0], in6[1], in6[2], in6[3], in6[4], in6[5], in6[6], in6[7],
+			in6[8], in6[9], in6[10], in6[11], in6[12], in6[13], in6[14], in6[15]);
 	}
 
 	// if (!sup) hlog(LOG_DEBUG, "... to: %s", eb);

@@ -102,7 +102,7 @@ void uplink_close(struct client_t *c)
 {
 	int rc;
 
-	hlog(LOG_DEBUG, "Uplink to %s has been closed.", c->addr_ss);
+	hlog(LOG_INFO, "Uplink to %s has been closed.", c->addr_ss);
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -145,19 +145,21 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 
 	passcode = aprs_passcode(c->username);
 
-	hlog(LOG_DEBUG, "%s: server string: '%.*s'", c->addr_ss, len, s);
+	hlog(LOG_INFO, "%s: Uplink server says: \"%.*s\"", c->addr_ss, len, s);
 
-	// FIXME: Send the login string... (filters ???)
+	// FIXME: Send the login string... (filters missing ???)
 
 	len = sprintf(buf, "user %s pass %d vers %s\r\n", c->username, passcode, VERSTR);
 
-	hlog(LOG_DEBUG, "%s: my login string: '%.*s'", c->addr_ss, len-2, buf, len);
+	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_ss, len-2, buf, len);
 
 	rc = client_write(self, c, buf, len);
 	if (rc < -2) return rc;
 
 	c->handler = incoming_handler;
 	c->state   = CSTATE_CONNECTED;
+	
+	hlog(LOG_INFO, "%s: Connected to server, logging in", c->addr_ss);
 	
 	return 0;
 }
@@ -530,7 +532,7 @@ void uplink_thread(void *asdf)
 		poll(NULL, 0, 4000);
 	}
 	
-	hlog(LOG_DEBUG, "Uplinker thread shutting down uplinking sockets...");
+	hlog(LOG_DEBUG, "Uplink thread shutting down uplinking sockets...");
 	close_uplinkers();
 }
 

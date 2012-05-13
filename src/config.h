@@ -108,6 +108,7 @@ struct uplink_config_t {
 
 	int client_flags;
 	int state;				/* the state of the uplink */
+	void *client_ptr;			/* pointer to the client structure for state matching */
 };
 
 #define UPLINK_ST_UNKNOWN	-1

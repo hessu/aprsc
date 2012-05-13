@@ -110,7 +110,16 @@ void uplink_close(struct client_t *c)
 	}
 
 	-- uplink_connects.gauge;
-
+	
+	struct uplink_config_t *l = uplink_config;
+	for (; l; l = l->next) {
+		if (l->client_ptr == (void *)c) {
+			hlog(LOG_DEBUG, "found the link to disconnect");
+			l->state = UPLINK_ST_NOT_LINKED;
+			l->client_ptr = NULL;
+		}
+	}
+	
 	uplink_client[c->uplink_index] = NULL; // there can be only one!
 
 	if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
@@ -316,6 +325,7 @@ int make_uplink(struct uplink_config_t *l)
 	}
 
 	c = client_alloc();
+	l->client_ptr = (void *)c;
 	c->uplink_index = uplink_index;
 	c->fd    = fd;
 	c->addr  = sa;
@@ -408,7 +418,7 @@ int make_uplink(struct uplink_config_t *l)
 	++ uplink_connects.gauge;
 	++ uplink_connects.counter;
 	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */
-
+	
 	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
 	
 	return 0;

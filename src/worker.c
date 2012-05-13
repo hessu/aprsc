@@ -915,7 +915,7 @@ void collect_new_clients(struct worker_t *self)
 		/* the new client may end up destroyed right away, never mind it here... */
 		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
 	}
-	hlog( LOG_DEBUG, "Worker %d accepted %d new clients, now total %d",
+	hlog( LOG_DEBUG, "Worker %d accepted %d new connections, now total %d",
 	      self->id, self->xp.pollfd_used - n, self->xp.pollfd_used );
 }
 
@@ -957,7 +957,7 @@ void send_keepalives(struct worker_t *self)
 		// the  c  may get destroyed from underneath of ourselves!
 		cnext = c->next;
 
-#if 0  /* Or perhaps we should ? */
+#if 0  /* Or perhaps we should ? Oh yes we should! Especially for read-only uplinks. */
 		if ( c->flags & (CLFLAGS_UPLINKSIM|CLFLAGS_UPLINKPORT) ||
 		     c->state == CSTATE_COREPEER )
 			continue;
@@ -981,24 +981,45 @@ void send_keepalives(struct worker_t *self)
 			rc = client_write(self, c, buf, 0);
 			if (rc < -2) continue; // destroyed..
 		}
+		
+		/* check for input timeouts */
+		if (c->flags & CLFLAGS_INPORT) {
+			if (c->last_read < tick - client_timeout) {
+				hlog(LOG_DEBUG, "Closing client %p fd %d (%s) due to inactivity (%d s)",
+				      c, c->fd, c->addr_s, client_timeout);
+				close_client(self, c);
+				continue;
+			}
+		} else {
+			if (c->last_read < tick - upstream_timeout) {
+				hlog(LOG_DEBUG, "Closing upstream %p fd %d (%s) due to inactivity (%d s)",
+				      c, c->fd, c->addr_s, upstream_timeout);
+				close_client(self, c);
+				continue;
+			}
+		}
+		
+		/* check for write timeouts */
 		if (c->obuf_wtime < w_expire && c->state != CSTATE_UDP) {
 			// TOO OLD!  Shutdown the client
-			hlog( LOG_DEBUG,"Closing client %p fd %d (%s) due to obuf wtime timeout",
+			hlog( LOG_DEBUG,"Closing connection %p fd %d (%s) due to obuf wtime timeout",
 			      c, c->fd, c->addr_s );
 			close_client(self, c);
 			continue;
 		}
+		
+		/* adjust buffering */
 		if (c->obuf_writes > obuf_writes_treshold) {
 			// Lots and lots of writes, switch to buffering...
 
 		  if (c->obuf_flushsize == 0)
-		    // hlog( LOG_DEBUG,"Switch client %p fd %d (%s) to buffered writes", c, c->fd, c->addr_s );
+		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to buffered writes", c, c->fd, c->addr_s );
 
 			c->obuf_flushsize = c->obuf_size - 200;
 		} else {
 		        // Not so much writes, back to "write immediate"
 		  if (c->obuf_flushsize != 0)
-		    // hlog( LOG_DEBUG,"Switch client %p fd %d (%s) to unbuffered writes", c, c->fd, c->addr_s );
+		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to unbuffered writes", c, c->fd, c->addr_s );
 
 			c->obuf_flushsize = 0;
 		}

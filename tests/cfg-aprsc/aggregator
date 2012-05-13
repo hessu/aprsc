@@ -29,12 +29,13 @@ ExpiryInterval	30s
 # How long to cache last position of each station
 LastPositionCache	48h
 
+# NOTE: THESE SHORT TIMEOUTS ARE USED BY THE TIMEOUT TEST, DON'T CHANGE IN THIS CONFIG
 # When no data is received from an upstream server in N seconds, switch to
 # another server
 UpstreamTimeout		10s
 
 # When no data is received from a downstream server in N seconds, disconnect
-ClientTimeout		48h
+ClientTimeout		20s
 
 ### TCP listener ##########
 # Listen <socketname> <porttype> tcp <address to bind> <port>

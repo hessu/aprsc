@@ -52,6 +52,9 @@ struct history_cell_t {
 				170 bytes long out of some 17 000 .. */
 };
 
+#define HISTORYDB_CELL_SIZE sizeof(struct history_cell_t)
+
+extern long historydb_cellgauge;
 
 extern void historydb_init(void);
 

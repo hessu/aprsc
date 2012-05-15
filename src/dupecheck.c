@@ -35,7 +35,7 @@ extern int uplink_simulator;
 int dupecheck_shutting_down;
 int dupecheck_running;
 pthread_t dupecheck_th;
-int dupecheck_cellgauge;
+long dupecheck_cellgauge;
 
 int pbuf_global_count;
 int pbuf_global_dupe_count;
@@ -46,17 +46,6 @@ int pbuf_global_dupe_count_limit =     1; /* .. but we set some minimum packet c
 
 long long dupecheck_outcount;  /* 64 bit counters for statistics */
 long long dupecheck_dupecount;
-
-struct dupe_record_t {
-	struct dupe_record_t *next;
-	uint32_t hash;
-	time_t	 t;
-	int	 alen;	// Address length
-	int	 plen;	// Payload length
-	char	 addresses[20];
-	char	*packet;
-	char	 packetbuf[200]; /* 99.9+ % of time this is enough.. */
-};
 
 #define DUPECHECK_DB_SIZE 8192        /* Hash index table size */
 struct dupe_record_t *dupecheck_db[DUPECHECK_DB_SIZE]; /* Hash index table      */
@@ -446,7 +435,7 @@ static void dupecheck_thread(void)
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 
-	hlog(LOG_INFO, "Dupecheck thread started.");
+	hlog(LOG_INFO, "Dupecheck thread ready.");
 
 	while (!dupecheck_shutting_down) {
 		n = d = 0;

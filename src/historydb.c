@@ -44,6 +44,8 @@ long historydb_keymatches;
 long historydb_cellgauge;
 long historydb_noposcount;
 
+long historydb_cleanup_cleaned;
+
 void historydb_nopos(void) {}         /* profiler call counter items */
 void historydb_nointerest(void) {}
 void historydb_hashmatch(void) {}
@@ -371,7 +373,8 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 void historydb_cleanup(void)
 {
 	struct history_cell_t **hp, *cp;
-	int i, cleancount = 0;
+	int i;
+	long cleaned = 0;
 
 	// validity is 5 minutes shorter than expiration time..
 	time_t expirytime   = now - lastposition_storetime;
@@ -390,7 +393,7 @@ void historydb_cleanup(void)
 				*hp = cp->next;
 				cp->next = NULL;
 				historydb_free(cp);
-				++cleancount;
+				++cleaned;
 				continue;
 			}
 			/* No expiry, just advance the pointer */
@@ -400,6 +403,9 @@ void historydb_cleanup(void)
 		// Free the lock
 		rwl_wrunlock(&historydb_rwlock);
 	}
+	
+	historydb_cleanup_cleaned = cleaned;
+	
 	// hlog( LOG_DEBUG, "historydb_cleanup() removed %d entries, count now %ld",
-	//       cleancount, historydb_cellgauge );
+	//       cleaned, historydb_cellgauge );
 }

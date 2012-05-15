@@ -13,9 +13,22 @@
 
 #include "worker.h"
 
+struct dupe_record_t {
+	struct dupe_record_t *next;
+	uint32_t hash;
+	time_t	 t;
+	int	 alen;	// Address length
+	int	 plen;	// Payload length
+	char	 addresses[20];
+	char	*packet;
+	char	 packetbuf[200]; /* 99.9+ % of time this is enough.. */
+};
+
+#define DUPECHECK_CELL_SIZE sizeof(struct dupe_record_t)
+
 extern long long dupecheck_outcount;  /* statistics counter */
 extern long long dupecheck_dupecount; /* statistics counter */
-extern int       dupecheck_cellgauge; /* statistics gauge   */
+extern long      dupecheck_cellgauge; /* statistics gauge   */
 
 extern int  outgoing_lag_report(struct worker_t *self, int*lag, int*dupelag);
 

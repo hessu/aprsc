@@ -500,7 +500,7 @@ int worker_sighandler(int signum)
  *	close and forget a client connection
  */
 
-void close_client(struct worker_t *self, struct client_t *c)
+void close_client(struct worker_t *self, struct client_t *c, int errnum)
 {
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
 	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
@@ -512,11 +512,9 @@ void close_client(struct worker_t *self, struct client_t *c)
 	
 		/* remove from polling list */
 		xpoll_remove(&self->xp, c->xfd);
-
 	}
 
 	c->fd = -1;
-
 	
 	/* link the list together over this node */
 	if (c->next)
@@ -527,7 +525,7 @@ void close_client(struct worker_t *self, struct client_t *c)
 	 * setup module that the connection has gone away.
 	 */
 	if (c->flags & CLFLAGS_UPLINKPORT)
-		uplink_close(c);
+		uplink_close(c, errnum);
 	else {
 		/* Else if it is an inbound connection, handle their
 		 * population accounting...
@@ -603,7 +601,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				/* Remote socket closed.. */
 				hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
 				// WARNING: This also destroys the client object!
-				close_client(self, c);
+				close_client(self, c, e);
 				return -9;
 			}
 			if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
@@ -659,7 +657,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			/* Remote socket closed.. */
 			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
 			// WARNING: This also destroys the client object!
-			close_client(self, c);
+			close_client(self, c, e);
 			return -9;
 		}
 		if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
@@ -740,7 +738,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 
 	if (c->fd < 0) {
 		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_s);
-		close_client(self, c);
+		close_client(self, c, 0);
 		return -1;
 	}
 
@@ -751,7 +749,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	if (r == 0) {
 		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
 		      c->fd, c->addr_s, c->addr_ss );
-		close_client(self, c);
+		close_client(self, c, -1);
 		return -1;
 	}
 	if (r < 0) {
@@ -762,7 +760,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		      c->fd, c->addr_s, strerror(errno));
 		hlog( LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d",
 		      c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
-		close_client(self, c);
+		close_client(self, c, errno);
 		return -1;
 	}
 
@@ -833,7 +831,7 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 			return 0;
 
 		hlog(LOG_DEBUG, "write: Error from socket fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
-		close_client(self, c);
+		close_client(self, c, errno);
 		return -1;
 	}
 	
@@ -985,16 +983,16 @@ void send_keepalives(struct worker_t *self)
 		/* check for input timeouts */
 		if (c->flags & CLFLAGS_INPORT) {
 			if (c->last_read < tick - client_timeout) {
-				hlog(LOG_DEBUG, "Closing client %p fd %d (%s) due to inactivity (%d s)",
-				      c, c->fd, c->addr_s, client_timeout);
-				close_client(self, c);
+				hlog(LOG_DEBUG, "%s: Closing client fd %d due to inactivity (%d s)",
+				      c->addr_s, c->fd, client_timeout);
+				close_client(self, c, -2);
 				continue;
 			}
 		} else {
 			if (c->last_read < tick - upstream_timeout) {
-				hlog(LOG_DEBUG, "Closing upstream %p fd %d (%s) due to inactivity (%d s)",
-				      c, c->fd, c->addr_s, upstream_timeout);
-				close_client(self, c);
+				hlog(LOG_INFO, "%s: Closing uplink fd %d due to inactivity (%d s)",
+				      c->addr_s, c->fd, upstream_timeout);
+				close_client(self, c, -2);
 				continue;
 			}
 		}
@@ -1002,9 +1000,9 @@ void send_keepalives(struct worker_t *self)
 		/* check for write timeouts */
 		if (c->obuf_wtime < w_expire && c->state != CSTATE_UDP) {
 			// TOO OLD!  Shutdown the client
-			hlog( LOG_DEBUG,"Closing connection %p fd %d (%s) due to obuf wtime timeout",
-			      c, c->fd, c->addr_s );
-			close_client(self, c);
+			hlog(LOG_DEBUG, "%s: Closing connection fd %d due to obuf wtime timeout",
+			      c->addr_s, c->fd);
+			close_client(self, c, -2);
 			continue;
 		}
 		
@@ -1114,7 +1112,7 @@ void worker_thread(struct worker_t *self)
 	
 	/* close all clients */
 	while (self->clients)
-		close_client(self, self->clients);
+		close_client(self, self->clients, 0);
 	
 	/* stop polling */
 	xpoll_free(&self->xp);

@@ -98,11 +98,18 @@ void close_uplinkers(void)
 	return;
 }
 
-void uplink_close(struct client_t *c)
+void uplink_close(struct client_t *c, int errnum)
 {
 	int rc;
 
-	hlog(LOG_INFO, "Uplink to %s has been closed.", c->addr_ss);
+	if (errnum == 0)
+		hlog(LOG_INFO, "%s: Uplink has been closed.", c->addr_ss);
+	else if (errnum == -1)
+		hlog(LOG_INFO, "%s: Uplink has been closed by remote host (EOF).", c->addr_ss);
+	else if (errnum == -2)
+		hlog(LOG_INFO, "%s: Uplink has been closed due to timeout.", c->addr_ss);
+	else
+		hlog(LOG_INFO, "%s: Uplink has been closed due to error: %s", c->addr_ss, strerror(errnum));
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -332,11 +339,12 @@ int make_uplink(struct uplink_config_t *l)
 	c->fd    = fd;
 	c->addr  = sa;
 	c->state = CSTATE_CONNECTED;
-	c->keepalive = now;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;
 	c->flags    = l->client_flags;
-	c->connect_time = now;
+	c->keepalive = tick;
+	c->connect_time = tick;
+	c->last_read = tick; /* not simulated time */
 #ifndef FIXED_IOBUFS
 	c->username = hstrdup(mycall);
 #else
@@ -385,7 +393,7 @@ int make_uplink(struct uplink_config_t *l)
 	   incoming clients!  It makes certain error reporting much more sensible
 	   looking.  */
 
-	hlog(LOG_INFO, "%s - Uplink connection on fd %d from %s", c->addr_ss, c->fd, c->addr_s);
+	hlog(LOG_INFO, "%s: %s: Uplink connection established fd %d using source address %s", c->addr_ss, l->name, c->fd, c->addr_s);
 
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;
@@ -400,7 +408,7 @@ int make_uplink(struct uplink_config_t *l)
 
 	wc = worker_threads;
 	
-	hlog(LOG_INFO, "... passing to worker thread %d with %d users", wc->id, wc->client_count);
+	hlog(LOG_DEBUG, "... passing to worker thread %d with %d users", wc->id, wc->client_count);
 	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
 		hlog(LOG_ERR, "make_uplink(): could not lock new_clients_mutex: %s", strerror(pe));
 		goto err;
@@ -465,7 +473,7 @@ void uplink_thread(void *asdf)
 			uplink_reconfiguring = 0;
 			close_uplinkers();
 
-			hlog(LOG_INFO, "Uplink thread configured.");
+			hlog(LOG_INFO, "Uplink thread ready.");
 		}
 		
 		/* sleep for 1 second */

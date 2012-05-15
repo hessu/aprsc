@@ -73,6 +73,7 @@ OBJS = aprsc.o accept.o worker.o \
 	rwlock.o hmalloc.o hlog.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
+	status.o cJSON.o \
 	@LIBOBJS@
 
 clean:

@@ -31,6 +31,7 @@
 #include "accept.h"
 #include "uplink.h"
 #include "worker.h"
+#include "status.h"
 
 #include "dupecheck.h"
 #include "filter.h"
@@ -178,42 +179,42 @@ void pthreads_profiling_reset(const char *name)
 #endif
 }
 
-
+#define PATHLEN 500
 static void dbdump_all(void)
 {
 	FILE *fp;
-	char path[500];
+	char path[PATHLEN+1];
 
 	/*
 	 *    As a general rule, dumping of databases is not a Good Idea in
 	 *    operational system.  Development time debugging on other hand..
 	 */
 
-	sprintf(path, "%s/historydb.dump", rundir);
+	snprintf(path, PATHLEN, "%s/historydb.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
 		historydb_dump(fp);
 		fclose(fp);
 	}
-	sprintf(path, "%s/filter.wx.dump", rundir);
+	snprintf(path, PATHLEN, "%s/filter.wx.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
 		filter_wx_dump(fp);
 		fclose(fp);
 	}
-	sprintf(path, "%s/filter.entry.dump", rundir);
+	snprintf(path, PATHLEN, "%s/filter.entry.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
 		filter_entrycall_dump(fp);
 		fclose(fp);
 	}
-	sprintf(path, "%s/pbuf.dump", rundir);
+	snprintf(path, PATHLEN, "%s/pbuf.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
 		pbuf_dump(fp);
 		fclose(fp);
 	}
-	sprintf(path, "%s/pbuf.dupe.dump", rundir);
+	snprintf(path, PATHLEN, "%s/pbuf.dupe.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
 		pbuf_dupe_dump(fp);
@@ -231,11 +232,15 @@ int main(int argc, char **argv)
 	int e;
 	struct rlimit rlim;
 	time_t cleanup_tick;
+	time_t stats_tick;
 	
 	/* close stdin */
 	close(0);
 	time(&tick);
 	now = tick;
+	cleanup_tick = tick;
+	stats_tick = tick;
+	startup_tick = tick;
 	setlinebuf(stdout);
 	setlinebuf(stderr);
 
@@ -327,6 +332,7 @@ int main(int argc, char **argv)
 			reopen_logs = 0;
 			close_log(1);
 		}
+		
 		if (reconfiguring) {
 			reconfiguring = 0;
 			if (read_config()) {
@@ -336,12 +342,19 @@ int main(int argc, char **argv)
 				accept_reconfiguring = 1;
 			}
 		}
-		if (cleanup_tick < tick) {
-			cleanup_tick += 60;
+		
+		if (cleanup_tick < tick || cleanup_tick > tick + 60) {
+			cleanup_tick = tick + 60;
 
 			historydb_cleanup();
 			filter_wx_cleanup();
 			filter_entrycall_cleanup();
+		}
+		
+		if (stats_tick < tick || stats_tick > tick + stats_interval) {
+			stats_tick = tick + stats_interval;
+			hlog(LOG_INFO, "Dumping stats");
+			status_dump_file();
 		}
 	}
 	

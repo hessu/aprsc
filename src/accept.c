@@ -363,13 +363,14 @@ static struct client_t *do_accept(struct listen_t *l)
 	c->addr  = sa;
 	c->portnum = l->portnum;
 	c->state = CSTATE_LOGIN;
-	c->keepalive = tick;
 	c->flags     = l->clientflags;
 	/* use the default login handler */
 	c->handler = &login_handler;
 	c->udpclient = client_udp_find(l->portnum);
 	c->portaccount = l->portaccount;
-	c->connect_time = now;
+	c->keepalive = tick;
+	c->connect_time = tick;
+	c->last_read = tick; /* not simulated time */
 	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
 
 	/* text format of client's IP address + port */

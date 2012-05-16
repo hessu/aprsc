@@ -517,11 +517,8 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		} else {
 			/* Append ,qAS,IPADDR (IPADDR is an 8 character hex representation 
 			 * of the IP address of the remote server)
-			 * ... what should we do with IPv6? TODO: check what the competition does.
 			 */
-			/* FIXME: generate the hex IP addr
-			 * new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", ...);
-			 */
+			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->addr_hex);
 			q_proto = 'A';
 			q_type = 'S';
 		}

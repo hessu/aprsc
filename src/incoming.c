@@ -393,6 +393,9 @@ char *memstr(char *needle, char *haystack, char *haystack_end)
  *	and forwards it to the dupecheck thread.
  */
 
+// needs to be larger for ipv6 qAI!! 500 ?
+#define PATH_APPEND_LEN 160
+
 int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 {
 	struct pbuf_t *pb;
@@ -411,7 +414,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
 	int rc;
-	char path_append[160]; /* data to be appended to the path (generated Q construct, etc), could be long */
+	char path_append[PATH_APPEND_LEN]; /* data to be appended to the path (generated Q construct, etc), could be long */
 	int path_append_len;
 	int originated_by_client = 0;
 	char *p;

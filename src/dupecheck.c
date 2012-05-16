@@ -623,3 +623,13 @@ void dupecheck_atend(void)
 #endif
 	global_pbuf_purger(1, -1, -1); // purge everything..
 }
+
+/*
+ *	cellmalloc status
+ */
+void dupecheck_cell_stats(struct cellstatus_t *cellst)
+{
+	// TODO: this is not quite thread safe, but may be OK
+	cellstatus(dupecheck_cells, cellst);
+}
+

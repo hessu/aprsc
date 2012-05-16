@@ -204,6 +204,9 @@ int filter_wx_cellgauge;
 
 struct filter_wx_t *filter_wx_hash[FILTER_WX_HASHSIZE];
 
+rwlock_t filter_cellgauge_rwlock;
+int filter_cellgauge;
+
 
 #ifndef _FOR_VALGRIND_
 cellarena_t *filter_cells;
@@ -231,6 +234,7 @@ float filter_lon2rad(float lon)
 
 void filter_init(void)
 {
+	rwl_init(&filter_cellgauge_rwlock);
 #ifndef _FOR_VALGRIND_
 	/* A few hundred... */
 
@@ -1387,6 +1391,9 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	f->h.text = f->textbuf;
 	strcpy(f->textbuf, filt); /* and copy of filter text */
 #endif
+	rwl_wrlock(&filter_cellgauge_rwlock);
+	++ filter_cellgauge;
+	rwl_wrunlock(&filter_cellgauge_rwlock);
 
 	hlog(LOG_DEBUG, "parsed filter: t=%c n=%d '%s'", f->h.type, f->h.negation, f->h.text);
 
@@ -1403,6 +1410,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 void filter_free(struct filter_t *f)
 {
 	struct filter_t *fnext;
+	int freed = 0;
 
 	for ( ; f ; f = fnext ) {
 		fnext = f->h.next;
@@ -1414,7 +1422,12 @@ void filter_free(struct filter_t *f)
 #else
 		hfree(f);
 #endif
+		freed++;
 	}
+	
+	rwl_wrlock(&filter_cellgauge_rwlock);
+	filter_cellgauge -= freed;
+	rwl_wrunlock(&filter_cellgauge_rwlock);
 }
 
 
@@ -2305,3 +2318,18 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	}
 	return client_printf(self, c, "# Parsed %d filter specifications", i);
 }
+
+/*
+ *	cellmalloc status
+ */
+
+void filter_cell_stats(struct cellstatus_t *filter_cellst,
+	struct cellstatus_t *filter_entrycall_cellst,
+	struct cellstatus_t *filter_wx_cellst)
+{
+	// TODO: locks
+	cellstatus(filter_cells, filter_cellst);
+	cellstatus(filter_entrycall_cells, filter_entrycall_cellst);
+	cellstatus(filter_wx_cells, filter_wx_cellst);
+}
+

@@ -12,7 +12,7 @@
 #define FILTER_H 1
 
 #include "worker.h"
-
+#include "cellmalloc.h"
 
 extern void filter_init(void);
 extern int  filter_parse(struct client_t *c, const char *filt, int is_user_filter);
@@ -33,7 +33,13 @@ extern void filter_wx_atend(void);
 extern int  filter_wx_cellgauge;
 extern void filter_wx_dump(FILE *fp);
 
+extern int  filter_cellgauge;
+
 extern float filter_lat2rad(float lat);
 extern float filter_lon2rad(float lon);
+
+extern void filter_cell_stats(struct cellstatus_t *filter_cellst,
+	struct cellstatus_t *filter_entrycall_cellst,
+	struct cellstatus_t *filter_wx_cellst);
 
 #endif /* FILTER_H */

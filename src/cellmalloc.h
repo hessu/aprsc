@@ -17,6 +17,16 @@
  *
  */
 
+struct cellstatus_t {
+	int cellsize;
+	int alignment;
+	int cellsize_aligned;
+	int freecount;
+	int blocks;
+	int blocks_max;
+	int block_size;
+};
+
 typedef struct cellarena_t cellarena_t;
 
 extern cellarena_t *cellinit(const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree);
@@ -29,7 +39,7 @@ extern void *cellmalloc(cellarena_t *cellarena);
 extern int   cellmallocmany(cellarena_t *cellarena, void **array, const int numcells);
 extern void  cellfree(cellarena_t *cellarena, void *p);
 extern void  cellfreemany(cellarena_t *cellarena, void **array, const int numcells);
-
+extern void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status);
 
 #endif
 #else /* _FOR_VALGRIND_  .. normal malloc/free is better */

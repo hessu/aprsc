@@ -353,7 +353,7 @@ int main(int argc, char **argv)
 		
 		if (stats_tick < tick || stats_tick > tick + stats_interval) {
 			stats_tick = tick + stats_interval;
-			hlog(LOG_INFO, "Dumping stats");
+			hlog(LOG_DEBUG, "Dumping status to file");
 			status_dump_file();
 		}
 	}

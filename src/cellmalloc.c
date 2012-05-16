@@ -373,3 +373,14 @@ void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 		pthread_mutex_unlock(&ca->mutex);
 }
 #endif /* (NOT) _FOR_VALGRIND_ */
+
+void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status)
+{
+	status->cellsize = cellarena->cellsize;
+	status->cellsize_aligned = cellarena->increment;
+	status->alignment = cellarena->alignment;
+	status->freecount = cellarena->freecount;
+	status->blocks = cellarena->cellblocks_count;
+	status->blocks_max = CELLBLOCKS_MAX;
+	status->block_size = cellarena->createsize;
+}

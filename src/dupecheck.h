@@ -12,6 +12,7 @@
 #define DUPECHECK_H
 
 #include "worker.h"
+#include "cellmalloc.h"
 
 struct dupe_record_t {
 	struct dupe_record_t *next;
@@ -36,5 +37,8 @@ extern void dupecheck_init(void);
 extern void dupecheck_start(void);
 extern void dupecheck_stop(void);
 extern void dupecheck_atend(void);
+
+/* cellmalloc status */
+extern void dupecheck_cell_stats(struct cellstatus_t *cellst);
 
 #endif

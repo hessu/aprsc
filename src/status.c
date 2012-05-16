@@ -14,6 +14,7 @@
 #include <stdlib.h>
 
 #include "status.h"
+#include "cellmalloc.h"
 #include "config.h"
 #include "hlog.h"
 #include "worker.h"
@@ -40,12 +41,66 @@ int status_dump_fp(FILE *fp)
 	
 	// TODO: add free counts of each cell pool
 	cJSON *memory = cJSON_CreateObject();
-	cJSON_AddNumberToObject(memory, "cells_historydb", historydb_cellgauge);
-	cJSON_AddNumberToObject(memory, "cells_dupecheck", dupecheck_cellgauge);
-	cJSON_AddNumberToObject(memory, "cells_filter_entrycall", filter_entrycall_cellgauge);
-	cJSON_AddNumberToObject(memory, "cells_filter_wx", filter_wx_cellgauge);
-	cJSON_AddNumberToObject(memory, "bytes_historydb", historydb_cellgauge*HISTORYDB_CELL_SIZE);
-	cJSON_AddNumberToObject(memory, "bytes_dupecheck", dupecheck_cellgauge*DUPECHECK_CELL_SIZE);
+	struct cellstatus_t cellst;
+	historydb_cell_stats(&cellst), 
+	cJSON_AddNumberToObject(memory, "historydb_cells_used", historydb_cellgauge);
+	cJSON_AddNumberToObject(memory, "historydb_cells_free", cellst.freecount);
+	cJSON_AddNumberToObject(memory, "historydb_used_bytes", historydb_cellgauge*cellst.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "historydb_allocated_bytes", (long)cellst.blocks * (long)cellst.block_size);
+	cJSON_AddNumberToObject(memory, "historydb_block_size", (long)cellst.block_size);
+	cJSON_AddNumberToObject(memory, "historydb_blocks", (long)cellst.blocks);
+	cJSON_AddNumberToObject(memory, "historydb_blocks_max", (long)cellst.blocks_max);
+	cJSON_AddNumberToObject(memory, "historydb_cell_size", cellst.cellsize);
+	cJSON_AddNumberToObject(memory, "historydb_cell_size_aligned", cellst.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "historydb_cell_align", cellst.alignment);
+	
+	dupecheck_cell_stats(&cellst), 
+	cJSON_AddNumberToObject(memory, "dupecheck_cells_used", dupecheck_cellgauge);
+	cJSON_AddNumberToObject(memory, "dupecheck_cells_free", cellst.freecount);
+	cJSON_AddNumberToObject(memory, "dupecheck_used_bytes", dupecheck_cellgauge*cellst.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "dupecheck_allocated_bytes", (long)cellst.blocks * (long)cellst.block_size);
+	cJSON_AddNumberToObject(memory, "dupecheck_block_size", (long)cellst.block_size);
+	cJSON_AddNumberToObject(memory, "dupecheck_blocks", (long)cellst.blocks);
+	cJSON_AddNumberToObject(memory, "dupecheck_blocks_max", (long)cellst.blocks_max);
+	cJSON_AddNumberToObject(memory, "dupecheck_cell_size", cellst.cellsize);
+	cJSON_AddNumberToObject(memory, "dupecheck_cell_size_aligned", cellst.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "dupecheck_cell_align", cellst.alignment);
+	
+	struct cellstatus_t cellst_filter, cellst_filter_wx, cellst_filter_entrycall;
+	filter_cell_stats(&cellst_filter, &cellst_filter_entrycall, &cellst_filter_wx),
+	cJSON_AddNumberToObject(memory, "filter_cells_used", filter_cellgauge);
+	cJSON_AddNumberToObject(memory, "filter_cells_free", cellst_filter.freecount);
+	cJSON_AddNumberToObject(memory, "filter_used_bytes", filter_cellgauge*cellst_filter.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "filter_allocated_bytes", (long)cellst_filter.blocks * (long)cellst_filter.block_size);
+	cJSON_AddNumberToObject(memory, "filter_block_size", (long)cellst_filter.block_size);
+	cJSON_AddNumberToObject(memory, "filter_blocks", (long)cellst_filter.blocks);
+	cJSON_AddNumberToObject(memory, "filter_blocks_max", (long)cellst_filter.blocks_max);
+	cJSON_AddNumberToObject(memory, "filter_cell_size", cellst_filter.cellsize);
+	cJSON_AddNumberToObject(memory, "filter_cell_size_aligned", cellst_filter.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "filter_cell_align", cellst_filter.alignment);
+	
+	cJSON_AddNumberToObject(memory, "filter_wx_cells_used", filter_wx_cellgauge);
+	cJSON_AddNumberToObject(memory, "filter_wx_cells_free", cellst_filter_wx.freecount);
+	cJSON_AddNumberToObject(memory, "filter_wx_used_bytes", filter_wx_cellgauge*cellst_filter_wx.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "filter_wx_allocated_bytes", (long)cellst_filter_wx.blocks * (long)cellst_filter_wx.block_size);
+	cJSON_AddNumberToObject(memory, "filter_wx_block_size", (long)cellst_filter_wx.block_size);
+	cJSON_AddNumberToObject(memory, "filter_wx_blocks", (long)cellst_filter_wx.blocks);
+	cJSON_AddNumberToObject(memory, "filter_wx_blocks_max", (long)cellst_filter_wx.blocks_max);
+	cJSON_AddNumberToObject(memory, "filter_wx_cell_size", cellst_filter_wx.cellsize);
+	cJSON_AddNumberToObject(memory, "filter_wx_cell_size_aligned", cellst_filter_wx.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "filter_wx_cell_align", cellst_filter_wx.alignment);
+	
+	cJSON_AddNumberToObject(memory, "filter_entrycall_cells_used", filter_entrycall_cellgauge);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_cells_free", cellst_filter_entrycall.freecount);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_used_bytes", filter_entrycall_cellgauge*cellst_filter_entrycall.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_allocated_bytes", (long)cellst_filter_entrycall.blocks * (long)cellst_filter_entrycall.block_size);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_block_size", (long)cellst_filter_entrycall.block_size);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_blocks", (long)cellst_filter_entrycall.blocks);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_blocks_max", (long)cellst_filter_entrycall.blocks_max);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_cell_size", cellst_filter_entrycall.cellsize);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_cell_size_aligned", cellst_filter_entrycall.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "filter_entrycall_cell_align", cellst_filter_entrycall.alignment);
+	
 	cJSON_AddItemToObject(root, "memory", memory);
 	
 	cJSON *dupecheck = cJSON_CreateObject();

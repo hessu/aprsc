@@ -409,3 +409,15 @@ void historydb_cleanup(void)
 	// hlog( LOG_DEBUG, "historydb_cleanup() removed %d entries, count now %ld",
 	//       cleaned, historydb_cellgauge );
 }
+
+/*
+ *	cellmalloc status
+ */
+
+void historydb_cell_stats(struct cellstatus_t *cellst)
+{
+	rwl_rdlock(&historydb_rwlock);
+	cellstatus(historydb_cells, cellst);
+	rwl_rdunlock(&historydb_rwlock);
+}
+

@@ -32,6 +32,7 @@
 #ifndef __HISTORYDB_H__
 #define __HISTORYDB_H__
 
+#include "cellmalloc.h"
 
 struct history_cell_t {
 	struct history_cell_t *next;
@@ -66,5 +67,8 @@ extern void historydb_atend(void);
 /* insert and lookup... interface yet unspecified */
 extern int historydb_insert(struct pbuf_t*);
 extern int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t **result);
+
+/* cellmalloc status */
+extern void historydb_cell_stats(struct cellstatus_t *cellst);
 
 #endif

@@ -393,8 +393,9 @@ char *memstr(char *needle, char *haystack, char *haystack_end)
  *	and forwards it to the dupecheck thread.
  */
 
-// needs to be larger for ipv6 qAI!! 500 ?
-#define PATH_APPEND_LEN 160
+// Must be large enough to accommodate the largest packet we accept on input
+// + the length of the IPv6 qAI appended address and our callsign
+#define PATH_APPEND_LEN 600
 
 int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 {
@@ -493,12 +494,17 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	if (path_append_len < 0) {
 		/* the q construct algorithm decided to drop the packet */
-		fprintf(stderr, "q construct drop: %d\n", path_append_len);
+		hlog(LOG_DEBUG, "q construct drop: %d", path_append_len);
 		return path_append_len;
 	}
 	
 	/* get a packet buffer */
-	pb = pbuf_get(self, len+path_append_len+3); /* we add path_append_len + CRLFNUL */
+	int new_len;
+	if (q_replace)
+		new_len = len+path_append_len-(path_end-q_start)+3; /* we remove the old path first */
+	else
+		new_len = len+path_append_len+3; /* we add path_append_len + CRLFNUL */
+	pb = pbuf_get(self, new_len);
 	if (!pb) {
 		// This should never happen...
 		hlog(LOG_INFO, "pbuf_get failed to get a block");

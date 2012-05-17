@@ -330,7 +330,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	} else if (strcasecmp(argv[2], "full") == 0) {
 		/* regular */
 	} else {
-		hlog(LOG_ERR, "Uplink: Unsupported uplink type '%s'\n", argv[2]);
+		hlog(LOG_ERR, "Uplink: Unsupported uplink type '%s'", argv[2]);
 		return -2;
 	}
 
@@ -352,13 +352,13 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		hlog(LOG_ERR, "Uplink: Unsupported protocol '%s'\n", argv[3]);
+		hlog(LOG_ERR, "Uplink: Unsupported protocol '%s'", argv[3]);
 		return -2;
 	}
 	
 	port = atoi(argv[5]);
 	if (port < 1 || port > 65535) {
-		hlog(LOG_ERR, "Uplink: Invalid port number '%s'\n", argv[5]);
+		hlog(LOG_ERR, "Uplink: Invalid port number '%s'", argv[5]);
 		return -2;
 	}
 

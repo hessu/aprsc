@@ -29,11 +29,15 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		cnext = c->next; // the client_write() MAY destroy the client object!
 
 		/* Do not send to clients that are not logged in. */
-		if (c->state != CSTATE_CONNECTED)
+		if (c->state != CSTATE_CONNECTED) {
+			//hlog(LOG_DEBUG, "%d: not sending to client: not connected", c->fd);
 			continue;
-		if (c->flags & CLFLAGS_PORT_RO)
+		}
+		if (c->flags & CLFLAGS_PORT_RO) {
+			//hlog(LOG_DEBUG, "%d: not sending to client: read-only socket", c->fd);
 			continue;
-
+		}
+		
 		/* Do not send packet back to the source client.
 		   This may reject a packet that came from a socket that got
 		   closed a few milliseconds previously and its client_t got
@@ -42,13 +46,16 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		   just fine.
 		   For packet history dumps this test shall be ignored!
 		 */
-		if (c == pb->origin)
+		if (c == pb->origin) {
+			//hlog(LOG_DEBUG, "%d: not sending to client: originated from this socketsocket", c->fd);
 			continue;
-
+		}
+		
 		if ((pb->flags & F_DUPE) && (!(c->flags & CLFLAGS_DUPEFEED))) {
 		  /* Duplicate packet.
 		     Don't send, unless client especially wants! */
-		  continue;
+			//hlog(LOG_DEBUG, "%d: not sending to client: packet is duplicate", c->fd);
+			continue;
 		}
 
 		/*  Process filters - check if this packet should be
@@ -56,6 +63,8 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 
 		if (filter_process(self, c, pb) > 0) {
 			client_write(self, c, pb->data, pb->packet_len);
+		} else {
+			//hlog(LOG_DEBUG, "%d: not sending to client: filter not matched", c->fd);
 		}
 	}
 }

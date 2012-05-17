@@ -50,6 +50,9 @@ Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152
 Listen "Igate port"                               igate       tcp 0.0.0.0  14580
 Listen "Client-only port"                         clientonly  tcp 0.0.0.0  14581
 
+Uplink full1 full tcp 127.0.0.1 10153
+
+
 ### Internals ############
 # Only use 3 threads in these basic tests, to keep startup/shutdown times
 # short.

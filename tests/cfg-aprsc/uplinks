@@ -46,12 +46,12 @@ ClientTimeout		48h
 #		userfilter - user-specified filters
 #
 Listen "Messages only"                            messageonly tcp 0.0.0.0   1314   t/m
-Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152
+Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  10152   t/c*
 Listen "Igate port"                               igate       tcp 0.0.0.0  14580
 Listen "Client-only port"                         clientonly  tcp 0.0.0.0  14581
 
-Uplink core1 full tcp 10.0.0.5 10153
-Uplink core2 full tcp 10.0.0.6 10154
+Uplink core1 multiro tcp 127.0.0.1 10153
+Uplink core2 multiro tcp ::1 10153
 
 ### Internals ############
 # Only use 3 threads in these basic tests, to keep startup/shutdown times

@@ -170,6 +170,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		
 		/* copy over existing qAI trace */
 		new_q_len = path_end - q_start - 1;
+		//hlog(LOG_DEBUG, "qAI replacing, new_q_len %d", new_q_len);
 		if (new_q_len > new_q_size) {
 			/* ouch, memcpy would run over the buffer */
 			/* TODO: The reject log should really log the offending packet */
@@ -178,18 +179,26 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		}
 		memcpy(new_q, q_start+1, new_q_len);
 		
+		//hlog(LOG_DEBUG, "qAI first memcpy done, new_q_len %d, q_replace %d", new_q_len, *q_replace);
+		
 		/* If the packet is from a verified port where the login is not found after the q construct */
 		if (c->validated && !login_in_path) {
 			/* Append ,login */
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
 		} else if (!(c->flags & CLFLAGS_INPORT)) {
 			/* from an outbound connection, append client's hexaddr */
+			//hlog(LOG_DEBUG, "qAI appending hex address, starting at %d, got %d left in buffer", new_q_len, new_q_size - new_q_len);
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->addr_hex);
+		}
+		//hlog(LOG_DEBUG, "qAI append done, new_q_len %d, new_q_size %d, q_replace %d, going to append %d more", new_q_len, new_q_size, *q_replace, strlen(mycall)+1);
+		
+		if (new_q_size - new_q_len < 20) {
+			hlog(LOG_DEBUG, "dropping due to buffer being too tight when appending my login for qAI");
+			return -2;
 		}
 		
 		/* Append ,SERVERLOGIN */
 		new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", mycall);
-		
 	}
 	
 	return new_q_len;

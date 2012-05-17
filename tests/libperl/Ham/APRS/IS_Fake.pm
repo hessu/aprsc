@@ -6,7 +6,7 @@ use strict;
 use warnings;
 
 use IO::Handle '_IOFBF';
-use IO::Socket::INET;
+use IO::Socket::INET6;
 use IO::Select;
 
 use Ham::APRS::IS;
@@ -47,7 +47,7 @@ sub bind_and_listen($)
 	
 	my($localaddr, $localport) = split(':', $self->{'host_port'});
 	
-	$self->{'lsock'} = IO::Socket::INET->new(
+	$self->{'lsock'} = IO::Socket::INET6->new(
 		Listen => 10,
 		LocalAddr => $self->{'host_port'},
 		Proto => 'tcp',
@@ -86,7 +86,7 @@ sub send_login_ok($$)
 {
 	my($self, $is) = @_;
 	
-	return $is->sendline("# logresp CALLSIGN unverified, server IS_FAKE");
+	return $is->sendline("# logresp CALLSIGN unverified, server FAKE" . sprintf("%d", rand(999)) );
 }
 
 1;

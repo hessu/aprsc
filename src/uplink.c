@@ -141,6 +141,8 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 {
 	char buf[1000];
 	int passcode, rc;
+	int argc;
+	char *argv[256];
 
 #ifndef FIXED_IOBUFS
 	if (!c->username)
@@ -153,6 +155,27 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	passcode = aprs_passcode(c->username);
 
 	hlog(LOG_INFO, "%s: Uplink server says: \"%.*s\"", c->addr_rem, len, s);
+	
+	/* parse to arguments */
+	/* make it null-terminated for our string processing */
+	char *e = s + len;
+	*e = 0;
+	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
+		hlog(LOG_ERR, "%s: Uplink's welcome message is not recognized", c->addr_rem);
+		return 0;
+	}
+	
+	if (argc >= 3) {
+#ifndef FIXED_IOBUFS
+		c->app_name = hstrdup(argv[1]);
+		c->app_version = hstrdup(argv[2]);
+#else
+		strncpy(c->app_name, argv[1], sizeof(c->app_name));
+		c->app_name[sizeof(c->app_name)-1] = 0;
+		strncpy(c->app_version, argv[2], sizeof(c->app_version));
+		c->app_version[sizeof(c->app_version)-1] = 0;
+#endif
+	}
 
 	// FIXME: Send the login string... (filters missing ???)
 

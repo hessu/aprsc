@@ -502,6 +502,8 @@ int worker_sighandler(int signum)
 
 void close_client(struct worker_t *self, struct client_t *c, int errnum)
 {
+	int pe;
+	
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
 	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
 			  ? "uplink":"client" ), c->fd, c->addr_s);
@@ -515,6 +517,11 @@ void close_client(struct worker_t *self, struct client_t *c, int errnum)
 	}
 
 	c->fd = -1;
+	
+	if ((pe = pthread_mutex_lock(&self->clients_mutex))) {
+		hlog(LOG_ERR, "close_client(worker %d): could not lock clients_mutex: %s", self->id, strerror(pe));
+		return;
+	}
 	
 	/* link the list together over this node */
 	if (c->next)
@@ -536,6 +543,11 @@ void close_client(struct worker_t *self, struct client_t *c, int errnum)
 
 	/* free it up */
 	client_free(c);
+	
+	if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {
+		hlog(LOG_ERR, "close_client(worker %d): could not unlock clients_mutex: %s", self->id, strerror(pe));
+		exit(1);
+	}
 	
 	/* reduce client counter */
 	self->client_count--;
@@ -893,6 +905,11 @@ void collect_new_clients(struct worker_t *self)
 		exit(1);
 	}
 	
+	if ((pe = pthread_mutex_lock(&self->clients_mutex))) {
+		hlog(LOG_ERR, "collect_new_clients(worker %d): could not lock clients_mutex: %s", self->id, strerror(pe));
+		return;
+	}
+	
 	/* move the new clients to the thread local client list */
 	n = self->xp.pollfd_used;
 	while (new_clients) {
@@ -913,6 +930,12 @@ void collect_new_clients(struct worker_t *self)
 		/* the new client may end up destroyed right away, never mind it here... */
 		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
 	}
+	
+	if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {
+		hlog(LOG_ERR, "collect_new_clients(worker %d): could not unlock clients_mutex: %s", self->id, strerror(pe));
+		exit(1);
+	}
+	
 	hlog( LOG_DEBUG, "Worker %d accepted %d new connections, now total %d",
 	      self->id, self->xp.pollfd_used - n, self->xp.pollfd_used );
 }
@@ -1061,7 +1084,7 @@ void worker_thread(struct worker_t *self)
 	while (!self->shutting_down) {
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
 		t1 = tick;
-
+		
 		/* if we have new stuff in the global packet buffer, process it */
 		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
 			process_outgoing(self);
@@ -1070,7 +1093,7 @@ void worker_thread(struct worker_t *self)
 
 		// TODO: calculate different delay based on outgoing lag ?
 		/* poll for incoming traffic */
-		xpoll(&self->xp, 200);
+		xpoll(&self->xp, 50); // was 200
 		
 		/* if we have stuff in the local queue, try to flush it and make
 		 * it available to the dupecheck thread
@@ -1092,6 +1115,7 @@ void worker_thread(struct worker_t *self)
 			next_keepalive += keepalive_poll_freq; /* Run them every 2 seconds */
 			send_keepalives(self);
 		}
+		
 		t6 = tick;
 #if 0
 		if (tick > next_lag_query) {
@@ -1214,6 +1238,7 @@ void workers_start(void)
 		w->prevp = prevp;
 
 		w->id = i;
+		pthread_mutex_init(&w->clients_mutex, NULL);
 		pthread_mutex_init(&w->new_clients_mutex, NULL);
 		xpoll_initialize(&w->xp, (void *)w, &handle_client_event);
 		
@@ -1235,3 +1260,52 @@ void workers_start(void)
 	}
 }
 
+/*
+ *	Fill worker client list for status display
+ *	(called from another thread - watch out and lock!)
+ */
+
+int worker_client_list(cJSON *clients, cJSON *uplinks)
+{
+	struct worker_t *w = worker_threads;
+	struct client_t *c;
+	int pe;
+	
+	while (w) {
+		if ((pe = pthread_mutex_lock(&w->clients_mutex))) {
+			hlog(LOG_ERR, "worker_client_list(worker %d): could not lock clients_mutex: %s", w->id, strerror(pe));
+			return -1;
+		}
+		
+		for (c = w->clients; (c); c = c->next) {
+			cJSON *jc = cJSON_CreateObject();
+			cJSON_AddNumberToObject(jc, "fd", c->fd);
+			cJSON_AddStringToObject(jc, "addr_c", c->addr_s);
+			cJSON_AddStringToObject(jc, "addr_s", c->addr_ss);
+			cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
+			cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
+			cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);
+			cJSON_AddNumberToObject(jc, "since_last_read", tick - c->last_read);
+			cJSON_AddStringToObject(jc, "username", c->username);
+			cJSON_AddStringToObject(jc, "app_name", c->app_name);
+			cJSON_AddStringToObject(jc, "app_version", c->app_version);
+			cJSON_AddNumberToObject(jc, "verified", c->validated);
+			cJSON_AddNumberToObject(jc, "obuf_q", c->obuf_end - c->obuf_start);
+			
+			if (c->flags & CLFLAGS_INPORT)
+				cJSON_AddItemToArray(clients, jc);
+			else
+				cJSON_AddItemToArray(uplinks, jc);
+		}
+		
+		if ((pe = pthread_mutex_unlock(&w->clients_mutex))) {
+			hlog(LOG_ERR, "worker_client_list(worker %d): could not unlock clients_mutex: %s", w->id, strerror(pe));
+			/* we'd going to deadlock here... */
+			exit(1);
+		}
+		
+		w = w->next;
+	}
+	
+	return 0;
+}

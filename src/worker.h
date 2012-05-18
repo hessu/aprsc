@@ -23,6 +23,7 @@
 
 #include "xpoll.h"
 #include "rwlock.h"
+#include "cJSON.h"
 
 extern time_t now;	/* current time - updated by the main thread, MAY be running under simulator */
 extern time_t tick;	/* clocktick - monotonously increasing, never in simulator */
@@ -309,6 +310,7 @@ struct worker_t {
 	int shutting_down;			/* should I shut down? */
 	
 	struct client_t *clients;		/* clients handled by this thread */
+	pthread_mutex_t clients_mutex;		/* mutex to protect access to the client list by the status dumps */
 	
 	struct client_t *new_clients;		/* new clients which passed in by accept */
 	pthread_mutex_t new_clients_mutex;	/* mutex to protect *new_clients */
@@ -377,5 +379,7 @@ extern void port_accounter_drop(struct portaccount_t *p);
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
 extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets);
+
+extern int worker_client_list(cJSON *clients, cJSON *uplinks);
 
 #endif

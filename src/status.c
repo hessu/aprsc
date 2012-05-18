@@ -12,6 +12,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/utsname.h>
 
 #include "status.h"
 #include "cellmalloc.h"
@@ -25,6 +26,22 @@
 
 time_t startup_tick;
 
+#define UNAME_LEN 512
+void status_uname(cJSON *root)
+{
+	struct utsname ut;
+	char s[UNAME_LEN];
+	
+	if (uname(&ut)) {
+		hlog(LOG_ERR, "status_uname: uname() failed: %s", strerror(errno));
+		return;
+	}
+	
+	snprintf(s, UNAME_LEN, "%s %s %s", ut.sysname, ut.release, ut.machine);
+	
+	cJSON_AddStringToObject(root, "os", s);
+}
+
 int status_dump_fp(FILE *fp)
 {
 	char *out;
@@ -32,11 +49,15 @@ int status_dump_fp(FILE *fp)
 	cJSON *root = cJSON_CreateObject();
 	
 	cJSON *server = cJSON_CreateObject();
+	cJSON_AddStringToObject(server, "server_id", mycall);
+	cJSON_AddStringToObject(server, "admin", myadmin);
+	cJSON_AddStringToObject(server, "email", myemail);
 	cJSON_AddStringToObject(server, "software", "aprsc");
 	cJSON_AddStringToObject(server, "software_version", VERSION);
 	cJSON_AddNumberToObject(server, "uptime", tick - startup_tick);
 	cJSON_AddNumberToObject(server, "t_started", startup_tick);
 	cJSON_AddNumberToObject(server, "t_now", tick);
+	status_uname(server);
 	cJSON_AddItemToObject(root, "server", server);
 	
 	// TODO: add free counts of each cell pool
@@ -108,6 +129,12 @@ int status_dump_fp(FILE *fp)
 	cJSON_AddNumberToObject(dupecheck, "uniques_out", dupecheck_outcount);
 	cJSON_AddItemToObject(root, "dupecheck", dupecheck);
 	
+	cJSON *json_clients = cJSON_CreateArray();
+	cJSON *json_uplinks = cJSON_CreateArray();
+	worker_client_list(json_clients, json_uplinks);
+	cJSON_AddItemToObject(root, "clients", json_clients);
+	cJSON_AddItemToObject(root, "uplinks", json_uplinks);
+	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
 	fputs(out, fp);
@@ -146,3 +173,4 @@ int status_dump_file(void)
 	
 	return 0;
 }
+

@@ -86,7 +86,7 @@ void close_uplinkers(void)
 	int i;
 	for (i = 0; i < MAX_UPLINKS; i++) {
 		if ((uplink_client[i]) && uplink_client[i]->fd >= 0) {
-			hlog( LOG_DEBUG, "Closing uplinking socket %d (fd %d) %s ...", i, uplink_client[i]->fd, uplink_client[i]->addr_ss );
+			hlog( LOG_DEBUG, "Closing uplinking socket %d (fd %d) %s ...", i, uplink_client[i]->fd, uplink_client[i]->addr_rem );
 			shutdown(uplink_client[i]->fd, SHUT_RDWR);
 		}
 	}
@@ -103,13 +103,13 @@ void uplink_close(struct client_t *c, int errnum)
 	int rc;
 
 	if (errnum == 0)
-		hlog(LOG_INFO, "%s: Uplink has been closed.", c->addr_ss);
+		hlog(LOG_INFO, "%s: Uplink has been closed.", c->addr_rem);
 	else if (errnum == -1)
-		hlog(LOG_INFO, "%s: Uplink has been closed by remote host (EOF).", c->addr_ss);
+		hlog(LOG_INFO, "%s: Uplink has been closed by remote host (EOF).", c->addr_rem);
 	else if (errnum == -2)
-		hlog(LOG_INFO, "%s: Uplink has been closed due to timeout.", c->addr_ss);
+		hlog(LOG_INFO, "%s: Uplink has been closed due to timeout.", c->addr_rem);
 	else
-		hlog(LOG_INFO, "%s: Uplink has been closed due to error: %s", c->addr_ss, strerror(errnum));
+		hlog(LOG_INFO, "%s: Uplink has been closed due to error: %s", c->addr_rem, strerror(errnum));
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -152,13 +152,13 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 
 	passcode = aprs_passcode(c->username);
 
-	hlog(LOG_INFO, "%s: Uplink server says: \"%.*s\"", c->addr_ss, len, s);
+	hlog(LOG_INFO, "%s: Uplink server says: \"%.*s\"", c->addr_rem, len, s);
 
 	// FIXME: Send the login string... (filters missing ???)
 
 	len = sprintf(buf, "user %s pass %d vers %s\r\n", c->username, passcode, VERSTR);
 
-	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_ss, len-2, buf, len);
+	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_rem, len-2, buf, len);
 
 	rc = client_write(self, c, buf, len);
 	if (rc < -2) return rc;
@@ -166,7 +166,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	c->handler = incoming_handler;
 	c->state   = CSTATE_CONNECTED;
 	
-	hlog(LOG_INFO, "%s: Connected to server, logging in", c->addr_ss);
+	hlog(LOG_INFO, "%s: Connected to server, logging in", c->addr_rem);
 	
 	return 0;
 }
@@ -360,10 +360,10 @@ int make_uplink(struct uplink_config_t *l)
 	getpeername(fd, (struct sockaddr *)&sa, &addr_len);
 	s = strsockaddr( &sa.sa, addr_len ); /* server side address */
 #ifndef FIXED_IOBUFS
-	c->addr_ss = s;
+	c->addr_rem = s;
 #else
-	strncpy(c->addr_ss, s, sizeof(c->addr_ss));
-	c->addr_ss[sizeof(c->addr_ss)-1] = 0;
+	strncpy(c->addr_rem, s, sizeof(c->addr_rem));
+	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
 	hfree(s);
 #endif
 
@@ -382,18 +382,14 @@ int make_uplink(struct uplink_config_t *l)
 	getsockname(fd, (struct sockaddr *)&sa, &addr_len);
 	s = strsockaddr( &sa.sa, addr_len ); /* client side address */
 #ifndef FIXED_IOBUFS
-	c->addr_s = s;
+	c->addr_loc = s;
 #else
-	strncpy(c->addr_s, s, sizeof(c->addr_s));
-	c->addr_s[sizeof(c->addr_s)-1] = 0;
+	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
+	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
 	hfree(s);
 #endif
 
-	/* Above the addr_s / addr_ss are in REVERSE order compared with normal
-	   incoming clients!  It makes certain error reporting much more sensible
-	   looking.  */
-
-	hlog(LOG_INFO, "%s: %s: Uplink connection established fd %d using source address %s", c->addr_ss, l->name, c->fd, c->addr_s);
+	hlog(LOG_INFO, "%s: %s: Uplink connection established fd %d using source address %s", c->addr_rem, l->name, c->fd, c->addr_loc);
 
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;

@@ -377,10 +377,10 @@ static struct client_t *do_accept(struct listen_t *l)
 
 	s = strsockaddr( &sa.sa, addr_len );
 #ifndef FIXED_IOBUFS
-	c->addr_s = s;
+	c->addr_rem = s;
 #else
-	strncpy(c->addr_s, s, sizeof(c->addr_s));
-	c->addr_s[sizeof(c->addr_s)-1] = 0;
+	strncpy(c->addr_rem, s, sizeof(c->addr_rem));
+	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
 	hfree(s);
 #endif
 
@@ -405,10 +405,10 @@ static struct client_t *do_accept(struct listen_t *l)
 	  s = hstrdup( l->addr_s ); /* Server's bound IP address */
 	}
 #ifndef FIXED_IOBUFS
-	c->addr_ss = s;
+	c->addr_loc = s;
 #else
-	strncpy(c->addr_ss, s, sizeof(c->addr_ss));
-	c->addr_ss[sizeof(c->addr_ss)-1] = 0;
+	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
+	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
 	hfree(s);
 #endif
 
@@ -428,7 +428,7 @@ static struct client_t *do_accept(struct listen_t *l)
 	if (c->flags & CLFLAGS_UPLINKSIM)
 		uplink_simulator = 1;
 
-	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", c->addr_ss, c->fd, c->addr_s);
+	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i])

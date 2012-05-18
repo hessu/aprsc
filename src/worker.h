@@ -205,9 +205,9 @@ struct client_t {
 
 	int    fd;
 #ifndef FIXED_IOBUFS
-	char  *addr_s;	    /* client IP address in text format */
-	char  *addr_hex;    /* client IP address in hex format */
-	char  *addr_ss;	    /* server IP address in text format */
+	char  *addr_rem;	/* remote IP address in text format */
+	char  *addr_hex;	/* remote IP address in hex format */
+	char  *addr_loc;	/* local IP address in text format */
 #endif
 	int    uplink_index; /* uplink array index */
 	int    portnum;
@@ -286,9 +286,9 @@ struct client_t {
 	char  app_name[32];     /* application name, from 'user' command */
 	char  app_version[16];  /* application version, from 'user' command */
 	
-	char  addr_s[80];	    /* client IP address in text format */
+	char  addr_rem[80];	    /* client IP address in text format */
 	char  addr_hex[36];	    /* client IP address in hex format */
-	char  addr_ss[80];	    /* server IP address in text format */
+	char  addr_loc[80];	    /* server IP address in text format */
 	
 	char	ibuf[IBUF_SIZE];
 	char	obuf[OBUF_SIZE];

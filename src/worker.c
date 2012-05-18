@@ -301,8 +301,8 @@ void client_free(struct client_t *c)
 #ifndef FIXED_IOBUFS
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
-	if (c->addr_s)   hfree(c->addr_s);
-	if (c->addr_ss)  hfree(c->addr_ss);
+	if (c->addr_rem)   hfree(c->addr_rem);
+	if (c->addr_loc)  hfree(c->addr_loc);
 	if (c->username) hfree(c->username);
 	if (c->app_name) hfree(c->app_name);
 	if (c->app_version) hfree(c->app_version);
@@ -506,7 +506,7 @@ void close_client(struct worker_t *self, struct client_t *c, int errnum)
 	
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
 	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
-			  ? "uplink":"client" ), c->fd, c->addr_s);
+			  ? "uplink":"client" ), c->fd, c->addr_rem);
 
 	/* close */
 	if (c->fd >= 0) {
@@ -611,7 +611,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			}
 			if (i < 0 && (e == EPIPE)) {
 				/* Remote socket closed.. */
-				hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
+				hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
 				// WARNING: This also destroys the client object!
 				close_client(self, c, e);
 				return -9;
@@ -642,7 +642,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			    goto write_retry;
 			  }
 #endif
-			  hlog(LOG_DEBUG, "client_write(%s) fails/1; %s", c->addr_s, strerror(e));
+			  hlog(LOG_DEBUG, "client_write(%s) fails/1; %s", c->addr_rem, strerror(e));
 			  return -1;
 			}
 		}
@@ -667,7 +667,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			goto write_retry_2;
 		if (i < 0 && (e == EPIPE)) {
 			/* Remote socket closed.. */
-			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
 			// WARNING: This also destroys the client object!
 			close_client(self, c, e);
 			return -9;
@@ -680,7 +680,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		  return 0; // but could not write it at this time..
 		}
 		if (i < 0 && len != 0) {
-			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_s, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
 			return -1;
 		}
 		if (i > 0) {
@@ -716,7 +716,7 @@ int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ..
 	va_end(args);
 	
 	if (i < 0 || i >= PACKETLEN_MAX) {
-		hlog(LOG_ERR, "client_printf failed to %s: '%s'", c->addr_s, fmt);
+		hlog(LOG_ERR, "client_printf failed to %s: '%s'", c->addr_rem, fmt);
 		return -1;
 	}
 	
@@ -749,7 +749,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	char *row_start;
 
 	if (c->fd < 0) {
-		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_s);
+		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_rem);
 		close_client(self, c, 0);
 		return -1;
 	}
@@ -760,7 +760,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 
 	if (r == 0) {
 		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
-		      c->fd, c->addr_s, c->addr_ss );
+		      c->fd, c->addr_rem, c->addr_loc );
 		close_client(self, c, -1);
 		return -1;
 	}
@@ -769,7 +769,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 			return 0; /* D'oh..  return again latter */
 
 		hlog( LOG_DEBUG, "read: Error from socket fd %d (%s): %s",
-		      c->fd, c->addr_s, strerror(errno));
+		      c->fd, c->addr_rem, strerror(errno));
 		hlog( LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d",
 		      c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
 		close_client(self, c, errno);
@@ -783,7 +783,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 
 	c->ibuf_end += r;
 	// hlog( LOG_DEBUG, "read: %d bytes from client fd %d (%s) - %d in ibuf",
-	//       r, c->fd, c->addr_s, c->ibuf_end);
+	//       r, c->fd, c->addr_rem, c->ibuf_end);
 	
 	/* parse out rows ending in CR and/or LF and pass them to the handler
 	 * without the CRLF (we accept either CR or LF or both, but make sure
@@ -842,13 +842,13 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 		if (errno == EINTR || errno == EAGAIN)
 			return 0;
 
-		hlog(LOG_DEBUG, "write: Error from socket fd %d (%s): %s", c->fd, c->addr_s, strerror(errno));
+		hlog(LOG_DEBUG, "write: Error from socket fd %d (%s): %s", c->fd, c->addr_rem, strerror(errno));
 		close_client(self, c, errno);
 		return -1;
 	}
 	
 	c->obuf_start += r;
-	//hlog(LOG_DEBUG, "write: %d bytes to socket fd %d (%s) - %d in obuf", r, c->fd, c->addr_s, c->obuf_end - c->obuf_start);
+	//hlog(LOG_DEBUG, "write: %d bytes to socket fd %d (%s) - %d in obuf", r, c->fd, c->addr_rem, c->obuf_end - c->obuf_start);
 	if (c->obuf_start == c->obuf_end) {
 		xpoll_outgoing(&self->xp, c->xfd, 0);
 		c->obuf_start = c->obuf_end = 0;
@@ -928,7 +928,7 @@ void collect_new_clients(struct worker_t *self)
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
 
 		/* the new client may end up destroyed right away, never mind it here... */
-		client_printf(self, c, "# Hello %s\r\n", c->addr_s, SERVERID);
+		client_printf(self, c, "# Hello %s\r\n", c->addr_rem, SERVERID);
 	}
 	
 	if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {
@@ -990,7 +990,7 @@ void send_keepalives(struct worker_t *self)
 			int flushlevel = c->obuf_flushsize;
 			c->keepalive = tick + keepalive_interval;
 
-			len = len0 + sprintf(s, "%s\r\n", c->addr_ss);
+			len = len0 + sprintf(s, "%s\r\n", c->addr_loc);
 
 			c->obuf_flushsize = 0;
 			/* Write out immediately */
@@ -1007,14 +1007,14 @@ void send_keepalives(struct worker_t *self)
 		if (c->flags & CLFLAGS_INPORT) {
 			if (c->last_read < tick - client_timeout) {
 				hlog(LOG_DEBUG, "%s: Closing client fd %d due to inactivity (%d s)",
-				      c->addr_s, c->fd, client_timeout);
+				      c->addr_rem, c->fd, client_timeout);
 				close_client(self, c, -2);
 				continue;
 			}
 		} else {
 			if (c->last_read < tick - upstream_timeout) {
 				hlog(LOG_INFO, "%s: Closing uplink fd %d due to inactivity (%d s)",
-				      c->addr_s, c->fd, upstream_timeout);
+				      c->addr_rem, c->fd, upstream_timeout);
 				close_client(self, c, -2);
 				continue;
 			}
@@ -1024,7 +1024,7 @@ void send_keepalives(struct worker_t *self)
 		if (c->obuf_wtime < w_expire && c->state != CSTATE_UDP) {
 			// TOO OLD!  Shutdown the client
 			hlog(LOG_DEBUG, "%s: Closing connection fd %d due to obuf wtime timeout",
-			      c->addr_s, c->fd);
+			      c->addr_rem, c->fd);
 			close_client(self, c, -2);
 			continue;
 		}
@@ -1034,13 +1034,13 @@ void send_keepalives(struct worker_t *self)
 			// Lots and lots of writes, switch to buffering...
 
 		  if (c->obuf_flushsize == 0)
-		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to buffered writes", c, c->fd, c->addr_s );
+		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to buffered writes", c, c->fd, c->addr_rem );
 
 			c->obuf_flushsize = c->obuf_size - 200;
 		} else {
 		        // Not so much writes, back to "write immediate"
 		  if (c->obuf_flushsize != 0)
-		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to unbuffered writes", c, c->fd, c->addr_s );
+		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to unbuffered writes", c, c->fd, c->addr_rem );
 
 			c->obuf_flushsize = 0;
 		}
@@ -1280,8 +1280,8 @@ int worker_client_list(cJSON *clients, cJSON *uplinks)
 		for (c = w->clients; (c); c = c->next) {
 			cJSON *jc = cJSON_CreateObject();
 			cJSON_AddNumberToObject(jc, "fd", c->fd);
-			cJSON_AddStringToObject(jc, "addr_c", c->addr_s);
-			cJSON_AddStringToObject(jc, "addr_s", c->addr_ss);
+			cJSON_AddStringToObject(jc, "addr_rem", c->addr_rem);
+			cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
 			cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
 			cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
 			cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);

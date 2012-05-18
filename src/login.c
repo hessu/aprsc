@@ -59,19 +59,19 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* make it null-terminated for our string processing */
 	char *e = s + len;
 	*e = 0;
-	hlog(LOG_DEBUG, "%s: login string: '%s' (%d)", c->addr_s, s, len);
+	hlog(LOG_DEBUG, "%s: login string: '%s' (%d)", c->addr_rem, s, len);
 	
 	/* parse to arguments */
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] == '#')
 		return 0;
 	
 	if (argc < 2) {
-		hlog(LOG_WARNING, "%s: Invalid login string, too few arguments: '%s'", c->addr_s, s);
+		hlog(LOG_WARNING, "%s: Invalid login string, too few arguments: '%s'", c->addr_rem, s);
 		return 0;
 	}
 	
 	if (strcasecmp(argv[0], "user") != 0) {
-		hlog(LOG_WARNING, "%s: Invalid login string, no 'user': '%s'", c->addr_s, s);
+		hlog(LOG_WARNING, "%s: Invalid login string, no 'user': '%s'", c->addr_rem, s);
 		return 0;
 	}
 	
@@ -94,7 +94,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	for (i = 2; i < argc; i++) {
 		if (strcasecmp(argv[i], "pass") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): No passcode after pass command", c->addr_s, username);
+				hlog(LOG_WARNING, "%s (%s): No passcode after pass command", c->addr_rem, username);
 				break;
 			}
 			
@@ -104,7 +104,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 					c->validated = 1;
 		} else if (strcasecmp(argv[i], "vers") == 0) {
 			if (i+2 >= argc) {
-				hlog(LOG_WARNING, "%s (%s): No application name and version after vers command", c->addr_s, username);
+				hlog(LOG_WARNING, "%s (%s): No application name and version after vers command", c->addr_rem, username);
 				break;
 			}
 			
@@ -119,12 +119,12 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 #endif
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): Missing UDP port number after UDP command", c->addr_s, username);
+				hlog(LOG_WARNING, "%s (%s): Missing UDP port number after UDP command", c->addr_rem, username);
 				break;
 			}
 			c->udp_port = atoi(argv[i]);
 			if (c->udp_port < 1024 || c->udp_port > 65535) {
-				hlog(LOG_WARNING, "%s (%s): UDP port number %s is out of range", c->addr_s, username, argv[i]);
+				hlog(LOG_WARNING, "%s (%s): UDP port number %s is out of range", c->addr_rem, username, argv[i]);
 				c->udp_port = 0;
 			}
 
@@ -170,7 +170,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",
-	     c->addr_s, username,
+	     c->addr_rem, username,
 	     (c->validated) ? " pass_ok" : "",
 	     (!c->validated && given_passcode >= 0) ? " pass_invalid" : "",
 	     (given_passcode < 0) ? " pass_none" : "",

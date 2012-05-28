@@ -57,6 +57,13 @@ sub bind_and_listen($)
 	die "Could not create socket: $!\n" unless $self->{'lsock'};
 }
 
+sub unbind($)
+{
+	my($self) = @_;
+	
+	undef $self->{'lsock'};
+}
+
 sub accept($)
 {
 	my($self) = @_;

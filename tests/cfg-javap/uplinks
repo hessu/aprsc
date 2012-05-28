@@ -38,3 +38,7 @@ msgOnlyPorts=55314u
 IGatePorts=55580u
 clientOnlyPorts=55581u
 #
+# servers
+upstreamHubs=127.0.0.1:54153;[::1]:54153
+#
+

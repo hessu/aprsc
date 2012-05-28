@@ -475,8 +475,8 @@ static void dupecheck_thread(void)
 			w->pbuf_incoming_count = 0;
 			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 
-			hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
-			     c, w->id, dupecheck_seqnum);
+			//hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
+			//     c, w->id, dupecheck_seqnum);
 
 			for (pb = pb_list; (pb); pb = pbnext) {
 				int rc = dupecheck(pb);

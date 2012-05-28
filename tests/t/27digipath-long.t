@@ -38,11 +38,11 @@ BEGIN {
 
 ok(1); # If we made it this far, we're ok.
 
-my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:10153', 'CORE1');
+my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'CORE1');
 ok(defined $iss1, 1, "Test failed to initialize listening server socket");
 $iss1->bind_and_listen();
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:10153', 'CORE6');
+my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'CORE6');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 
@@ -53,7 +53,7 @@ ok($p->start(), 1, "Failed to start product");
 
 my $login = "N0CALL-1";
 my $server_call = "TESTING";
-my $i_rx = new Ham::APRS::IS("localhost:10152", $login);
+my $i_rx = new Ham::APRS::IS("localhost:55152", $login);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $is1 = $iss1->accept();

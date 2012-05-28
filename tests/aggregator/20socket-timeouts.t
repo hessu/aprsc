@@ -19,7 +19,7 @@ my $ret;
 
 ok(1); # modules load fine
 
-my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:10153', 'CORE1');
+my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'CORE1');
 ok(1); # there's a working socket
 
 $iss1->bind_and_listen();
@@ -50,7 +50,7 @@ warn sprintf("\ntimeout on uplink socket took %.3f s, should take 10s\n", $t_dif
 ok($t_dif > 9 && $t_dif < 15);
 
 # create client connection
-my $cl = new Ham::APRS::IS("localhost:10152", 'CL1ENT');
+my $cl = new Ham::APRS::IS("localhost:55152", 'CL1ENT');
 ok(defined $cl, 1, "Failed to initialize Ham::APRS::IS");
 $ret = $cl->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $cl->{'error'});

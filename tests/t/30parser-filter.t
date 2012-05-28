@@ -22,12 +22,12 @@ ok($p->start(), 1, "Failed to start product");
 
 my $login = "N0CALL-1";
 my $server_call = "TESTING";
-my $i_tx = new Ham::APRS::IS("localhost:14580", $login);
+my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
 # first filter is for uncompressed packet, second for compressed,
 # third for mic-e, fourth for prefix filter test
-my $i_rx = new Ham::APRS::IS("localhost:14581", "N0CALL-2",
+my $i_rx = new Ham::APRS::IS("localhost:55581", "N0CALL-2",
 	'filter' => 'r/60.4752/25.0947/1 r/60.0520/24.5045/1 r/37.0887/-76.4585/100 p/OG/OF3/N');
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 

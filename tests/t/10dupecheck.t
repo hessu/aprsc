@@ -21,10 +21,10 @@ ok($p->start(), 1, "Failed to start product");
 
 my $login = "N0CALL-1";
 my $server_call = "TESTING";
-my $i_tx = new Ham::APRS::IS("localhost:14580", $login);
+my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-my $i_rx = new Ham::APRS::IS("localhost:10152", "N0CALL-2");
+my $i_rx = new Ham::APRS::IS("localhost:55152", "N0CALL-2");
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;

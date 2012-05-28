@@ -18,13 +18,13 @@ ok($p->start(), 1, "Failed to start product");
 
 my $login = "N0CALL-1";
 my $server_call = "TESTING";
-my $i_tx = new Ham::APRS::IS("localhost:14581", $login);
+my $i_tx = new Ham::APRS::IS("localhost:55581", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-my $i_rx = new Ham::APRS::IS("localhost:10152", "N0CALL-2");
+my $i_rx = new Ham::APRS::IS("localhost:55152", "N0CALL-2");
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
-# connect, initially to the client-only port 14581
+# connect, initially to the client-only port 55581
 
 my $ret;
 $ret = $i_tx->connect('retryuntil' => 8);
@@ -96,14 +96,14 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 
 $ret = $i_tx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
-$i_tx = new Ham::APRS::IS("localhost:10152", $login);
+$i_tx = new Ham::APRS::IS("localhost:55152", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 $ret = $i_tx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_tx->{'error'});
 
 # for loop testing, also make a second connection
 my $login_second = "MYC4LL-5";
-$i_tx2 = new Ham::APRS::IS("localhost:10152", $login_second);
+$i_tx2 = new Ham::APRS::IS("localhost:55152", $login_second);
 ok(defined $i_tx2, 1, "Failed to initialize Ham::APRS::IS");
 $ret = $i_tx2->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect twice to the server: " . $i_tx->{'error'});

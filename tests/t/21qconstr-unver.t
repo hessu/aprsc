@@ -17,10 +17,10 @@ ok($p->start(), 1, "Failed to start product");
 
 $tx_call = "N0CALL-1";
 $server_call = "TESTING";
-$i_tx = new Ham::APRS::IS("localhost:10152", $tx_call, 'nopass' => 1);
+$i_tx = new Ham::APRS::IS("localhost:55152", $tx_call, 'nopass' => 1);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-$i_rx = new Ham::APRS::IS("localhost:10152", "N0CALL-2", 'nopass' => 1);
+$i_rx = new Ham::APRS::IS("localhost:55152", "N0CALL-2", 'nopass' => 1);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 # connect

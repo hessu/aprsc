@@ -167,7 +167,6 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	}
 
 	c->keepalive = now + keepalive_interval;
-
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",
 	     c->addr_rem, username,
@@ -181,8 +180,22 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	     (c->app_version) ? c->app_version : ""
 	);
 	
-	/* add the client to the client list */
-	clientlist_add(c);
+	/* Add the client to the client list.
+	 *
+	 * If the client logged in with a valid passcode, check if there are
+	 * other validated clients logged in with the same username.
+	 * If one is found, it needs to be disconnected.
+	 *
+	 * The lookup is done while holding the write lock to the clientlist,
+	 * instead of a separate lookup call, so that two clients logging in
+	 * at exactly the same time won't make it.
+	 */
+	 
+	int old_fd = clientlist_add(c);
+	if (c->validated && old_fd != -1) {
+		hlog(LOG_DEBUG, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, username);
+		shutdown(old_fd, SHUT_RDWR);
+	}
 	
 	return 0;
 }

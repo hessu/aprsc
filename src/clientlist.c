@@ -33,6 +33,8 @@ struct clientlist_t {
 	
 	char  username[16];     /* The callsign */
 	int   validated;	/* Valid passcode given? */
+	int   fd;               /* File descriptor, can be used by another
+	                           thread to shut down a socket */
 	
 	void *client_id;	/* DO NOT REFERENCE - just used for an ID */
 };
@@ -57,21 +59,65 @@ struct clientlist_t *clientlist_find_id(void *id)
 }
 
 /*
+ *	Check if given usename is logged in and validated.
+ *	Return fd if found, -1 if not.
+ *	Internal variant, no locking.
+ */
+
+static int check_if_validated_client(char *username, int len)
+{
+	struct clientlist_t *cl;
+	
+	for (cl = clientlist; cl; cl = cl->next) {
+		if (strncasecmp(username, cl->username, len) == 0
+		  && strlen(cl->username) == len && cl->validated) {
+		  	return cl->fd;
+		}
+	}
+	
+	return -1;
+}
+
+/*
+ *	Check if given usename is logged in and validated.
+ *	Return fd if found, -1 if not.
+ *	This is the external variant, with locking.
+ */
+
+int clientlist_check_if_validated_client(char *username, int len)
+{
+	int fd;
+	
+	rwl_rdlock(&clientlist_lock);
+	
+	fd = check_if_validated_client(username, len);
+	
+	rwl_rdunlock(&clientlist_lock);
+	
+	return fd;
+}
+
+/*
  *	Add a client to the client list
  */
 
-void clientlist_add(struct client_t *c)
+int clientlist_add(struct client_t *c)
 {
 	struct clientlist_t *cl;
+	int old_fd;
 	
 	/* allocate and fill in */
 	cl = hmalloc(sizeof(*cl));
 	strncpy(cl->username, c->username, sizeof(cl->username));
 	cl->username[sizeof(cl->username)-1] = 0;
 	cl->validated = c->validated;
+	cl->fd = c->fd;
 	
 	/* get lock for list and insert */
 	rwl_wrlock(&clientlist_lock);
+	
+	old_fd = check_if_validated_client(c->username, strlen(c->username));
+	
 	if (clientlist)
 		clientlist->prevp = &cl->next;
 	cl->next = clientlist;
@@ -79,6 +125,8 @@ void clientlist_add(struct client_t *c)
 	cl->client_id = (void *)c;
 	clientlist = cl;
 	rwl_wrunlock(&clientlist_lock);
+	
+	return old_fd;
 }
 
 /*
@@ -102,27 +150,5 @@ void clientlist_remove(struct client_t *c)
 	}
 	
 	rwl_wrunlock(&clientlist_lock);
-}
-
-/*
- *	Check if given usename is logged in and validated
- */
-
-int clientlist_check_if_validated_client(char *username, int len)
-{
-	struct clientlist_t *cl;
-	
-	rwl_rdlock(&clientlist_lock);
-	
-	for (cl = clientlist; cl; cl = cl->next) {
-		if (strncasecmp(username, cl->username, len) == 0
-		  && strlen(cl->username) == len && cl->validated) {
-			rwl_rdunlock(&clientlist_lock);
-			return 1;
-		}
-	}
-	
-	rwl_rdunlock(&clientlist_lock);
-	return 0;
 }
 

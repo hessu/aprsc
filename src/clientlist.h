@@ -12,7 +12,7 @@
 
 #include "worker.h"
 
-extern void clientlist_add(struct client_t *c);
+extern int clientlist_add(struct client_t *c);
 extern void clientlist_remove(struct client_t *c);
 
 extern int clientlist_check_if_validated_client(char *username, int len);

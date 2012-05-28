@@ -144,7 +144,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 				hlog(LOG_DEBUG, "dropping due to login callsign not being the last viacall after Q construct");
 				return -2;
 			}
-		} else if (clientlist_check_if_validated_client(qcallv[i], l)) {
+		} else if (clientlist_check_if_validated_client(qcallv[i], l) != -1) {
 			/* 2) hits: TODO: should dump to a loop log */
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "dropping due to callsign '%s' in Q construct being logged in on another socket", qcallv[i]);

@@ -24,14 +24,14 @@ my $server_call = "TESTING";
 my $i_rx = new Ham::APRS::IS("localhost:55152", $login);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
-warn "accepting\n";
+#warn "accepting\n";
 
 my $is1 = $iss1->accept();
 ok(defined $is1, (1), "Failed to accept connection 1 from server");
 
-warn "sending login prompt\n";
+#warn "sending login prompt\n";
 $iss1->send_login_prompt($is1);
-warn "sending login ok\n";
+#warn "sending login ok\n";
 $iss1->send_login_ok($is1);
 
 my $ret;
@@ -52,7 +52,7 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 #    }
 #
 
-warn "doing test 1\n";
+#warn "doing test 1\n";
 
 # (2):
 istest::txrx(\&ok, $is1, $i_rx,
@@ -62,17 +62,17 @@ istest::txrx(\&ok, $is1, $i_rx,
 # unbind the IPv4 server and create IPv6 server
 $iss1->unbind();
 
-warn "switching to ipv6\n";
+#warn "switching to ipv6\n";
 
 my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'CORE6');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 
-warn "disconnecting uplink 1\n";
+#warn "disconnecting uplink 1\n";
 
 $is1->disconnect();
 
-warn "accepting ipv6 connect\n";
+#warn "accepting ipv6 connect\n";
 
 my $is6 = $iss6->accept();
 ok(defined $is6, (1), "Failed to accept connection ipv6 from server");

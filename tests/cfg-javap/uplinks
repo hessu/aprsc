@@ -28,7 +28,7 @@ TNCLogPorts=127.0.0.1:14508
 # Status Page Parameters
 #
 statusPorts=55501
-plainStatusPorts554511
+plainStatusPorts=554511
 portTable=10152;Full APRS-IS Feed;14580;User-defined Filtered Feed;14581;User-defined Filtered Feed;1314;Message-only Feed
 #
 # Client Port Properties

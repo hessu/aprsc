@@ -50,7 +50,10 @@ struct history_cell_t {
 	int  packetlen;
 	char *packet;
 	char packetbuf[170]; /* Maybe a dozen packets are bigger than
-				170 bytes long out of some 17 000 .. */
+				170 bytes long out of some 17 000 ...
+				The bigger ones are malloc()'ed to the
+				*packet pointer, small ones go to
+				packetbuf where *packet points to. */
 };
 
 #define HISTORYDB_CELL_SIZE sizeof(struct history_cell_t)

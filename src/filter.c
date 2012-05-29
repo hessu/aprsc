@@ -23,6 +23,7 @@
 #include "historydb.h"
 #include "cfgfile.h"
 #include "keyhash.h"
+#include "client_heard.h"
 
 // static double rad2deg(double a) { return a * (180.0 * M_1_PI); }
 
@@ -2191,7 +2192,17 @@ static int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filt
 int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	struct filter_t *f;
-
+	
+	/* messaging support: if (1) this is a text message,
+	 * (2) the client is an igate port,
+	 * and (3) the message's recipient has been heard
+	 * recently on the port, gate the message.
+	 */
+	if ((c->flags & CLFLAGS_IGATE) && (pb->packettype & T_MESSAGE)
+	 	&& client_heard_check(c, pb->dstname, pb->dstname_len)) {
+	 		return 1;
+	 }
+	
 	f = c->negdefaultfilters;
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);

@@ -31,6 +31,7 @@
 #include "filter.h"
 #include "dupecheck.h"
 #include "clientlist.h"
+#include "client_heard.h"
 #include "cellmalloc.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
@@ -312,6 +313,8 @@ void client_free(struct client_t *c)
 	filter_free(c->negdefaultfilters);
 	filter_free(c->posuserfilters);
 	filter_free(c->neguserfilters);
+	
+	client_heard_free(c);
 
 	client_udp_free(c->udpclient);
 	clientlist_remove(c);

@@ -1148,11 +1148,13 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		// them the same way in filters as we do those with real
 		// positions..
 		{
+			/* collect destination callsign of the message */
 			char keybuf[CALLSIGNLEN_MAX+1];
 			const char *p;
 			int i;
 			struct history_cell_t *history;
 
+			pb->dstname = body;
 			p = body;
 			for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
 				keybuf[i] = *p;
@@ -1160,9 +1162,19 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 				// to 9 chars, while our historydb is not.
 				if (*p == 0 || *p == ' ' || *p == ':')
 					break;
+				p++;
 			}
 			keybuf[i] = 0;
-
+			pb->dstname_len = p - body;
+			hlog(LOG_DEBUG, "message: dstname len %d", pb->dstname_len);
+			
+			/*
+			 * This adds a position for a message based on the
+			 * recipient, causing it to match an area filter.
+			 * This is not what javAPRSSrvr does, so let's not do it
+			 * quite yet. Compatibility first, at first.
+			 */
+			/*
 			i = historydb_lookup( keybuf, i, &history );
 			if (i > 0) {
 				pb->lat     = history->lat;
@@ -1172,6 +1184,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 				pb->flags  |= F_HASPOS;
 				return 1;
 			}
+			*/
 		}
 		return 0;
 

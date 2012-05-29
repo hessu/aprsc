@@ -105,6 +105,7 @@ struct pbuf_t {
 	uint16_t flags;		/* bitmask: one or more of F_* */
 	uint16_t srcname_len;	/* parsed length of source (object, item, srcall) name 3..9 */
 	uint16_t dstcall_len;	/* parsed length of destination callsign *including* SSID */
+	uint16_t dstname_len;   /* parsed length of message destination including SSID */
 	uint16_t entrycall_len;
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
@@ -116,6 +117,7 @@ struct pbuf_t {
 	const char *qconst_start;  /* "qAX,incomingSSID:"	-- for q and e filters  */
 	const char *info_start;    /* pointer to start of info field */
 	const char *srcname;       /* source's name (either srccall or object/item name) */
+	const char *dstname;       /* message destination callsign */
 	
 	float lat;	/* if the packet is PT_POSITION, latitude and longitude go here */
 	float lng;	/* .. in RADIAN */
@@ -152,8 +154,17 @@ union sockaddr_u {
 	struct sockaddr_in6 si6;
 };
 
-#define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
+/* list of message recipient callsigns heard on a client port */
+struct client_heard_t {
+	char    callsign[CALLSIGNLEN_MAX+1];
+	int	call_len;
+	time_t  last_heard;
+	
+	struct client_heard_t *next;
+	struct client_heard_t **prevp;
+};
 
+#define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
 
 struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 				   Reporting looks up these via listener list. */
@@ -269,7 +280,12 @@ struct client_t {
 	struct filter_t *negdefaultfilters;
 	struct filter_t *posuserfilters;
 	struct filter_t *neguserfilters;
-
+	
+	/* List of station callsigns (not objects/items!) which have been
+	 * heard by this client. Only collected for filtered ports!
+	 * Used for deciding if messages should be routed here.
+	 */
+	struct client_heard_t *client_heard;
 
 	// Maybe we use these four items, or maybe not.
 	// They are there for experimenting with outgoing queue processing algorithms.

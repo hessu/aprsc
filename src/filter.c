@@ -311,9 +311,9 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 	}
 	if ((key[keylen] != ',' && key[keylen] != ':') || keylen < CALLSIGNLEN_MIN)
 		return 0; /* Bad entry-station callsign */
-
-pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
-
+	
+	pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
+	
 	/* We insert only those that have Q-Constructs of qAR or qAr */
 	if (qcons != 'r' && qcons != 'R') return 0;
 

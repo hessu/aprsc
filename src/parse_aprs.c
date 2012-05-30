@@ -1152,7 +1152,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			char keybuf[CALLSIGNLEN_MAX+1];
 			const char *p;
 			int i;
-			struct history_cell_t *history;
+			//struct history_cell_t *history;
 
 			pb->dstname = body;
 			p = body;

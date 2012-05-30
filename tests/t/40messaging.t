@@ -17,7 +17,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 7 + 5 + 2 + 2 + 6 + 4 };
+BEGIN { plan tests => 7 + 7 + 2 + 2 + 6 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -65,8 +65,20 @@ $helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # now, transmit a position packet on the receiving filtered port
+$tx = "$msg_dst-2>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
+$rx = "$msg_dst-2>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
+istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
+
+sleep(3);
+
+# now, transmit a position packet on the receiving filtered port
 $tx = "$msg_dst>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
 $rx = "$msg_dst>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
+istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
+
+# now, transmit a position packet on the receiving filtered port
+$tx = "$msg_dst-3>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
+$rx = "$msg_dst-3>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 # then, a message packet should magically pass!

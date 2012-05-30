@@ -65,6 +65,9 @@ int stats_interval     = 1 * 60;
 int lastposition_storetime = 24*60*60;	/* how long the last position packet of each station is stored */
 int dupefilter_storetime   =     30;	/* how long to store information required for dupe filtering */
 
+int heard_list_storetime   =     3*60*60; /* how long to store "client X has heard station Y" information,
+                                           * to support text message routing */
+
 int pbuf_global_expiration       = 35*60; /* 35 minutes */
 int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */
 

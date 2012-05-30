@@ -286,6 +286,7 @@ struct client_t {
 	 * Used for deciding if messages should be routed here.
 	 */
 	struct client_heard_t *client_heard;
+	int client_heard_count;			/* number of 'heard' list entries for clients */
 
 	// Maybe we use these four items, or maybe not.
 	// They are there for experimenting with outgoing queue processing algorithms.
@@ -396,6 +397,6 @@ extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
 extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets);
 
-extern int worker_client_list(cJSON *clients, cJSON *uplinks);
+extern int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory);
 
 #endif

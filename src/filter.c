@@ -2200,8 +2200,10 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	 */
 	if ((c->flags & CLFLAGS_IGATE) && (pb->packettype & T_MESSAGE)
 	 	&& client_heard_check(c, pb->dstname, pb->dstname_len)) {
+	 		// TODO: this should also trigger a courtesy position transmission,
+	 		// if one has not been recently transmitted.
 	 		return 1;
-	 }
+	}
 	
 	f = c->negdefaultfilters;
 	for ( ; f; f = f->h.next ) {

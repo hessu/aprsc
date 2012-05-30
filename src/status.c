@@ -131,7 +131,7 @@ int status_dump_fp(FILE *fp)
 	
 	cJSON *json_clients = cJSON_CreateArray();
 	cJSON *json_uplinks = cJSON_CreateArray();
-	worker_client_list(json_clients, json_uplinks);
+	worker_client_list(json_clients, json_uplinks, memory);
 	cJSON_AddItemToObject(root, "clients", json_clients);
 	cJSON_AddItemToObject(root, "uplinks", json_uplinks);
 	

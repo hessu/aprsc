@@ -30,6 +30,14 @@ my %products = (
 		'dieswith' => 15,
 		'exitcode' => 143
 	}
+	'javap4' => {
+		'binary' => './javaprssrvr/java',
+		'stdargs' => '-server -cp ./javaprssrvr4/javAPRSSrvr.jar SrvrMain',
+		'cfgfileargs' => '',
+		'cfgdir' => 'cfg-javap',
+		'dieswith' => 15,
+		'exitcode' => 143
+	}
 );
 
 sub new($$)

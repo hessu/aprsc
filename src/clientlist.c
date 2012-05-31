@@ -19,6 +19,7 @@
   *	client list.
   *
   *	TODO: the clientlist should use a hash for quick lookups
+  *	TODO: the clientlist should use cellmalloc
   */
 
 #include <string.h>

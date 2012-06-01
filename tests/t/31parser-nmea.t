@@ -17,12 +17,12 @@ my $p = new runproduct('basic');
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
 
-my $login = "N0CALL-1";
+my $login = "N5CAL-1";
 my $server_call = "TESTING";
 my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-my $i_rx = new Ham::APRS::IS("localhost:55581", "N0CALL-2",
+my $i_rx = new Ham::APRS::IS("localhost:55581", "N5CAL-2",
 	'filter' => 'r/-38.5452/-58.7366/1 s/->' # GPRMC
 	);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");

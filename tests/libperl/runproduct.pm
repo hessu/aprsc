@@ -29,12 +29,13 @@ my %products = (
 		'cfgdir' => 'cfg-javap',
 		'dieswith' => 15,
 		'exitcode' => 143
-	}
+	},
 	'javap4' => {
-		'binary' => './javaprssrvr/java',
-		'stdargs' => '-server -cp ./javaprssrvr4/javAPRSSrvr.jar SrvrMain',
+		'binary' => '../javaprssrvr/java',
+		'chdir' => './javaprssrvr4',
+		'stdargs' => '-server -cp javAPRSSrvr.jar SrvrMain',
 		'cfgfileargs' => '',
-		'cfgdir' => 'cfg-javap',
+		'cfgdir' => '.',
 		'dieswith' => 15,
 		'exitcode' => 143
 	}
@@ -57,6 +58,10 @@ sub new($$)
 	}
 	
 	my $prod = $self->{'prod'} = $products{$self->{'prod_name'}};
+	
+	if (defined $self->{'prod'}->{'chdir'}) {
+		chdir($self->{'prod'}->{'chdir'}) || return "could not chdir to " . $self->{'prod'}->{'chdir'};
+	}
 	
 	my $cfgfile = $self->{'cfgfile'} = $prod->{'cfgdir'} . '/' . $config;
 	if (! -f $cfgfile) {
@@ -89,6 +94,10 @@ sub start($)
 	
 	my($stdin, $stdout, $stderr);
 	my $pid = open3($stdin, $stdout, $stderr, $self->{'cmdline'});
+	
+	#if (defined $self->{'prod'}->{'chdir'}) {
+	#	chdir('..');
+	#}
 	
 	if (!defined $pid) {
 		return "Failed to run product: $!";

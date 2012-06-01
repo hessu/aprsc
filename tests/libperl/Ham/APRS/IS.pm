@@ -174,6 +174,7 @@ sub connect($;%)
 	
 	my $t = time();
 	while (my $l = $self->getline()) {
+		#warn "login got: $l\n";
 		return 1 if ($l =~ /^#\s+logresp\s+/);
 		if (time() - $t > 5) {
 			$self->{'error'} = "Login command timed out";
@@ -250,13 +251,13 @@ sub getline($;$)
 		if (($nfound) && ($rout)) {
 			my $rbuf;
 			my $nread = sysread($sock, $rbuf, 1024);
-			if ($nread > 0) {
-				$self->{'ibuf'} .= $rbuf;
-			} elsif ($nread < 1) {
+			if (!defined $nread || $nread < 1) {
 				$self->{'error'} = "Failed to read from server: $!";
-				warn "getline: read error (on read)\n";
+				warn "getline: read error (on read): $!\n";
 				$self->disconnect();
 				return undef;
+			} else {
+				$self->{'ibuf'} .= $rbuf;
 			}
 		} elsif (($nfound) && ($eout)) {
 			$self->{'error'} = "Failed to read from server (select returned errors): $!";

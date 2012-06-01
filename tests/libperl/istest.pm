@@ -55,10 +55,11 @@ sub should_drop($$$$$;$)
 	}
 	
 	my $helper_key = 'helper.' . int(rand(1000000));
-	$sent = $i_tx->sendline($helper. ' ' . $helper_key);
+	my $helper_l = $helper. ' ' . $helper_key;
+	$sent = $i_tx->sendline($helper_l);
 	
 	if (!$sent) {
-		&$ok($sent, 1, "Failed to send helper line to server: '$tx'");
+		&$ok($sent, 1, "Failed to send helper line to server: '$helper_l'");
 		return;
 	}
 	
@@ -66,9 +67,9 @@ sub should_drop($$$$$;$)
 	
 	if (!defined $received) {
 		if ($i_rx->{'state'} eq 'connected') {
-			&$ok(1, 0, "Did not receive packet from server (timeout): '$tx'");
+			&$ok(1, 0, "Did not receive helper packet from server (timeout): '$helper_l'");
 		} else {
-			&$ok(1, 0, "Server connection went down after sending: '$tx'");
+			&$ok(1, 0, "Server connection went down after sending: '$tx' and '$helper_l'");
 		}
 		return;
 	}

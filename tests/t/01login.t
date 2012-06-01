@@ -15,7 +15,7 @@ ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
 
 # connect to the server
-my $is = new Ham::APRS::IS("localhost:55152", "N0CALL");
+my $is = new Ham::APRS::IS("localhost:55152", "OH7LZB");
 ok(defined $is, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret = $is->connect('retryuntil' => 8);

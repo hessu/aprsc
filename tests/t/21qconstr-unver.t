@@ -15,12 +15,12 @@ my $p = new runproduct('basic');
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
 
-$tx_call = "N0CALL-1";
+$tx_call = "N5CAL-1";
 $server_call = "TESTING";
 $i_tx = new Ham::APRS::IS("localhost:55152", $tx_call, 'nopass' => 1);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-$i_rx = new Ham::APRS::IS("localhost:55152", "N0CALL-2", 'nopass' => 1);
+$i_rx = new Ham::APRS::IS("localhost:55152", "N5CAL-2", 'nopass' => 1);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 # connect
@@ -93,7 +93,7 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 
 $position .= '.';
 istest::txrx(\&ok, $i_tx, $i_rx,
-	"$tx_call>DST,DIGI1,DIGI5*,N0CALL,I:$position",
+	"$tx_call>DST,DIGI1,DIGI5*,N5CAL,I:$position",
 	"$tx_call>DST,TCPXX*,qAX,$server_call:$position");
 
 

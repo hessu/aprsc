@@ -24,6 +24,7 @@
 #include <sys/syscall.h>
 #endif
 #include <sys/resource.h>
+#include <locale.h>
 
 #include "hmalloc.h"
 #include "hlog.h"
@@ -243,6 +244,26 @@ int main(int argc, char **argv)
 	startup_tick = tick;
 	setlinebuf(stdout);
 	setlinebuf(stderr);
+	
+	/* set locale to C so that isalnum(), isupper() etc don't do anything
+	 * unexpected if the environment is unexpected.
+	 */
+	if (!setlocale(LC_COLLATE, "C")) {
+		hlog(LOG_CRIT, "Failed to set locale C for LC_COLLATE.");
+		exit(1);
+	}
+	if (!setlocale(LC_CTYPE, "C")) {
+		hlog(LOG_CRIT, "Failed to set locale C for LC_CTYPE.");
+		exit(1);
+	}
+	if (!setlocale(LC_MESSAGES, "C")) {
+		hlog(LOG_CRIT, "Failed to set locale C for LC_MESSAGES.");
+		exit(1);
+	}
+	if (!setlocale(LC_NUMERIC, "C")) {
+		hlog(LOG_CRIT, "Failed to set locale C for LC_NUMERIC.");
+		exit(1);
+	}
 
 	/* Adjust process global fileno limit */
 	e = getrlimit(RLIMIT_NOFILE, &rlim);

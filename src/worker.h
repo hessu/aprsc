@@ -141,6 +141,7 @@ extern struct pbuf_t **pbuf_global_dupe_prevp;
 typedef enum {
 	CSTATE_UDP,
 	CSTATE_LOGIN,
+	CSTATE_LOGRESP,
 	CSTATE_CONNECTED,
 	CSTATE_COREPEER
 } CStateEnum;
@@ -373,6 +374,7 @@ extern void pbuf_dupe_dump(FILE *fp);
 extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
 extern int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
+extern void client_close(struct worker_t *self, struct client_t *c, int errnum);
 extern void client_init(void);
 
 extern struct worker_t *worker_threads;

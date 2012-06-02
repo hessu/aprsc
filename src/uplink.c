@@ -107,9 +107,11 @@ void uplink_close(struct client_t *c, int errnum)
 	else if (errnum == -1)
 		hlog(LOG_INFO, "%s: Uplink has been closed by remote host (EOF).", c->addr_rem);
 	else if (errnum == -2)
-		hlog(LOG_INFO, "%s: Uplink has been closed due to timeout.", c->addr_rem);
+		hlog(LOG_INFO, "%s: Uplink has been closed due to a timeout.", c->addr_rem);
+	else if (errnum == -3)
+		hlog(LOG_INFO, "%s: Uplink has been closed due to a protocol error.", c->addr_rem);
 	else
-		hlog(LOG_INFO, "%s: Uplink has been closed due to error: %s", c->addr_rem, strerror(errnum));
+		hlog(LOG_INFO, "%s: Uplink has been closed due to an error: %s", c->addr_rem, strerror(errnum));
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -136,6 +138,66 @@ void uplink_close(struct client_t *c, int errnum)
 	return;
 }
 
+/*
+ *	uplink_logresp_handler parses the "# logresp" string given by
+ *	an upstream server after our "user" command has been sent.
+ */
+
+int uplink_logresp_handler(struct worker_t *self, struct client_t *c, char *s, int len)
+{
+	int argc;
+	char *argv[256];
+	
+	hlog(LOG_INFO, "%s: Uplink server login response: \"%.*s\"", c->addr_rem, len, s);
+	
+	/* parse to arguments */
+	/* make it null-terminated for our string processing */
+	char *e = s + len;
+	*e = 0;
+	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
+		hlog(LOG_ERR, "%s: Uplink's logresp message is not recognized: no # in beginning", c->addr_rem);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	if (argc < 6) {
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not have enough arguments", c->addr_rem);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	if (strcmp(argv[1], "logresp") != 0) {
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not say 'logresp'", c->addr_rem);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	if (strcmp(argv[2], mycall) != 0) {
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it", c->addr_rem, mycall);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	if (strcmp(argv[3], "verified,") != 0) {
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not say I'm verified", c->addr_rem);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	// TODO: When logging in to a remote server, should probably catch it's callsign and verify I've found the right server
+	
+	c->handler = incoming_handler;
+	c->state   = CSTATE_CONNECTED;
+	
+	hlog(LOG_INFO, "%s: Logged in to server", c->addr_rem);
+	
+	return 0;
+}
+
+/*
+ *	uplink_login_handler parses the "# <software> <version" string given by
+ *	an upstream server.
+ */
 
 int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 {
@@ -153,15 +215,16 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 #endif
 
 	passcode = aprs_passcode(c->username);
-
-	hlog(LOG_INFO, "%s: Uplink server says: \"%.*s\"", c->addr_rem, len, s);
+	
+	hlog(LOG_INFO, "%s: Uplink server software: \"%.*s\"", c->addr_rem, len, s);
 	
 	/* parse to arguments */
 	/* make it null-terminated for our string processing */
 	char *e = s + len;
 	*e = 0;
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
-		hlog(LOG_ERR, "%s: Uplink's welcome message is not recognized", c->addr_rem);
+		hlog(LOG_ERR, "%s: Uplink's welcome message is not recognized: no # in beginning", c->addr_rem);
+		client_close(self, c, -3);
 		return 0;
 	}
 	
@@ -186,14 +249,13 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	rc = client_write(self, c, buf, len);
 	if (rc < -2) return rc;
 
-	c->handler = incoming_handler;
+	c->handler = uplink_logresp_handler;
 	c->state   = CSTATE_CONNECTED;
 	
 	hlog(LOG_INFO, "%s: Connected to server, logging in", c->addr_rem);
 	
 	return 0;
 }
-
 
 /*
  *	Uplink a single connection

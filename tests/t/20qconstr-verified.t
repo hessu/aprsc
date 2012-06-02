@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 32 };
+BEGIN { plan tests => 33 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -50,6 +50,14 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,DIGI1,DIGI5*,qAR:a4ufy",
 	"SRC>DST,DIGI1,DIGI5*,qAO,$login:a4ufy");
 
+# It's not in the algorithm, but:
+# if a path element after the q construct has a '*' or other crap
+# in the callsign, the packet is dropped.
+
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,DIGI1*,qAR,GATES*:testing * after Q construct",
+	"SRC>DST:dummy"); # will pass (helper packet)
+
 #
 #    If the packet entered the server from a verified client-only connection AND the FROMCALL does not match the login:
 #    {
@@ -81,7 +89,7 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 # (3)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*,IGATE,I:testing (3)",
-	"SRCCALL>DST,DIGI1*,IGATE,I,qAO,$login:testing (3)");
+	"SRCCALL>DST,DIGI1*,qAo,IGATE:testing (3)");
 # (4)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*:testing (4)",

@@ -14,12 +14,29 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "parse_qc.h"
 #include "incoming.h"
 #include "clientlist.h"
 #include "config.h"
 #include "hlog.h"
+
+static int check_invalid_q_callsign(const char *call, int len)
+{
+	const char *p = call;
+	const char *e = call + len;
+	
+	while (p < e) {
+		if (!isascii(*p))
+			return -1;
+		if ((!isalnum(*p)) && *p != '-')
+			return -1;
+		p++;
+	}
+	
+	return 0;
+}
 
 /*
  *	q_dropcheck contains the last big block of the Q construct algorithm
@@ -56,6 +73,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 	
 	/*
 	 * Produce an array of pointers pointing to each callsign in the path
+	 * after the q construct
 	 */
 	qcallc = 0;
 	if (q_start) {
@@ -126,7 +144,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 			/* this match is case sensitive in javaprssrvr, so that's what we'll do */
 			if (l == qcallv[j+1] - qcallv[j] - 1 && strncmp(qcallv[i], qcallv[j], l) == 0) {
 				/* TODO: The reject log should really log the offending packet */
-				hlog(LOG_DEBUG, "dropping due to callsign-SSID found twice after Q construct");
+				hlog(LOG_DEBUG, "dropping due to callsign-SSID '%.*s' found twice after Q construct", l, qcallv[i]);
 			    	return -2;
 			}
 		}
@@ -147,7 +165,10 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		} else if (clientlist_check_if_validated_client(qcallv[i], l) != -1) {
 			/* 2) hits: TODO: should dump to a loop log */
 			/* TODO: The reject log should really log the offending packet */
-			hlog(LOG_DEBUG, "dropping due to callsign '%s' in Q construct being logged in on another socket", qcallv[i]);
+			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being logged in on another socket", l, qcallv[i]);
+			return -2;
+		} else if (check_invalid_q_callsign(qcallv[i], l)) {
+			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being invalid as an APRS-IS server name", l, qcallv[i]);
 			return -2;
 		}
 	}

@@ -719,7 +719,7 @@ int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ..
 	va_end(args);
 	
 	if (i < 0 || i >= PACKETLEN_MAX) {
-		hlog(LOG_ERR, "client_printf failed to %s: '%s'", c->addr_rem, fmt);
+		hlog(LOG_ERR, "client_printf vsnprintf failed to %s: '%s'", c->addr_rem, fmt);
 		return -1;
 	}
 	
@@ -929,9 +929,15 @@ void collect_new_clients(struct worker_t *self)
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
-
-		/* the new client may end up destroyed right away, never mind it here... */
-		client_printf(self, c, "# Hello %s\r\n", c->addr_rem, SERVERID);
+		
+		/* The new client may end up destroyed right away, never mind it here.
+		 * We will notice it later and discard the client.
+		 */
+		
+		/* According to http://www.aprs-is.net/ServerDesign.aspx, the server must
+		 * initially transmit it's software name and version string.
+		 */
+		client_printf(self, c, "# " SERVERID "\r\n");
 	}
 	
 	if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {

@@ -30,7 +30,11 @@ sub new($$$;%)
 	my($host_port, $mycall, %options) = @_;
 	
 	$self->{'host_port'} = $host_port;
-	$self->{'mycall'} = $mycall;
+	if (defined $mycall) {
+		$self->{'mycall'} = $mycall;
+	} else {
+		$self->{'mycall'} = "FAKE" . sprintf("%d", rand(999));
+	}
 	#$self->{'filter'} = $options{'filter'} if (defined $options{'filter'});
 	
 	#warn "aprspass for $self->{mycall} is $self->{aprspass}\n";
@@ -93,7 +97,7 @@ sub send_login_ok($$)
 {
 	my($self, $is) = @_;
 	
-	return $is->sendline("# logresp CALLSIGN unverified, server FAKE" . sprintf("%d", rand(999)) );
+	return $is->sendline("# logresp CALLSIGN unverified, server " . $self->{'mycall'} );
 }
 
 1;

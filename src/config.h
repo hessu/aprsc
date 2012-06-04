@@ -49,6 +49,7 @@ extern int ibuf_size;
 extern int lastposition_storetime;
 extern int dupefilter_storetime;
 extern int heard_list_storetime;
+extern int courtesy_list_storetime;
 extern int upstream_timeout;
 extern int client_timeout;
 

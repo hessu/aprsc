@@ -67,6 +67,8 @@ int dupefilter_storetime   =     30;	/* how long to store information required f
 
 int heard_list_storetime   =     3*60*60; /* how long to store "client X has heard station Y" information,
                                            * to support text message routing */
+int courtesy_list_storetime   =    30*60; /* how long to store "client X has been given MSG from station Y" information,
+                                           * to support courtesy position transmission after text message routing */
 
 int pbuf_global_expiration       = 35*60; /* 35 minutes */
 int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */

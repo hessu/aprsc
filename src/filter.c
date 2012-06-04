@@ -2198,11 +2198,21 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	 * and (3) the message's recipient has been heard
 	 * recently on the port, gate the message.
 	 */
-	if ((c->flags & CLFLAGS_IGATE) && (pb->packettype & T_MESSAGE)
-	 	&& client_heard_check(c, pb->dstname, pb->dstname_len)) {
-	 		// TODO: this should also trigger a courtesy position transmission,
-	 		// if one has not been recently transmitted.
-	 		return 1;
+	if (c->flags & CLFLAGS_IGATE) {
+		if ((pb->packettype & T_MESSAGE)
+			&& client_heard_check(c, pb->dstname, pb->dstname_len)) {
+				/* insert the source callsign to the courtesy position list */
+				client_courtesy_update(c, pb);
+				return 1;
+		}
+		/* Courtesy position: if a message from this source callsign has been
+		 * passed to this socket within 30 minutes, do pass on the next
+		 * single position packet, too.
+		 */
+		if (pb->packettype & (T_POSITION|T_OBJECT|T_ITEM)
+			&& client_courtesy_needed(c, pb->srcname, pb->srcname_len)) {
+				return 1;
+		}
 	}
 	
 	f = c->negdefaultfilters;

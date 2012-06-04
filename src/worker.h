@@ -285,9 +285,14 @@ struct client_t {
 	/* List of station callsigns (not objects/items!) which have been
 	 * heard by this client. Only collected for filtered ports!
 	 * Used for deciding if messages should be routed here.
+	 *
+	 * client_courtesy lists the srccalls which have originated messages
+	 * on this filtered ports, and should have a courtesy position sent.
 	 */
 	struct client_heard_t *client_heard;
+	struct client_heard_t *client_courtesy;
 	int client_heard_count;			/* number of 'heard' list entries for clients */
+	int client_courtesy_count;		/* number of 'courtesy' list entries for clients */
 
 	// Maybe we use these four items, or maybe not.
 	// They are there for experimenting with outgoing queue processing algorithms.

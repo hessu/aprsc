@@ -184,12 +184,33 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, char *s, i
 		return 0;
 	}
 	
-	// TODO: When logging in to a remote server, should probably catch it's callsign and verify I've found the right server
+	if (strcmp(argv[4], "server") != 0) {
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not contain 'server'", c->addr_rem);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	// TODO: username length should be a define
+	if (strlen(argv[5]) > 9) {
+		hlog(LOG_ERR, "%s: Uplink's server name is too long: '%s'", c->addr_rem, argv[5]);
+		client_close(self, c, -3);
+		return 0;
+	}
+	
+	/* store the remote server's callsign as the "client username" */
+#ifndef FIXED_IOBUFS
+	if (c->username)
+		hfree(c->username);
+	c->username = hstrdup(argv[5]);
+#else
+	strncpy(c->username, argv[5], sizeof(c->username));
+	c->username[sizeof(c->username)-1] = 0;
+#endif
 	
 	c->handler = incoming_handler;
 	c->state   = CSTATE_CONNECTED;
 	
-	hlog(LOG_INFO, "%s: Logged in to server", c->addr_rem);
+	hlog(LOG_INFO, "%s: Logged in to server %s", c->addr_rem, c->username);
 	
 	return 0;
 }
@@ -558,7 +579,9 @@ void uplink_thread(void *asdf)
 		}
 		
 		/* sleep for 1 second */
-		poll(NULL, 0, 1000);
+		for (rc = 0; (!uplink_shutting_down) && rc < 5; rc++) {
+			poll(NULL, 0, 200);
+		}
 		
 		/* speed up shutdown */
 		if (uplink_shutting_down)
@@ -618,7 +641,8 @@ void uplink_thread(void *asdf)
 		}
 		
 		/* sleep for 4 seconds between successful rounds */
-		poll(NULL, 0, 4000);
+		for (rc = 0; (!uplink_shutting_down) && rc < 4000/200; rc++)
+			poll(NULL, 0, 200);
 	}
 	
 	hlog(LOG_DEBUG, "Uplink thread shutting down uplinking sockets...");

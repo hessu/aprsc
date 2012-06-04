@@ -13,6 +13,10 @@
   *	a given station. It's used for message routing by the
   *	message destination callsign.
   *
+  *	The module also maintains a list of callsigns which have transmitted
+  *	messages to a given client. The list is used to pass courtesy
+  *	positions to the client.
+  *	
   *	The heard list is only touched by the worker thread operating
   *	on that client socket, so it shouldn't need any locking at all.
   *

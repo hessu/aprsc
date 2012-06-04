@@ -13,18 +13,37 @@
 
 #include <signal.h>
 #include <poll.h>
+#include <string.h>
 
 #include <event2/event.h>  
 #include <event2/http.h>  
+#include <event2/buffer.h>  
 
 #include "http.h"
 #include "config.h"
 #include "hlog.h"
 #include "hmalloc.h"
 #include "worker.h"
+#include "status.h"
 
 int http_shutting_down;
 int http_reconfiguring;
+
+void http_status(struct evhttp_request *r)
+{
+	char *json;
+	struct evbuffer *buffer;
+	buffer = evbuffer_new();
+	
+	json = status_json_string();
+	evbuffer_add(buffer, json, strlen(json));
+	
+	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
+	
+	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
+	evbuffer_free(buffer);
+}
 
 /*
  *	HTTP request router
@@ -33,11 +52,24 @@ int http_reconfiguring;
 void http_router(struct evhttp_request *r, void *arg)
 {
 	const char *uri = evhttp_request_get_uri(r);
+	
+	hlog(LOG_DEBUG, "http request %s", uri);
+	
+	if (strcmp(uri, "/status.json") == 0) {
+		http_status(r);
+		return;
+	}
+	
+	evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 }
 
 struct event *ev_timer = NULL;
 struct evhttp *libsrvr = NULL;
 struct event_base *libbase = NULL;
+
+/*
+ *	HTTP timer event, mainly to catch the shutdown signal
+ */
 
 void http_timer(evutil_socket_t fd, short events, void *arg)
 {
@@ -98,11 +130,14 @@ void http_thread(void *asdf)
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			
+			hlog(LOG_INFO, "Binding HTTP socket %s:%d", http_bind, http_port);
+			
+			evhttp_bind_socket(libsrvr, http_bind, http_port);
+			evhttp_set_gencb(libsrvr, http_router, NULL);
+			
 			hlog(LOG_INFO, "HTTP thread ready.");
 		}
 		
-		evhttp_bind_socket(libsrvr, http_bind, http_port);
-		evhttp_set_gencb(libsrvr, http_router, NULL);
 		event_base_dispatch(libbase);
 	}
 	

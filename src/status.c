@@ -42,7 +42,7 @@ void status_uname(cJSON *root)
 	cJSON_AddStringToObject(root, "os", s);
 }
 
-int status_dump_fp(FILE *fp)
+char *status_json_string(void)
 {
 	char *out;
 	
@@ -137,6 +137,13 @@ int status_dump_fp(FILE *fp)
 	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
+	
+	return out;
+}
+
+int status_dump_fp(FILE *fp)
+{
+	char *out = status_json_string();
 	fputs(out, fp);
 	free(out);
 	

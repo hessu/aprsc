@@ -100,4 +100,36 @@ sub send_login_ok($$)
 	return $is->sendline("# logresp CALLSIGN unverified, server " . $self->{'mycall'} );
 }
 
+sub process_login($$)
+{
+	my($self, $is) = @_;
+	
+	my $r;
+	
+	$r = $is->sendline("# IS_Fake 1.00");
+	if (!$r) {
+		return 'failed to transmit server software string';
+	}
+	
+	my $login = $is->getline_noncomment(1);
+
+	if ($login !~ /^user\s+([^\s]+)\s+pass\s+(\d+)/) {
+		return 'login command not understood: ' . $login;
+	}
+	
+	$is->{'client_user'} = $1;
+	my $pass_given = $2;
+	
+	my $passcode = Ham::APRS::IS::aprspass($1);
+	
+	my $verified = ($pass_given eq $passcode) ? 'verified' : 'unverified';
+	
+	$r = $is->sendline("# logresp " . $is->{'client_user'} . " $verified, server " . $self->{'mycall'} );
+	if (!$r) {
+		return 'failed to transmit logresp';
+	}
+	
+	return 'ok';
+}
+
 1;

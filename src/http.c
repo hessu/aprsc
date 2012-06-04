@@ -48,6 +48,7 @@ void http_timer(evutil_socket_t fd, short events, void *arg)
 	//hlog(LOG_DEBUG, "http_timer fired");
 	
 	if (http_shutting_down) {
+		http_timer_tv.tv_usec = 1000;
 		event_base_loopexit(libbase, &http_timer_tv);
 		return;
 	}

@@ -209,7 +209,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 		} else if (!(c->flags & CLFLAGS_INPORT)) {
 			/* from an outbound connection, append client's hexaddr */
 			//hlog(LOG_DEBUG, "qAI appending hex address, starting at %d, got %d left in buffer", new_q_len, new_q_size - new_q_len);
-			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->addr_hex);
+			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
 		}
 		//hlog(LOG_DEBUG, "qAI append done, new_q_len %d, new_q_size %d, q_replace %d, going to append %d more", new_q_len, new_q_size, *q_replace, strlen(mycall)+1);
 		
@@ -368,7 +368,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			}
 		}
 		
-		/*
+		/* OLD:
 		 * If the packet entered the server from a verified client-only connection
 		 * AND the FROMCALL does not match the login:
 		 * {
@@ -382,6 +382,23 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 		 *	Skip to "All packets with q constructs"
 		 * }
 		 *
+		 * NOW:
+		 * If the packet entered the server from a verified client-only connection
+		 * AND the FROMCALL does not match the login:
+		 *     {
+		 *         if a q construct exists in the path
+		 *             if the q construct equals ,qAR,callsignssid or ,qAr,callsignssid
+		 *                 Replace qAR or qAr with qAo
+		 *             else if the q construct equals ,qAS,callsignssid
+		 *                 Replace qAS with qAO
+		 *             else if the q construct equals ,qAC,callsignssid and callsignssid is not equal to the servercall or login
+		 *                 Replace qAC with qAO
+		 *         else if the path is terminated with ,callsignssid,I
+		 *             Replace ,callsignssid,I with qAo,callsignssid
+		 *         else
+		 *             Append ,qAO,login
+		 *         Skip to "All packets with q constructs"
+		 *     }
 		 */
 		if (c->validated && (c->flags & CLFLAGS_CLIENTONLY) && !originated_by_client) {
 			// fprintf(stderr, "\tvalidated client sends sends packet originated by someone else\n");
@@ -389,18 +406,25 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			int add_qAO = 1;
 			if (q_proto) {
 				// fprintf(stderr, "\thas q construct\n");
-				/* if the q construct is at the end of the path AND it equals ,qAR,login */
-				if (q_proto == 'A' && q_type == 'R' && q_nextcall_end == *path_end) {
+				/* if the q construct equals ,qAR,callsignssid or ,qAr,callsignssid */
+				if (q_proto == 'A' && (q_type == 'R' || q_type == 'r')) {
 					/* Replace qAR with qAo */
-					*(q_start + 3) = 'o';
-					q_type = 'o';
+					*(q_start + 3) = q_type = 'o';
 					// fprintf(stderr, "\treplaced qAR with qAo\n");
-					/* Not going to modify the construct, update pointer to it */
-					*new_q_start = q_start + 1;
+				} else if (q_proto == 'A' && q_type == 'S') {
+					/* Replace qAS with qAO */
+					*(q_start + 3) = q_type = 'O';
+					// fprintf(stderr, "\treplaced qAS with qAO\n");
+				} else if (q_proto == 'A' && q_type == 'C') {
+					// FIXME: should also check callsignssid to servercall & login
+					/* Replace qAC with qAO */
+					*(q_start + 3) = q_type = 'O';
+					// fprintf(stderr, "\treplaced qAC with qAO\n");
 				} else {
-					/* Not going to modify the construct, update pointer to it */
-					*new_q_start = q_start + 1;
+					// What? Dunno.
 				}
+				/* Not going to modify the construct, update pointer to it */
+				*new_q_start = q_start + 1;
 				add_qAO = 0;
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
 				// fprintf(stderr, "\tpath has ,I in the end\n");
@@ -413,10 +437,11 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 					const char *prevcall_end = *path_end - 2;
 					// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 					/* if the path is terminated with ,login,I */
-					if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
+					// TODO: Should validate that prevcall is a nice callsign
+					if (1) {
 						/* Replace ,login,I with qAo,login */
 						*path_end = p;
-						new_q_len = snprintf(new_q, new_q_size, ",qAo,%s", c->username);
+						new_q_len = snprintf(new_q, new_q_size, ",qAo,%.*s", (int)(prevcall_end - prevcall), prevcall);
 						q_proto = 'A';
 						q_type = 'o';
 						add_qAO = 0;

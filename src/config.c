@@ -53,6 +53,10 @@ struct uplink_config_t *new_uplink_config;
 struct peerip_config_t *peerip_config;
 struct peerip_config_t *new_peerip_config;
 
+char def_http_bind[] = "0.0.0.0";
+char *http_bind = def_http_bind;	/* http address string to listen on */
+int http_port = 14501;
+
 int fork_a_daemon;	/* fork a daemon */
 
 int dump_splay;	/* print splay tree information */

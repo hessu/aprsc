@@ -123,6 +123,10 @@ extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
 extern struct uplink_config_t *uplink_config;
 
+/* http server config */
+extern char *http_bind;
+extern int http_port;
+
 extern int read_config(void);
 extern void free_config(void);
 

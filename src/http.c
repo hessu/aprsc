@@ -14,6 +14,8 @@
 #include <signal.h>
 #include <poll.h>
 
+#include <event2/event.h>  
+#include <event2/http.h>  
 
 #include "http.h"
 #include "config.h"
@@ -25,6 +27,35 @@ int http_shutting_down;
 int http_reconfiguring;
 
 /*
+ *	HTTP request router
+ */
+
+void http_router(struct evhttp_request *r, void *arg)
+{
+	const char *uri = evhttp_request_get_uri(r);
+}
+
+struct event *ev_timer = NULL;
+struct evhttp *libsrvr = NULL;
+struct event_base *libbase = NULL;
+
+void http_timer(evutil_socket_t fd, short events, void *arg)
+{
+	struct timeval http_timer_tv;
+	http_timer_tv.tv_sec = 0;
+	http_timer_tv.tv_usec = 200000;
+	
+	//hlog(LOG_DEBUG, "http_timer fired");
+	
+	if (http_shutting_down) {
+		event_base_loopexit(libbase, &http_timer_tv);
+		return;
+	}
+	
+	event_add(ev_timer, &http_timer_tv);
+}
+
+/*
  *	HTTP server thread
  */
 
@@ -32,6 +63,11 @@ void http_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
 	int e;
+	
+	struct timeval http_timer_tv;
+	
+	http_timer_tv.tv_sec = 0;
+	http_timer_tv.tv_usec = 200000;
 	
 	pthreads_profiling_reset("http");
 	
@@ -56,11 +92,17 @@ void http_thread(void *asdf)
 			http_reconfiguring = 0;
 			
 			// do init
+			libbase = event_base_new();
+			libsrvr = evhttp_new(libbase);
+			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
+			event_add(ev_timer, &http_timer_tv);
+			
 			hlog(LOG_INFO, "HTTP thread ready.");
 		}
 		
-		/* sleep */
-		e = poll(NULL, 0, 200);
+		evhttp_bind_socket(libsrvr, http_bind, http_port);
+		evhttp_set_gencb(libsrvr, http_router, NULL);
+		event_base_dispatch(libbase);
 	}
 	
 	hlog(LOG_DEBUG, "HTTP thread shutting down...");

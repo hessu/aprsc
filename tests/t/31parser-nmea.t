@@ -53,7 +53,7 @@ $tx = "OH3XYZ>GPSMW:\$GPRMC,212052,A,4609.1157,N,12258.8145,W,0.168,13.4,130909,
 my $dummy = "OH4XYZ>GPSMV:\$GPRMC,212052,A,4609.1157,N,12258.8145,W,0.168,13.4,130909,17.9,E*6B";
 istest::should_drop(\&ok, $i_tx, $i_rx,
         $tx, # should drop
-        $dummy); # will pass (helper packet)
+        $dummy, 1, 1); # will pass (helper packet)
 
 # stop
 

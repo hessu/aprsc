@@ -571,7 +571,7 @@ void accept_thread(void *asdf)
 		}
 		
 		/* check for new connections */
-		e = poll(acceptpfd, listen_n, 1000);
+		e = poll(acceptpfd, listen_n, 200);
 		if (e == 0)
 			continue;
 		if (e < 0) {

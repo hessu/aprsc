@@ -135,7 +135,7 @@ int sighandler(int signum)
 	case SIGINT:
 	case SIGTERM:
 	case SIGQUIT:
-		hlog(LOG_CRIT, "Shutting down on signal %d", signum);
+		hlog(LOG_NOTICE, "Shutting down on signal %d", signum);
 		shutting_down = 1;
 		return 0;
 		
@@ -409,7 +409,7 @@ int main(int argc, char **argv)
 	filter_wx_atend();
 	filter_entrycall_atend();
 	
-	hlog(LOG_CRIT, "Shut down.");
+	hlog(LOG_NOTICE, "Shut down.");
 	close_log(0);
 	
 	return 0;

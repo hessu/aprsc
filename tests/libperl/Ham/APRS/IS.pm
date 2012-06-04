@@ -14,6 +14,8 @@ our $VERSION = '0.01';
 
 our $aprs_appid = "IS $VERSION";
 
+our $debug = 0;
+
 =head1 new(hostport, mycall, optionshash)
 
 Initializes a new Ham::APRS::IS socket. Takes two mandatory arguments,
@@ -282,14 +284,30 @@ sub getline_noncomment($;$)
 sub sendline($$)
 {
 	my($self, $line) = @_;
+	
+	warn "sendline $line\n" if ($debug);
+	
 	return undef if ($self->{'state'} ne 'connected');
+
+	warn "blocking(1)\n" if ($debug);
 	
 	if (!defined $self->{'sock'}->blocking(1)) {
 		warn "sendline: blocking(1) failed: $!\n";
 		return undef;
 	}
+	
+	warn "printf\n" if ($debug);
+	
+	if (!defined $self->{'sock'}) {
+		warn "sendline: sock not defined: $!\n";
+		return undef;
+	}
+	
 	my $ret = $self->{'sock'}->printf( "%s\r\n", $line);
-	if (!$self->{'sock'}->flush) {
+	
+	warn "flush\n" if ($debug);
+	
+	if (!defined $self->{'sock'}->flush) {
 		warn "sendline: flush() failed: $!\n";
 		return undef;
 	}
@@ -299,7 +317,7 @@ sub sendline($$)
 		return undef;
 	}
 	
-	#warn "sent ($ret): $line\n";
+	warn "sent ($ret): $line\n" if ($debug);
 	return $ret;
 }
 

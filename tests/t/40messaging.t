@@ -4,12 +4,13 @@
 #
 # On a filtered igate port (14580), no messages should come out at first.
 # When a position of a station has been heard, messages for that station
-# should come out, together with a complementary position packet
-# of the originating packet (but not too often?).
+# should come out.
+# After such a message, the next following position transmitted within
+# 30 minutes by the originator should be passed to the recipient's socket, too.
 #
-# Messages transmitted to any SSID must be passed.
+# Messages transmitted to any SSID must be passed?
 #
-# Are messages transmitted to objects passed, too?
+# Are messages transmitted to objects passed, too? No.
 #
 # When a position has been heard, positions for the same callsign-ssid
 # from other igates should come out too, to assist TX igates to know
@@ -17,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 7 + 7 + 2 + 2 + 6 + 4 };
+BEGIN { plan tests => 8 + 9 + 2 + 2 + 6 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -64,6 +65,12 @@ $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I::%-9.9s:message", $msg_dst
 $helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
+# verify that a position packet from the message originator is not passed
+# to a filtered port
+$tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I:!6428.51N/02545.98E#");
+$helper = "H1LP-5>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
 # now, transmit a position packet on the receiving filtered port
 $tx = "$msg_dst-2>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
 $rx = "$msg_dst-2>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
@@ -99,6 +106,16 @@ $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message with SSID{a", $lo
 #$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message with SSID{a", $login_tx, $msg_dst . '-5');
 #istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 $helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass5";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+# now, after a message has been transmitted, the complimentary position should pass
+$tx = "$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I:!5528.51N/00505.68E# should pass compl";
+$rx = "$msg_src>APRS,OH2RDG*,WIDE,qAR,$login_tx:!5528.51N/00505.68E# should pass compl";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# try a second complimentary position - it must be dropped.
+$tx = "$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I:!5628.51N/00505.68E# should drop compl2";
+$helper = "H1LP-C>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 #

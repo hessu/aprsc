@@ -15,12 +15,16 @@ use IPC::Open3;
 use POSIX ":sys_wait_h";
 use Data::Dumper;
 
+my $debug = 0;
+
 my %products = (
 	'aprsc' => {
 		'binary' => '../src/aprsc',
 		'stdargs' => '-e debug -o file -r logs',
 		'cfgfileargs' => '-c',
-		'cfgdir' => 'cfg-aprsc'
+		'cfgdir' => 'cfg-aprsc',
+		'pidfile' => 'logs/aprsc.pid'
+		
 	},
 	'javap' => {
 		'binary' => './javaprssrvr/java',
@@ -90,6 +94,21 @@ sub start($)
 		return "Product already running.";
 	}
 	
+	if (defined $self->{'prod'}->{'pidfile'}) {
+		my $pf = $self->{'prod'}->{'pidfile'};
+		if (open(PF, $pf)) {
+			my $pl = <PF>;
+			close(PF);
+			if ($pl =~ /^(\d+)/) {
+				#warn "runproduct: found old pid $1 from pidfile\n";
+				if (kill(9, $1)) {
+					warn "runproduct: killed old process $1 based on pid file\n";
+					sleep(1); # let it die
+				}
+			}
+		}
+	}
+	
 	#warn "Product command line: $self->{cmdline}\n";
 	
 	my($stdin, $stdout, $stderr);
@@ -122,6 +141,8 @@ sub start($)
 	$self->{'stdin'} = $stdin;
 	$self->{'stdout'} = $stdout;
 	$self->{'stderr'} = $stderr;
+	
+	warn "\nproduct started, pid $pid\n" if ($debug);
 	
 	return 1;
 }
@@ -173,8 +194,11 @@ sub stop($)
 	
 	my $pid = $self->{'pid'};
 	
+	warn "\nkilling product, pid $pid\n" if ($debug);
+	
 	my $hits = kill("TERM", $pid);
 	if ($hits < 1) {
+		warn "\nkilling did not hit anything - not running, pid $pid\n" if ($debug);
 		return "Product is not running.";
 		$self->discard();
 		return undef;
@@ -190,9 +214,10 @@ sub stop($)
 		$slept += $sleeptime;
 		if ($slept >= $maxwait) {
 			if ($rekilled) {
+				warn "\nproduct refuses to die, pid $pid\n" if ($debug);
 				return "Product refuses to die!";
 			} else {
-				warn "Sending SIGKILL...\n";
+				warn "Sending SIGKILL to $pid...\n";
 				$slept = 0;
 				$rekilled = 1;
 				kill("KILL", $pid);
@@ -209,14 +234,19 @@ sub stop($)
 		$self->discard();
 		if ($retval ne 0 || $signal ne 0) {
 			if (defined $self->{'prod'}->{'exitcode'} && $self->{'prod'}->{'exitcode'} eq $retval) {
+				warn "\nproduct kill: ok, retval match $retval, pid $pid\n" if ($debug);
 				# fine
 			} elsif (defined $self->{'prod'}->{'dieswith'} && $self->{'prod'}->{'dieswith'} eq $signal) {
+				warn "\nproduct kill: ok, dieswith signal match $retval, pid $pid\n" if ($debug);
 				# fine
 			} else {
+				warn "\nproduct kill: ok\n" if ($debug);
 				return "Product has been terminated, signal $signal retcode $retval.";
 			}
 		}
 	}
+	
+	warn "\nproduct kill: end, pid $pid\n" if ($debug);
 	
 	$self->discard();
 	return 1;

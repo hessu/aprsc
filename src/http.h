@@ -8,14 +8,12 @@
  *	
  */
 
-#ifndef ACCEPT_H
-#define ACCEPT_H
+#ifndef HTTP_H
+#define HTTP_H
 
-extern int accept_reconfiguring;
-extern int accept_shutting_down;
+extern int http_reconfiguring;
+extern int http_shutting_down;
 
-extern void accept_thread(void *asdf);
-
-extern int connections_accepted;
+extern void http_thread(void *asdf);
 
 #endif

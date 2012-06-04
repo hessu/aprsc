@@ -22,6 +22,8 @@ CC=		@CC@
 PROF=
 CFLAGS=		@CFLAGS@ $(PROF) $(DEFS)
 
+# On solaris, should use -D_REENTRANT  CFLAGS
+
 # Linker and flags
 LD=		@LD@
 LDFLAGS=	@LDFLAGS@ $(PROF)
@@ -74,6 +76,7 @@ OBJS = aprsc.o accept.o worker.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
 	status.o cJSON.o \
+	http.o \
 	@LIBOBJS@
 
 clean:

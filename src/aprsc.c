@@ -33,6 +33,7 @@
 #include "uplink.h"
 #include "worker.h"
 #include "status.h"
+#include "http.h"
 
 #include "dupecheck.h"
 #include "filter.h"
@@ -230,6 +231,7 @@ static void dbdump_all(void)
 int main(int argc, char **argv)
 {
 	pthread_t accept_th;
+	pthread_t http_th;
 	int e;
 	struct rlimit rlim;
 	time_t cleanup_tick;
@@ -337,6 +339,10 @@ int main(int argc, char **argv)
 	if (pthread_create(&accept_th, &pthr_attrs, (void *)accept_thread, NULL))
 		perror("pthread_create failed for accept_thread");
 
+	/* start the HTTP thread, which runs libevent's HTTP server */
+	if (pthread_create(&http_th, &pthr_attrs, (void *)http_thread, NULL))
+		perror("pthread_create failed for http_thread");
+
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
 		poll(NULL, 0, 300); // 0.300 sec -- or there abouts..
@@ -379,13 +385,20 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	hlog(LOG_INFO, "Signalling accept_thread to shut down...");
+	hlog(LOG_INFO, "Signalling threads to shut down...");
 	accept_shutting_down = 1;
+	http_shutting_down = 1;
+	
+	if ((e = pthread_join(http_th, NULL)))
+		hlog(LOG_ERR, "Could not pthread_join http_th: %s", strerror(e));
+	else
+		hlog(LOG_INFO, "HTTP thread has terminated.");
+	
 	if ((e = pthread_join(accept_th, NULL)))
 		hlog(LOG_ERR, "Could not pthread_join accept_th: %s", strerror(e));
 	else
 		hlog(LOG_INFO, "Accept thread has terminated.");
-	
+		
 	if (dbdump_at_exit) {
 		dbdump_all();
 	}

@@ -33,16 +33,16 @@ BEGIN {
 		push @packets, $packet;
 	}
 	
-	plan tests => 8 + ($#packets+1) + 2 + 2;
+	plan tests => 9 + ($#packets+1) + 2 + 2;
 };
 
 ok(1); # If we made it this far, we're ok.
 
-my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'CORE1');
+my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'FAKE4');
 ok(defined $iss1, 1, "Test failed to initialize listening server socket");
 $iss1->bind_and_listen();
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'CORE6');
+my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'FAKE6');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 
@@ -56,17 +56,9 @@ my $server_call = "TESTING";
 my $i_rx = new Ham::APRS::IS("localhost:55152", $login);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
-#my $is1 = $iss1->accept();
-#ok(defined $is1, (1), "Failed to accept connection 1 from server");
-#$iss1->send_login_prompt($is1);
-#my $log1 = $is1->getline_noncomment(1);
-#$iss1->send_login_ok($is1);
-
 my $is6 = $iss6->accept();
 ok(defined $is6, (1), "Failed to accept connection ipv6 from server");
-$iss6->send_login_prompt($is6);
-my $log2 = $is6->getline_noncomment(1);
-$iss6->send_login_ok($is6);
+ok($iss6->process_login($is6), 'ok', "Failed to accept login ipv6 from server");
 
 my $ret;
 $ret = $i_rx->connect('retryuntil' => 8);
@@ -75,12 +67,12 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 # do the actual tests
 
 my $maxlen = 509;
-$maxlen = 510 if ($ENV{'TEST_PRODUCT'} eq 'javap');
+$maxlen = 510 if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} =~ /^javap/);
 
 # (1):
 foreach my $packet (@packets) {
 	my $expect = $packet;
-	$expect =~ s/IGATE:/IGATE,00000000000000000000000000000001,$server_call:/;
+	$expect =~ s/IGATE:/IGATE,FAKE6,$server_call:/;
 	if (length($expect) > $maxlen) {
 		my $res = $is6->sendline($packet);
 		if ($res) {

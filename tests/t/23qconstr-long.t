@@ -24,7 +24,7 @@ BEGIN {
 		if ($append) {
 			push @l, "D" x $append;
 		} elsif (@l) {
-			$l[$#l] .= '*';
+			$l[$#l] =~ s/(.)$/,Y/;
 		}
 		#warn join(',', @l) . "\n";
 		my $packet = "SRC>DST,qAI," . join(',', @l) . ":$data";
@@ -33,12 +33,12 @@ BEGIN {
 		push @packets, $packet;
 	}
 	
-	plan tests => 6 + ($#packets+1) + 5;
+	plan tests => 7 + ($#packets+1) + 5;
 };
 
 ok(1); # If we made it this far, we're ok.
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'CORE6');
+my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'FAKEIS');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 
@@ -54,9 +54,7 @@ ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $is6 = $iss6->accept();
 ok(defined $is6, (1), "Failed to accept connection ipv6 from server");
-$iss6->send_login_prompt($is6);
-my $log2 = $is6->getline_noncomment(1);
-$iss6->send_login_ok($is6);
+ok($iss6->process_login($is6), 'ok', "Failed to accept login ipv6 from server");
 
 my $ret;
 $ret = $i_rx->connect('retryuntil' => 8);
@@ -65,11 +63,12 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 # do the actual tests
 
 my $maxlen = 509;
-$maxlen = 510 if ($ENV{'TEST_PRODUCT'} eq 'javap');
+$maxlen = 510 if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} =~ /^javap/);
 
 foreach my $packet (@packets) {
 	my $expect = $packet;
-	$expect =~ s/:/,00000000000000000000000000000001,$server_call:/;
+	$expect =~ s/:/,FAKEIS,$server_call:/;
+	#warn "tx: $packet\n";
 	if (length($expect) > $maxlen) {
 		$is6->sendline($packet);
 		ok(1);

@@ -3,14 +3,16 @@
 #
 
 use Test;
-BEGIN { plan tests => 2 + 5 + 2 + 2 + 2 };
+BEGIN { plan tests => 2 + 6 + 2 + 3 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
 use Ham::APRS::IS_Fake;
 ok(1); # If we made it this far, we're ok.
 
-my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'CORE1');
+my $upstream_call = 'FAKEUP';
+
+my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', $upstream_call);
 ok(defined $iss1, 1, "Test failed to initialize listening server socket (IPv4)");
 $iss1->bind_and_listen();
 
@@ -28,11 +30,7 @@ ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $is1 = $iss1->accept();
 ok(defined $is1, (1), "Failed to accept connection 1 from server");
-
-#warn "sending login prompt\n";
-$iss1->send_login_prompt($is1);
-#warn "sending login ok\n";
-$iss1->send_login_ok($is1);
+ok($iss1->process_login($is1), 'ok', "Failed to accept login 1 from server");
 
 my $ret;
 $ret = $i_rx->connect('retryuntil' => 8);
@@ -57,14 +55,14 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 # (2):
 istest::txrx(\&ok, $is1, $i_rx,
 	"SRC>DST,DIGI1,DIGI2*,qAI,FOOBA,BLAA:testing qAI (1)",
-	"SRC>DST,DIGI1,DIGI2*,qAI,FOOBA,BLAA,7F000001,$server_call:testing qAI (1)");
+	"SRC>DST,DIGI1,DIGI2*,qAI,FOOBA,BLAA,$upstream_call,$server_call:testing qAI (1)");
 
 # unbind the IPv4 server and create IPv6 server
 $iss1->unbind();
 
 #warn "switching to ipv6\n";
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'CORE6');
+my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', $upstream_call);
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 
@@ -76,13 +74,12 @@ $is1->disconnect();
 
 my $is6 = $iss6->accept();
 ok(defined $is6, (1), "Failed to accept connection ipv6 from server");
-$iss6->send_login_prompt($is6);
-$iss6->send_login_ok($is6);
+ok($iss6->process_login($is6), 'ok', "Failed to accept login ipv6 from server");
 
 # (2), ipv6:
 istest::txrx(\&ok, $is6, $i_rx,
 	"SRC>DST,DIGI1,DIGI2*,qAI,FOOBAR,BLAA:testing qAI (ipv6)",
-	"SRC>DST,DIGI1,DIGI2*,qAI,FOOBAR,BLAA,00000000000000000000000000000001,$server_call:testing qAI (ipv6)");
+	"SRC>DST,DIGI1,DIGI2*,qAI,FOOBAR,BLAA,$upstream_call,$server_call:testing qAI (ipv6)");
 
 # disconnect
 $ret = $i_rx->disconnect();

@@ -145,6 +145,7 @@ void http_thread(void *asdf)
 			// do init
 			libbase = event_base_new();
 			libsrvr = evhttp_new(libbase);
+			evhttp_set_allowed_methods(libsrvr, EVHTTP_REQ_GET);
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			

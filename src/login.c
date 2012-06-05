@@ -22,31 +22,6 @@
 #include "clientlist.h"
 
 /*
- *	Parse a command line to argv, not honoring quotes or such
- */
- 
-int parse_args_noshell(char *argv[],char *cmd)
-{
-	int ct = 0;
-	
-	while (ct < 255)
-	{
-		while (*cmd && isspace((int)*cmd))
-			cmd++;
-		if (*cmd == 0)
-			break;
-		argv[ct++] = cmd;
-		while (*cmd && !isspace((int)*cmd))
-			cmd++;
-		if (*cmd)
-			*cmd++ = 0;
-	}
-	argv[ct] = NULL;
-	return ct;
-}
-
-
-/*
  *	login.c: works in the context of the worker thread
  */
 

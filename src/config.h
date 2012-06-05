@@ -25,6 +25,8 @@
 #include <inttypes.h>
 #include <netdb.h>
 
+#include "acl.h"
+
 #ifndef AI_PASSIVE
 #include "netdb6.h"
 #endif
@@ -67,6 +69,7 @@ extern char *rundir;
 extern char *logdir;
 extern char *logname;
 
+#define LISTEN_MAX_FILTERS 10
 
 struct listen_config_t {
 	struct listen_config_t *next;
@@ -77,8 +80,9 @@ struct listen_config_t {
 	int   portnum;
 
 	struct addrinfo *ai;
-
-	const char *filters[10];		/* up to 10 filters, NULL when not defined */
+	struct acl_t *acl;
+	
+	const char *filters[LISTEN_MAX_FILTERS];		/* up to 10 filters, NULL when not defined */
 
 	int client_flags;
 };
@@ -92,7 +96,7 @@ struct peerip_config_t {
 
 	struct addrinfo *ai;
 
-	const char *filters[10];		/* up to 10 filters, NULL when not defined */
+	const char *filters[LISTEN_MAX_FILTERS];		/* up to 10 filters, NULL when not defined */
 
 	int client_flags;
 };
@@ -106,7 +110,7 @@ struct uplink_config_t {
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	const char *port;
 
-	const char *filters[10];		/* up to 10 filters, NULL when not defined */
+	const char *filters[LISTEN_MAX_FILTERS];	/* up to 10 filters, NULL when not defined */
 
 	int client_flags;
 	int state;				/* the state of the uplink */
@@ -126,6 +130,8 @@ extern struct uplink_config_t *uplink_config;
 /* http server config */
 extern char *http_bind;
 extern int http_port;
+
+extern int parse_args_noshell(char *argv[],char *cmd);
 
 extern int read_config(void);
 extern void free_config(void);

@@ -13,7 +13,6 @@
 
 #include "worker.h"
 
-extern int parse_args_noshell(char *argv[],char *cmd);
 extern int login_handler(struct worker_t *self, struct client_t *c, char *s, int len);
 
 #endif

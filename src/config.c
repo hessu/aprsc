@@ -124,6 +124,30 @@ static struct cfgcmd cfg_cmds[] = {
 };
 
 /*
+ *	Parse a command line to argv, not honoring quotes or such
+ */
+ 
+int parse_args_noshell(char *argv[],char *cmd)
+{
+	int ct = 0;
+	
+	while (ct < 255)
+	{
+		while (*cmd && isspace((int)*cmd))
+			cmd++;
+		if (*cmd == 0)
+			break;
+		argv[ct++] = cmd;
+		while (*cmd && !isspace((int)*cmd))
+			cmd++;
+		if (*cmd)
+			*cmd++ = 0;
+	}
+	argv[ct] = NULL;
+	return ct;
+}
+
+/*
  *	Free a listen config tree
  */
 
@@ -141,6 +165,8 @@ void free_listen_config(struct listen_config_t **lc)
 			if (this->filters[i])
 				hfree((void*)this->filters[i]);
 		freeaddrinfo(this->ai);
+		if (this->acl)
+			acl_free(this->acl);
 		hfree(this);
 	}
 }
@@ -417,6 +443,37 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
  *
  */
 
+int config_parse_listen_filter(struct listen_config_t *l, char *filt_string, char *portname)
+{
+	int argc;
+	char *argv[256];
+	int i;
+	
+	argc = parse_args_noshell(argv, filt_string);
+	if (argc == 0) {
+		hlog(LOG_ERR, "Listen: Bad filter definition for '%s': '%s' - no filter arguments found",
+			portname, filt_string);
+		return -1;
+	}
+	
+	if (argc > LISTEN_MAX_FILTERS) {
+		hlog(LOG_ERR, "Listen: Bad filter definition for '%s': '%s' - too many (%d) filter arguments found, max %d",
+			portname, filt_string, argc, LISTEN_MAX_FILTERS);
+		return -1;
+	}
+	
+	for (i = 0; i < argc && i < LISTEN_MAX_FILTERS; i++) {
+		if (filter_parse(NULL, argv[i], 0) < 0) {
+			hlog(LOG_ERR, "Listen: Bad filter definition for '%s': '%s' - filter parsing failed",
+				portname, argv[i]);
+			return -1;
+		}
+		l->filters[i] = hstrdup(argv[i]);
+	}
+	
+	return 0;
+}
+
 int do_listen(struct listen_config_t **lq, int argc, char **argv)
 {
 	int i, port;
@@ -490,16 +547,57 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	l->portnum      = port;
 	l->client_flags = clflags;
 	l->ai = ai;
-	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+	l->acl = NULL;
+	l->next = NULL;
+	l->prevp = NULL;
+	
+	/* by default, no filters */
+	for (i = 0; i < LISTEN_MAX_FILTERS; i++)
 		l->filters[i] = NULL;
-		if (argc - 6 > i) {
-			if (filter_parse(NULL,argv[i+6],0) < 0) {
-			  hlog( LOG_ERR,"Bad filter definition on '%s' port %s: '%s'",
-				argv[1],argv[5],argv[i+6] );
-			  continue;
+	
+	/* parse rest of arguments */
+	i = 6;
+	while (i < argc) {
+		if (strcasecmp(argv[i], "filter") == 0) {
+			/* set a filter for the clients */
+			i++;
+			if (i >= argc) {
+				hlog(LOG_ERR, "Listen: 'filter' argument is missing the filter parameter for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
 			}
-			l->filters[i] = hstrdup(argv[i+6]);
+			
+			if (config_parse_listen_filter(l, argv[i], argv[1])) {
+				free_listen_config(&l);
+				return -2;
+			}
+		} else if (strcasecmp(argv[i], "acl") == 0) {
+			/* Access list */
+			i++;
+			if (i >= argc) {
+				hlog(LOG_ERR, "Listen: 'acl' argument is missing the acl parameter for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			if (l->acl) {
+				hlog(LOG_ERR, "Listen: second 'acl' not allowed for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			l->acl = acl_load(argv[i]);
+			if (!l->acl) {
+				free_listen_config(&l);
+				return -2;
+			}
+			
+		} else {
+			hlog(LOG_ERR, "Listen: Unknown argument '%s' for '%s'", argv[i], argv[1]);
+			free_listen_config(&l);
+			return -2;
 		}
+		i++;
 	}
 	
 	/* put in the list */

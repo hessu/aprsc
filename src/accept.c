@@ -49,6 +49,7 @@ struct listen_t {
 	int portnum;
 	struct client_udp_t *udp;
 	struct portaccount_t *portaccount;
+	struct acl_t *acl;
 
 	char *name;
 	char *addr_s;
@@ -94,8 +95,10 @@ static void listener_free(struct listen_t *l)
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i)
 		if (l->filters[i])
 			hfree(l->filters[i]);
-
-
+	
+	if (l->acl)
+		acl_free(l->acl);
+	
 	hfree(l);
 }
 
@@ -223,8 +226,6 @@ static int open_listeners(void)
 	int opened = 0, i;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
-
-
 		l = listener_alloc();
 
 		l->clientflags = lc->client_flags;
@@ -253,6 +254,10 @@ static int open_listeners(void)
 			listener_free(l);
 			continue;
 		}
+		
+		/* Copy access lists */
+		if (lc->acl)
+			l->acl = acl_dup(lc->acl);
 
 		/* Copy filter definitions */
 		for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
@@ -358,6 +363,19 @@ static struct client_t *do_accept(struct listen_t *l)
 		}
 	}
 	
+	/* convert client address to string */
+	s = strsockaddr( &sa.sa, addr_len );
+	
+	/* match against acl */
+	if (l->acl) {
+		if (!acl_check(l->acl, (struct sockaddr *)&sa, addr_len)) {
+			hlog(LOG_INFO, "%s - Denied client on fd %d from %s (ACL)", l->addr_s, fd, s);
+			close(fd);
+			hfree(s);
+			return NULL;
+		}
+	}
+	
 	c = client_alloc();
 	c->fd    = fd;
 	c->addr  = sa;
@@ -375,7 +393,6 @@ static struct client_t *do_accept(struct listen_t *l)
 
 	/* text format of client's IP address + port */
 
-	s = strsockaddr( &sa.sa, addr_len );
 #ifndef FIXED_IOBUFS
 	c->addr_rem = s;
 #else
@@ -428,7 +445,7 @@ static struct client_t *do_accept(struct listen_t *l)
 	if (c->flags & CLFLAGS_UPLINKSIM)
 		uplink_simulator = 1;
 
-	hlog(LOG_DEBUG, "%s - Accepted connection on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
+	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i])

@@ -145,7 +145,13 @@ void http_thread(void *asdf)
 			// do init
 			libbase = event_base_new();
 			libsrvr = evhttp_new(libbase);
+			
+			// limit what the clients can do a bit
 			evhttp_set_allowed_methods(libsrvr, EVHTTP_REQ_GET);
+			evhttp_set_timeout(libsrvr, 30);
+			evhttp_set_max_body_size(libsrvr, 10*1024);
+			evhttp_set_max_headers_size(libsrvr, 10*1024);
+			
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			

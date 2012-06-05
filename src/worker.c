@@ -1281,6 +1281,7 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 	int pe;
 	
 	int client_heard_count = 0;
+	int client_courtesy_count = 0;
 	
 	while (w) {
 		if ((pe = pthread_mutex_lock(&w->clients_mutex))) {
@@ -1303,6 +1304,7 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 			cJSON_AddNumberToObject(jc, "verified", c->validated);
 			cJSON_AddNumberToObject(jc, "obuf_q", c->obuf_end - c->obuf_start);
 			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
+			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 			
 			if (c->flags & CLFLAGS_INPORT)
 				cJSON_AddItemToArray(clients, jc);
@@ -1310,6 +1312,7 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 				cJSON_AddItemToArray(uplinks, jc);
 			
 			client_heard_count += c->client_heard_count;
+			client_courtesy_count += c->client_courtesy_count;
 		}
 		
 		if ((pe = pthread_mutex_unlock(&w->clients_mutex))) {
@@ -1324,6 +1327,9 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 	cJSON_AddNumberToObject(memory, "client_heard_cells_used", client_heard_count);
 	cJSON_AddNumberToObject(memory, "client_heard_cell_size", sizeof(struct client_heard_t));
 	cJSON_AddNumberToObject(memory, "client_heard_used_bytes", sizeof(struct client_heard_t) * client_heard_count);
+	cJSON_AddNumberToObject(memory, "client_courtesy_cells_used", client_courtesy_count);
+	cJSON_AddNumberToObject(memory, "client_courtesy_cell_size", sizeof(struct client_heard_t));
+	cJSON_AddNumberToObject(memory, "client_courtesy_used_bytes", sizeof(struct client_heard_t) * client_courtesy_count);
 	
 	return 0;
 }

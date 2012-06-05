@@ -31,6 +31,8 @@
 #include "config.h"
 #include "hmalloc.h"
 
+//#define HEARD_DEBUG
+
 /*
  *	Update the heard list, either update timestamp of a heard
  *	callsign or insert a new entry
@@ -42,8 +44,10 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	int call_len;
 	
 	call_len = pb->srccall_end - pb->data;
-	
+
+#ifdef HEARD_DEBUG
 	hlog(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s", c->fd, which, call_len, pb->data);
+#endif
 	
 	for (h = *list; (h); h = h->next) {
 		if (call_len == h->call_len
@@ -105,7 +109,9 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 {
 	struct client_heard_t *h, *next;
 	
+#ifdef HEARD_DEBUG
 	hlog(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s", c->fd, which, call_len, callsign);
+#endif
 	
 	int expire_below = tick - storetime;
 	next = NULL;

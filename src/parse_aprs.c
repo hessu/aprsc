@@ -1166,7 +1166,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			}
 			keybuf[i] = 0;
 			pb->dstname_len = p - body;
-			hlog(LOG_DEBUG, "message: dstname len %d", pb->dstname_len);
+			//hlog(LOG_DEBUG, "message: dstname len %d", pb->dstname_len);
 			
 			/*
 			 * This adds a position for a message based on the

@@ -2184,7 +2184,7 @@ static int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filt
 		rc = -1;
 		break;
 	}
-	hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
+	//hlog(LOG_DEBUG, "filter '%s'  rc=%d", f->h.text, rc);
 
 	return rc;
 }

@@ -53,9 +53,13 @@ void http_status(struct evhttp_request *r)
 
 void http_router(struct evhttp_request *r, void *arg)
 {
+	char *remote_host;
+	ev_uint16_t remote_port;
 	const char *uri = evhttp_request_get_uri(r);
+	struct evhttp_connection *conn = evhttp_request_get_connection(r);
+	evhttp_connection_get_peer(conn, &remote_host, &remote_port);
 	
-	hlog(LOG_DEBUG, "http request %s", uri);
+	hlog(LOG_DEBUG, "http [%s] request %s", remote_host, uri);
 	
 	if (strcmp(uri, "/status.json") == 0) {
 		http_status(r);

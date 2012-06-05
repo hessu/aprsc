@@ -45,13 +45,21 @@ ClientTimeout		48h
 #		msgonly - messages only
 #		userfilter - user-specified filters
 #
-Listen "Messages only"                            messageonly tcp 0.0.0.0  55314   t/m
-Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  55152   t/c*
-Listen "Igate port"                               igate       tcp 0.0.0.0  55580
+Listen "Messages only"                            messageonly tcp 0.0.0.0  55314   filter t/m
+Listen "Full feed with CWOP"                      fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl" filter t/c*
+Listen "Igate port"                               igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
 Listen "Client-only port"                         clientonly  tcp 0.0.0.0  55581
+Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
 
 Uplink full1 full tcp 127.0.0.1 10153
 
+### HTTP listener ##########
+# Status port provides a status view to web browsers.
+# It starts up by default on 0.0.0.0:14501.
+HTTPStatus 127.0.0.1 55501
+# Upload port allows position uploads.
+# It does not start up by default.
+HTTPUpload 127.0.0.1 55080
 
 ### Internals ############
 # Only use 3 threads in these basic tests, to keep startup/shutdown times

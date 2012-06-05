@@ -37,6 +37,7 @@ void http_status(struct evhttp_request *r)
 	
 	json = status_json_string();
 	evbuffer_add(buffer, json, strlen(json));
+	free(json);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");

@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <poll.h>
 #include <string.h>
+#include <errno.h>
 
 #include <event2/event.h>  
 #include <event2/http.h>  
@@ -96,7 +97,6 @@ void http_timer(evutil_socket_t fd, short events, void *arg)
 void http_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
-	int e;
 	
 	struct timeval http_timer_tv;
 	
@@ -125,15 +125,37 @@ void http_thread(void *asdf)
 		if (http_reconfiguring) {
 			http_reconfiguring = 0;
 			
+			// shut down existing instance
+			if (ev_timer) {
+				event_del(ev_timer);
+			}
+			if (libsrvr) {
+				evhttp_free(libsrvr);
+				libsrvr = NULL;
+			}
+			if (libbase) {
+				event_base_free(libbase);
+				libbase = NULL;
+			}
+			
 			// do init
 			libbase = event_base_new();
 			libsrvr = evhttp_new(libbase);
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			
-			hlog(LOG_INFO, "Binding HTTP socket %s:%d", http_bind, http_port);
+			hlog(LOG_INFO, "Binding HTTP status socket %s:%d", http_bind, http_port);
+			if (evhttp_bind_socket(libsrvr, http_bind, http_port)) {
+				hlog(LOG_ERR, "Failed to bind HTTP status socket %s:%d: %s", http_bind, http_port, strerror(errno));
+			}
 			
-			evhttp_bind_socket(libsrvr, http_bind, http_port);
+			if (http_bind_upload) {
+				hlog(LOG_INFO, "Binding HTTP upload socket %s:%d", http_bind_upload, http_port_upload);
+				if (evhttp_bind_socket(libsrvr, http_bind_upload, http_port_upload)) {
+					hlog(LOG_ERR, "Failed to bind HTTP upload socket %s:%d: %s", http_bind_upload, http_port_upload, strerror(errno));
+				}
+			}
+			
 			evhttp_set_gencb(libsrvr, http_router, NULL);
 			
 			hlog(LOG_INFO, "HTTP thread ready.");

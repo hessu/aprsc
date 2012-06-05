@@ -53,9 +53,15 @@ struct uplink_config_t *new_uplink_config;
 struct peerip_config_t *peerip_config;
 struct peerip_config_t *new_peerip_config;
 
-char def_http_bind[] = "0.0.0.0";
-char *http_bind = def_http_bind;	/* http address string to listen on */
+char http_bind_default[] = "0.0.0.0";
+char *http_bind = http_bind_default;	/* http address string to listen on */
 int http_port = 14501;
+char *new_http_bind;
+int new_http_port;
+char *http_bind_upload = NULL;	/* http address string to listen on */
+int http_port_upload = 8080;
+char *new_http_bind_upload;
+int new_http_port_upload;
 
 int fork_a_daemon;	/* fork a daemon */
 
@@ -92,6 +98,8 @@ int verbose;
 /* address:port pairs being listened */
 struct listen_config_t *listen_config = NULL, *listen_config_new = NULL;
 
+int do_httpstatus(char *new, int argc, char **argv);
+int do_httpupload(char *new, int argc, char **argv);
 int do_listen(struct listen_config_t **lq, int argc, char **argv);
 int do_interval(int *dest, int argc, char **argv);
 int do_peerip(struct peerip_config_t **lq, int argc, char **argv);
@@ -116,6 +124,8 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout	},
 	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
 	{ "filelimit",		_CFUNC_ do_int,		&new_fileno_limit	},
+	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
+	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peerip",		_CFUNC_ do_peerip,	&new_peerip_config	},
@@ -609,12 +619,36 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	return 0;
 }
 
+int do_http_listener(char *what, char **bind, int *port, int argc, char **argv)
+{
+	if (argc != 3) {
+		hlog(LOG_ERR, "%s: Invalid number of arguments", what);
+		return -1;
+	}
+	
+	*bind = hstrdup(argv[1]);
+	*port = atoi(argv[2]);
+	
+	return 0;
+}
+
+int do_httpstatus(char *new, int argc, char **argv)
+{
+	return do_http_listener("HTTPStatus", &new_http_bind, &new_http_port, argc, argv);
+}
+
+int do_httpupload(char *new, int argc, char **argv)
+{
+	return do_http_listener("HTTPUpload", &new_http_bind_upload, &new_http_port_upload, argc, argv);
+}
+
 /*
  *	Validate an APRS-IS callsign
  */
 
 int valid_aprsis_call(char *s)
 {
+	// TODO: use the other function in q parser which is stricter
 	if (strlen(s) > 12)
 		return 0;
 	if (strlen(s) < 3)
@@ -710,6 +744,22 @@ int read_config(void)
 	} else {
 		hlog(LOG_WARNING, "Config: myemail is not defined.");
 		failed = 1;
+	}
+	
+	if (new_http_bind) {
+		if (http_bind && http_bind != http_bind_default)
+			hfree(http_bind);
+		http_bind = new_http_bind;
+		new_http_bind = NULL;
+		http_port = new_http_port;
+	}
+	
+	if (new_http_bind_upload) {
+		if (http_bind_upload)
+			hfree(http_bind_upload);
+		http_bind_upload = new_http_bind_upload;
+		new_http_bind_upload = NULL;
+		http_port_upload = new_http_port_upload;
 	}
 	
 	/* validate uplink config: if there is a single 'multiro' connection

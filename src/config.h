@@ -130,6 +130,8 @@ extern struct uplink_config_t *uplink_config;
 /* http server config */
 extern char *http_bind;
 extern int http_port;
+extern char *http_bind_upload;
+extern int http_port_upload;
 
 extern int parse_args_noshell(char *argv[],char *cmd);
 

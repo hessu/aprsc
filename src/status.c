@@ -16,6 +16,7 @@
 
 #include "status.h"
 #include "cellmalloc.h"
+#include "hmalloc.h"
 #include "config.h"
 #include "hlog.h"
 #include "worker.h"
@@ -25,6 +26,10 @@
 #include "cJSON.h"
 
 time_t startup_tick;
+
+pthread_mutex_t status_json_mt = PTHREAD_MUTEX_INITIALIZER;
+char *status_json_cached = NULL;
+time_t status_json_cache_t = 0;
 
 #define UNAME_LEN 512
 void status_uname(cJSON *root)
@@ -44,7 +49,26 @@ void status_uname(cJSON *root)
 
 char *status_json_string(void)
 {
-	char *out;
+	char *out = NULL;
+	int pe;
+	
+	/* if we have a very recent status JSON available, return it instead. */
+	if ((pe = pthread_mutex_lock(&status_json_mt))) {
+		hlog(LOG_ERR, "status_json_string(): could not lock status_json_mt: %s", strerror(pe));
+		return NULL;
+	}
+	if (status_json_cached && (status_json_cache_t == tick || status_json_cache_t == tick - 1)) {
+		out = hstrdup(status_json_cached);
+		if ((pe = pthread_mutex_unlock(&status_json_mt))) {
+			hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
+			return NULL;
+		}
+		return out;
+	}
+	if ((pe = pthread_mutex_unlock(&status_json_mt))) {
+		hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
+		return NULL;
+	}
 	
 	cJSON *root = cJSON_CreateObject();
 	
@@ -137,6 +161,21 @@ char *status_json_string(void)
 	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
+	
+	if ((pe = pthread_mutex_lock(&status_json_mt))) {
+		hlog(LOG_ERR, "status_json_string(): could not lock status_json_mt: %s", strerror(pe));
+		return NULL;
+	}
+	if (status_json_cached)
+		hfree(status_json_cached);
+		
+	status_json_cached = hstrdup(out);
+	status_json_cache_t = tick;
+	
+	if ((pe = pthread_mutex_unlock(&status_json_mt))) {
+		hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
+		return NULL;
+	}
 	
 	return out;
 }

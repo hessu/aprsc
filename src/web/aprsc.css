@@ -1,0 +1,37 @@
+
+body {
+	font-family: verdana, arial, helvetica, sans-serif;
+	font-size: 12px;
+}
+
+.grey { color: #666; }
+.bold { font-weight: bold; }
+.red { color: #ff5370; }
+
+div.page_title {
+	color: #000;
+	margin-top: 5px;
+	margin-bottom: 5px;
+	font-weight: bold;
+}
+
+
+table {
+}
+
+td {
+	background: #e1f6ff;
+	padding: 1px 4px 1px 4px;
+	margin: 1px 3px 1px 10px;
+	border: 1px solid white;
+	vertical-align: top;
+}
+
+th {
+	vertical-align: top;
+}
+
+td.ar {
+	text-align: right;
+}
+

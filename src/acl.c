@@ -316,6 +316,7 @@ int acl_check_6(struct acl_t *acl, uint32_t addr[4])
 int acl_check(struct acl_t *acl, struct sockaddr *sa, int addr_len)
 {
 	union sockaddr_u su, *sup;
+	sup = (union sockaddr_u *)sa;
 	
 	/* When we're listening on [::] address, IPv4 connections will be
 	 * accepted too. The IPv4 source address will be given to mapped
@@ -331,12 +332,11 @@ int acl_check(struct acl_t *acl, struct sockaddr *sa, int addr_len)
 		su.si.sin_port   = sup->si6.sin6_port;
 		memcpy(& su.si.sin_addr, &((uint32_t*)(&(sup->si6.sin6_addr)))[3], 4);
 		sa = &su.sa;
-		// sup = NULL;
+		sup = (union sockaddr_u *)sa;
 		// hlog(LOG_DEBUG, "Translating v4 mapped/compat address..");
 	}
 #endif
 	
-	sup = (union sockaddr_u *)sa;
 	
 	if (sup->sa.sa_family == AF_INET)
 		return acl_check_4(acl, ntohl(sup->si.sin_addr.s_addr));

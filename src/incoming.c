@@ -664,9 +664,6 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	/* note: len does not include CRLF, it's reconstructed here... we accept
 	 * CR, LF or CRLF on input but make sure to use CRLF on output.
 	 */
-
-	clientaccount_add(c, 0, 1, 0, 0); /* one packet, bytes were accounted previously */
-
 	
 	/* Make sure it looks somewhat like an APRS-IS packet... len is without CRLF.
 	 * Do not do PACKETLEN_MIN test here, since it would drop the 'filter'
@@ -683,6 +680,13 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		return 0;
 	}
 
+	/* Account the one incoming packet. This is almost a small bug, it also
+	 * counts filter commands and invalid packets, but at least it doesn't
+	 * account keepalives any more.
+	 * Incoming bytes were already accounted earlier.
+	 */
+	clientaccount_add(c, 0, 1, 0, 0);
+	
 	/* do some parsing */
 	if (len < PACKETLEN_MIN-2)
 		e = -42;
@@ -702,4 +706,13 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	}
 	
 	return 0;
+}
+
+void incoming_cell_stats(struct cellstatus_t *cellst_pbuf_small,
+	struct cellstatus_t *cellst_pbuf_medium,
+	struct cellstatus_t *cellst_pbuf_large)
+{
+	cellstatus(pbuf_cells_small, cellst_pbuf_small);
+	cellstatus(pbuf_cells_medium, cellst_pbuf_medium);
+	cellstatus(pbuf_cells_large, cellst_pbuf_large);
 }

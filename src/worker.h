@@ -196,6 +196,8 @@ struct client_udp_t {			/* UDP services can be available at multiple
 };
 
 
+#define FILTER_S_SIZE 256 /* how many bytes of filter to store for status display */
+
 #define FIXED_IOBUFS 1
 #ifdef FIXED_IOBUFS
 #define OBUF_SIZE 32000
@@ -316,6 +318,7 @@ struct client_t {
 	char	ibuf[IBUF_SIZE];
 	char	obuf[OBUF_SIZE];
 #endif
+	char filter_s[FILTER_S_SIZE];
 };
 
 extern struct client_t *client_alloc(void);

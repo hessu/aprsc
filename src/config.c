@@ -30,6 +30,7 @@
 #include "filter.h"
 
 char def_cfgfile[] = "aprsc.conf";
+char def_webdir[] = "web";
 
 char *cfgfile = def_cfgfile;
 char *pidfile;
@@ -37,6 +38,8 @@ char *new_rundir;
 char *rundir;
 char *new_logdir;
 char *logdir;	/* access logs go here */
+//char *new_webdir;
+char *webdir = def_webdir;
 
 char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */
@@ -864,6 +867,8 @@ void free_config(void)
 	cfgfile = NULL;
 	if (logname != def_logname)
 		hfree(logname);
+	if (webdir != def_webdir)
+		hfree(webdir);
 	hfree(mycall);
 	hfree(myemail);
 	hfree(myadmin);

@@ -2334,12 +2334,16 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	b = alloca(len+2);
 	memcpy(b, s, len);
 	b[len] = 0;
-
+	
+	// archive a copy of the filters, for status display
+	strncpy(c->filter_s, s, FILTER_S_SIZE);
+	c->filter_s[FILTER_S_SIZE-1] = 0;
+	
 	argc = parse_args( argv, b );
 	for (i = 0; i < argc; ++i) {
 		filter_parse(c, argv[i], 1); /* user filters */
 	}
-	return client_printf(self, c, "# Parsed %d filter specifications", i);
+	return client_printf(self, c, "# Parsed %d filter specifications\r\n", i);
 }
 
 /*
@@ -2350,7 +2354,6 @@ void filter_cell_stats(struct cellstatus_t *filter_cellst,
 	struct cellstatus_t *filter_entrycall_cellst,
 	struct cellstatus_t *filter_wx_cellst)
 {
-	// TODO: locks
 	cellstatus(filter_cells, filter_cellst);
 	cellstatus(filter_entrycall_cells, filter_entrycall_cellst);
 	cellstatus(filter_wx_cells, filter_wx_cellst);

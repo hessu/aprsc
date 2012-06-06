@@ -21,6 +21,7 @@ struct cellstatus_t {
 	int cellsize;
 	int alignment;
 	int cellsize_aligned;
+	int cellcount;
 	int freecount;
 	int blocks;
 	int blocks_max;

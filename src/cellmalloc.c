@@ -380,6 +380,7 @@ void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status)
 	status->cellsize_aligned = cellarena->increment;
 	status->alignment = cellarena->alignment;
 	status->freecount = cellarena->freecount;
+	status->cellcount = (cellarena->createsize / cellarena->increment) * cellarena->cellblocks_count;
 	status->blocks = cellarena->cellblocks_count;
 	status->blocks_max = CELLBLOCKS_MAX;
 	status->block_size = cellarena->createsize;

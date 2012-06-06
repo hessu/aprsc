@@ -15,6 +15,10 @@
 #include <poll.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <event2/event.h>  
 #include <event2/http.h>  
@@ -30,11 +34,83 @@
 int http_shutting_down;
 int http_reconfiguring;
 
+unsigned long http_requests = 0;
+
+struct http_static_t {
+	char	*name;
+	char	*filename;
+};
+
+static struct http_static_t http_static_files[] = {
+	{ "/", "index.html" },
+	{ "/favicon.ico", "favicon.ico" },
+	{ "/aprsc.css", "aprsc.css" },
+	{ "/aprsc.js", "aprsc.js" },
+	{ NULL, NULL }
+};
+
+static struct http_static_t http_content_types[] = {
+	{ ".html", "text/html; charset=UTF-8" },
+	{ ".ico", "image/x-icon" },
+	{ ".css", "text/css; charset=UTF-8" },
+	{ ".js", "application/x-javascript; charset=UTF-8" },
+	{ ".jpg", "image/jpeg" },
+	{ ".jpeg", "image/jpeg" },
+	{ ".png", "image/png" },
+	{ ".gif", "image/gif" },
+	{ NULL, NULL }
+};
+
+/*
+ *	Find a content-type for a file name
+ */
+
+char *http_content_type(char *fn)
+{
+	struct http_static_t *cmdp;
+	static char default_ctype[] = "text/html";
+	char *s;
+	
+	s = strrchr(fn, '.');
+	if (!s)
+		return default_ctype;
+		
+	for (cmdp = http_content_types; cmdp->name != NULL; cmdp++)
+		if (strcasecmp(cmdp->name, s) == 0)
+			break;
+	
+	if (cmdp->name == NULL)
+		return default_ctype;
+	
+	return cmdp->filename;
+}
+
+/*
+ *	HTTP date formatting
+ */
+
+int http_date(char *buf, int len, time_t t)
+{
+	struct tm tb;
+	char *wkday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", NULL };
+	char *mon[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
+			"Sep", "Oct", "Nov", "Dec", NULL };
+	
+	gmtime_r(&t, &tb);
+	
+	return snprintf(buf, len, "%s, %02d %s %04d %02d:%02d:%02d GMT",
+		wkday[tb.tm_wday], tb.tm_mday, mon[tb.tm_mon], tb.tm_year + 1900,
+		tb.tm_hour, tb.tm_min, tb.tm_sec);
+}
+
+/*
+ *	Generate a status JSON response
+ */
+
 void http_status(struct evhttp_request *r)
 {
 	char *json;
-	struct evbuffer *buffer;
-	buffer = evbuffer_new();
+	struct evbuffer *buffer = evbuffer_new();
 	
 	json = status_json_string();
 	evbuffer_add(buffer, json, strlen(json));
@@ -42,6 +118,103 @@ void http_status(struct evhttp_request *r)
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
+	
+	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
+	evbuffer_free(buffer);
+}
+
+/*
+ *	HTTP static file server
+ */
+
+#define HTTP_FNAME_LEN 1024
+
+static void http_route_static(struct evhttp_request *r, const char *uri)
+{
+	struct http_static_t *cmdp;
+	struct stat st;
+	char fname[HTTP_FNAME_LEN];
+	char last_modified[128];
+	char *contenttype;
+	int fd;
+	int file_size;
+	char *buf;
+	struct evbuffer *buffer;
+	struct evkeyvalq *req_headers;
+	const char *ims;
+	
+	for (cmdp = http_static_files; cmdp->name != NULL; cmdp++)
+		if (strncasecmp(cmdp->name, uri, strlen(uri)) == 0)
+			break;
+			
+	if (cmdp->name == NULL) {
+		hlog(LOG_DEBUG, "HTTP: 404");
+		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+		return;
+	}
+	
+	snprintf(fname, HTTP_FNAME_LEN, "%s/%s", webdir, cmdp->filename);
+	
+	hlog(LOG_DEBUG, "static file request %s", uri);
+	
+	if (stat(fname, &st) == -1) {
+		hlog(LOG_ERR, "http static file '%s' not found", fname);
+		evhttp_send_error(r, HTTP_NOTFOUND, "Really not found");
+		return;
+	}
+	
+	/* Generate Last-Modified header, and other headers
+	 * (they need to be present in an IMS hit)
+	 */
+	http_date(last_modified, sizeof(last_modified), st.st_mtime);
+	
+	contenttype = http_content_type(cmdp->filename);
+	//hlog(LOG_DEBUG, "found content-type %s", contenttype);
+	
+	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Content-Type", contenttype);
+	evhttp_add_header(headers, "Last-Modified", last_modified);
+	
+	/* Consider an IMS hit */
+	req_headers = evhttp_request_get_input_headers(r);
+	ims = evhttp_find_header(req_headers, "If-Modified-Since");
+	
+	if ((ims) && strcasecmp(ims, last_modified) == 0) {
+		hlog(LOG_DEBUG, "http static file '%s' IMS hit", fname);
+		evhttp_send_reply(r, HTTP_NOTMODIFIED, "Not modified", NULL);
+		return;
+	}
+	
+	file_size = st.st_size;  
+	
+	fd = open(fname, 0, O_RDONLY);
+	if (fd < 0) {
+		hlog(LOG_ERR, "http static file '%s' could not be opened for reading: %s", fname, strerror(errno));
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		return;
+	}
+	
+	buf = hmalloc(file_size);
+	int n = read(fd, buf, file_size);
+	
+	if (close(fd) < 0) {
+		hlog(LOG_ERR, "http static file '%s' could not be closed after reading: %s", fname, strerror(errno));
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		hfree(buf);
+		return;
+	}
+	
+	if (n != file_size) {
+		hlog(LOG_ERR, "http static file '%s' could only read %d of %d bytes", fname, n, file_size);
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		hfree(buf);
+		return;
+	}
+	
+	buffer = evbuffer_new();
+	evbuffer_add(buffer, buf, n);
+	hfree(buf);
+	
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
 	evbuffer_free(buffer);
@@ -61,11 +234,14 @@ void http_router(struct evhttp_request *r, void *arg)
 	
 	hlog(LOG_DEBUG, "http [%s] request %s", remote_host, uri);
 	
-	if (strcmp(uri, "/status.json") == 0) {
+	http_requests++;
+	
+	if (strncmp(uri, "/status.json", 12) == 0) {
 		http_status(r);
 		return;
 	}
 	
+	http_route_static(r, uri);
 	evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 }
 
@@ -151,6 +327,8 @@ void http_thread(void *asdf)
 			evhttp_set_timeout(libsrvr, 30);
 			evhttp_set_max_body_size(libsrvr, 10*1024);
 			evhttp_set_max_headers_size(libsrvr, 10*1024);
+			
+			// TODO: How to limit the amount of concurrent HTTP connections?
 			
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);

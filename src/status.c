@@ -23,6 +23,7 @@
 #include "historydb.h"
 #include "dupecheck.h"
 #include "filter.h"
+#include "incoming.h"
 #include "cJSON.h"
 
 time_t startup_tick;
@@ -145,6 +146,44 @@ char *status_json_string(void)
 	cJSON_AddNumberToObject(memory, "filter_entrycall_cell_size", cellst_filter_entrycall.cellsize);
 	cJSON_AddNumberToObject(memory, "filter_entrycall_cell_size_aligned", cellst_filter_entrycall.cellsize_aligned);
 	cJSON_AddNumberToObject(memory, "filter_entrycall_cell_align", cellst_filter_entrycall.alignment);
+	
+	struct cellstatus_t cellst_pbuf_small, cellst_pbuf_medium, cellst_pbuf_large;
+	incoming_cell_stats(&cellst_pbuf_small, &cellst_pbuf_medium, &cellst_pbuf_large);
+	cJSON_AddNumberToObject(memory, "pbuf_small_cells_used", cellst_pbuf_small.cellcount - cellst_pbuf_small.freecount);
+	cJSON_AddNumberToObject(memory, "pbuf_small_cells_free", cellst_pbuf_small.freecount);
+	cJSON_AddNumberToObject(memory, "pbuf_small_cells_alloc", cellst_pbuf_small.cellcount);
+	cJSON_AddNumberToObject(memory, "pbuf_small_used_bytes", (cellst_pbuf_small.cellcount - cellst_pbuf_small.freecount)*cellst_pbuf_small.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "pbuf_small_allocated_bytes", (long)cellst_pbuf_small.blocks * (long)cellst_pbuf_small.block_size);
+	cJSON_AddNumberToObject(memory, "pbuf_small_block_size", (long)cellst_pbuf_small.block_size);
+	cJSON_AddNumberToObject(memory, "pbuf_small_blocks", (long)cellst_pbuf_small.blocks);
+	cJSON_AddNumberToObject(memory, "pbuf_small_blocks_max", (long)cellst_pbuf_small.blocks_max);
+	cJSON_AddNumberToObject(memory, "pbuf_small_cell_size", cellst_pbuf_small.cellsize);
+	cJSON_AddNumberToObject(memory, "pbuf_small_cell_size_aligned", cellst_pbuf_small.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "pbuf_small_cell_align", cellst_pbuf_small.alignment);
+	
+	cJSON_AddNumberToObject(memory, "pbuf_medium_cells_used", cellst_pbuf_medium.cellcount - cellst_pbuf_medium.freecount);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_cells_free", cellst_pbuf_medium.freecount);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_cells_alloc", cellst_pbuf_medium.cellcount);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_used_bytes", (cellst_pbuf_medium.cellcount - cellst_pbuf_medium.freecount)*cellst_pbuf_medium.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_allocated_bytes", (long)cellst_pbuf_medium.blocks * (long)cellst_pbuf_medium.block_size);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_block_size", (long)cellst_pbuf_medium.block_size);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_blocks", (long)cellst_pbuf_medium.blocks);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_blocks_max", (long)cellst_pbuf_medium.blocks_max);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_cell_size", cellst_pbuf_medium.cellsize);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_cell_size_aligned", cellst_pbuf_medium.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "pbuf_medium_cell_align", cellst_pbuf_medium.alignment);
+	
+	cJSON_AddNumberToObject(memory, "pbuf_large_cells_used", cellst_pbuf_large.cellcount - cellst_pbuf_large.freecount);
+	cJSON_AddNumberToObject(memory, "pbuf_large_cells_free", cellst_pbuf_large.freecount);
+	cJSON_AddNumberToObject(memory, "pbuf_large_cells_alloc", cellst_pbuf_large.cellcount);
+	cJSON_AddNumberToObject(memory, "pbuf_large_used_bytes", (cellst_pbuf_large.cellcount - cellst_pbuf_large.freecount)*cellst_pbuf_large.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "pbuf_large_allocated_bytes", (long)cellst_pbuf_large.blocks * (long)cellst_pbuf_large.block_size);
+	cJSON_AddNumberToObject(memory, "pbuf_large_block_size", (long)cellst_pbuf_large.block_size);
+	cJSON_AddNumberToObject(memory, "pbuf_large_blocks", (long)cellst_pbuf_large.blocks);
+	cJSON_AddNumberToObject(memory, "pbuf_large_blocks_max", (long)cellst_pbuf_large.blocks_max);
+	cJSON_AddNumberToObject(memory, "pbuf_large_cell_size", cellst_pbuf_large.cellsize);
+	cJSON_AddNumberToObject(memory, "pbuf_large_cell_size_aligned", cellst_pbuf_large.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "pbuf_large_cell_align", cellst_pbuf_large.alignment);
 	
 	cJSON_AddItemToObject(root, "memory", memory);
 	

@@ -62,6 +62,8 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		    sent to this client.   */
 		
 		if (filter_process(self, c, pb) > 0) {
+			/* account for the packet sent */
+			clientaccount_add( c, 0, 0, 0, 1);
 			client_write(self, c, pb->data, pb->packet_len);
 		} else {
 			//hlog(LOG_DEBUG, "%d: not sending to client: filter not matched", c->fd);

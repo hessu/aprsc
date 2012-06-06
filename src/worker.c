@@ -590,7 +590,11 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		return 0;
 
 	if (len > 0) {
-		clientaccount_add( c, 0, 0, len, 1); /* this will be written.. 
+		/* Here, we only increment the bytes counter. Packets counter
+		 * will be incremented only when we actually transmit a packet
+		 * instead of a keepalive.
+		 */
+		clientaccount_add( c, 0, 0, len, 0); /* this will be written.. 
 							.. failures ignored. */
 	}
 	if (c->obuf_end + len > c->obuf_size) {
@@ -1303,12 +1307,17 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 			cJSON_AddStringToObject(jc, "app_version", c->app_version);
 			cJSON_AddNumberToObject(jc, "verified", c->validated);
 			cJSON_AddNumberToObject(jc, "obuf_q", c->obuf_end - c->obuf_start);
+			cJSON_AddNumberToObject(jc, "bytes_rx", c->localaccount.rxbytes);
+			cJSON_AddNumberToObject(jc, "bytes_tx", c->localaccount.txbytes);
+			cJSON_AddNumberToObject(jc, "pkts_rx", c->localaccount.rxpackets);
+			cJSON_AddNumberToObject(jc, "pkts_tx", c->localaccount.txpackets);
 			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 			
-			if (c->flags & CLFLAGS_INPORT)
+			if (c->flags & CLFLAGS_INPORT) {
+				cJSON_AddStringToObject(jc, "filter", c->filter_s);
 				cJSON_AddItemToArray(clients, jc);
-			else
+			} else
 				cJSON_AddItemToArray(uplinks, jc);
 			
 			client_heard_count += c->client_heard_count;
@@ -1327,9 +1336,11 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 	cJSON_AddNumberToObject(memory, "client_heard_cells_used", client_heard_count);
 	cJSON_AddNumberToObject(memory, "client_heard_cell_size", sizeof(struct client_heard_t));
 	cJSON_AddNumberToObject(memory, "client_heard_used_bytes", sizeof(struct client_heard_t) * client_heard_count);
+	cJSON_AddNumberToObject(memory, "client_heard_allocated_bytes", sizeof(struct client_heard_t) * client_heard_count);
 	cJSON_AddNumberToObject(memory, "client_courtesy_cells_used", client_courtesy_count);
 	cJSON_AddNumberToObject(memory, "client_courtesy_cell_size", sizeof(struct client_heard_t));
 	cJSON_AddNumberToObject(memory, "client_courtesy_used_bytes", sizeof(struct client_heard_t) * client_courtesy_count);
+	cJSON_AddNumberToObject(memory, "client_courtesy_allocated_bytes", sizeof(struct client_heard_t) * client_courtesy_count);
 	
 	return 0;
 }

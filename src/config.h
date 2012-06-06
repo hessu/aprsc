@@ -66,6 +66,7 @@ extern char *myadmin;
 extern char *cfgfile;
 extern char *pidfile;
 extern char *rundir;
+extern char *webdir;
 extern char *logdir;
 extern char *logname;
 

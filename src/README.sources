@@ -79,6 +79,11 @@ config.c
 	provided by cfgfile.c. Validates configuration and takes
 	it into use. Contains global configuration variables.
 
+http.c
+	HTTP server implemented using libevent2. Runs in a single thread,
+	event-driven, provides access to the status page and HTTP
+	position uploads.
+
 --- Libraries ---
 
 The following source code files have rather clean APIs, are not specific to

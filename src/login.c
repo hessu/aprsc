@@ -121,7 +121,27 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 			if (!(c->flags & CLFLAGS_USERFILTEROK)) {
 				return client_printf(self, c, "# No user-specified filters on this port\r\n");
 			}
+			
+			/* copy the null-separated filter arguments back to a space-separated
+			 * string, for the status page to show
+			 */
+			char *fp = c->filter_s;
+			char *fe = c->filter_s + FILTER_S_SIZE;
+			int f_non_first = 0;
+			
 			while (++i < argc) {
+				int l = strlen(argv[i]);
+				if (fp + l + 2 < fe) {
+					if (f_non_first) {
+						*fp++ = ' ';
+					}
+					memcpy(fp, argv[i], l);
+					fp += l;
+					*fp = 0;
+					
+					f_non_first = 1;	
+				}
+				
 				/* parse filters in argv[i] */
 				rc = filter_parse(c, argv[i], 1);
 				if (rc) {

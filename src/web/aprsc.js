@@ -30,6 +30,16 @@ function conv_verified(i)
 	return '<span class="red">No</span>';
 }
 
+function client_bytes_rates(c, k)
+{
+	var ckey = c['addr_rem'] + ':' + k;
+	var tx = calc_rate(ckey + ':tx', c['bytes_tx'], 1);
+	var rx = calc_rate(ckey + ':rx', c['bytes_rx'], 1);
+	if (!isUndefined(tx[1]) && tx[1] !== '')
+		return tx[1] + ' / ' + rx[1];
+	return '';
+}
+
 function htmlent(s)
 {
 	if (isUndefined(s))
@@ -107,6 +117,10 @@ var key_translate = {
 	'uniques_out': 'Unique packets seen'
 };
 
+var val_convert_c = {
+	'bytes_rates': client_bytes_rates
+};
+
 var val_convert = {
 	't_started': timestr,
 	'uptime': dur_str,
@@ -130,6 +144,7 @@ var uplink_cols = {
 	'pkts_rx': 'Packets Rx',
 	'bytes_tx': 'Bytes Tx',
 	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx Bytes/s',
 	'obuf_q': 'OutQ'
 };
 
@@ -145,6 +160,7 @@ var client_cols = {
 	'pkts_rx': 'Packets Rx',
 	'bytes_tx': 'Bytes Tx',
 	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx Bytes/s',
 	'obuf_q': 'OutQ',
 	'heard_count': 'MsgRcpts',
 	'filter': 'Filter'
@@ -180,13 +196,10 @@ function render_clients(element, d, cols)
 			c['show_app_name'] = c['app_name'];
 		
 		for (var k in cols) {
-			if (!c[k] && c[k] !== 0 && c[k] !== '') {
-				s += '<td>??</td>';
-				continue;
-			}
-			
 			s += '<td>';
-			if (val_convert[k])
+			if (val_convert_c[k])
+				s += val_convert_c[k](c, k);
+			else if (val_convert[k])
 				s += val_convert[k](c[k]);
 			else
 				s += htmlent(c[k]);
@@ -280,7 +293,7 @@ function render_memory(element, d)
 var t_now;
 
 var rate_cache = {};
-function calc_rate(key, value)
+function calc_rate(key, value, no_s)
 {
 	var rate = '';
 	if (rate_cache[key]) {
@@ -294,9 +307,12 @@ function calc_rate(key, value)
 			rate = rate.toFixed(1);
 		else if (rate >= 0.1)
 			rate = rate.toFixed(2);
+		else if (rate == 0)
+			rate = '0';
 		else
 			rate = rate.toFixed(3);
-		rate += '/s';
+		if (!no_s)
+			rate += '/s';
 	}
 	
 	rate_cache[key] = [t_now, value];

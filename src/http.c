@@ -41,13 +41,25 @@ struct http_static_t {
 	char	*filename;
 };
 
+/*
+ *	This is a list of files that the http server agrees to serve.
+ *	Due to security concerns the list is static.
+ *	It's a lot of work to actually implement a full-blown secure web
+ *	server, and that's not what we're trying to do here.
+ */
+
 static struct http_static_t http_static_files[] = {
 	{ "/", "index.html" },
 	{ "/favicon.ico", "favicon.ico" },
 	{ "/aprsc.css", "aprsc.css" },
 	{ "/aprsc.js", "aprsc.js" },
+	{ "/aprsc-logo.png", "aprsc-logo.png" },
 	{ NULL, NULL }
 };
+
+/*
+ *	Content types for the required file extensions
+ */
 
 static struct http_static_t http_content_types[] = {
 	{ ".html", "text/html; charset=UTF-8" },

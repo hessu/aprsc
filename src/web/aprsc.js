@@ -364,7 +364,7 @@ function update_status()
 		dataType: 'json',
 		cache: false,
 		error: function() {
-			setTimeout(function() { update_status(); }, 30000);
+			setTimeout(function() { update_status(); }, 10000);
 		},
 		success: function(data) {
 			render(data);
@@ -372,7 +372,5 @@ function update_status()
 		}
 	});
 }
-
-update_status();
 
 //-->

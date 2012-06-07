@@ -46,7 +46,7 @@ ClientTimeout		48h
 #		userfilter - user-specified filters
 #
 Listen "Messages only"                            messageonly tcp 0.0.0.0  55314   filter t/m
-Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  55152   filter t/c*
+Listen "Full feed with CWOP"                      fullfeed    tcp 0.0.0.0  55152
 Listen "Igate port"                               igate       tcp 0.0.0.0  55580
 Listen "Client-only port"                         clientonly  tcp 0.0.0.0  55581
 

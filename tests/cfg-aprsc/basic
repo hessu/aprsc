@@ -56,7 +56,7 @@ Uplink full1 full tcp 127.0.0.1 10153
 ### HTTP listener ##########
 # Status port provides a status view to web browsers.
 # It starts up by default on 0.0.0.0:14501.
-HTTPStatus 127.0.0.1 55501
+HTTPStatus :: 55501
 # Upload port allows position uploads.
 # It does not start up by default.
 HTTPUpload 127.0.0.1 55080

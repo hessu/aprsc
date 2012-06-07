@@ -98,7 +98,6 @@ var key_translate = {
 	'server_id': 'Server ID',
 	'admin': 'Server admin',
 	'software': 'Server software',
-	'software_version': 'Version',
 	'os': 'Operating system',
 	't_started': 'Server started',
 	'uptime': 'Uptime',
@@ -208,12 +207,20 @@ function render_block(element, d)
 			continue;
 			
 		var o;
-		if (val_convert[k])
-			o = val_convert[k](d[k]);
-		else
-			o = d[k];
+		if (typeof(d[k]) == 'object') {
+			for (var i in d[k])
+				d[k][i] = htmlent(d[k][i]);
+			o = '<td class="ar">' + d[k].join('</td><td class="ar">') + '</td>';
+		} else {
+			if (val_convert[k])
+				o = val_convert[k](d[k]);
+			else
+				o = htmlent(d[k]);
+			
+			o = '<td class="ar">' + o + '</td>';
+		}
 		
-		$(element).append('<tr><td>' + htmlent(key_translate[k]) + '</td><td class="ar">' + htmlent(o) + '</td></tr>');
+		$(element).append('<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
 	}
 }
 
@@ -270,24 +277,60 @@ function render_memory(element, d)
 	$(element).append(s);
 }
 
+var t_now;
+
+var rate_cache = {};
+function calc_rate(key, value)
+{
+	var rate = '';
+	if (rate_cache[key]) {
+		// can calculate current rate
+		var t_dif = t_now - rate_cache[key][0];
+		var val_dif = value - rate_cache[key][1];
+		rate = val_dif / t_dif;
+		if (rate >= 10)
+			rate = rate.toFixed(0);
+		else if (rate >= 1)
+			rate = rate.toFixed(1);
+		else if (rate >= 0.1)
+			rate = rate.toFixed(2);
+		else
+			rate = rate.toFixed(3);
+		rate += '/s';
+	}
+	
+	rate_cache[key] = [t_now, value];
+	return [ value, rate ];
+}
 
 function render(d)
 {
-	if (d['server']) {
-		if (d['server']['server_id'])
-			document.title = htmlent(d['server']['server_id']) + ' aprsc status';
-			
-		if (d['server']['t_now'])
-			$('#upt').html(' at ' + timestr(d['server']['t_now']));
+	if (d['server'] && d['server']['t_now']) {
+		var s = d['server'];
 		
-		render_block('#server', d['server']);
+		if (s['server_id'])
+			document.title = htmlent(s['server_id']) + ' aprsc status';
+			
+		if (s['t_now'])
+			$('#upt').html(' at ' + timestr(s['t_now']));
+		
+		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
+			s['software'] = s['software'] + ' ' + s['software_version'];
+			
+		render_block('#server', s);
 	} else {
 		return;
 	}
 	
-	if (d['dupecheck'])
-		render_block('#dupecheck', d['dupecheck']);
-		
+	t_now = d['server']['t_now'];
+	
+	if (d['dupecheck']) {
+		var u = d['dupecheck'];
+		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
+		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
+		render_block('#dupecheck', u);
+	}
+	
 	if (d['uplinks'])
 		render_clients('#uplinks', d['uplinks'], uplink_cols);
 		

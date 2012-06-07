@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 33 };
+BEGIN { plan tests => 34 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -155,10 +155,15 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 #        Append ,qAS,login
 #    Skip to "All packets with q constructs"
 #
+# Note: Only one TCPIP* should be inserted.
 
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"$login>DST:aifyua",
 	"$login>DST,TCPIP*,qAC,$server_call:aifyua");
+
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"$login>DST,TCPIP*:gaaee",
+	"$login>DST,TCPIP*,qAC,$server_call:gaaee");
 
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,DIGI1,DIGI2*:test",

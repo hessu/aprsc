@@ -53,7 +53,6 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	char *username = argv[1];
 	if (strlen(username) > 9) /* limit length */
 		username[9] = 0;
-	c->state = CSTATE_CONNECTED;
 #ifndef FIXED_IOBUFS
 	c->username = hstrdup(username);
 #else
@@ -162,6 +161,7 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 	}
 
 	c->keepalive = now + keepalive_interval;
+	c->state = CSTATE_CONNECTED;
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",
 	     c->addr_rem, username,

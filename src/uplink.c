@@ -271,7 +271,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int
 	if (rc < -2) return rc;
 
 	c->handler = uplink_logresp_handler;
-	c->state   = CSTATE_CONNECTED;
+	c->state   = CSTATE_LOGRESP;
 	
 	hlog(LOG_INFO, "%s: Connected to server, logging in", c->addr_rem);
 	
@@ -444,7 +444,7 @@ int make_uplink(struct uplink_config_t *l)
 	c->uplink_index = uplink_index;
 	c->fd    = fd;
 	c->addr  = sa;
-	c->state = CSTATE_CONNECTED;
+	c->state = CSTATE_INIT;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;
 	c->flags    = l->client_flags;

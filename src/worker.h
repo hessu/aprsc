@@ -139,6 +139,7 @@ extern struct pbuf_t **pbuf_global_dupe_prevp;
 
 /* a network client */
 typedef enum {
+	CSTATE_INIT,
 	CSTATE_UDP,
 	CSTATE_LOGIN,
 	CSTATE_LOGRESP,

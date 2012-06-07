@@ -30,11 +30,11 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED) {
-			//hlog(LOG_DEBUG, "%d: not sending to client: not connected", c->fd);
+			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
 			continue;
 		}
 		if (c->flags & CLFLAGS_PORT_RO) {
-			//hlog(LOG_DEBUG, "%d: not sending to client: read-only socket", c->fd);
+			//hlog(LOG_DEBUG, "%d/%s: not sending to client: read-only socket", c->fd, c->username);
 			continue;
 		}
 		
@@ -58,10 +58,12 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			continue;
 		}
 
-		/*  Process filters - check if this packet should be
-		    sent to this client.   */
+		/* Process filters - check if this packet should be sent to this client.
+		 * Uplinks get all packets.
+		 * Fullfeed downstreams should too, without filtering.
+		 */
 		
-		if (filter_process(self, c, pb) > 0) {
+		if ((c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_FULLFEED)) || (filter_process(self, c, pb) > 0)) {
 			/* account for the packet sent */
 			clientaccount_add( c, 0, 0, 0, 1);
 			client_write(self, c, pb->data, pb->packet_len);

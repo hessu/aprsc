@@ -281,6 +281,7 @@ struct client_t *client_alloc(void)
 
 	memset((void *)c, 0, sizeof(*c));
 	c->fd = -1;
+	c->state = CSTATE_INIT;
 
 #ifdef FIXED_IOBUFS
 	c->ibuf_size = sizeof(c->ibuf);
@@ -1283,6 +1284,12 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 	struct worker_t *w = worker_threads;
 	struct client_t *c;
 	int pe;
+	static char *uplink_modes[] = {
+		"ro",
+		"multiro",
+		"full"
+	};
+	char *mode;
 	
 	int client_heard_count = 0;
 	int client_courtesy_count = 0;
@@ -1317,8 +1324,17 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 			if (c->flags & CLFLAGS_INPORT) {
 				cJSON_AddStringToObject(jc, "filter", c->filter_s);
 				cJSON_AddItemToArray(clients, jc);
-			} else
+			} else {
+				if (c->flags & CLFLAGS_UPLINKMULTI)
+					mode = uplink_modes[1];
+				else if (c->flags & CLFLAGS_PORT_RO)
+					mode = uplink_modes[0];
+				else
+					mode = uplink_modes[2];
+				cJSON_AddStringToObject(jc, "mode", mode);
+					
 				cJSON_AddItemToArray(uplinks, jc);
+			}
 			
 			client_heard_count += c->client_heard_count;
 			client_courtesy_count += c->client_courtesy_count;

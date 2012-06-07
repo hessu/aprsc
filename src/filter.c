@@ -1010,7 +1010,6 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 	memset(&f0, 0, sizeof(f0));
 	if (*filt == '-') {
-		// f0.h.negation = 1;
 		++filt;
 		ff  = fn;
 		fff = ffn;
@@ -1110,7 +1109,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'E':
 		/*   e/call1/call1/...  Entry station filter (*) */
 
-		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
 		if (i < 0)
 			return i;
 		if (i > 0) /* extended previous */
@@ -1159,7 +1158,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'O':
 		/* o/obje1/obj2...  	Object filter (*)	*/
 
-		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
 		if (i < 0)
 			return i;
 		if (i > 0) /* extended previous */
@@ -1172,7 +1171,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/* p/aa/bb/cc...  	Prefix filter
 		   Pass traffic with fromCall that start with aa or bb or cc...
 		*/
-		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchPrefix );
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchPrefix );
 		if (i < 0)
 			return i;
 		if (i > 0) /* extended previous */
@@ -1274,7 +1273,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'S':
 		/* s/pri/alt/over  	Symbol filter  */
 
-		i = filter_parse_one_s( c, filt0, &f0, ff, ffp );
+		i = filter_parse_one_s( c, filt0, &f0, ff, fff );
 		if (i < 0) {
 			hlog(LOG_DEBUG, "Bad s-filter syntax: %s", filt0);
 			return i;
@@ -1358,7 +1357,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	case 'U':
 		/* u/unproto1/unproto2...  	Unproto filter (*)	*/
 
-		i = filter_parse_one_callsignset(c, filt0, &f0, ff, ffp, MatchWild );
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
 		if (i < 0)
 			return i;
 		if (i > 0) /* extended previous */
@@ -1400,9 +1399,9 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 	/* link to the tail.. */
 	if (ff)
-		ffp = &ff->h.next;
+		fff = &ff->h.next;
 
-	*ffp = f;
+	*fff = f;
 
 	return 0;
 }
@@ -2254,7 +2253,7 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		if (rc > 0)
 			return rc;
 	}
-
+	
 	return 0;
 }
 

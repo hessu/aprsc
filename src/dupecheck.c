@@ -340,6 +340,8 @@ static int dupecheck(struct pbuf_t *pb)
 			    memcmp(addr, dp->addresses, addrlen) == 0 &&
 			    memcmp(data, dp->packet,    datalen) == 0) {
 				// PACKET MATCH!
+				//hlog(LOG_DEBUG, "Dupe: %.*s", pb->packet_len - 2, pb->data);
+				//hlog(LOG_DEBUG, "Orig: %.*s %.*s", addrlen, dp->addresses, datalen, dp->packet);
 				pb->flags |= F_DUPE;
 				filter_postprocess_dupefilter(pb);
 				return F_DUPE;

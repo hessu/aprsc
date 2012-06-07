@@ -254,7 +254,6 @@ void http_router(struct evhttp_request *r, void *arg)
 	}
 	
 	http_route_static(r, uri);
-	evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 }
 
 struct event *ev_timer = NULL;

@@ -524,7 +524,11 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			}
 		} else if (originated_by_client) {
 			/* FROMCALL matches the login */
-			return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", mycall);
+			/* Add TCPIP* in the end of the path only if it's not there already */
+			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
+				return snprintf(new_q, new_q_size, ",qAC,%s", mycall);
+			else
+				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", mycall);
 		} else {
 			/* Append ,qAS,login */
 			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->username);

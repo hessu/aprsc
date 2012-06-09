@@ -82,7 +82,6 @@ $tx = "N1CAL>$dstcall,OH2RDG*,WIDE:!5028.51S/02505.68E#PHG$phg should pass";
 $rx = "N1CAL>$dstcall,OH2RDG*,WIDE,qAS,$login:!5028.51S/02505.68E#PHG$phg should pass";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
-
 # disconnect
 
 $ret = $i_rx->disconnect();

@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 34 };
+BEGIN { plan tests => 37 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -33,6 +33,23 @@ $ret = $i_rx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
 # do the actual tests
+
+# Not in the Q algorithm, but:
+# Packets having srccall == login, and having no Q construct, must have
+# their digipeater path truncated away and replaced with ,TCPIP* and
+# then the Q construct.
+
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"$login>DST:tcpip-path-replace1",
+	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace1");
+
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"$login>DST,DIGI1,DIGI5*:tcpip-path-replace2",
+	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace2");
+
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"$login>DST,TCPIP*:tcpip-path-replace3",
+	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace3");
 
 #
 # All packets

@@ -629,8 +629,12 @@ int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, char *
 	s = p;
 	
 	/* starts with '#' => a comment packet, timestamp or something */
-	if (*s == '#')
+	if (*s == '#') {
+		/* filter adjunct commands ? */
+		if (strncasecmp(s, "#filter", 7) == 0)
+			return filter_commands(self, c, s, len);
 		return 0;
+	}
 	
 	/* do some parsing */
 	if (len < PACKETLEN_MIN-2)
@@ -639,10 +643,6 @@ int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, char *
 		e = incoming_parse(self, c, s, len);
 	
 	if (e < 0) {
-		/* filter adjunct commands ? */
-		if (strncasecmp(s, "filter", 6) == 0)
-			return filter_commands(self, c, s, len);
-		
 		/* failed parsing */
 		if (e == -42)
 			hlog(LOG_DEBUG, "Uplinksim: Packet too short (%d): %.*s", len, len, s);
@@ -676,6 +676,10 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#') {
+		/* filter adjunct commands ? */
+		if (strncasecmp(s, "#filter", 7) == 0)
+			return filter_commands(self, c, s, len);
+			
 		hlog(LOG_DEBUG, "#-in: '%.*s'", len, s);
 		return 0;
 	}
@@ -694,10 +698,6 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		e = incoming_parse(self, c, s, len);
 	
 	if (e < 0) {
-		/* filter adjunct commands ? */
-		if (strncasecmp(s, "filter", 6) == 0)
-			return filter_commands(self, c, s, len);
-		
 		/* failed parsing */
 		if (e == -42)
 			hlog(LOG_DEBUG, "Packet too short (%d): %.*s", len, len, s);

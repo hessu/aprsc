@@ -2288,8 +2288,9 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	char *b, *p;
 	int i, argc;
 
-	len -= 6;
-	s   += 6;
+	/* skip over the #filter in the beginning of the command */
+	len -= 7;
+	s   += 7;
 
 	if ( *s == '?' && len == 1 ) {
 		/* Query current filters */

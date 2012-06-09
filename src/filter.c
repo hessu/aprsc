@@ -25,6 +25,16 @@
 #include "keyhash.h"
 #include "client_heard.h"
 
+#define FILTER_CLIENT_DEBUGGING
+
+#ifdef FILTER_CLIENT_DEBUGGING
+#define FILTER_CLIENT_DEBUG(worker, c, fmt, ...) \
+            do { client_printf(worker, c, fmt, __VA_ARGS__); } while (0)
+#else
+#define FILTER_CLIENT_DEBUG(fmt, ...)
+#endif
+
+
 // static double rad2deg(double a) { return a * (180.0 * M_1_PI); }
 
 /*
@@ -2210,7 +2220,9 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		 */
 		if (pb->packettype & (T_POSITION|T_OBJECT|T_ITEM)
 			&& client_courtesy_needed(c, pb->srcname, pb->srcname_len)) {
+				FILTER_CLIENT_DEBUG(self, c, "# courtesy position after message\r\n", NULL);
 				return 1;
+			
 		}
 	}
 	
@@ -2226,8 +2238,10 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	for ( ; f; f = f->h.next ) {
 		int rc = filter_process_one(c, pb, f);
 		/* no reports to user about bad filters.. */
-		if (rc > 0)
+		if (rc > 0) {
+			FILTER_CLIENT_DEBUG(self, c, "# matched server default filter %s\r\n", f->h.text);
 			return rc;
+		}
 	}
 
 	f = c->neguserfilters;
@@ -2238,8 +2252,10 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 			if (rc < 0) /* possibly the client got destroyed here! */
 				return rc;
 		}
-		if (rc > 0)
+		if (rc > 0) {
+			FILTER_CLIENT_DEBUG(self, c, "# matched negative filter %s\r\n", f->h.text);
 			return 0; // match on filter - no output on client
+		}
 	}
 
 	f = c->posuserfilters;
@@ -2250,8 +2266,10 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 			if (rc < 0) /* possibly the client got destroyed here! */
 				return rc;
 		}
-		if (rc > 0)
+		if (rc > 0) {
+			FILTER_CLIENT_DEBUG(self, c, "# matched filter %s\r\n", f->h.text);
 			return rc;
+		}
 	}
 	
 	return 0;

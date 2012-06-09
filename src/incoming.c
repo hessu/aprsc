@@ -411,7 +411,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	char *dstcall_end; /* end of dstcall including SSID ([:,]) */
 	char *via_start; /* start of the digipeater path (after dstcall,) */
 	char *q_start = NULL; /* start of the Q construct (points to the 'q') */
-	int q_replace = 0; /* whether the existing Q construct is replaced */
+	char *q_replace = NULL; /* whether the existing Q construct is replaced */
 	const char *data;	  /* points to original incoming path/payload separating ':' character */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
@@ -502,7 +502,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* get a packet buffer */
 	int new_len;
 	if (q_replace)
-		new_len = len+path_append_len-(path_end-q_start)+3; /* we remove the old path first */
+		new_len = len+path_append_len-(path_end-q_replace)+3; /* we remove the old path first */
 	else
 		new_len = len+path_append_len+3; /* we add path_append_len + CRLFNUL */
 	pb = pbuf_get(self, new_len);
@@ -520,10 +520,10 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->t = now;
 	
 	/* Copy the unmodified part of the packet header */
-	if (q_replace && q_start) {
+	if (q_replace) {
 		/* if we're replacing the Q construct, we don't copy the old one */
-		memcpy(pb->data, s, q_start - s);
-		p = pb->data + (q_start - s);
+		memcpy(pb->data, s, q_replace - s);
+		p = pb->data + (q_replace - s);
 	} else {
 		memcpy(pb->data, s, path_end - s);
 		p = pb->data + (path_end - s);
@@ -547,7 +547,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	memcpy(p, path_append, path_append_len);
 	p += path_append_len;
 	
-	// hlog(LOG_DEBUG, "q construct: %.*s", 3, pb->qconst_start);
+	//hlog(LOG_DEBUG, "q construct: %.*s", 3, pb->qconst_start);
 	
 	/* Copy the unmodified end of the packet (including the :) */
 	memcpy(p, info_start - 1, datalen);

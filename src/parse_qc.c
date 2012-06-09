@@ -48,7 +48,7 @@ static int check_invalid_q_callsign(const char *call, int len)
 
 static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			int new_q_len, char q_proto, char q_type, char *q_start,
-			int *q_replace, char *path_end )
+			char **q_replace, char *path_end )
 {
 	char *qcallv[MAX_Q_CALLS+1];
 	int qcallc;
@@ -187,7 +187,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 	
 	if (q_proto == 'A' && q_type == 'I') {
 		/* we replace the existing Q construct with a regenerated one */
-		*q_replace = 1;
+		*q_replace = q_start+1;
 		
 		/* copy over existing qAI trace */
 		new_q_len = path_end - q_start - 1;
@@ -245,7 +245,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
  */
 
 int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
-              char **path_end, int pathlen, char **new_q_start, int *q_replace,
+              char **path_end, int pathlen, char **new_q_start, char **q_replace,
               int originated_by_client)
 {
 	char *q_start = NULL; /* points to the , before the Q construct */
@@ -293,6 +293,17 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 				q_proto = q_type = 0; /* for the further code: we do not have a Qc */
 			}
 			/* it's OK to have more than one callsign after qPT */
+		}
+	} else {
+		/* if the packet's srccall == login, replace digipeater path with
+		 * TCPIP* and insert Q construct
+		 */
+		//hlog(LOG_DEBUG, "no q found");
+		if (originated_by_client) {
+			// where to replace from
+			*q_replace = via_start;
+			//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
+			return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", mycall);
 		}
 	}
 	

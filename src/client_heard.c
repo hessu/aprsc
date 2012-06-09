@@ -33,6 +33,13 @@
 
 //#define HEARD_DEBUG
 
+#ifdef HEARD_DEBUG
+#define DLOG(level, fmt, ...) \
+            do { hlog(level, fmt, __VA_ARGS__); } while (0)
+#else
+#define DLOG(fmt, ...)
+#endif
+
 /*
  *	Update the heard list, either update timestamp of a heard
  *	callsign or insert a new entry
@@ -45,15 +52,14 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	
 	call_len = pb->srccall_end - pb->data;
 
-#ifdef HEARD_DEBUG
-	hlog(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s", c->fd, which, call_len, pb->data);
-#endif
+	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s", c->fd, which, call_len, pb->data);
 	
 	for (h = *list; (h); h = h->next) {
 		if (call_len == h->call_len
 		    && strncasecmp(pb->data, h->callsign, h->call_len) == 0) {
 			// OK, found it from the list
-			hlog(LOG_DEBUG, "heard_list_update fd %d %s: found, updating %.*s", c->fd, which, call_len, pb->data);
+
+			DLOG(LOG_DEBUG, "heard_list_update fd %d %s: found, updating %.*s", c->fd, which, call_len, pb->data);
 			h->last_heard = pb->t;
 			
 			/* Because of digipeating we'll see the same station
@@ -62,7 +68,7 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 			 */
 			 
 			 if (c->client_heard != h) {
-				hlog(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
+				//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
 				*h->prevp = h->next;
 				if (h->next)
 					h->next->prevp = h->prevp;
@@ -79,7 +85,7 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	}
 	
 	/* Not found, insert. */
-	hlog(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, pb->data);
+	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, pb->data);
 	h = hmalloc(sizeof(*h));
 	strncpy(h->callsign, pb->data, call_len);
 	h->callsign[sizeof(h->callsign)-1] = 0;
@@ -109,9 +115,7 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 {
 	struct client_heard_t *h, *next;
 	
-#ifdef HEARD_DEBUG
-	hlog(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s", c->fd, which, call_len, callsign);
-#endif
+	DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s", c->fd, which, call_len, callsign);
 	
 	int expire_below = tick - storetime;
 	next = NULL;
@@ -121,7 +125,7 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 		
 		// expire old entries
 		if (h->last_heard < expire_below || h->last_heard > tick) {
-			hlog(LOG_DEBUG, "heard_find fd %d %s: expiring %s (%ul below %ul)", c->fd, which, h->callsign, h->last_heard, expire_below);
+			DLOG(LOG_DEBUG, "heard_find fd %d %s: expiring %.*s (%ul below %ul)", c->fd, which, h->callsign_len, h->callsign, h->last_heard, expire_below);
 			
 			*h->prevp = h->next;
 			if (h->next)
@@ -135,7 +139,7 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 		if (call_len == h->call_len
 		    && strncasecmp(callsign, h->callsign, h->call_len) == 0) {
 			/* OK, found it from the list. */
-			hlog(LOG_DEBUG, "heard_find fd %d %s: found %.*s%s", c->fd, which, call_len, callsign, (drop_if_found) ? " (dropping)" : "");
+			DLOG(LOG_DEBUG, "heard_find fd %d %s: found %.*s%s", c->fd, which, call_len, callsign, (drop_if_found) ? " (dropping)" : "");
 			
 			if (drop_if_found) {
 				*h->prevp = h->next;

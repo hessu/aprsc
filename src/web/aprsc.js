@@ -136,6 +136,7 @@ var val_convert = {
 var uplink_cols = {
 	'username': 'Server ID',
 	'addr_rem': 'Address',
+	'mode': 'Mode',
 	't_connect': 'Connected',
 	'since_connect': 'Up',
 	'since_last_read': 'Last in',
@@ -256,8 +257,8 @@ var mem_cols = {
 	'_cells_used': 'Cells used',
 	'_cells_free': 'Cells free',
 	'_used_bytes': 'Bytes used',
-	'_allocated_bytes': 'Allocated bytes',
-	'_blocks': 'Allocated blocks'
+	'_allocated_bytes': 'Bytes allocated',
+	'_blocks': 'Blocks allocated'
 };
 
 function render_memory(element, d)

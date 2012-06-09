@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 3 + 5 + 5 + 3 };
+BEGIN { plan tests => 6 + 3 + 4 + 3+2 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -75,10 +75,10 @@ $tx = "OH7TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should pass wild
 $rx = "OH7TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should pass wildcard buddy filter";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
-# wildcard in middle
-$tx = "OH9RDA>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# wildcard-middle buddy filter";
-$rx = "OH9RDA>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# wildcard-middle buddy filter";
-istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+# wildcard in middle (not supported in any of the products)
+#$tx = "OH9RDA>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# wildcard-middle buddy filter";
+#$rx = "OH9RDA>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# wildcard-middle buddy filter";
+#istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 ############################
 # set an object filter
@@ -100,13 +100,23 @@ $rx = "SRC>APRS,qAR,$login:;PREFIX   *090902z6010.78N/02451.11E-Object prefix";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # wildcard in beginning
-$tx = "SRC>APRS,qAR,$login:;TEEND    *090902z6010.78N/02451.11E-Object suffix";
-$rx = "SRC>APRS,qAR,$login:;TEEND    *090902z6010.78N/02451.11E-Object suffix";
-istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+#$tx = "SRC>APRS,qAR,$login:;TEEND    *090902z6010.78N/02451.11E-Object suffix";
+#$rx = "SRC>APRS,qAR,$login:;TEEND    *090902z6010.78N/02451.11E-Object suffix";
+#istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # wildcard in middle
-$tx = "SRC>APRS,qAR,$login:;FOOBAR   *090902z6010.78N/02451.11E-Object wild middle";
-$rx = "SRC>APRS,qAR,$login:;FOOBAR   *090902z6010.78N/02451.11E-Object wild middle";
+#$tx = "SRC>APRS,qAR,$login:;FOOBAR   *090902z6010.78N/02451.11E-Object wild middle";
+#$rx = "SRC>APRS,qAR,$login:;FOOBAR   *090902z6010.78N/02451.11E-Object wild middle";
+#istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# Then, try Items, they should probably match the object filter too
+
+$tx = "SRC>APRS,qAR,$login:)OBJ1!4903.50N/07201.75WA";
+$rx = $tx;
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+$tx = "SRC>APRS,qAR,$login:)OBJ2!4903.50N/07201.75WA";
+$rx = $tx;
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # disconnect

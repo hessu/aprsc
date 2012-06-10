@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 17 + 3 };
+BEGIN { plan tests => 6 + 16 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -68,7 +68,7 @@ $drop = "ST10>APRS,qAR,$login:\@100857z5241.73N/00611.14E_086/002g008t064r000p00
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 # set a filter for second half of the types
-$i_rx->sendline("#filter t/stunwq");
+$i_rx->sendline("#filter t/stunw");
 sleep(0.5);
 
 # status pass, position drop
@@ -90,10 +90,6 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 $drop = sprintf("ST17>APRS,qAR,%s::%-9.9s:normal message again{ff", $login, 'DSTC');
 $pass = "ST18>APRS,qAR,$login:\@100857z5241.73N/00611.14E_086/002g008t064r000p000P000h63b10102L810.DsIP-VP";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
-
-# query pass
-$tx = $rx = sprintf("ST19>APRS,qAR,%s::%-9.9s:?APRSP", $login, 'IGCALL');
-istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 ##############################################
 # distance in type filter

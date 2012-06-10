@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 16 + 3 };
+BEGIN { plan tests => 6 + 17 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -142,6 +142,11 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 $i_rx->sendline("#filter s//#/T"); # This will pass all Digi with overlay of capital T
 sleep(0.5);
+
+$pass = "OH2RDS-1>APRS,qAR,$login:!6016.66NT02515.26E# digi sym mand overlay pass";
+$drop = "OH2RDS-2>APRS,qAR,$login:!6016.66NN02515.26E# digi sym mand overlay drop";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
 
 # disconnect
 

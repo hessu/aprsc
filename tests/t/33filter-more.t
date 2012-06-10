@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 3 + 4 + 3+2 + 3 };
+BEGIN { plan tests => 6 + 3 + 4 + 4+2 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -84,6 +84,11 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 # set an object filter
 $i_rx->sendline("#filter o/OBJ1/OBJ2 o/PRE*/*END/FO*AR");
 sleep(0.5);
+
+# the previously set prefix filter should no longer pass
+$tx = "G0TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should drop buddy filter";
+$helper = "HSRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # see that the filter does match
 $tx = "SRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";

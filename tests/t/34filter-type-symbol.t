@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 12 + 3 };
+BEGIN { plan tests => 6 + 16 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -115,6 +115,33 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 $drop = "OH2FRM>APRS,qAR,$login:;OH2FRM   *092253z6017.00N/02457.34E-Tom's";
 $pass = "OH1UK>APRS,qAR,$login:;OH2WW    *100802z6008.09N/02443.65EYPatrick's";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+##################################################
+# Symbol filter
+$i_rx->sendline("#filter s/->"); # This will pass all House and Car symbols (primary table)
+sleep(0.5);
+
+$drop = "OH2RDP>BEACON,qAR,$login:!6028.51N/02505.68E#PHG7220/drop digi sym"; # digi
+$pass = "OH2FIH>APX201,qAR,$login:=/0&ynTc8A-  pass car sym"; # house
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$drop = "OH3RDP>BEACON,qAR,$login:!6028.51N/02505.68E#PHG7220/drop digi sym again"; # digi
+$pass = "OH2FIH-9>APRS,qAR,$login:!6018.16N/02421.26E>"; # car
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$i_rx->sendline("#filter s//#"); # This will pass all Digi with or without overlay
+sleep(0.5);
+
+$drop = "OH5TES>APRS,qAR,$login:!6018.16N/02421.26E> drop car"; # car
+$pass = "OH2RDP>BEACON,qAR,$login:!6028.51N\\02505.68E# digi symbol pass"; # digi
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$drop = "OH5TES-2>APRS,qAR,$login:!6018.16N/02421.26E> drop car again"; # car
+$pass = "OH2RDS>APRS,qAR,$login:!6016.66NN02515.26E# digi symbol opt overlay";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$i_rx->sendline("#filter s//#/T"); # This will pass all Digi with overlay of capital T
+sleep(0.5);
 
 # disconnect
 

@@ -146,7 +146,7 @@ struct filter_head_t {
 	  int16_t len1;     /*  or as len2 of s-filter */
 	}; /* ANONYMOUS UNION */
 	union {
-		int16_t len2s, len2, len3s, len3; /* of s-filter */
+		struct lens_t { int16_t len2s, len2, len3s, len3; } lens; /* of s-filter */
 		/* for cases where there is only one.. */
 		struct filter_refcallsign_t  refcallsign;
 		/*  hmalloc()ed array, alignment important! */
@@ -933,26 +933,27 @@ int filter_parse_one_s(struct client_t *c, const char *filt0, struct filter_t *f
 	++s;
 
 	len1 = len2 = len3 = len4 = len5 = len6 = 0;
-
+	
 	while (1) {
-
 		len1 = s - filt0;
-		while (*s && *s != '/') ++s;
+		while (*s && *s != '/')
+			s++;
 		len2 = s - filt0;
 
 		f0->h.len1s = len1;
 		f0->h.len1  = len2 - len1;
-		f0->h.len2s = f0->h.len2 = f0->h.len3s = f0->h.len3 = 0;
+		f0->h.lens.len2s = f0->h.lens.len2 = f0->h.lens.len3s = f0->h.lens.len3 = 0;
 
 		if (!*s) break;
 
 		if (*s == '/') ++s;
 		len3 = s - filt0;
-		while (*s && *s != '/') ++s;
+		while (*s && *s != '/')
+			s++;
 		len4 = s - filt0;
 
-		f0->h.len2s = len3;
-		f0->h.len2  = len4 - len3;
+		f0->h.lens.len2s = len3;
+		f0->h.lens.len2  = len4 - len3;
 
 		if (!*s) break;
 
@@ -961,8 +962,8 @@ int filter_parse_one_s(struct client_t *c, const char *filt0, struct filter_t *f
 		while (*s) ++s;
 		len6 = s - filt0;
 
-		f0->h.len3s = len5;
-		f0->h.len3  = len6 - len5;
+		f0->h.lens.len3s = len5;
+		f0->h.lens.len3  = len6 - len5;
 
 		break;
 	}
@@ -1950,19 +1951,19 @@ static int filter_process_one_s(struct client_t *c, struct pbuf_t *pb, struct fi
 			return f->h.negation ? 2 : 1;
 		// return 0;
 	}
-	if (f->h.len3 != 0) {
+	if (f->h.lens.len3 != 0) {
 		/* Secondary table with overlay */
-		if ( memchr(f->h.text+f->h.len3s, symolay, f->h.len3) == NULL )
+		if ( memchr(f->h.text+f->h.lens.len3s, symolay, f->h.lens.len3) == NULL )
 			return 0; // No match on overlay
-		if ( memchr(f->h.text+f->h.len2s, symcode, f->h.len2) == NULL )
+		if ( memchr(f->h.text+f->h.lens.len2s, symcode, f->h.lens.len2) == NULL )
 			return 0; // No match on overlay
 		return f->h.negation ? 2 : 1;
 	}
 	/* OK, no overlay... */
-	if (f->h.len2 != 0) {
+	if (f->h.lens.len2 != 0) {
 		/* Secondary table symbols */
-		if ( symtable != '\\' &&
-		     memchr(f->h.text+f->h.len2s, symcode, f->h.len2) != NULL )
+		if ( symtable == '\\' &&
+		     memchr(f->h.text+f->h.lens.len2s, symcode, f->h.lens.len2) != NULL )
 			return f->h.negation ? 2 : 1;
 	}
 	/* No match */

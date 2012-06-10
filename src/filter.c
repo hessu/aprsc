@@ -42,7 +42,7 @@
 
   a/latN/lonW/latS/lonE Area filter
   b/call1/call2...  	Budlist filter (*)
-  d/digi1/digi2...  	Digipeater filter (*)
+  d/digi1/digi2...  	USED Digipeater filter (*)
   e/call1/call1/...  	Entry station filter (*)
   f/call/dist  		Friend Range filter
   m/dist  		My Range filter
@@ -1106,7 +1106,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 	case 'd':
 	case 'D':
-		/* d/digi1/digi2...  	Digipeater filter (*)	*/
+		/* d/digi1/digi2...  	Used digipeater filter (*)	*/
 
 		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
 		if (i < 0)
@@ -1561,7 +1561,9 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	   The digipeater filter will pass all packets that have been
 	   digipeated by a particular station(s) (the station's call
-	   is in the path).   This filter allows the * wildcard.
+	   is in the path, and a * is present in that callsign or
+	   a following callsign before the Q construct).
+	   This filter allows the * wildcard.
 
 	   25-35 filters in use at any given time.
 	   Up to 1300 invocations per second.
@@ -1569,36 +1571,83 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 	struct filter_refcallsign_t ref;
 	const char *d = pb->srccall_end + 1 + pb->dstcall_len + 1; /* viacall start */
 	const char *q = pb->qconst_start-1;
-	int rc, i, j = 0;
+	int rc, i, cl, j = 0;
+	int found_call = 0;
 
-	// hlog( LOG_INFO, "digifilter:  '%.*s' -> '%.*s'  q-d=%d",
-	//       (int)(pb->packet_len < 50 ? pb->packet_len : 50),
-	//       pb->data, (int)i, d, (int)(q-d) );
-
+	hlog( LOG_INFO, "digifilter:  '%.*s' -> '%.*s'  q-d=%d",
+	       (int)(pb->packet_len < 50 ? pb->packet_len : 50),
+	       pb->data, (int)i, d, (int)(q-d) );
+	
 	for (i = 0; d < q; ) {
 		++j;
 		if (j > 10) break; /* way too many callsigns... */
 
 		if (*d == ',') ++d; /* second round and onwards.. */
+		/* find end of callsign */
 		for (i = 0; i+d <= q && i <= CALLSIGNLEN_MAX; ++i) {
 			if (d[i] == ',')
 				break;
 		}
 
-		// hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
+		hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
+		
+		/* When matching callsign, ignore trailing '*' */
+		cl = i;
+		if (d[cl-1] == '*')
+			cl--;
 
 		/* digipeater address  ",addr," */
-		memcpy( ref.callsign, d, i);
-		memset( ref.callsign+i, 0, sizeof(ref)-i );
+		memcpy( ref.callsign, d, cl);
+		memset( ref.callsign+cl, 0, sizeof(ref)-cl );
 
-		if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+		if (cl > CALLSIGNLEN_MAX) cl = CALLSIGNLEN_MAX;
 
-		rc = filter_match_on_callsignset(&ref, i, f, MatchWild);
+		rc = filter_match_on_callsignset(&ref, cl, f, MatchWild);
 		if (rc) {
-			return (rc == 1);
+			if (rc == 1) {
+				found_call = 1;
+				break;
+			}
 		}
 		d += i;
 	}
+	
+	if (!found_call)
+		return 0;
+	
+	/* Ok, we found the call. Check if it has a '*' in the end.
+	 * Or if one of the following calls does.
+	 *
+	 * d points to the start of this call, d[i-1] should be it's last character.
+	 */
+	
+	if (d[cl] == '*')
+		return 1;
+	
+	/* continue looking from next callsign */
+	d += i;
+	while (d < q) {
+		++j;
+		if (j > 10) break; /* way too many callsigns... */
+
+		if (*d == ',')
+			d++;
+		
+		/* find end of callsign */
+		for (i = 0; i+d <= q && i <= CALLSIGNLEN_MAX; ++i) {
+			if (d[i] == ',')
+				break;
+		}
+		
+		hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
+		
+		/* Is there a trailing '*' in the call? */
+		if (d[i-1] == '*')
+			return 1;;
+		
+		d += i;
+	}
+	
 	return 0;
 }
 

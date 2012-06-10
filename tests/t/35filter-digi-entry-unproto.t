@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 4 + 2 + 2 + 3 };
+BEGIN { plan tests => 6 + 4 + 2 + 2 + 1 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -80,14 +80,6 @@ $pass = "USRC3>APZMDR,qAR,$login:!6016.66NT02515.26E# pass unproto wildcard";
 $drop = "USRC4>APXMDR,qAR,$login:!6016.66NT02515.26E# drop unproto wildcard";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
-
-# disconnect
-
-$ret = $i_rx->disconnect();
-ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
-
-$ret = $i_tx->disconnect();
-ok($ret, 1, "Failed to disconnect from the server: " . $i_tx->{'error'});
 
 # stop
 

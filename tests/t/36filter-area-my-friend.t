@@ -1,0 +1,62 @@
+#
+# Test filters for area (a/), my position range (m/), friend pos range (f/)
+#
+
+use Test;
+BEGIN { plan tests => 6 + 4 + 1 };
+use runproduct;
+use istest;
+use Ham::APRS::IS;
+use Time::HiRes qw(sleep);
+
+my $p = new runproduct('basic');
+
+ok(defined $p, 1, "Failed to initialize product runner");
+ok($p->start(), 1, "Failed to start product");
+
+my $login = "N5CAL-1";
+my $server_call = "TESTING";
+my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
+ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
+
+# allow range, then drop using a buddy filter
+my $i_rx = new Ham::APRS::IS("localhost:55581", "N5CAL-2");
+ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
+
+my $ret;
+$ret = $i_tx->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to connect to the server: " . $i_tx->{'error'});
+
+$ret = $i_rx->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
+
+my($tx, $rx, $helper);
+
+# filter for area in north-east
+$i_rx->sendline("#filter a/60.1874/24.8362/60.1872/24.8365");
+sleep(0.5);
+
+$pass = "OH2TI>APRX1M,qAR,$login:/054048h6011.24N/02450.18E_c212s003g006t053h82b10046";
+$drop = "DR0P>APRX1M,qAR,$login:/054048h6011.30N/02450.18E_c212s003g006t053h82b10046";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$pass = "OH2TI>RXTLM-1,qAR,$login:T#363,12.2,0.0,62.0,13.0,0.0,00000000";
+$drop = "DR0P>APRX1M,qAR,$login:/054048h6011.224N/02450.28E_c212s003g006t053h82b10046";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+# filter for area in south-west
+$i_rx->sendline("#filter a/-23.5679/-47.3288/-23.5688/-47.3278");
+sleep(0.5);
+
+$pass = "PU2TFG-15>APN390,qAR,PY2PE-1:!2334.10S/04719.70W# pass";
+$drop = "DR0P-15>APN390,qAR,PY2PE-1:!2334.10N/04719.70W# drop north";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$pass = "PU2TFG-15>BEACON,qAR,PY2PE-1:Rede Brasileira de APRS - Aluminio/SP";
+$drop = "DR0P-15>APN390,qAR,PY2PE-1:!2334.10S/04719.70E# drop east";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+# stop
+
+ok($p->stop(), 1, "Failed to stop product");
+

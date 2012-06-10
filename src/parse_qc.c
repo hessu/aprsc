@@ -46,7 +46,7 @@ static int check_invalid_q_callsign(const char *call, int len)
 
 #define MAX_Q_CALLS 64
 
-static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *via_start,
+static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int new_q_size, char *via_start,
 			int new_q_len, char q_proto, char q_type, char *q_start,
 			char **q_replace, char *path_end )
 {
@@ -171,6 +171,11 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
 			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being invalid as an APRS-IS server name", l, qcallv[i]);
 			return -2;
 		}
+		
+		if (q_type == 'U' && memcmp(qcallv[i], pdata, l) == 0 && pdata[l] == '>') {
+			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after qAU also being srccall", l, qcallv[i]);
+			return -2;
+		}
 	}
 	
 	/*
@@ -244,7 +249,7 @@ static int q_dropcheck( struct client_t *c, char *new_q, int new_q_size, char *v
  *	reuse some code snippets.
  */
 
-int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
+int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size, char *via_start,
               char **path_end, int pathlen, char **new_q_start, char **q_replace,
               int originated_by_client)
 {
@@ -468,7 +473,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			}
 			
 			/* Skip to "All packets with q constructs" */
-			return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+			return q_dropcheck(c, pdata, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
 		/*
@@ -480,7 +485,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			/* Not going to modify the construct, update pointer to it */
 			*new_q_start = q_start + 1;
 			/* Skip to "All packets with q constructs" */
-			return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+			return q_dropcheck(c, pdata, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
 		/* At this point we have packets which do not have Q constructs, and
@@ -547,7 +552,7 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 			q_type = 'S';
 		}
 		/* Skip to "All packets with q constructs" */
-		return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+		return q_dropcheck(c, pdata, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 	}
 	
 	/*
@@ -598,6 +603,6 @@ int q_process(struct client_t *c, char *new_q, int new_q_size, char *via_start,
 	if (!new_q_len)
 		*new_q_start = q_start + 1;
 	
-	return q_dropcheck(c, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
+	return q_dropcheck(c, pdata, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 }
 

@@ -489,7 +489,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
 	 */
-	path_append_len = q_process( c, path_append, sizeof(path_append),
+	path_append_len = q_process( c, s, path_append, sizeof(path_append),
 					via_start, &path_end, pathlen, &q_start,
 					&q_replace, originated_by_client );
 	

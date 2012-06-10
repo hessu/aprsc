@@ -51,7 +51,7 @@ static int valid_sym_table_compressed(char c)
 static int valid_sym_table_uncompressed(char c)
 {
 	return (c == '/' || c == '\\' || (c >= 0x41 && c <= 0x5A)
-		    || (c >= 0x48 && c <= 0x57)); /* [\/\\A-Z0-9] */
+		    || (c >= 0x30 && c <= 0x39)); /* [\/\\A-Z0-9] */
 }
 
 /*

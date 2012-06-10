@@ -1574,9 +1574,10 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 	int rc, i, cl, j = 0;
 	int found_call = 0;
 
-	hlog( LOG_INFO, "digifilter:  '%.*s' -> '%.*s'  q-d=%d",
-	       (int)(pb->packet_len < 50 ? pb->packet_len : 50),
-	       pb->data, (int)i, d, (int)(q-d) );
+	/*hlog( LOG_INFO, "digifilter:  '%.*s' -> '%.*s'  q-d=%d",
+	 *      (int)(pb->packet_len < 50 ? pb->packet_len : 50),
+	 *      pb->data, (int)i, d, (int)(q-d) );
+	 */
 	
 	for (i = 0; d < q; ) {
 		++j;
@@ -1589,7 +1590,7 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 				break;
 		}
 
-		hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
+		//hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
 		
 		/* When matching callsign, ignore trailing '*' */
 		cl = i;
@@ -1639,7 +1640,7 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 				break;
 		}
 		
-		hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
+		//hlog(LOG_INFO, "d:  -> (%d,%d) '%.*s'", (int)(d-pb->data), i, i, d);
 		
 		/* Is there a trailing '*' in the call? */
 		if (d[i-1] == '*')

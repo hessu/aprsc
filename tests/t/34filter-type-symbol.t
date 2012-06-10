@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 10 + 3 };
+BEGIN { plan tests => 6 + 12 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -95,13 +95,26 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 $tx = $rx = sprintf("ST19>APRS,qAR,%s::%-9.9s:?APRSP", $login, 'IGCALL');
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
-
+##############################################
 # distance in type filter
-$i_rx->sendline("#filter t/w/POSIT/10");
+$i_rx->sendline("#filter t/o/OH2TI/10");
 sleep(0.5);
 
+# send a position/wx packet (OH2TI's coordinates).
+# This should not pass, since this is not an object
+$i_tx->sendline("OH2TI>APRX1M,qAR,$login:/010848h6011.24N/02450.18E_c237s005g009t048h88b10042");
 
+# OH2KXH's position is just under 10 km from OH2TI, but it's not an object.
+# OH2V object is less than 10 km away.
+$pass = "OH1UK>APRS,qAR,$login:;OH2V     *100802z6013.32N/02445.49EyNokia Espoo Club";
+$drop = "OH2KXH>APX200,qAR,$login:=6014.22N/02443.08E_193/000g000t047r000P000p000h93b10080XRSW";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
+# OH2FRM DW3161 is some 12 km from OH2TI
+# OH1UK is 9 km from OH2TI
+$drop = "OH2FRM>APRS,qAR,$login:;OH2FRM   *092253z6017.00N/02457.34E-Tom's";
+$pass = "OH1UK>APRS,qAR,$login:;OH2WW    *100802z6008.09N/02443.65EYPatrick's";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 # disconnect
 

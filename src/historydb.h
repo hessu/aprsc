@@ -58,7 +58,13 @@ struct history_cell_t {
 
 #define HISTORYDB_CELL_SIZE sizeof(struct history_cell_t)
 
+extern long historydb_inserts;
+extern long historydb_lookups;
+extern long historydb_hashmatches;
+extern long historydb_keymatches;
 extern long historydb_cellgauge;
+extern long historydb_noposcount;
+extern long historydb_cleanup_cleaned;
 
 extern void historydb_init(void);
 

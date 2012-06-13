@@ -40,6 +40,13 @@ function client_bytes_rates(c, k)
 	return '';
 }
 
+function client_pkts_rx(c, k)
+{
+	var s = c['pkts_rx'];
+	
+	return c['pkts_rx'] + '/' + c['pkts_ign_parse_fail'] + '/' + c['pkts_ign_q_drop'];
+}
+
 function htmlent(s)
 {
 	if (isUndefined(s))
@@ -118,7 +125,8 @@ var key_translate = {
 };
 
 var val_convert_c = {
-	'bytes_rates': client_bytes_rates
+	'bytes_rates': client_bytes_rates,
+	'pkts_rx': client_pkts_rx
 };
 
 var val_convert = {

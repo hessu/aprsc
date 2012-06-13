@@ -178,6 +178,7 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 
 	long long  rxbytes,   txbytes;
 	long long  rxpackets, txpackets;
+	long long  rxparsefails, rxqdrops;
 
 	/* record usage references */
 	int	refcount;	/* listener = 1, clients ++ */
@@ -406,7 +407,7 @@ extern void port_accounter_drop(struct portaccount_t *p);
 
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
-extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets);
+extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
 
 extern int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory);
 

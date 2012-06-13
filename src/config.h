@@ -17,6 +17,8 @@
 #define SERVERID PROGNAME " " VERSION
 #define CRLF "\r\n"
 
+#define HAVE_SYNC_FETCH_AND_ADD
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>

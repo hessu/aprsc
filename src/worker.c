@@ -432,28 +432,53 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 	return hstrdup(eb);
 }
 
-void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets)
+void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails)
 {
 	/* worker local accounters do not need locks */
 	c->localaccount.rxbytes   += rxbytes;
 	c->localaccount.txbytes   += txbytes;
 	c->localaccount.rxpackets += rxpackets;
 	c->localaccount.txpackets += txpackets;
+	c->localaccount.rxqdrops += rxqdrops;
+	c->localaccount.rxparsefails += rxparsefails;
 
 	if (c->portaccount) {
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+		__sync_fetch_and_add(&c->portaccount->rxbytes, rxbytes);
+		__sync_fetch_and_add(&c->portaccount->txbytes, txbytes);
+		__sync_fetch_and_add(&c->portaccount->rxpackets, rxpackets);
+		__sync_fetch_and_add(&c->portaccount->txpackets, txpackets);
+		__sync_fetch_and_add(&c->portaccount->rxqdrops, rxqdrops);
+		__sync_fetch_and_add(&c->portaccount->rxparsefails, rxparsefails);
+#else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		c->portaccount->rxbytes   += rxbytes;
 		c->portaccount->txbytes   += txbytes;
 		c->portaccount->rxpackets += rxpackets;
 		c->portaccount->txpackets += txpackets;
+		c->portaccount->rxqdrops += rxqdrops;
+		c->portaccount->rxparsefails += rxparsefails;
+#endif
 	}
 
 	if (!(c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))) {
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+		__sync_fetch_and_add(&client_connects_tcp.rxbytes, rxbytes);
+		__sync_fetch_and_add(&client_connects_tcp.txbytes, txbytes);
+		__sync_fetch_and_add(&client_connects_tcp.rxpackets, rxpackets);
+		__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
+		__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
+		__sync_fetch_and_add(&client_connects_tcp.rxqdrops, rxqdrops);
+		__sync_fetch_and_add(&client_connects_tcp.rxparsefails, rxparsefails);
+#else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		client_connects_tcp.rxbytes   += rxbytes;
 		client_connects_tcp.txbytes   += txbytes;
 		client_connects_tcp.rxpackets += rxpackets;
 		client_connects_tcp.txpackets += txpackets;
+		client_connects_tcp.rxqdrops += rxqdrops;
+		client_connects_tcp.rxparsefails += rxparsefails;
+#endif
 	}
 }
 
@@ -467,18 +492,32 @@ void clientaccount_add_udp(struct client_t *c, int rxbytes, int rxpackets, int t
 	c->localaccount.txpackets += txpackets;
 
 	if (c->portaccount) {
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+		// __sync_fetch_and_add(&c->portaccount->rxbytes, rxbytes);
+		__sync_fetch_and_add(&c->portaccount->txbytes, txbytes);
+		// __sync_fetch_and_add(&c->portaccount->rxpackets, rxpackets);
+		__sync_fetch_and_add(&c->portaccount->txpackets, txpackets);
+#else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		// c->portaccount->rxbytes   += rxbytes;
 		c->portaccount->txbytes   += txbytes;
 		// c->portaccount->rxpackets += rxpackets;
 		c->portaccount->txpackets += txpackets;
+#endif
 	}
 
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+	// __sync_fetch_and_add(&client_connects_udp.rxbytes, rxbytes);
+	__sync_fetch_and_add(&client_connects_udp.txbytes, txbytes);
+	// __sync_fetch_and_add(&client_connects_udp.rxpackets, rxpackets);
+	__sync_fetch_and_add(&client_connects_udp.txpackets, txpackets);
+#else
 	// FIXME: MUTEX !! -- this may or may not need locks..
 	// client_connects_udp.rxbytes   += rxbytes;
 	client_connects_udp.txbytes   += txbytes;
 	// client_connects_udp.rxpackets += rxpackets;
 	client_connects_udp.txpackets += txpackets;
+#endif
 
 	// FIXME: global UDP write statistics - or shall reporter make summaries ?
 }
@@ -595,7 +634,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		 * will be incremented only when we actually transmit a packet
 		 * instead of a keepalive.
 		 */
-		clientaccount_add( c, 0, 0, len, 0); /* this will be written.. 
+		clientaccount_add( c, 0, 0, len, 0, 0, 0); /* this will be written.. 
 							.. failures ignored. */
 	}
 	if (c->obuf_end + len > c->obuf_size) {
@@ -784,7 +823,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 
-	clientaccount_add(c, r, 0, 0, 0); /* Number of packets is now unknown,
+	clientaccount_add(c, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
 					     byte count is collected.
 					     The incoming_handler() will account
 					     packets. */
@@ -1318,6 +1357,8 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 			cJSON_AddNumberToObject(jc, "bytes_tx", c->localaccount.txbytes);
 			cJSON_AddNumberToObject(jc, "pkts_rx", c->localaccount.rxpackets);
 			cJSON_AddNumberToObject(jc, "pkts_tx", c->localaccount.txpackets);
+			cJSON_AddNumberToObject(jc, "pkts_ign_parse_fail", c->localaccount.rxparsefails);
+			cJSON_AddNumberToObject(jc, "pkts_ign_q_drop", c->localaccount.rxqdrops);
 			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 			

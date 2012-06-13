@@ -187,6 +187,15 @@ char *status_json_string(void)
 	
 	cJSON_AddItemToObject(root, "memory", memory);
 	
+	cJSON *historydb = cJSON_CreateObject();
+	cJSON_AddNumberToObject(historydb, "inserts", historydb_inserts);
+	cJSON_AddNumberToObject(historydb, "lookups", historydb_lookups);
+	cJSON_AddNumberToObject(historydb, "hashmatches", historydb_hashmatches);
+	cJSON_AddNumberToObject(historydb, "keymatches", historydb_keymatches);
+	cJSON_AddNumberToObject(historydb, "noposcount", historydb_noposcount);
+	cJSON_AddNumberToObject(historydb, "cleaned", historydb_cleanup_cleaned);
+	cJSON_AddItemToObject(root, "historydb", historydb);
+	
 	cJSON *dupecheck = cJSON_CreateObject();
 	cJSON_AddNumberToObject(dupecheck, "dupes_dropped", dupecheck_dupecount);
 	cJSON_AddNumberToObject(dupecheck, "uniques_out", dupecheck_outcount);

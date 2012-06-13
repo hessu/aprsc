@@ -68,7 +68,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	if (q_proto == 'A' && q_type == 'Z') {
 		/* TODO: The reject log should really log the offending packet */
 		hlog(LOG_DEBUG, "dropping for unknown Q construct %c%c", q_proto, q_type);
-		return -2; /* drop the packet */
+		return -21; /* drop the packet */
 	}
 	
 	/*
@@ -107,7 +107,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		if (p && *(p-1) == ',' && ( *(p+mycall_len) == ',' || p+mycall_len == path_end || *(p+mycall_len) == ':' )) {
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "dropping due to my callsign appearing in path");
-			return -2; /* drop the packet */
+			return -21; /* drop the packet */
 		}
 	}
 	
@@ -145,7 +145,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 			if (l == qcallv[j+1] - qcallv[j] - 1 && strncmp(qcallv[i], qcallv[j], l) == 0) {
 				/* TODO: The reject log should really log the offending packet */
 				hlog(LOG_DEBUG, "dropping due to callsign-SSID '%.*s' found twice after Q construct", l, qcallv[i]);
-			    	return -2;
+			    	return -21;
 			}
 		}
 		if (l == username_len && strncasecmp(qcallv[i], c->username, username_len) == 0) {
@@ -160,21 +160,21 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 				 */
 				/* TODO: The reject log should really log the offending packet */
 				hlog(LOG_DEBUG, "dropping due to login callsign not being the last viacall after Q construct");
-				return -2;
+				return -21;
 			}
 		} else if (clientlist_check_if_validated_client(qcallv[i], l) != -1) {
 			/* 2) hits: TODO: should dump to a loop log */
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being logged in on another socket", l, qcallv[i]);
-			return -2;
+			return -21;
 		} else if (check_invalid_q_callsign(qcallv[i], l)) {
 			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being invalid as an APRS-IS server name", l, qcallv[i]);
-			return -2;
+			return -21;
 		}
 		
 		if (q_type == 'U' && memcmp(qcallv[i], pdata, l) == 0 && pdata[l] == '>') {
 			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after qAU also being srccall", l, qcallv[i]);
-			return -2;
+			return -21;
 		}
 	}
 	
@@ -201,7 +201,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 			/* ouch, memcpy would run over the buffer */
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "dropping due to buffer being too tight");
-			return -2;
+			return -21;
 		}
 		memcpy(new_q, q_start+1, new_q_len);
 		
@@ -220,7 +220,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		
 		if (new_q_size - new_q_len < 20) {
 			hlog(LOG_DEBUG, "dropping due to buffer being too tight when appending my login for qAI");
-			return -2;
+			return -21;
 		}
 		
 		/* Append ,SERVERLOGIN */
@@ -376,7 +376,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				/* more than a single call exists after the q construct,
 				 * invalid header, drop the packet as error
 				 */
-				return -1;
+				return -20;
 			} else {
 				/* Append ,qAX,SERVERLOGIN (well, javaprssrvr replaces the via path too) */
 				*path_end = via_start;
@@ -536,7 +536,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				}
 			} else {
 				/* Undefined by the algorithm - there was no VIACALL */
-				return -1;
+				return -20;
 			}
 		} else if (originated_by_client) {
 			/* FROMCALL matches the login */
@@ -587,7 +587,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				q_type = 'r';
 			} else {
 				/* Undefined by the algorithm - there was no VIACALL */
-				return -1;
+				return -20;
 			}
 		} else {
 			/* Append ,qAS,IPADDR (IPADDR is an 8 character hex representation 

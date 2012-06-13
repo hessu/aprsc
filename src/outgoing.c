@@ -65,7 +65,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		
 		if ((c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_FULLFEED)) || (filter_process(self, c, pb) > 0)) {
 			/* account for the packet sent */
-			clientaccount_add( c, 0, 0, 0, 1);
+			clientaccount_add( c, 0, 0, 0, 1, 0, 0);
 			client_write(self, c, pb->data, pb->packet_len);
 		} else {
 			//hlog(LOG_DEBUG, "%d: not sending to client: filter not matched", c->fd);

@@ -684,13 +684,6 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		return 0;
 	}
 
-	/* Account the one incoming packet. This is almost a small bug, it also
-	 * counts filter commands and invalid packets, but at least it doesn't
-	 * account keepalives any more.
-	 * Incoming bytes were already accounted earlier.
-	 */
-	clientaccount_add(c, 0, 1, 0, 0);
-	
 	/* do some parsing */
 	if (len < PACKETLEN_MIN-2)
 		e = -42;
@@ -704,6 +697,12 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 		else
 			hlog(LOG_DEBUG, "Failed parsing (%d): %.*s",e,len,s);
 	}
+	
+	/* Account the one incoming packet.
+	 * Incoming bytes were already accounted earlier.
+	 */
+	int q_drop = (e == -20 || e == -21) ? 1 : 0;
+	clientaccount_add(c, 0, 1, 0, 0, q_drop, (e >= 0 || q_drop) ? 0 : 1);
 	
 	return 0;
 }

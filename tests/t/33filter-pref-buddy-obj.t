@@ -52,7 +52,7 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 ############################
 # set a buddy filter
-$i_rx->sendline("#filter b/OH0TES/OH2TES b/OH7* b/OH*DA");
+$i_rx->sendline("#filter b/OH0TES/OH2TES b/OH7*");
 sleep(0.5);
 
 # see that the filter does match
@@ -82,21 +82,22 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 ############################
 # set an object filter
-$i_rx->sendline("#filter o/OBJ1/OBJ2 o/PRE*/*END/FO*AR");
+#$i_rx->sendline("#filter o/OBJ1/OBJ2 o/PRE*/*END/FO*AR");
+$i_rx->sendline("#filter o/OBJ1/OBJ2/OBJ3/PRE*"); # # o/PRE*");
 sleep(0.5);
 
 # the previously set prefix filter should no longer pass
-$tx = "G0TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should drop buddy filter";
-$helper = "HSRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
-istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+$drop = "G0TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should drop buddy filter";
+$pass = "HSRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 # see that the filter does match
-$tx = "SRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
-$rx = "SRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
-istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
-
 $tx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
 $rx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+$tx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
+$rx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # wildcard in end

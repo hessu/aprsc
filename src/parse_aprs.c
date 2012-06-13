@@ -1137,11 +1137,15 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		}
 
 		// Or perhaps a DIRECTED QUERY ?
+		/* It might not be a bright idea to mark all messages starting with ?
+		 * queries instead of messages and making them NOT match the
+		 * filter message.
 		if (body[9] == ':' && body[10] == '?') {
 			pb->packettype &= ~T_MESSAGE;
 			pb->packettype |=  T_QUERY;
 			// Fall through to recipient location lookup
 		}
+		*/
 
 		// Now find out if the message RECIPIENT address is known
 		// to have some location data ?  Because then we can treat

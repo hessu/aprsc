@@ -8,7 +8,8 @@
  *	
  */
 
-#define HELPS	"Usage: aprsc [-t chrootdir] [-c cfgfile] [-f (fork)] [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>] [-h (help)]\n"
+#define HELPS	"Usage: aprsc [-t <chrootdir>] [-u <setuid user>] [-c <cfgfile>] [-f (fork)]\n" \
+	" [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>] [-h (help)]\n"
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -18,6 +19,8 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <pwd.h>
 #include <time.h>
 #include <sys/time.h>
 #ifdef __linux__ /* Very Linux-specific code.. */
@@ -61,7 +64,7 @@ void parse_cmdline(int argc, char *argv[])
 	int s, i;
 	int failed = 0;
 	
-	while ((s = getopt(argc, argv, "c:ft:n:r:d:De:o:?h")) != -1) {
+	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:De:o:?h")) != -1) {
 	switch (s) {
 		case 'c':
 			cfgfile = hstrdup(optarg);
@@ -71,6 +74,9 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case 't':
 			chrootdir = hstrdup(optarg);
+			break;
+		case 'u':
+			setuid_s = hstrdup(optarg);
 			break;
 		case 'n':
 			logname = hstrdup(optarg);
@@ -111,7 +117,7 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case '?':
 		case 'h':
-			fprintf(stderr, "%s", VERSTR);
+			fprintf(stderr, "%s\n", VERSTR);
 			failed = 1;
 	}
 	}
@@ -228,6 +234,45 @@ static void dbdump_all(void)
 }
 
 /*
+ *	switch uid
+ */
+void set_uid(char *uid_s)
+{
+	struct passwd pwbuf, *pwbufp;
+	char *buf;
+	int buflen;
+	int e;
+	
+	buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
+	if (buflen < 10)
+		buflen = 1024;
+	
+	buf = hmalloc(buflen);
+	
+	e = getpwnam_r(uid_s, &pwbuf, buf, buflen, &pwbufp);
+	
+	if (e) {
+		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: %s\n", uid_s, strerror(e));
+		exit(1);
+	}
+	
+	if (pwbufp == NULL) {
+		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: user not found\n", uid_s);
+		exit(1);
+	}
+	
+	if (setgid(pwbuf.pw_gid)) {
+		fprintf(stderr, "aprsc: Failed to set GID %d: %s\n", pwbuf.pw_gid, strerror(errno));
+		exit(1);
+	}
+	
+	if (setuid(pwbuf.pw_uid)) {
+		fprintf(stderr, "aprsc: Failed to set UID %d: %s\n", pwbuf.pw_uid, strerror(errno));
+		exit(1);
+	}
+}
+
+/*
  *	Main
  */
 
@@ -289,6 +334,10 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 	}
+	
+	/* if setuid is needed, do so */
+	if (setuid_s)
+		set_uid(setuid_s);
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);

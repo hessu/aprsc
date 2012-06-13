@@ -72,6 +72,7 @@ extern char *webdir;
 extern char *logdir;
 extern char *logname;
 extern char *chrootdir;
+extern char *setuid_s;
 
 #define LISTEN_MAX_FILTERS 10
 

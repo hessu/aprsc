@@ -53,7 +53,8 @@ static struct http_static_t http_static_files[] = {
 	{ "/favicon.ico", "favicon.ico" },
 	{ "/aprsc.css", "aprsc.css" },
 	{ "/aprsc.js", "aprsc.js" },
-	{ "/aprsc-logo.png", "aprsc-logo.png" },
+	{ "/aprsc-logo1.png", "aprsc-logo1.png" },
+	{ "/aprsc-logo2.png", "aprsc-logo2.png" },
 	{ NULL, NULL }
 };
 

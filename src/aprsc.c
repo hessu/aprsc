@@ -8,7 +8,7 @@
  *	
  */
 
-#define HELPS	"Usage: aprsc [-c cfgfile] [-f (fork)] [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>] [-h (help)]\n"
+#define HELPS	"Usage: aprsc [-t chrootdir] [-c cfgfile] [-f (fork)] [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>] [-h (help)]\n"
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -61,13 +61,16 @@ void parse_cmdline(int argc, char *argv[])
 	int s, i;
 	int failed = 0;
 	
-	while ((s = getopt(argc, argv, "c:fn:r:d:De:o:?h")) != -1) {
+	while ((s = getopt(argc, argv, "c:ft:n:r:d:De:o:?h")) != -1) {
 	switch (s) {
 		case 'c':
 			cfgfile = hstrdup(optarg);
 			break;
 		case 'f':
 			fork_a_daemon = 1;
+			break;
+		case 't':
+			chrootdir = hstrdup(optarg);
 			break;
 		case 'n':
 			logname = hstrdup(optarg);
@@ -278,6 +281,14 @@ int main(int argc, char **argv)
 	
 	/* command line */
 	parse_cmdline(argc, argv);
+	
+	/* do a chroot if required */
+	if (chrootdir) {
+		if (chroot(chrootdir)) {
+			fprintf(stderr, "aprsc: chroot(%s) failed: %s", chrootdir, strerror(errno));
+			exit(1);
+		}
+	}
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);

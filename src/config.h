@@ -71,6 +71,7 @@ extern char *rundir;
 extern char *webdir;
 extern char *logdir;
 extern char *logname;
+extern char *chrootdir;
 
 #define LISTEN_MAX_FILTERS 10
 

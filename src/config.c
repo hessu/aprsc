@@ -40,6 +40,7 @@ char *new_logdir;
 char *logdir;	/* access logs go here */
 //char *new_webdir;
 char *webdir = def_webdir;
+char *chrootdir = NULL;
 
 char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */

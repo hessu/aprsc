@@ -236,10 +236,12 @@ static void dbdump_all(void)
 /*
  *	switch uid
  */
-void set_uid(char *uid_s)
+struct passwd pwbuf;
+char *pw_buf_s;
+
+void find_uid(char *uid_s)
 {
-	struct passwd pwbuf, *pwbufp;
-	char *buf;
+	struct passwd *pwbufp;
 	int buflen;
 	int e;
 	
@@ -247,9 +249,9 @@ void set_uid(char *uid_s)
 	if (buflen < 10)
 		buflen = 1024;
 	
-	buf = hmalloc(buflen);
+	pw_buf_s = hmalloc(buflen);
 	
-	e = getpwnam_r(uid_s, &pwbuf, buf, buflen, &pwbufp);
+	e = getpwnam_r(uid_s, &pwbuf, pw_buf_s, buflen, &pwbufp);
 	
 	if (e) {
 		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: %s\n", uid_s, strerror(e));
@@ -260,7 +262,10 @@ void set_uid(char *uid_s)
 		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: user not found\n", uid_s);
 		exit(1);
 	}
-	
+}
+
+void set_uid(char *uid_s)
+{
 	if (setgid(pwbuf.pw_gid)) {
 		fprintf(stderr, "aprsc: Failed to set GID %d: %s\n", pwbuf.pw_gid, strerror(errno));
 		exit(1);
@@ -326,6 +331,10 @@ int main(int argc, char **argv)
 	
 	/* command line */
 	parse_cmdline(argc, argv);
+	
+	/* if setuid is needed, find the user UID */
+	if (setuid_s)
+		find_uid(setuid_s);
 	
 	/* do a chroot if required */
 	if (chrootdir) {

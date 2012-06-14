@@ -278,6 +278,21 @@ void set_uid(char *uid_s)
 }
 
 /*
+ *	Check that we're not running as root. Bail out if we are
+ */
+
+void check_uid(void)
+{
+	if (getuid() == 0 || geteuid() == 0) {
+		fprintf(stderr,
+			"aprsc: Horrible security accident about to happen: running as root.\n"
+			"Use the -u <username> switch to run as unprivileged user 'aprsc', or start\n"
+			"it up as such an user.\n");
+		exit(1);
+	}
+}
+
+/*
  *	Main
  */
 
@@ -347,6 +362,9 @@ int main(int argc, char **argv)
 	/* if setuid is needed, do so */
 	if (setuid_s)
 		set_uid(setuid_s);
+	
+	/* check that we're not root - it would be insecure and really not required */
+	check_uid();
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);

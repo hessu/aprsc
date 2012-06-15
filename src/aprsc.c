@@ -285,7 +285,7 @@ void check_uid(void)
 {
 	if (getuid() == 0 || geteuid() == 0) {
 		fprintf(stderr,
-			"aprsc: Horrible security accident about to happen: running as root.\n"
+			"aprsc: Security incident about to happen: running as root.\n"
 			"Use the -u <username> switch to run as unprivileged user 'aprsc', or start\n"
 			"it up as such an user.\n");
 		exit(1);

@@ -210,14 +210,14 @@ int parse_args(char *argv[],char *cmd)
  
 char *argstr(int arg, int argc, char **argv)
 {
-	static char s[CFGLINE_LEN];
+	static char s[CFGLINE_LEN+1];
 	int i;
 	
 	s[0] = '\0';
 	
 	for (i = arg; i < argc; i++) {
-		strncat(s, argv[i], CFGLINE_LEN);
-		strncat(s, " ", CFGLINE_LEN);
+		strncat(s, argv[i], CFGLINE_LEN - strlen(s));
+		strncat(s, " ", CFGLINE_LEN - strlen(s));
 	}
 	
 	if ((i = strlen(s)) > 0)

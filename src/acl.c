@@ -139,7 +139,7 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 			acl->entries6 = e6;
 			e6->allow = allow;
 			
-			memcpy(e6->addr, sup->si6.sin6_addr.in6_u.u6_addr16, sizeof(e6->addr));
+			memcpy(e6->addr, sup->si6.sin6_addr.s6_addr, sizeof(e6->addr));
 			e6->prefixlen = prefixlen;
 			if (prefixlen == 128) {
 				memset(e6->mask, 0xff, 16);
@@ -282,7 +282,7 @@ int acl_check_4(struct acl_t *acl, uint32_t addr)
 /*
  *	Match an IPv6 address agaist the ACL list
  */
- 
+
 int acl_check_6(struct acl_t *acl, uint32_t addr[4])
 {
 	struct acl_e6_t *a = acl->entries6;
@@ -341,7 +341,7 @@ int acl_check(struct acl_t *acl, struct sockaddr *sa, int addr_len)
 	if (sup->sa.sa_family == AF_INET)
 		return acl_check_4(acl, ntohl(sup->si.sin_addr.s_addr));
 	if (sup->sa.sa_family == AF_INET6)
-		return acl_check_6(acl, sup->si6.sin6_addr.in6_u.u6_addr32);
+		return acl_check_6(acl, (uint32_t *)sup->si6.sin6_addr.s6_addr);
 	
 	hlog(LOG_ERR, "acl_check failed: unknown address family or address length (family %d, length %d)", sup->sa.sa_family, addr_len);
 	

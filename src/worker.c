@@ -547,9 +547,9 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d: %s",
+	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d err %d: %s",
 	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
-			  ? "uplink":"client" ), c->fd, c->addr_rem);
+			  ? "uplink":"client" ), c->fd, errnum, c->addr_rem);
 
 	/* close */
 	if (c->fd >= 0) {
@@ -1058,11 +1058,20 @@ void send_keepalives(struct worker_t *self)
 		
 		/* check for input timeouts */
 		if (c->flags & CLFLAGS_INPORT) {
-			if (c->last_read < tick - client_timeout) {
-				hlog(LOG_DEBUG, "%s: Closing client fd %d due to inactivity (%d s)",
-				      c->addr_rem, c->fd, client_timeout);
-				client_close(self, c, -2);
-				continue;
+			if (c->state != CSTATE_CONNECTED) {
+				if (c->connect_time < tick - client_login_timeout) {
+					hlog(LOG_DEBUG, "%s: Closing client fd %d due to login timeout (%d s)",
+					      c->addr_rem, c->fd, client_login_timeout);
+					client_close(self, c, -2);
+					continue;
+				}
+			} else {
+				if (c->last_read < tick - client_timeout) {
+					hlog(LOG_DEBUG, "%s: Closing client fd %d due to inactivity (%d s)",
+						c->addr_rem, c->fd, client_timeout);
+					client_close(self, c, -2);
+					continue;
+				}
 			}
 		} else {
 			if (c->last_read < tick - upstream_timeout) {

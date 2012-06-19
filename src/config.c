@@ -88,8 +88,9 @@ int courtesy_list_storetime   =    30*60; /* how long to store "client X has bee
 int pbuf_global_expiration       = 35*60; /* 35 minutes */
 int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */
 
-int upstream_timeout =  60;		/* after N seconds of no input from an upstream, disconnect */
-int client_timeout   = 30*60;		/* after N seconds of no input from a client, disconnect */
+int upstream_timeout      = 60;		/* after N seconds of no input from an upstream, disconnect */
+int client_timeout        = 30*60;	/* after N seconds of no input from a client, disconnect */
+int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
 int ibuf_size = 8100;			/* size of input buffer for clients */
 int obuf_size = 32*1024;		/* size of output buffer for clients */
@@ -128,6 +129,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "lastpositioncache",	_CFUNC_ do_interval,	&lastposition_storetime	},
 	{ "upstreamtimeout",	_CFUNC_ do_interval,	&upstream_timeout	},
 	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
+	{ "logintimeout",	_CFUNC_ do_interval,	&client_login_timeout	},
 	{ "filelimit",		_CFUNC_ do_int,		&new_fileno_limit	},
 	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},

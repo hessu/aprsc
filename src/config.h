@@ -55,6 +55,7 @@ extern int heard_list_storetime;
 extern int courtesy_list_storetime;
 extern int upstream_timeout;
 extern int client_timeout;
+extern int client_login_timeout;
 
 extern int disallow_unverified;		/* don't allow unverified clients to transmit packets with srccall != login */
 

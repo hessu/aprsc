@@ -231,7 +231,6 @@ struct client_t {
 	time_t connect_time;/* Time of connection */
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
-	time_t logintimeout; /* when the login wait times out */
 
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 

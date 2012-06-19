@@ -30,6 +30,15 @@ function conv_verified(i)
 	return '<span class="red">No</span>';
 }
 
+function port_conn_rates(c, k)
+{
+	var ckey = 'l_' + c['addr'] + ':' + k;
+	var c = calc_rate(ckey + ':c', c['connects'], 1);
+	if (!isUndefined(c[1]) && c[1] !== '')
+		return c[1];
+	return '';
+}
+
 function client_bytes_rates(c, k)
 {
 	var ckey;
@@ -133,7 +142,8 @@ var key_translate = {
 
 var val_convert_c = {
 	'bytes_rates': client_bytes_rates,
-	'pkts_rx': client_pkts_rx
+	'pkts_rx': client_pkts_rx,
+	'connects_rates': port_conn_rates
 };
 
 var val_convert = {
@@ -150,14 +160,16 @@ var val_convert = {
 
 var listener_cols = {
 	'addr': 'Address',
+	'name': 'Name',
 	'clients': 'Clients',
 	'clients_peak': 'Peak',
 	'connects': 'Connects',
+	'connects_rates': 'Conn/s',
 	'pkts_tx': 'Packets Tx',
 	'pkts_rx': 'Packets Rx',
 	'bytes_tx': 'Bytes Tx',
 	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx Bytes/s',
+	'bytes_rates': 'Tx/Rx bytes/s'
 };
 
 var uplink_cols = {
@@ -172,7 +184,7 @@ var uplink_cols = {
 	'pkts_rx': 'Packets Rx',
 	'bytes_tx': 'Bytes Tx',
 	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx Bytes/s',
+	'bytes_rates': 'Tx/Rx bytes/s',
 	'obuf_q': 'OutQ'
 };
 
@@ -188,7 +200,7 @@ var client_cols = {
 	'pkts_rx': 'Packets Rx',
 	'bytes_tx': 'Bytes Tx',
 	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx Bytes/s',
+	'bytes_rates': 'Tx/Rx bytes/s',
 	'obuf_q': 'OutQ',
 	'heard_count': 'MsgRcpts',
 	'filter': 'Filter'

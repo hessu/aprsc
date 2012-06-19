@@ -704,9 +704,57 @@ void filter_wx_dump(FILE *fp)
 
 /* ================================================================ */
 
+const char *aprsc_strnstr(const char *s1, const char *s2, size_t len)
+{
+	char  c1, c2;
+	size_t  n;
+	
+	c2 = *(char *) s2++;
+	
+	n = strlen(s2);
+	
+	do {
+		do {
+			/* if we're going too far */
+			if (len-- == 0)
+				return NULL;
+			
+			/* pick first char and advance */
+			c1 = *s1++;
+			
+			/* end of string? */
+			if (c1 == 0)
+				return NULL;
+		} while (c1 != c2);
+		
+		/* at least the first character matches... if the needle is longer than
+		 * what we have left in the haystack, we won't find a match.
+		 */
+		
+		if (n > len)
+			return NULL;
+		
+	} while (strncmp(s1, s2, n) != 0);
+	
+	return s1;
+}
+
+
+/*
+ *	Check if there is a TCPIP* component in the path.
+ *	OPTIMIZE: The flag could be set when TCPIP is inserted, or when the path
+ *	is analyzed on input.
+ */
+
+void filter_check_tcpip(struct pbuf_t *pbuf)
+{
+	if (aprsc_strnstr(pbuf->dstcall_end, ",TCPIP*,", pbuf->qconst_start - pbuf->dstcall_end))
+		pbuf->flags |= F_HAS_TCPIP;
+}
 
 void filter_preprocess_dupefilter(struct pbuf_t *pbuf)
 {
+	filter_check_tcpip(pbuf);
 	filter_entrycall_insert(pbuf);
 	filter_wx_insert(pbuf);
 }
@@ -2274,6 +2322,15 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 				FILTER_CLIENT_DEBUG(self, c, "# courtesy position after message\r\n", NULL);
 				return 1;
 			
+		}
+		/* If the source callsign of a packet having TCPIP* in the path has been
+		 * recently heard on this socket, do pass on the packets to this socket too.
+		 * This lets igates know that the station is also available on the Internet,
+		 * and no TX igating to RF should be done.
+		 */
+		if ((pb->flags & F_HAS_TCPIP) && client_heard_check(c, pb->data, pb->srccall_end - pb->data)) {
+			FILTER_CLIENT_DEBUG(self, c, "# igate support TCPIP* packet from a heard station\r\n", NULL);
+			return 1;
 		}
 	}
 	

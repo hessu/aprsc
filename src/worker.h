@@ -78,8 +78,9 @@ extern pthread_attr_t pthr_attrs;  /* used to setup new threads */
 #define T_STATCAPA  (1 << 11) // packet is station capability response
 #define T_ALL	    (1 << 15) // set on _all_ packets
 
-#define F_DUPE    1	/* Duplicate of a previously seen packet */
-#define F_HASPOS  2	/* This packet has valid parsed position */
+#define F_DUPE    	(1 << 0)	/* Duplicate of a previously seen packet */
+#define F_HASPOS  	(1 << 1)	/* This packet has valid parsed position */
+#define F_HAS_TCPIP	(1 << 2)	/* There is a TCPIP* in the path */
 
 struct client_t; /* forward declarator */
 

@@ -18,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 9 + 2 + 2 + 6 + 4 };
+BEGIN { plan tests => 8 + 9 + 1 + 2 + 2 + 6 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -117,6 +117,16 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 $tx = "$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I:!5628.51N/00505.68E# should drop compl2";
 $helper = "H1LP-C>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+# A position packet having TCPIP* in the path, coming from another connection,
+# should be passed to the port where the station was heard without TCPIP*.
+# "This is so the IGate can determine if there is a station it is hearing
+# on RF is also directly connected to APRS-IS.  If the RF station is heard
+# directly on APRS-IS, the IGate should NOT gate messages for that station
+# to RF." (Pete Loveall, 17 May 2012, APRSSIG)
+
+$rx = $tx = "$msg_src>APRS,TCPIP*,qAC,$msg_src:!5528.51N/00505.68E# should pass TCPIP*";
+istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 #
 # Message to an OBJECT

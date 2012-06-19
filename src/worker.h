@@ -173,7 +173,7 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 				   Reporting looks up these via listener list. */
 	pthread_mutex_t mutex;	/* mutex to protect counters, refcount especially */
 
-	long	counter;	/* New arroving connects count */
+	long	counter;	/* New arriving connects count */
 	long	gauge;		/* Number of current connects */
 	long	gauge_max;	/* Maximum of the current connects */
 

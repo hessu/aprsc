@@ -24,6 +24,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "incoming.h"
+#include "accept.h"
 #include "cJSON.h"
 
 time_t startup_tick;
@@ -200,6 +201,10 @@ char *status_json_string(void)
 	cJSON_AddNumberToObject(dupecheck, "dupes_dropped", dupecheck_dupecount);
 	cJSON_AddNumberToObject(dupecheck, "uniques_out", dupecheck_outcount);
 	cJSON_AddItemToObject(root, "dupecheck", dupecheck);
+	
+	cJSON *json_listeners = cJSON_CreateArray();
+	accept_listener_status(json_listeners);
+	cJSON_AddItemToObject(root, "listeners", json_listeners);
 	
 	cJSON *json_clients = cJSON_CreateArray();
 	cJSON *json_uplinks = cJSON_CreateArray();

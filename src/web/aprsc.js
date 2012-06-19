@@ -32,7 +32,11 @@ function conv_verified(i)
 
 function client_bytes_rates(c, k)
 {
-	var ckey = c['addr_rem'] + ':' + k;
+	var ckey;
+	if (isUndefined(c['addr_rem']))
+		ckey = 'l_' + c['addr'] + ':' + k;
+	else
+		ckey = c['addr_rem'] + ':' + k;
 	var tx = calc_rate(ckey + ':tx', c['bytes_tx'], 1);
 	var rx = calc_rate(ckey + ':rx', c['bytes_rx'], 1);
 	if (!isUndefined(tx[1]) && tx[1] !== '')
@@ -43,6 +47,9 @@ function client_bytes_rates(c, k)
 function client_pkts_rx(c, k)
 {
 	var s = c['pkts_rx'];
+	
+	if (isUndefined(c['pkts_ign_parse_fail']))
+		return c['pkts_rx'];
 	
 	return c['pkts_rx'] + '/' + c['pkts_ign_parse_fail'] + '/' + c['pkts_ign_q_drop'];
 }
@@ -139,6 +146,18 @@ var val_convert = {
 	'username': username_link,
 	'addr_loc': addr_loc_port,
 	'verified': conv_verified
+};
+
+var listener_cols = {
+	'addr': 'Address',
+	'clients': 'Clients',
+	'clients_peak': 'Peak',
+	'connects': 'Connects',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx Bytes/s',
 };
 
 var uplink_cols = {
@@ -356,6 +375,9 @@ function render(d)
 		render_block('#dupecheck', u);
 	}
 	
+	if (d['listeners'])
+		render_clients('#listeners', d['listeners'], listener_cols);
+		
 	if (d['uplinks'])
 		render_clients('#uplinks', d['uplinks'], uplink_cols);
 		

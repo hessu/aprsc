@@ -11,10 +11,14 @@
 #ifndef ACCEPT_H
 #define ACCEPT_H
 
+#include "cJSON.h"
+
 extern int accept_reconfiguring;
 extern int accept_shutting_down;
 
 extern void accept_thread(void *asdf);
+
+extern int accept_listener_status(cJSON *listeners);
 
 extern int connections_accepted;
 

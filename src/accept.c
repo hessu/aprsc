@@ -619,3 +619,25 @@ void accept_thread(void *asdf)
 	hfree(acceptpfd);
 }
 
+int accept_listener_status(cJSON *listeners)
+{
+	int n = 0;
+	struct listen_t *l;
+	
+	for (l = listen_list; (l); l = l->next) {
+		cJSON *jl = cJSON_CreateObject();
+		cJSON_AddNumberToObject(jl, "fd", l->fd);
+		cJSON_AddStringToObject(jl, "name", l->name);
+		cJSON_AddStringToObject(jl, "addr", l->addr_s);
+		cJSON_AddNumberToObject(jl, "clients", l->portaccount->gauge);
+		cJSON_AddNumberToObject(jl, "clients_peak", l->portaccount->gauge_max);
+		cJSON_AddNumberToObject(jl, "connects", l->portaccount->counter);
+		cJSON_AddNumberToObject(jl, "bytes_rx", l->portaccount->rxbytes);
+		cJSON_AddNumberToObject(jl, "bytes_tx", l->portaccount->txbytes);
+		cJSON_AddNumberToObject(jl, "pkts_rx", l->portaccount->rxpackets);
+		cJSON_AddNumberToObject(jl, "pkts_tx", l->portaccount->txpackets);
+		cJSON_AddItemToArray(listeners, jl);
+	}
+	
+	return n;
+}

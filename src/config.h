@@ -83,6 +83,7 @@ struct listen_config_t {
 	const char *name;			/* name of socket */
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	int   portnum;
+	int   clients_max;
 
 	struct addrinfo *ai;
 	struct acl_t *acl;

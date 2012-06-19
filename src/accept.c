@@ -47,6 +47,7 @@ struct listen_t {
 	int fd;
 	int clientflags;
 	int portnum;
+	int clients_max;
 	struct client_udp_t *udp;
 	struct portaccount_t *portaccount;
 	struct acl_t *acl;
@@ -229,6 +230,7 @@ static int open_listeners(void)
 		l = listener_alloc();
 
 		l->clientflags = lc->client_flags;
+		l->clients_max = lc->clients_max;
 
 		l->portaccount = port_accounter_alloc();
 
@@ -366,7 +368,19 @@ static struct client_t *do_accept(struct listen_t *l)
 	/* convert client address to string */
 	s = strsockaddr( &sa.sa, addr_len );
 	
-	/* match against acl */
+	/* TODO: the dropped connections here are not accounted. */
+	
+	/* limit amount of connections per port... should probably have an error
+	 * message to the client (javaprssrvr has one)
+	 */
+	if (l->portaccount->gauge >= l->clients_max) {
+		hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients (%d)", l->addr_s, fd, s, l->portaccount->gauge);
+		close(fd);
+		hfree(s);
+		return NULL;
+	}
+	
+	/* match against acl... could probably have an error message to the client */
 	if (l->acl) {
 		if (!acl_check(l->acl, (struct sockaddr *)&sa, addr_len)) {
 			hlog(LOG_INFO, "%s - Denied client on fd %d from %s (ACL)", l->addr_s, fd, s);
@@ -631,6 +645,7 @@ int accept_listener_status(cJSON *listeners)
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);
 		cJSON_AddNumberToObject(jl, "clients", l->portaccount->gauge);
 		cJSON_AddNumberToObject(jl, "clients_peak", l->portaccount->gauge_max);
+		cJSON_AddNumberToObject(jl, "clients_max", l->clients_max);
 		cJSON_AddNumberToObject(jl, "connects", l->portaccount->counter);
 		cJSON_AddNumberToObject(jl, "bytes_rx", l->portaccount->rxbytes);
 		cJSON_AddNumberToObject(jl, "bytes_tx", l->portaccount->txbytes);

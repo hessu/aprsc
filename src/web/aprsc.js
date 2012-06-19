@@ -163,6 +163,7 @@ var listener_cols = {
 	'name': 'Name',
 	'clients': 'Clients',
 	'clients_peak': 'Peak',
+	'clients_max': 'Max',
 	'connects': 'Connects',
 	'connects_rates': 'Conn/s',
 	'pkts_tx': 'Packets Tx',

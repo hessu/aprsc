@@ -496,7 +496,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	int i, port;
 	struct listen_config_t *l;
 	struct addrinfo req, *ai;
+	/* default parameters for a listener */
 	int clflags = CLFLAGS_INPORT;
+	int clients_max = 200;
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -563,6 +565,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	l->host = hstrdup(argv[4]);
 	l->portnum      = port;
 	l->client_flags = clflags;
+	l->clients_max  = clients_max;
 	l->ai = ai;
 	l->acl = NULL;
 	l->next = NULL;
@@ -588,6 +591,15 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 				free_listen_config(&l);
 				return -2;
 			}
+		} else if (strcasecmp(argv[i], "maxclients") == 0) {
+			/* Limit amount of clients */
+			i++;
+			if (i >= argc) {
+				hlog(LOG_ERR, "Listen: 'maxclients' argument is missing the numeric max clients limit for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			l->clients_max = atoi(argv[i]);
 		} else if (strcasecmp(argv[i], "acl") == 0) {
 			/* Access list */
 			i++;

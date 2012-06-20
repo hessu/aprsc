@@ -377,7 +377,7 @@ static struct client_t *do_accept(struct listen_t *l)
 		hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients (%d)", l->addr_s, fd, s, l->portaccount->gauge);
 		close(fd);
 		hfree(s);
-		inbound_connects_account(-1, c->portaccount); /* account rejected connection */
+		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 		return NULL;
 	}
 	
@@ -387,7 +387,7 @@ static struct client_t *do_accept(struct listen_t *l)
 			hlog(LOG_INFO, "%s - Denied client on fd %d from %s (ACL)", l->addr_s, fd, s);
 			close(fd);
 			hfree(s);
-			inbound_connects_account(-1, c->portaccount); /* account rejected connection */
+			inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 			return NULL;
 		}
 	}

@@ -105,6 +105,18 @@ struct portaccount_t *port_accounter_alloc(void)
 	return p;
 }
 
+void port_accounter_reject(struct portaccount_t *p)
+{
+	int i;
+	if (!p) return;
+
+	i = pthread_mutex_lock( & p->mutex );
+
+	++ p->counter;
+	
+	i = pthread_mutex_unlock( & p->mutex );
+}
+
 void port_accounter_add(struct portaccount_t *p)
 {
 	int i, r;
@@ -115,14 +127,14 @@ void port_accounter_add(struct portaccount_t *p)
 	++ p->refcount;
 	++ p->counter;
 	++ p->gauge;
-
+	
 	if (p->gauge > p->gauge_max)
 		p->gauge_max = p->gauge;
-
+	
 	r = p->refcount;
+	
 	i = pthread_mutex_unlock( & p->mutex );
 
-	// hlog(LOG_DEBUG, "port_accounter_add(%p) refcount=%d", p, r);
 }
 
 void port_accounter_drop(struct portaccount_t *p)
@@ -152,12 +164,15 @@ void port_accounter_drop(struct portaccount_t *p)
  */
 
 void inbound_connects_account(const int add, struct portaccount_t *p) 
-{	/* add == 2/3  --> UDP "client" socket drop/add */
+{	/* add == 2/3  --> UDP "client" socket drop/add, -1 --> rejected connect */
 	int i;
 	if (add < 2) {
 		i = pthread_mutex_lock(& inbound_connects.mutex );
 
-		if (add) {
+		if (add == -1) {
+			/* just increment connects, it was discarded */
+			++ inbound_connects.counter;
+		} else if (add) {
 			++ inbound_connects.counter;
 			++ inbound_connects.gauge;
 			if (inbound_connects.gauge > inbound_connects.gauge_max)
@@ -168,12 +183,14 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 
 		i = pthread_mutex_unlock(& inbound_connects.mutex );
 	}
-
+	
 	if ( p ) {
-		if ( add & 1 ) {
-			port_accounter_add( p );
+		if ( add == -1 ) {
+			port_accounter_reject(p);
+		} else if ( add & 1 ) {
+			port_accounter_add(p);
 		} else {
-			port_accounter_drop( p );
+			port_accounter_drop(p);
 		}
 	}
 

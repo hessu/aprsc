@@ -342,7 +342,9 @@ function calc_rate(key, value, no_s)
 		var t_dif = t_now - rate_cache[key][0];
 		var val_dif = value - rate_cache[key][1];
 		rate = val_dif / t_dif;
-		if (rate >= 10)
+		if (rate < 0)
+			rate = '';
+		else if (rate >= 10)
 			rate = rate.toFixed(0);
 		else if (rate >= 1)
 			rate = rate.toFixed(1);

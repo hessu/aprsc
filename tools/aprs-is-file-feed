@@ -13,7 +13,7 @@ my $APRSIS;
 my $mycall = 'OH2MQK-FF';
 my $filter = ''; 'p/OH2R -p/OH2 p/OH ';
 
-$APRSIS = APRS::IS->new('127.0.0.1:10190', $mycall, $filter);
+$APRSIS = APRS::IS->new('127.0.0.1:55580', $mycall, $filter);
 
 if (!defined($APRSIS)) {
     printf "aprsazel: Failed to open APRS-IS socket!\n";
@@ -32,19 +32,23 @@ while (<>) {
 
     local $line = $_;
     local %aprs;
+    chomp $line;
+    next if ($line !~ /^(\d+) (.*)$/);
+    $line = $2;
 
-    $APRSIS->sendline(sprintf("%d",$now)."\t".$line);
+#    $APRSIS->sendline(sprintf("%d",$now)."\t".$line);
+    $APRSIS->sendline("$line\r\n");
 
     ++$cnt;
-    $now += 0.03; ## magic 
+    #$now += 0.03; ## magic 
 
-    if ($cnt >= $next) {
-	$APRSIS->flush();
-	while ($line = $APRSIS->getline) {
-	    ;
-	}
-	$next += 1000;
-    }
+    #if ($cnt >= $next) {
+#	$APRSIS->flush();
+#	while ($line = $APRSIS->getline) {
+#	    ;
+#	}
+#	$next += 1000;
+#    }
 
 #    next if (!defined $line);
 
@@ -53,6 +57,8 @@ while (<>) {
 }
 
 $APRSIS->flush();
+
+exit(0);
 
 printf "\n cnt = $cnt\n";
 

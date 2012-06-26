@@ -256,6 +256,7 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 			/* Out of free cells ? alloc new set */
 			if (new_cellblock(ca)) {
 			  /* Failed ! */
+			  hlog(LOG_ERR, "cellmallocmany: failed to allocate new block!");
 			  break;
 			}
 		}
@@ -267,8 +268,8 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 		// hlog( LOG_DEBUG, "cellmallocmany(%d of %d); freecount %d; %p at %p",
 		//       count, numcells, ca->freecount, cellhead_to_clientptr(ch), ca );
 
-		// if (!ch)
-		// 	break;	// Should not happen...
+		if (!ch)
+		 	break;	// Should not happen...
 
 		ca->free_head = ch->next;
 		ch->next = NULL;

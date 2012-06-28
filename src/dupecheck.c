@@ -546,7 +546,7 @@ static void dupecheck_thread(void)
 		dupecheck_dupecount += pb_out_dupe_count;
 
 		if (cleanup_tick <= now) { // once in a (simulated) minute or so..
-			cleanup_tick = now + 60;
+			cleanup_tick = now + 10;
 
 			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
 			dupecheck_cleanup();

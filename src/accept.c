@@ -475,6 +475,12 @@ static struct client_t *do_accept(struct listen_t *l)
 		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
 		goto err;
 	}
+	
+	/* Pete heavily recommends SO_NODELY for APRS-IS sockets. I'm not so sure,
+	 * need to investigate a bit. High delays can cause packets getting past
+	 * the dupe filters.
+	 */
+	//setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg)); // Maybe?
 
 #if 1
 	/* Use simple round-robin on client feeding.  Least clients is

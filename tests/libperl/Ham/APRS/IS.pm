@@ -235,20 +235,19 @@ sub getline($;$)
 	my $sock = $self->{'sock'};
 	
 	while (1) {
-		if ($self->{'ibuf'} =~ s/^(.*?)[\r\n]+//s) {
+	        # This really needs to check for a real CRLF sequence, not [\r\n]+.
+	        # Otherwise the CRLF will once find itself on the boundary between
+	        # two buffers / read() calls, return the line based on the \r alone,
+	        # and then the next read will return an empty line before the \n.
+		if ($self->{'ibuf'} =~ s/^(.*?)\r\n//s) {
 			#warn "got: $1\n";
 			return $1;
-		}
-		
-		if (time() > $end_t) {
-			warn "getline: timeout\n";
-			return undef;
 		}
 		
 		my($rin, $rout, $ein, $eout) = ('', '', '', '');
 		vec($rin, fileno($sock), 1) = 1;
 		$ein = $rin;
-		my $nfound = select($rout = $rin, undef, $eout = $ein, 1);
+		my $nfound = select($rout = $rin, undef, $eout = $ein, $timeout);
 		
 		if (($nfound) && ($rout)) {
 			my $rbuf;
@@ -267,6 +266,11 @@ sub getline($;$)
 			$self->disconnect();
 			return undef;
 		}
+		
+		if (time() > $end_t) {
+			#warn "getline: timeout\n";
+			return undef;
+		}
 	}
 }
 
@@ -281,9 +285,9 @@ sub getline_noncomment($;$)
 	}
 }
 
-sub sendline($$)
+sub sendline($$;$$)
 {
-	my($self, $line) = @_;
+	my($self, $line, $raw, $noflush) = @_;
 	
 	warn "sendline $line\n" if ($debug);
 	
@@ -303,13 +307,15 @@ sub sendline($$)
 		return undef;
 	}
 	
-	my $ret = $self->{'sock'}->printf( "%s\r\n", $line);
+	my $ret = $self->{'sock'}->printf( "%s%s", $line, ($raw) ? '' : "\r\n" );
 	
-	warn "flush\n" if ($debug);
-	
-	if (!defined $self->{'sock'}->flush) {
-		warn "sendline: flush() failed: $!\n";
-		return undef;
+	if (!$noflush) {
+        	warn "flush\n" if ($debug);
+        	
+        	if (!defined $self->{'sock'}->flush) {
+        		warn "sendline: flush() failed: $!\n";
+        		return undef;
+		}
 	}
 	
 	if (!defined $self->{'sock'}->blocking(0)) {

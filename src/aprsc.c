@@ -472,6 +472,9 @@ int main(int argc, char **argv)
 		}
 	}
 	
+	hlog(LOG_DEBUG, "Dumping status to file");
+	status_dump_file();
+	
 	hlog(LOG_INFO, "Signalling threads to shut down...");
 	accept_shutting_down = 1;
 	http_shutting_down = 1;

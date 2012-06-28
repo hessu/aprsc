@@ -269,7 +269,8 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 
 	bunchlen = cellmallocmany( global_pool, (void**)allocarray, bunchlen );
 	if (bunchlen < 1) {
-	  abort();
+		hlog(LOG_CRIT, "aprsc: Out of memory: Could not allocate packet buffers!");
+		abort();
 	}
 
 	for ( i = 1;  i < bunchlen; ++i ) {
@@ -301,14 +302,14 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	int sz = sizeof(struct pbuf_t) + len;
 
 	for ( i = 1;  i < bunchlen; ++i ) {
-	  pb = hmalloc(sz);
-	  pb->next = *pool;
-	  pb->buf_len = len; // for valgrind this is not necessary.. but exists for symmetry's sake
-	  *pool = pb;
+		pb = hmalloc(sz);
+		pb->next = *pool;
+		pb->buf_len = len; // for valgrind this is not necessary.. but exists for symmetry's sake
+		*pool = pb;
 	}
 
 	pb = hmalloc(sz);
-
+	
 	memset(pb, 0, sz);
 	pb->buf_len = len;
 
@@ -590,6 +591,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	self->pbuf_incoming_local_last = &pb->next;
 	self->pbuf_incoming_local_count++;
 	
+	// TODO: should be atomic
 	incoming_count++;
 	
 	return rc;

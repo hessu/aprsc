@@ -49,27 +49,29 @@ void status_uname(cJSON *root)
 	cJSON_AddStringToObject(root, "os", s);
 }
 
-char *status_json_string(void)
+char *status_json_string(int no_cache)
 {
 	char *out = NULL;
 	int pe;
 	
 	/* if we have a very recent status JSON available, return it instead. */
-	if ((pe = pthread_mutex_lock(&status_json_mt))) {
-		hlog(LOG_ERR, "status_json_string(): could not lock status_json_mt: %s", strerror(pe));
-		return NULL;
-	}
-	if (status_json_cached && (status_json_cache_t == tick || status_json_cache_t == tick - 1)) {
-		out = hstrdup(status_json_cached);
+	if (!no_cache) {
+		if ((pe = pthread_mutex_lock(&status_json_mt))) {
+			hlog(LOG_ERR, "status_json_string(): could not lock status_json_mt: %s", strerror(pe));
+			return NULL;
+		}
+		if (status_json_cached && (status_json_cache_t == tick || status_json_cache_t == tick - 1)) {
+			out = hstrdup(status_json_cached);
+			if ((pe = pthread_mutex_unlock(&status_json_mt))) {
+				hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
+				return NULL;
+			}
+			return out;
+		}
 		if ((pe = pthread_mutex_unlock(&status_json_mt))) {
 			hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
 			return NULL;
 		}
-		return out;
-	}
-	if ((pe = pthread_mutex_unlock(&status_json_mt))) {
-		hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
-		return NULL;
 	}
 	
 	cJSON *root = cJSON_CreateObject();
@@ -208,7 +210,9 @@ char *status_json_string(void)
 	
 	cJSON *json_clients = cJSON_CreateArray();
 	cJSON *json_uplinks = cJSON_CreateArray();
-	worker_client_list(json_clients, json_uplinks, memory);
+	cJSON *json_workers = cJSON_CreateArray();
+	worker_client_list(json_workers, json_clients, json_uplinks, memory);
+	cJSON_AddItemToObject(root, "workers", json_workers);
 	cJSON_AddItemToObject(root, "clients", json_clients);
 	cJSON_AddItemToObject(root, "uplinks", json_uplinks);
 	
@@ -235,7 +239,7 @@ char *status_json_string(void)
 
 int status_dump_fp(FILE *fp)
 {
-	char *out = status_json_string();
+	char *out = status_json_string(1);
 	fputs(out, fp);
 	free(out);
 	

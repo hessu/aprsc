@@ -654,6 +654,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		clientaccount_add( c, 0, 0, len, 0, 0, 0); /* this will be written.. 
 							.. failures ignored. */
 	}
+	
 	if (c->obuf_end + len > c->obuf_size) {
 		/* Oops, cannot append the data to the output buffer.
 		 * Check if we can make space for it by moving data
@@ -666,12 +667,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 			e = errno;
 			if (i < 0 && (e == EINTR)) {
-			  // retrying..
-			  if (c->obuf_start > 0)
-			    memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
-			  c->obuf_end  -= c->obuf_start;
-			  c->obuf_start = 0;
-			  goto write_retry;
+				// retrying..
+				if (c->obuf_start > 0)
+					memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+				c->obuf_end  -= c->obuf_start;
+				c->obuf_start = 0;
+				goto write_retry;
 			}
 			if (i < 0 && (e == EPIPE)) {
 				/* Remote socket closed.. */
@@ -681,8 +682,8 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				return -9;
 			}
 			if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-			  // FIXME: WHAT TO DO ?
-			  // USE WBUF_ADJUSTER ?
+				// FIXME: WHAT TO DO ?
+				// USE WBUF_ADJUSTER ?
 			}
 			if (i > 0) {
 				c->obuf_start += i;
@@ -737,23 +738,26 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			return -9;
 		}
 		if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-		  // FIXME: WHAT TO DO ?
-		  // USE WBUF_ADJUSTER ?
-		  /* tell the poller that we have outgoing data */
-		  xpoll_outgoing(&self->xp, c->xfd, 1);
-		  return 0; // but could not write it at this time..
+			// FIXME: WHAT TO DO ?
+			// USE WBUF_ADJUSTER ?
+			/* tell the poller that we have outgoing data */
+			hlog(LOG_DEBUG, "client_write(%s) blocks/2; polling for write: %s", c->addr_rem, strerror(e));
+			xpoll_outgoing(&self->xp, c->xfd, 1);
+			return 0; // but could not write it at this time..
 		}
 		if (i < 0 && len != 0) {
 			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
 			return -1;
 		}
 		if (i > 0) {
+			//hlog(LOG_DEBUG, "client_write(%s) wrote %d", c->addr_rem, i);
 			c->obuf_start += i;
 			c->obuf_wtime = tick;
 		}
 	}
 	/* All done ? */
 	if (c->obuf_start >= c->obuf_end) {
+		//hlog(LOG_DEBUG, "client_write(%s) obuf empty", c->addr_rem);
 		c->obuf_start = 0;
 		c->obuf_end   = 0;
 		return len;
@@ -895,7 +899,7 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	
 	if (c->obuf_start == c->obuf_end) {
 		/* there is nothing to write any more */
-		//hlog(LOG_DEBUG, "write: nothing to write on fd %d", c->fd);
+		//hlog(LOG_DEBUG, "writable: nothing to write on fd %d (%s)", c->fd, c->addr_rem);
 		xpoll_outgoing(&self->xp, c->xfd, 0);
 		c->obuf_start = c->obuf_end = 0;
 		return 0;
@@ -903,16 +907,19 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	
 	r = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 	if (r < 0) {
-		if (errno == EINTR || errno == EAGAIN)
+		if (errno == EINTR || errno == EAGAIN) {
+			hlog(LOG_DEBUG, "writable: Would block fd %d (%s): %s", c->fd, c->addr_rem, strerror(errno));
 			return 0;
-
-		hlog(LOG_DEBUG, "write: Error from socket fd %d (%s): %s", c->fd, c->addr_rem, strerror(errno));
+		}
+		
+		hlog(LOG_DEBUG, "writable: Error from socket fd %d (%s): %s", c->fd, c->addr_rem, strerror(errno));
 		client_close(self, c, errno);
 		return -1;
 	}
 	
 	c->obuf_start += r;
-	//hlog(LOG_DEBUG, "write: %d bytes to socket fd %d (%s) - %d in obuf", r, c->fd, c->addr_rem, c->obuf_end - c->obuf_start);
+	//hlog(LOG_DEBUG, "writable: %d bytes to socket fd %d (%s) - %d in obuf", r, c->fd, c->addr_rem, c->obuf_end - c->obuf_start);
+	
 	if (c->obuf_start == c->obuf_end) {
 		xpoll_outgoing(&self->xp, c->xfd, 0);
 		c->obuf_start = c->obuf_end = 0;
@@ -1111,17 +1118,16 @@ void send_keepalives(struct worker_t *self)
 		/* adjust buffering */
 		if (c->obuf_writes > obuf_writes_treshold) {
 			// Lots and lots of writes, switch to buffering...
-
-		  if (c->obuf_flushsize == 0)
-		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to buffered writes", c, c->fd, c->addr_rem );
-
-			c->obuf_flushsize = c->obuf_size - 200;
+			if (c->obuf_flushsize == 0) {
+				hlog( LOG_DEBUG,"Switch connection fd %d (%s) to buffered writes", c->fd, c->addr_rem );
+				c->obuf_flushsize = c->obuf_size / 2;
+			}
 		} else {
-		        // Not so much writes, back to "write immediate"
-		  if (c->obuf_flushsize != 0)
-		    // hlog( LOG_DEBUG,"Switch connection %p fd %d (%s) to unbuffered writes", c, c->fd, c->addr_rem );
-
-			c->obuf_flushsize = 0;
+			// Not so much writes, back to "write immediate"
+			if (c->obuf_flushsize != 0) {
+				hlog( LOG_DEBUG,"Switch connectionfd %d (%s) to unbuffered writes", c->fd, c->addr_rem );
+				c->obuf_flushsize = 0;
+			}
 		}
 		c->obuf_writes = 0;
 	}
@@ -1221,6 +1227,19 @@ void worker_thread(struct worker_t *self)
 	xpoll_free(&self->xp);
 	memset(&self->xp,0,sizeof(self->xp));
 	
+	/* check if there is stuff in the incoming queue (not taken by dupecheck) */
+	int pbuf_incoming_found = 0;
+	for (p = self->pbuf_incoming; p; p = p->next) {
+		pbuf_incoming_found++;
+	}
+	if (pbuf_incoming_found != self->pbuf_incoming_count) {
+		hlog(LOG_ERR, "Worker %d: found %d packets in incoming queue, does not match count %d",
+			self->id, pbuf_incoming_found, self->pbuf_incoming_count);
+	}
+	if (self->pbuf_incoming_count)
+		hlog(LOG_INFO, "Worker %d: %d packets left in incoming queue",
+			self->id, self->pbuf_incoming_count);
+		
 	/* clean up thread-local pbuf pools */
 
 	for (p = self->pbuf_free_small; p; p = pn) {
@@ -1344,7 +1363,7 @@ void workers_start(void)
  *	(called from another thread - watch out and lock!)
  */
 
-int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
+int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *memory)
 {
 	struct worker_t *w = worker_threads;
 	struct client_t *c;
@@ -1364,6 +1383,12 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 			hlog(LOG_ERR, "worker_client_list(worker %d): could not lock clients_mutex: %s", w->id, strerror(pe));
 			return -1;
 		}
+		
+		cJSON *jw = cJSON_CreateObject();
+		cJSON_AddNumberToObject(jw, "id", w->id);
+		cJSON_AddNumberToObject(jw, "clients", w->client_count);
+		cJSON_AddNumberToObject(jw, "pbuf_incoming_count", w->pbuf_incoming_count);
+		cJSON_AddNumberToObject(jw, "pbuf_incoming_local_count", w->pbuf_incoming_local_count);
 		
 		for (c = w->clients; (c); c = c->next) {
 			cJSON *jc = cJSON_CreateObject();
@@ -1406,6 +1431,8 @@ int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory)
 			client_heard_count += c->client_heard_count;
 			client_courtesy_count += c->client_courtesy_count;
 		}
+		
+		cJSON_AddItemToArray(workers, jw);
 		
 		if ((pe = pthread_mutex_unlock(&w->clients_mutex))) {
 			hlog(LOG_ERR, "worker_client_list(worker %d): could not unlock clients_mutex: %s", w->id, strerror(pe));

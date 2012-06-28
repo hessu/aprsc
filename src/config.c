@@ -85,8 +85,8 @@ int heard_list_storetime   =     3*60*60; /* how long to store "client X has hea
 int courtesy_list_storetime   =    30*60; /* how long to store "client X has been given MSG from station Y" information,
                                            * to support courtesy position transmission after text message routing */
 
-int pbuf_global_expiration       = 35*60; /* 35 minutes */
-int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */
+int pbuf_global_expiration       = 10;//35*60; /* 35 minutes */
+int pbuf_global_dupe_expiration  = 10;//10*60; /* 10 minutes */
 
 int upstream_timeout      = 60;		/* after N seconds of no input from an upstream, disconnect */
 int client_timeout        = 30*60;	/* after N seconds of no input from a client, disconnect */

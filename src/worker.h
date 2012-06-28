@@ -354,9 +354,6 @@ struct worker_t {
 	/* packets which have been parsed, waiting to be moved into
 	 * pbuf_incoming
 	 */
-	int pbuf_incoming_local_count; // debug stuff
-	int pbuf_incoming_count;       // debug stuff
-	
 	struct pbuf_t *pbuf_incoming_local;
 	struct pbuf_t **pbuf_incoming_local_last;
 	
@@ -364,6 +361,9 @@ struct worker_t {
 	struct pbuf_t *pbuf_incoming;
 	struct pbuf_t **pbuf_incoming_last;
 	pthread_mutex_t pbuf_incoming_mutex;
+	
+	int pbuf_incoming_local_count; /* number of packets parsed, not yet in dupecheck's inbox */
+	int pbuf_incoming_count;       /* number of packets waiting for dupecheck thread to get */
 	
 	/* Pointer to last pointer in pbuf_global(_dupe) */
 	struct pbuf_t **pbuf_global_prevp;
@@ -409,6 +409,6 @@ extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
 extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
 
-extern int worker_client_list(cJSON *clients, cJSON *uplinks, cJSON *memory);
+extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *memory);
 
 #endif

@@ -1,6 +1,6 @@
 #!/usr/bin/perl 
 
-$VERSION = 'APRS-IS-FILE-FEED version-1.0';
+$VERSION = 'filefeed 1.0';
 
 
 use POSIX;
@@ -10,8 +10,8 @@ select STDOUT; $| = 1;
 my $quit = 0;
 my $APRSIS;
 
-my $mycall = 'OH2MQK-FF';
-my $filter = ''; 'p/OH2R -p/OH2 p/OH ';
+my $mycall = 'F0FED';
+my $filter; # 'p/OH2R -p/OH2 p/OH ';
 
 $APRSIS = APRS::IS->new('127.0.0.1:55580', $mycall, $filter);
 
@@ -20,6 +20,7 @@ if (!defined($APRSIS)) {
     exit 4;
 }
 
+print "connected\n";
 
 
 
@@ -29,17 +30,17 @@ my $next = 100;
 my $cnt = 0;
 
 while (<>) {
-
-    local $line = $_;
-    local %aprs;
+    my $line = $_;
     chomp $line;
     next if ($line !~ /^(\d+) (.*)$/);
     $line = $2;
 
 #    $APRSIS->sendline(sprintf("%d",$now)."\t".$line);
     $APRSIS->sendline("$line\r\n");
+    #print "$line\n";
 
     ++$cnt;
+    $APRSIS->flush() if ($cnt % 30 == 0);
     #$now += 0.03; ## magic 
 
     #if ($cnt >= $next) {
@@ -58,9 +59,10 @@ while (<>) {
 
 $APRSIS->flush();
 
+printf "\n cnt = $cnt\n";
+
 exit(0);
 
-printf "\n cnt = $cnt\n";
 
 printf "Last tick: %s\n", $now;
 
@@ -146,16 +148,18 @@ sub new {
 ##
 
     $self->{sock}->blocking(1);
-    $self->{sock}->printf( "user %s pass %s vers %s filter %s\r\n",
+    my $filter = '';
+    $filter = "filter " . $self->{filterre} if ($self->{filterre});
+    $self->{sock}->printf( "user %s pass %s vers %s%s\r\n",
 			   $self->{aprsmycall},
 			   $self->{aprspass}, # -- but we are read-only !
-			   $main::VERSION, $self->{filterre}
+			   $main::VERSION, $filter
     );
 
-    printf( "user %s pass %s vers %s filter %s\n",
+    printf( "user %s pass %s vers %s%s\n",
 	    $self->{aprsmycall},
 	    $self->{aprspass}, # -- but we are read-only !
-	    $main::VERSION, $self->{filterre} );
+	    $main::VERSION, $filter );
     $self->{sock}->flush;
 
     $self->{sock}->blocking(1);

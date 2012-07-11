@@ -18,7 +18,7 @@ extern int accept_shutting_down;
 
 extern void accept_thread(void *asdf);
 
-extern int accept_listener_status(cJSON *listeners);
+extern int accept_listener_status(cJSON *listeners, cJSON *totals);
 
 extern int connections_accepted;
 

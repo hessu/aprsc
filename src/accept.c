@@ -641,10 +641,16 @@ void accept_thread(void *asdf)
 	hfree(acceptpfd);
 }
 
-int accept_listener_status(cJSON *listeners)
+int accept_listener_status(cJSON *listeners, cJSON *totals)
 {
 	int n = 0;
 	struct listen_t *l;
+	long total_clients = 0;
+	long total_connects = 0;
+	long long total_rxbytes = 0;
+	long long total_txbytes = 0;
+	long long total_rxpackets = 0;
+	long long total_txpackets = 0;
 	
 	for (l = listen_list; (l); l = l->next) {
 		cJSON *jl = cJSON_CreateObject();
@@ -660,7 +666,21 @@ int accept_listener_status(cJSON *listeners)
 		cJSON_AddNumberToObject(jl, "pkts_rx", l->portaccount->rxpackets);
 		cJSON_AddNumberToObject(jl, "pkts_tx", l->portaccount->txpackets);
 		cJSON_AddItemToArray(listeners, jl);
+		
+		total_clients += l->portaccount->gauge;
+		total_connects += l->portaccount->counter;
+		total_rxbytes += l->portaccount->rxbytes;
+		total_txbytes += l->portaccount->txbytes;
+		total_rxpackets += l->portaccount->rxpackets;
+		total_txpackets += l->portaccount->txpackets;
 	}
+	
+	cJSON_AddNumberToObject(totals, "clients", total_clients);
+	cJSON_AddNumberToObject(totals, "connects", total_connects);
+	cJSON_AddNumberToObject(totals, "bytes_rx", total_rxbytes);
+	cJSON_AddNumberToObject(totals, "bytes_tx", total_txbytes);
+	cJSON_AddNumberToObject(totals, "pkts_rx", total_rxpackets);
+	cJSON_AddNumberToObject(totals, "pkts_tx", total_txpackets);
 	
 	return n;
 }

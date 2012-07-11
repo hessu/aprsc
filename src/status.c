@@ -204,8 +204,10 @@ char *status_json_string(int no_cache)
 	cJSON_AddNumberToObject(dupecheck, "uniques_out", dupecheck_outcount);
 	cJSON_AddItemToObject(root, "dupecheck", dupecheck);
 	
+	cJSON *json_totals = cJSON_CreateObject();
 	cJSON *json_listeners = cJSON_CreateArray();
-	accept_listener_status(json_listeners);
+	accept_listener_status(json_listeners, json_totals);
+	cJSON_AddItemToObject(root, "totals", json_totals);
 	cJSON_AddItemToObject(root, "listeners", json_listeners);
 	
 	cJSON *json_clients = cJSON_CreateArray();

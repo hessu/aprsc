@@ -142,10 +142,14 @@ var key_translate = {
 	// totals block
 	'clients': 'Clients',
 	'connects': 'Connections',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx'
+	'tcp_pkts_tx': 'TCP Packets Tx',
+	'tcp_pkts_rx': 'TCP Packets Rx',
+	'tcp_bytes_tx': 'TCP Bytes Tx',
+	'tcp_bytes_rx': 'TCP Bytes Rx',
+	'udp_pkts_tx': 'UDP Packets Tx',
+	'udp_pkts_rx': 'UDP Packets Rx',
+	'udp_bytes_tx': 'UDP Bytes Tx',
+	'udp_bytes_rx': 'UDP Bytes Rx'
 };
 
 var val_convert_c = {
@@ -400,7 +404,10 @@ function render(d)
 	
 	if (d['totals']) {
 		var u = d['totals'];
-		var ks = ['connects', 'bytes_tx', 'bytes_rx', 'pkts_tx', 'pkts_rx'];
+		var ks = ['clients', 'connects',
+			'tcp_bytes_tx', 'tcp_bytes_rx', 'tcp_pkts_tx', 'tcp_pkts_rx',
+			'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx'
+			];
 		for (var i in ks) {
 			u[ks[i]] = calc_rate('totals.' + ks[i], u[ks[i]]);
 		}

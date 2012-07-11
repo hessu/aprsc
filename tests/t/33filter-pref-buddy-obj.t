@@ -87,18 +87,25 @@ $i_rx->sendline("#filter o/OBJ1/OBJ2/OBJ3/PRE*"); # # o/PRE*");
 sleep(0.5);
 
 # the previously set prefix filter should no longer pass
-$drop = "G0TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should drop buddy filter";
-$pass = "HSRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
-istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
-
-# see that the filter does match
-$tx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
-$rx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
-istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
-
-$tx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
-$rx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
-istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} =~ /javap/) {
+	print "# javAPRSSrvr o/ filter requires spaces\n";
+	skip "Skip: javAPRSSrvr o/ filter requires spaces";
+	skip "Skip: javAPRSSrvr o/ filter requires spaces";
+	skip "Skip: javAPRSSrvr o/ filter requires spaces";
+} else {
+	$drop = "G0TES>APRS,OH2RDG*,WIDE,qAR,$login:!6028.51N/02505.68E# should drop buddy filter";
+	$pass = "HSRC>APRS,qAR,$login:;OBJ1     *090902z6010.78N/02451.11E-Object 1";
+	istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+	
+	# see that the filter does match
+	$tx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
+	$rx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
+	istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+	
+	$tx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
+	$rx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
+	istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+}
 
 # wildcard in end
 $tx = "SRC>APRS,qAR,$login:;PREFIX   *090902z6010.78N/02451.11E-Object prefix";

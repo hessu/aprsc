@@ -400,7 +400,7 @@ function render(d)
 	
 	if (d['totals']) {
 		var u = d['totals'];
-		var ks = ['clients', 'connects', 'bytes_tx', 'bytes_rx', 'pkts_tx', 'pkts_rx'];
+		var ks = ['connects', 'bytes_tx', 'bytes_rx', 'pkts_tx', 'pkts_rx'];
 		for (var i in ks) {
 			u[ks[i]] = calc_rate('totals.' + ks[i], u[ks[i]]);
 		}

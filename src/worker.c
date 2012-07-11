@@ -478,25 +478,23 @@ void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbyt
 #endif
 	}
 
-	if (!(c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))) {
 #ifdef HAVE_SYNC_FETCH_AND_ADD
-		__sync_fetch_and_add(&client_connects_tcp.rxbytes, rxbytes);
-		__sync_fetch_and_add(&client_connects_tcp.txbytes, txbytes);
-		__sync_fetch_and_add(&client_connects_tcp.rxpackets, rxpackets);
-		__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
-		__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
-		__sync_fetch_and_add(&client_connects_tcp.rxqdrops, rxqdrops);
-		__sync_fetch_and_add(&client_connects_tcp.rxparsefails, rxparsefails);
+	__sync_fetch_and_add(&client_connects_tcp.rxbytes, rxbytes);
+	__sync_fetch_and_add(&client_connects_tcp.txbytes, txbytes);
+	__sync_fetch_and_add(&client_connects_tcp.rxpackets, rxpackets);
+	__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
+	__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
+	__sync_fetch_and_add(&client_connects_tcp.rxqdrops, rxqdrops);
+	__sync_fetch_and_add(&client_connects_tcp.rxparsefails, rxparsefails);
 #else
-		// FIXME: MUTEX !! -- this may or may not need locks..
-		client_connects_tcp.rxbytes   += rxbytes;
-		client_connects_tcp.txbytes   += txbytes;
-		client_connects_tcp.rxpackets += rxpackets;
-		client_connects_tcp.txpackets += txpackets;
-		client_connects_tcp.rxqdrops += rxqdrops;
-		client_connects_tcp.rxparsefails += rxparsefails;
+	// FIXME: MUTEX !! -- this may or may not need locks..
+	client_connects_tcp.rxbytes   += rxbytes;
+	client_connects_tcp.txbytes   += txbytes;
+	client_connects_tcp.rxpackets += rxpackets;
+	client_connects_tcp.txpackets += txpackets;
+	client_connects_tcp.rxqdrops += rxqdrops;
+	client_connects_tcp.rxparsefails += rxparsefails;
 #endif
-	}
 }
 
 void clientaccount_add_udp(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets)

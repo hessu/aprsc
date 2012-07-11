@@ -1361,7 +1361,7 @@ void workers_start(void)
  *	(called from another thread - watch out and lock!)
  */
 
-int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *memory)
+int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *totals, cJSON *memory)
 {
 	struct worker_t *w = worker_threads;
 	struct client_t *c;
@@ -1440,6 +1440,15 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *me
 		
 		w = w->next;
 	}
+	
+	cJSON_AddNumberToObject(totals, "tcp_bytes_rx", client_connects_tcp.rxbytes);
+	cJSON_AddNumberToObject(totals, "tcp_bytes_tx", client_connects_tcp.txbytes);
+	cJSON_AddNumberToObject(totals, "udp_bytes_rx", client_connects_udp.rxbytes);
+	cJSON_AddNumberToObject(totals, "udp_bytes_tx", client_connects_udp.txbytes);
+	cJSON_AddNumberToObject(totals, "tcp_pkts_rx", client_connects_tcp.rxpackets);
+	cJSON_AddNumberToObject(totals, "tcp_pkts_tx", client_connects_tcp.txpackets);
+	cJSON_AddNumberToObject(totals, "udp_pkts_rx", client_connects_udp.rxpackets);
+	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
 	
 	cJSON_AddNumberToObject(memory, "client_heard_cells_used", client_heard_count);
 	cJSON_AddNumberToObject(memory, "client_heard_cell_size", sizeof(struct client_heard_t));

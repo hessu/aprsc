@@ -409,6 +409,6 @@ extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
 extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
 
-extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *memory);
+extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *totals, cJSON *memory);
 
 #endif

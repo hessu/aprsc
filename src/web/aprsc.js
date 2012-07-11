@@ -137,7 +137,15 @@ var key_translate = {
 	
 	// dupecheck block
 	'dupes_dropped': 'Duplicate packets dropped',
-	'uniques_out': 'Unique packets seen'
+	'uniques_out': 'Unique packets seen',
+	
+	// totals block
+	'clients': 'Clients',
+	'connects': 'Connections',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx'
 };
 
 var val_convert_c = {
@@ -388,6 +396,15 @@ function render(d)
 		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
 		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
 		render_block('#dupecheck', u);
+	}
+	
+	if (d['totals']) {
+		var u = d['totals'];
+		var ks = ['clients', 'connects', 'bytes_tx', 'bytes_rx', 'pkts_tx', 'pkts_rx'];
+		for (var i in ks) {
+			u[ks[i]] = calc_rate('totals.' + ks[i], u[ks[i]]);
+		}
+		render_block('#totals', u);
 	}
 	
 	if (d['listeners'])

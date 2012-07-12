@@ -9,6 +9,7 @@ use Time::HiRes qw( time sleep );
 use IO::Handle '_IOFBF';
 use IO::Socket::INET;
 use IO::Select;
+use Data::Dumper;
 
 our $VERSION = '0.01';
 
@@ -25,6 +26,7 @@ argument, the filter string to be sent with the login command.
   my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL');
   my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL', 'filter' => 'f/*');
   my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL', 'nopass' => 1);
+  my $is = new Ham::APRS::IS('aprs.server.com:12345', 'N0CALL', 'udp' => 1);
 
 =cut
 
@@ -40,6 +42,7 @@ sub new($$$;%)
 	$self->{'host_port'} = $host_port;
 	$self->{'mycall'} = $mycall;
 	$self->{'filter'} = $options{'filter'} if (defined $options{'filter'});
+	$self->{'udp'} = $options{'udp'} if (defined $options{'udp'});
 	
 	if ($options{'nopass'}) {
 		$self->{'aprspass'} = -1;
@@ -105,6 +108,17 @@ sub connect($;%)
 	my $retryuntil = defined $options{'retryuntil'} ? $options{'retryuntil'} : 0;
 	my $starttime = time();
 	
+	if ($self->{'udp'} && !defined $self->{'usock'}) {
+		$self->{'usock'} = IO::Socket::INET->new(Proto => 'udp', LocalPort => $self->{'udp'});
+		
+		if (!defined($self->{'usock'})) {
+			$self->{'error'} = "Failed to bind an UDP client socket: $@";
+			return 0;
+                }
+                
+                warn "bound udp port " . $self->{'udp'} . "\n";
+	}
+	
 	while (!defined $self->{'sock'}) {
 		$self->{'sock'} = IO::Socket::INET->new($self->{'host_port'});
 		
@@ -148,18 +162,22 @@ sub connect($;%)
 	$self->{'sock'}->blocking(1);
 	$self->{'state'} = 'connected';
 	
-	my $s;
-	if (defined($self->{'filter'})) {
-		$s = sprintf("user %s pass %s vers %s filter %s\r\n",
+	my $s = sprintf("user %s pass %s vers %s",
 			$self->{'mycall'},
-			$self->{'aprspass'}, # -- but we are read-only !
-			$aprs_appid, $self->{'filter'} );
-	} else {
-		$s = sprintf("user %s pass %s vers %s\r\n",
-			$self->{'mycall'},
-			$self->{'aprspass'}, # -- but we are read-only !
+			$self->{'aprspass'},
 			$aprs_appid );
+			
+	if (defined($self->{'udp'})) {
+		$s .= sprintf(" UDP %d",
+			$self->{'udp'} );
 	}
+	
+	if (defined($self->{'filter'})) {
+		$s .= sprintf(" filter %s",
+			$self->{'filter'} );
+	}
+	
+	$s .= "\r\n";
 	
 	#warn "login: $s\n";
 	if (!$self->{'sock'}->print($s)) {
@@ -245,26 +263,44 @@ sub getline($;$)
 		}
 		
 		my($rin, $rout, $ein, $eout) = ('', '', '', '');
+		my $rudp = '';
 		vec($rin, fileno($sock), 1) = 1;
-		$ein = $rin;
+		my $rtcp = $rin;
+		if (defined $self->{'usock'}) {
+		        vec($rudp, fileno($self->{'usock'}), 1) = 1;
+		        $rin |= $rudp;
+		}
+		$ein = $rtcp;
 		my $nfound = select($rout = $rin, undef, $eout = $ein, $timeout);
 		
-		if (($nfound) && ($rout)) {
+		if ($nfound) {
 			my $rbuf;
-			my $nread = sysread($sock, $rbuf, 1024);
-			if (!defined $nread || $nread < 1) {
-				$self->{'error'} = "Failed to read from server: $!";
-				warn "getline: read error (on read): $!\n";
-				$self->disconnect();
-				return undef;
-			} else {
-				$self->{'ibuf'} .= $rbuf;
+			if (defined $self->{'usock'} && (($rout & $rudp) eq $rudp)) {
+				#warn "getline: got udp\n";
+				my $msg;
+				my $raddr = $self->{'usock'}->recv($msg, 1500);
+				my($port, $ipaddr) = sockaddr_in($raddr);
+				my $hishost = inet_ntoa($ipaddr);
+				warn "got udp from $hishost $port: $msg\n";
+				return $msg;
 			}
-		} elsif (($nfound) && ($eout)) {
-			$self->{'error'} = "Failed to read from server (select returned errors): $!";
-			warn "getline: read error (on select)\n";
-			$self->disconnect();
-			return undef;
+			if (($rout & $rtcp) eq $rtcp) {
+			        my $nread = sysread($sock, $rbuf, 1024);
+			        if (!defined $nread || $nread < 1) {
+			                $self->{'error'} = "Failed to read from server: $!";
+			                warn "getline: read error (on read): $!\n";
+			                $self->disconnect();
+			                return undef;
+                                } else {
+                                        $self->{'ibuf'} .= $rbuf;
+                                }
+			}
+			if (0 && $eout) {
+			        $self->{'error'} = "Failed to read from server (select returned errors): $!";
+			        warn "getline: read error (on select)\n";
+			        $self->disconnect();
+			        return undef;
+                        }
 		}
 		
 		if (time() > $end_t) {

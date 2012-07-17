@@ -113,7 +113,9 @@ int login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
 				}
 			} else {
 				/* Sorry, no UDP service for this port.. */
+				hlog(LOG_DEBUG, "%s (%s): Requested UDP on client port with no UDP configured", c->addr_rem, username);
 				c->udp_port = 0;
+				client_printf(self, c, "# No UDP service available on this port\r\n");
 			}
 
 		} else if (strcasecmp(argv[i], "filter") == 0) {

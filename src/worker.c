@@ -1114,6 +1114,12 @@ void send_keepalives(struct worker_t *self)
 		}
 		
 		/* adjust buffering */
+		/* TODO: This algorithm has a tendency of oscillating between
+		 * buffered and unbuffered writes. Right after enabling buffered
+		 * writes, the writes count goes to 1, resulting in a disabling
+		 * of the buffered writes. Furthermore, if writes are buffered,
+		 * there should be an upper *time* limit for buffering packets.
+		 */
 		if (c->obuf_writes > obuf_writes_treshold) {
 			// Lots and lots of writes, switch to buffering...
 			if (c->obuf_flushsize == 0) {
@@ -1123,7 +1129,7 @@ void send_keepalives(struct worker_t *self)
 		} else {
 			// Not so much writes, back to "write immediate"
 			if (c->obuf_flushsize != 0) {
-				hlog( LOG_DEBUG,"Switch connectionfd %d (%s) to unbuffered writes", c->fd, c->addr_rem );
+				hlog( LOG_DEBUG,"Switch connection fd %d (%s) to unbuffered writes", c->fd, c->addr_rem );
 				c->obuf_flushsize = 0;
 			}
 		}

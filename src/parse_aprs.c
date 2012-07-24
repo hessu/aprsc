@@ -567,7 +567,7 @@ static int parse_aprs_telem(struct pbuf_t *pb, const char *body, const char *bod
  *	APRS PROTOCOL REFERENCE 1.0.1 Chapter 10, page 42 (52 in PDF)
  */
 
-static int parse_aprs_mice(struct pbuf_t *pb, const char *body, const char *body_end)
+static int parse_aprs_mice(struct pbuf_t *pb, const unsigned char *body, const unsigned char *body_end)
 {
 	float lat = 0.0, lng = 0.0;
 	unsigned int lat_deg = 0, lat_min = 0, lat_min_frag = 0, lng_deg = 0, lng_min = 0, lng_min_frag = 0;
@@ -1068,7 +1068,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		/* could be mic-e, minimum body length 9 chars */
 		if (paclen >= 9) {
 			pb->packettype |= T_POSITION;
-			return parse_aprs_mice(pb, body, body_end);
+			return parse_aprs_mice(pb, (unsigned char *)body, (unsigned char *)body_end);
 		}
 		return 0;
 

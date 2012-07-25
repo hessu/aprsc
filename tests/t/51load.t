@@ -34,10 +34,11 @@ sleep(0.5);
 
 ############################################
 
-my $flush_interval = 300;
+my $flush_interval = 500;
+#$flush_interval = 300;
 my $bytelimit = 4*1024*1024;
 my $window = 64*1024;
-#my $window = 4*1024;
+#my $window = 2*1024;
 my $outstanding = 0;
 my $txn = 0;
 my $rxn = 0;
@@ -66,10 +67,10 @@ while ($txl < $bytelimit) {
 		$txq = '';
 	}
 	
-	while (($outstanding > $window) && (my $rx = $i_rx->getline_noncomment(0))) {
+	while (($outstanding > $window) && (my $rx = $i_rx->getline_noncomment(1))) {
 		my $exp = shift @l;
 		if ($exp ne $rx) {
-			warn "Ouch, received wrong packet: $rx\n";
+			warn "Ouch, received wrong packet: $rx\nExpected: $exp";
 		}
 		my $rx_l = length($rx) + 2;
 		$outstanding -= $rx_l;

@@ -212,11 +212,13 @@ char *status_json_string(int no_cache)
 	
 	cJSON *json_clients = cJSON_CreateArray();
 	cJSON *json_uplinks = cJSON_CreateArray();
+	cJSON *json_peers = cJSON_CreateArray();
 	cJSON *json_workers = cJSON_CreateArray();
-	worker_client_list(json_workers, json_clients, json_uplinks, json_totals, memory);
+	worker_client_list(json_workers, json_clients, json_uplinks, json_peers, json_totals, memory);
 	cJSON_AddItemToObject(root, "workers", json_workers);
-	cJSON_AddItemToObject(root, "clients", json_clients);
 	cJSON_AddItemToObject(root, "uplinks", json_uplinks);
+	cJSON_AddItemToObject(root, "peers", json_peers);
+	cJSON_AddItemToObject(root, "clients", json_clients);
 	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);

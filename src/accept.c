@@ -124,6 +124,35 @@ static int accept_sighandler(int signum)
 #endif
 
 /*
+ *	Pass a new client to a worker thread
+ */
+
+int accept_pass_client_to_worker(struct worker_t *wc, struct client_t *c)
+{
+	int pe;
+	
+	hlog(LOG_DEBUG, "... passing client to thread %d with %d users", wc->id, wc->client_count);
+
+	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
+		hlog(LOG_ERR, "do_accept(): could not lock new_clients_mutex: %s", strerror(pe));
+		return -1;
+	}
+	/* push the client in the worker's queue */
+	c->next = wc->new_clients;
+	c->prevp = &wc->new_clients;
+	if (c->next)
+		c->next->prevp = &c->next;
+	wc->new_clients = c;
+	/* unlock the queue */
+	if ((pe = pthread_mutex_unlock(&wc->new_clients_mutex))) {
+		hlog(LOG_ERR, "do_accept(): could not unlock new_clients_mutex: %s", strerror(pe));
+		return -1;
+	}
+	
+	return 0;
+}
+
+/*
  *	Open the TCP/SCTP listening socket
  */
 
@@ -238,6 +267,7 @@ static int open_listeners(void)
 
 		l->addr_s = strsockaddr( lc->ai->ai_addr, lc->ai->ai_addrlen );
 		l->name   = hstrdup(lc->name);
+		l->portnum = lc->portnum;
 		
 		if (lc->ai->ai_socktype == SOCK_DGRAM &&
 		    lc->ai->ai_protocol == IPPROTO_UDP) {
@@ -296,6 +326,86 @@ static void close_listeners(void)
 	}
 }
 
+/*
+ *	Generate UDP peer "clients"
+ */
+
+void peerip_clients_config(void)
+{
+	struct client_t *c;
+	struct peerip_config_t *pe;
+	struct client_udp_t *udpclient;
+	char *s;
+	union sockaddr_u sa; /* large enough for also IPv6 address */
+	socklen_t addr_len = sizeof(sa);
+	
+	for (pe = peerip_config; (pe); pe = pe->next) {
+		hlog(LOG_DEBUG, "Setting up UDP peer %s (%s)", pe->name, pe->host);
+		udpclient = client_udp_find(pe->port);
+		
+		if (!udpclient) {
+			hlog(LOG_ERR, "Failed to find UDP socket on port %d for peer %s (%s)", pe->port, pe->name, pe->host);
+			continue;
+		}
+
+		c = client_alloc();
+		c->fd = -1; // Right, this client will never have a socket of it's own.
+		c->portnum = pe->port;
+		c->state = CSTATE_COREPEER;
+		c->flags = 0;
+		c->handler = &incoming_handler;
+		memcpy((void *)&c->udpaddr.sa, (void *)pe->ai->ai_addr, pe->ai->ai_addrlen);
+		c->udpaddrlen = pe->ai->ai_addrlen;
+		c->addr = c->udpaddr;
+		c->udpclient = udpclient;
+		//c->portaccount = l->portaccount;
+		c->keepalive = tick;
+		c->connect_time = tick;
+		c->last_read = tick; /* not simulated time */
+		
+		/* convert client address to string */
+		s = strsockaddr( &c->udpaddr.sa, c->udpaddrlen );
+		
+		/* text format of client's IP address + port */
+#ifndef FIXED_IOBUFS
+		c->addr_rem = s;
+#else
+		strncpy(c->addr_rem, s, sizeof(c->addr_rem));
+		c->addr_rem[sizeof(c->addr_rem)-1] = 0;
+		hfree(s);
+#endif
+		
+		/* hex format of client's IP address + port */
+		s = hexsockaddr( &c->udpaddr.sa, c->udpaddrlen );
+		
+#ifndef FIXED_IOBUFS
+		c->addr_hex = s;
+#else
+		strncpy(c->addr_hex, s, sizeof(c->addr_hex));
+		c->addr_hex[sizeof(c->addr_hex)-1] = 0;
+		hfree(s);
+#endif
+
+		/* text format of servers' connected IP address + port */
+		addr_len = sizeof(sa);
+		if (getsockname(c->udpclient->fd, &sa.sa, &addr_len) == 0) { /* Fails very rarely.. */
+			/* present my socket end address as a malloced string... */
+			s = strsockaddr( &sa.sa, addr_len );
+		} else {
+			s = hstrdup( "um" ); /* Server's bound IP address.. TODO: what? */
+		}
+#ifndef FIXED_IOBUFS
+		c->addr_loc = s;
+#else
+		strncpy(c->addr_loc, s, sizeof(c->addr_loc));
+		c->addr_loc[sizeof(c->addr_loc)-1] = 0;
+		hfree(s);
+#endif
+
+		/* pass the client to the first worker thread */
+		accept_pass_client_to_worker(worker_threads, c);
+	}
+}
 
 /*
  *	Accept a single connection
@@ -304,7 +414,6 @@ static void close_listeners(void)
 static struct client_t *do_accept(struct listen_t *l)
 {
 	int fd, i;
-	int pe;
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len = sizeof(sa);
@@ -408,7 +517,6 @@ static struct client_t *do_accept(struct listen_t *l)
 	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
 
 	/* text format of client's IP address + port */
-
 #ifndef FIXED_IOBUFS
 	c->addr_rem = s;
 #else
@@ -418,7 +526,6 @@ static struct client_t *do_accept(struct listen_t *l)
 #endif
 
 	/* hex format of client's IP address + port */
-
 	s = hexsockaddr( &sa.sa, addr_len );
 #ifndef FIXED_IOBUFS
 	c->addr_hex = s;
@@ -429,7 +536,6 @@ static struct client_t *do_accept(struct listen_t *l)
 #endif
 
 	/* text format of servers' connected IP address + port */
-
 	addr_len = sizeof(sa);
 	if (getsockname(fd, &sa.sa, &addr_len) == 0) { /* Fails very rarely.. */
 	  /* present my socket end address as a malloced string... */
@@ -514,24 +620,9 @@ static struct client_t *do_accept(struct listen_t *l)
 		}
 #endif
 
-	/* ok, found it... lock the new client queue */
-	hlog(LOG_DEBUG, "... passing to thread %d with %d users", wc->id, wc->client_count);
-
-	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "do_accept(): could not lock new_clients_mutex: %s", strerror(pe));
+	/* ok, found it... lock the new client queue and pass the client */
+	if (accept_pass_client_to_worker(wc, c))
 		goto err;
-	}
-	/* push the client in the worker's queue */
-	c->next = wc->new_clients;
-	c->prevp = &wc->new_clients;
-	if (c->next)
-		c->next->prevp = &c->next;
-	wc->new_clients = c;
-	/* unlock the queue */
-	if ((pe = pthread_mutex_unlock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "do_accept(): could not unlock new_clients_mutex: %s", strerror(pe));
-		goto err;
-	}
 	
 	return c;
 	
@@ -607,6 +698,12 @@ void accept_thread(void *asdf)
 				dupecheck_start();
 				uplink_start();
 			}
+			
+			/*
+			 * generate UDP peer clients
+			 */
+			if (peerip_config)
+				peerip_clients_config();
 		}
 		
 		/* check for new connections */

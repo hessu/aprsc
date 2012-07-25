@@ -21,9 +21,19 @@
 
 #if 1
 
+static void udp_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
+{
+	hlog(LOG_DEBUG, "udp outgoing");
+	
+	
+}
+
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
+	
+	if (self->id == 0)
+		udp_outgoing_single(self, pb);
 	
 	for (c = self->clients; (c); c = cnext) {
 		cnext = c->next; // the client_write() MAY destroy the client object!

@@ -230,12 +230,12 @@ void client_udp_free(struct client_udp_t *u)
 
 struct client_udp_t *client_udp_find(const int portnum)
 {
-	struct client_udp_t *u = udpclient;
+	struct client_udp_t *u;
 	int i;
 
 	i = pthread_mutex_lock(& udpclient_mutex );
 
-	for ( ; u ; u = u->next ) {
+	for (u = udpclient ; u ; u = u->next ) {
 		if (u->portnum == portnum) {
 			++ u->refcount;
 			break;
@@ -954,7 +954,7 @@ int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 
 void collect_new_clients(struct worker_t *self)
 {
-	int pe, n;
+	int pe, n, i;
 	struct client_t *new_clients, *c;
 	
 	/* lock the queue */
@@ -981,7 +981,9 @@ void collect_new_clients(struct worker_t *self)
 	
 	/* move the new clients to the thread local client list */
 	n = self->xp.pollfd_used;
+	i = 0;
 	while (new_clients) {
+		i++;
 		c = new_clients;
 		new_clients = c->next;
 		
@@ -992,6 +994,12 @@ void collect_new_clients(struct worker_t *self)
 			c->next->prevp = &c->next;
 		self->clients = c;
 		c->prevp = &self->clients;
+		
+		/* If the new client is an UDP core peer, it does not have an fd, so it
+		 * won't go to the polling list. No identification sent, either.
+		 */
+		if (c->state == CSTATE_COREPEER)
+			continue;
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
@@ -1011,8 +1019,8 @@ void collect_new_clients(struct worker_t *self)
 		exit(1);
 	}
 	
-	hlog( LOG_DEBUG, "Worker %d accepted %d new connections, now total %d",
-	      self->id, self->xp.pollfd_used - n, self->xp.pollfd_used );
+	hlog( LOG_DEBUG, "Worker %d accepted %d new clients, %d new connections, now total %d clients",
+	      self->id, i, self->xp.pollfd_used - n, self->client_count );
 }
 
 /* 
@@ -1053,13 +1061,10 @@ void send_keepalives(struct worker_t *self)
 		// the  c  may get destroyed from underneath of ourselves!
 		cnext = c->next;
 
-#if 0  /* Or perhaps we should ? Oh yes we should! Especially for read-only uplinks. */
-		if ( c->flags & (CLFLAGS_UPLINKSIM|CLFLAGS_UPLINKPORT) ||
-		     c->state == CSTATE_COREPEER )
+		/* No keepalives on PEER links.. */
+		if ( c->state == CSTATE_COREPEER )
 			continue;
-		/* No keepalives on UPLINK or PEER links.. */
-#endif
-
+		
 		/* Is it time for keepalive ? */
 		if (c->keepalive <= tick && c->obuf_wtime < w_keepalive) {
 			int flushlevel = c->obuf_flushsize;
@@ -1182,7 +1187,7 @@ void worker_thread(struct worker_t *self)
 
 		// TODO: calculate different delay based on outgoing lag ?
 		/* poll for incoming traffic */
-		xpoll(&self->xp, 50); // was 200
+		xpoll(&self->xp, 50); // was 200, but gave too big latency
 		
 		/* if we have stuff in the local queue, try to flush it and make
 		 * it available to the dupecheck thread
@@ -1367,7 +1372,7 @@ void workers_start(void)
  *	(called from another thread - watch out and lock!)
  */
 
-int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *totals, cJSON *memory)
+int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory)
 {
 	struct worker_t *w = worker_threads;
 	struct client_t *c;
@@ -1375,7 +1380,8 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *to
 	static char *uplink_modes[] = {
 		"ro",
 		"multiro",
-		"full"
+		"full",
+		"peer"
 	};
 	char *mode;
 	
@@ -1417,7 +1423,10 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *to
 			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 			
-			if (c->flags & CLFLAGS_INPORT) {
+			if (c->state == CSTATE_COREPEER) {
+				cJSON_AddStringToObject(jc, "mode", uplink_modes[3]);
+				cJSON_AddItemToArray(peers, jc);
+			} else if (c->flags & CLFLAGS_INPORT) {
 				cJSON_AddStringToObject(jc, "filter", c->filter_s);
 				cJSON_AddItemToArray(clients, jc);
 			} else {

@@ -108,7 +108,7 @@ int do_httpstatus(char *new, int argc, char **argv);
 int do_httpupload(char *new, int argc, char **argv);
 int do_listen(struct listen_config_t **lq, int argc, char **argv);
 int do_interval(int *dest, int argc, char **argv);
-int do_peerip(struct peerip_config_t **lq, int argc, char **argv);
+int do_peergroup(struct peerip_config_t **lq, int argc, char **argv);
 int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 
 /*
@@ -135,7 +135,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
-	{ "peerip",		_CFUNC_ do_peerip,	&new_peerip_config	},
+	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
 	{ "disallow_unverified",	_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ NULL,			NULL,			NULL			}
 };
@@ -287,15 +287,33 @@ int do_interval(int *dest, int argc, char **argv)
 /*
  *	Parse a peer definition directive
  *
- *	"keyword" <token?> [tcp|udp|sctp] <hostname> <portnum> [<filter> [..<more_filters>]]
+ *	"keyword" <token?> [udp|sctp] <localhost>:<localport> <remotehost1>:<remoteport> <remote2> ...
  *
  */
 
-int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
+int parse_hostport(char *s, char **host_s, char **port_s)
 {
-	int i, port;
-	struct peerip_config_t *l;
-	struct addrinfo req, *ai;
+	char *colon;
+	
+	colon = strrchr(s, ':');
+	if (colon == NULL)
+		return -1;
+	
+	*colon = 0;
+	
+	*host_s = s;
+	*port_s = colon+1;
+	
+	return 0;
+}
+
+int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
+{
+	int localport, port, i, d;
+	struct peerip_config_t *pe;
+	struct listen_config_t *li;
+	struct addrinfo req, *ai, *a;
+	char *fullhost, *host_s, *port_s;
 
 	if (argc < 4)
 		return -1;
@@ -307,9 +325,8 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
 	req.ai_flags    = 0;
 	ai = NULL;
 
-	if (strcasecmp(argv[2], "tcp") == 0) {
-		// well, do nothing for now.
-	} else if (strcasecmp(argv[2], "udp") == 0) {
+	// Only UDP and SCTP are acceptable for peergroups
+	if (strcasecmp(argv[2], "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
 #if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
@@ -318,40 +335,111 @@ int do_peerip(struct peerip_config_t **lq, int argc, char **argv)
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		hlog(LOG_ERR, "Peer-ip: Unsupported protocol '%s'\n", argv[2]);
+		hlog(LOG_ERR, "PeerGroup: Unsupported protocol '%s'", argv[2]);
 		return -2;
 	}
 	
-	port = atoi(argv[4]);
-	if (port < 1 || port > 65535) {
-		hlog(LOG_ERR, "Peer-ip: Invalid port number '%s'\n", argv[4]);
+	fullhost = hstrdup(argv[3]);
+	
+	if (parse_hostport(argv[3], &host_s, &port_s)) {
+		hlog(LOG_ERR, "PeerGroup: Invalid local host:port specification '%s'", argv[3]);
+		hfree(fullhost);
 		return -2;
 	}
-
-	i = getaddrinfo(argv[3], argv[4], &req, &ai);
+	
+	localport = atoi(port_s);
+	if (localport < 1 || localport > 65535) {
+		hlog(LOG_ERR, "PeerGroup: Invalid local port number '%s'", port_s);
+		hfree(fullhost);
+		return -2;
+	}
+	
+	i = getaddrinfo(host_s, port_s, &req, &ai);
 	if (i != 0) {
-		hlog(LOG_ERR,"Peer-ip: address parse failure of '%s' '%s'",argv[3],argv[4]);
+		hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s : %s", host_s, port_s);
+		hfree(fullhost);
 		return i;
 	}
-
-
-	l = hmalloc(sizeof(*l));
-	l->name = hstrdup(argv[0]);
-	l->host = hstrdup(argv[3]);
-	l->client_flags = 0; // ???
-	l->ai = ai;
-	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-		l->filters[i] = NULL;
-		if (argc - 4 > i) {
-			l->filters[i] = hstrdup(argv[i+4]);
-		}
+	
+	d = 0;
+	for (a = ai; (a); a = a->ai_next, ++d);
+	if (d != 1) {
+		hlog(LOG_ERR, "PeerGroup: address parsing for local address %s returned %d addresses - can only have one", host_s, d);
+		return -2;
 	}
 	
+	hlog(LOG_DEBUG, "PeerGroup: configuring with local address %s:%s (local port %d)", host_s, port_s, localport);
+	
+	/* Configure a listener */
+	li = hmalloc(sizeof(*li));
+	li->name = hstrdup(argv[1]);
+	li->host = fullhost;
+	li->portnum      = localport;
+	li->client_flags = 0;
+	li->clients_max  = 1;
+	li->ai = ai;
+	li->acl = NULL;
+	li->next = NULL;
+	li->prevp = NULL;
+	
+	/* there are no filters between peers */
+	for (i = 0; i < LISTEN_MAX_FILTERS; i++)
+		li->filters[i] = NULL;
+	
 	/* put in the list */
-	l->next = *lq;
-	if (l->next)
-		l->next->prevp = &l->next;
-	*lq = l;
+	li->next = listen_config_new;
+	if (li->next)
+		li->next->prevp = &li->next;
+	listen_config_new = li;
+	
+	for (i = 4; i < argc; i++) {
+		hlog(LOG_DEBUG, "PeerGroup: configuring peer %s", argv[i]);
+		
+		if (parse_hostport(argv[i], &host_s, &port_s)) {
+			hlog(LOG_ERR, "PeerGroup: Invalid remote host:port specification '%s'", argv[i]);
+			//hfree(fullhost);
+			return -2;
+		}
+		
+		port = atoi(port_s);
+		if (port < 1 || port > 65535) {
+			hlog(LOG_ERR, "PeerGroup: Invalid port number '%s' for host '%s'", port_s, host_s);
+			//hfree(fullhost);
+			return -2;
+		}
+		
+		d = getaddrinfo(host_s, port_s, &req, &ai);
+		if (d != 0) {
+			hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s : %s", host_s, port_s);
+			//hfree(fullhost);
+			return d;
+		}
+		
+		/* we can only allow one address per peer at this point, SCTP multihoming ignored */
+		d = 0;
+		for (a = ai; (a); a = a->ai_next, ++d);
+		if (d != 1) {
+			hlog(LOG_ERR, "PeerGroup: address parsing for remote %s returned %d addresses - can only have one", host_s, d);
+			return -2;
+		}
+		
+		pe = hmalloc(sizeof(*pe));
+		pe->name = hstrdup(host_s);
+		pe->host = hstrdup(host_s);
+		pe->port = localport;
+		pe->client_flags = 0; // ???
+		pe->ai = ai;
+		
+		/* there are no filters between peers */
+		for (d = 0; d < (sizeof(pe->filters)/sizeof(pe->filters[0])); ++d)
+			pe->filters[d] = NULL;
+		
+		/* put in the list */
+		pe->next = *lq;
+		if (pe->next)
+			pe->next->prevp = &pe->next;
+		*lq = pe;
+	}
 	
 	return 0;
 }

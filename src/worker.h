@@ -194,7 +194,7 @@ struct client_udp_t {			/* UDP services can be available at multiple
 	struct portaccount_t *portaccount;
 	int    fd;			/* file descriptor */
 	int    refcount;		/* Reference count */
-	uint16_t portnum;		/* Server UDP port */
+	uint16_t portnum;		/* Server UDP port... TODO: should have address family, too! */
 	char	configured;		/* if not zero, refcount == 0 will not kill this */
 };
 
@@ -409,6 +409,6 @@ extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
 extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
 
-extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *totals, cJSON *memory);
+extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory);
 
 #endif

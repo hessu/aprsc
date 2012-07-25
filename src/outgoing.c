@@ -36,14 +36,6 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	for (c = self->clients; (c); c = cnext) {
 		cnext = c->next; // the client_write() MAY destroy the client object!
 		
-		/* UDP core peer handling */
-		/*
-		if (c->state == CSTATE_COREPEER && c != pb->origin) {
-			udp_outgoing_single(self, c, pb);
-			continue;
-		}
-		*/
-		
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
 			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
@@ -80,14 +72,18 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			/* Downstream client? If not full feed, process filters
 			 * to see if the packet should be sent.
 			 */
-			if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1)
+			if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1) {
+				hlog(LOG_DEBUG, "fd %d: Not fullfeed or not matching filter, not sending.", c->fd);
 				continue;
+			}
 		} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
 			/* core peer or uplink? Check that the packet is
 			 * coming from a downstream client.
 			 */
-			if ((pb->flags & F_FROM_DOWNSTR) != F_FROM_DOWNSTR)
+			if ((pb->flags & F_FROM_DOWNSTR) != F_FROM_DOWNSTR) {
+				hlog(LOG_DEBUG, "fd %d: Not from downstr, not sending to upstr.", c->fd);
 				continue;
+			}
 		} else {
 			hlog(LOG_DEBUG, "fd %d: Odd! Client not upstream or downstream. Not sending packets.", c->fd);
 			continue;

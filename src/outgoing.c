@@ -21,28 +21,36 @@
 
 #if 1
 
-static void udp_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
-{
-	hlog(LOG_DEBUG, "udp outgoing");
-	
-	
-}
-
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
 	
-	if (self->id == 0)
-		udp_outgoing_single(self, pb);
+	if (self->id == 0) {
+		hlog(LOG_DEBUG, "o: %*s", pb->packet_len-2, pb->data);
+		hlog(LOG_DEBUG, "b:%s%s",
+			(pb->flags & F_FROM_UPSTR) ? " from_upstr" : "",
+			(pb->flags & F_FROM_DOWNSTR) ? " from_downstr" : ""
+			);
+	}
 	
 	for (c = self->clients; (c); c = cnext) {
 		cnext = c->next; // the client_write() MAY destroy the client object!
-
+		
+		/* UDP core peer handling */
+		/*
+		if (c->state == CSTATE_COREPEER && c != pb->origin) {
+			udp_outgoing_single(self, c, pb);
+			continue;
+		}
+		*/
+		
 		/* Do not send to clients that are not logged in. */
-		if (c->state != CSTATE_CONNECTED) {
+		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
 			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
 			continue;
 		}
+		
+		/* Do not send to read-only sockets */
 		if (c->flags & CLFLAGS_PORT_RO) {
 			//hlog(LOG_DEBUG, "%d/%s: not sending to client: read-only socket", c->fd, c->username);
 			continue;
@@ -67,19 +75,27 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			//hlog(LOG_DEBUG, "%d: not sending to client: packet is duplicate", c->fd);
 			continue;
 		}
-
-		/* Process filters - check if this packet should be sent to this client.
-		 * Uplinks get all packets.
-		 * Fullfeed downstreams should too, without filtering.
-		 */
 		
-		if ((c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_FULLFEED)) || (filter_process(self, c, pb) > 0)) {
-			/* account for the packet sent */
-			clientaccount_add( c, 0, 0, 0, 1, 0, 0);
-			client_write(self, c, pb->data, pb->packet_len);
+		if (c->flags & CLFLAGS_INPORT) {
+			/* Downstream client? If not full feed, process filters
+			 * to see if the packet should be sent.
+			 */
+			if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1)
+				continue;
+		} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+			/* core peer or uplink? Check that the packet is
+			 * coming from a downstream client.
+			 */
+			if ((pb->flags & F_FROM_DOWNSTR) != F_FROM_DOWNSTR)
+				continue;
 		} else {
-			//hlog(LOG_DEBUG, "%d: not sending to client: filter not matched", c->fd);
+			hlog(LOG_DEBUG, "fd %d: Odd! Client not upstream or downstream. Not sending packets.", c->fd);
+			continue;
 		}
+		
+		/* account for the packet sent, and send it! */
+		clientaccount_add( c, 0, 0, 0, 1, 0, 0);
+		client_write(self, c, pb->data, pb->packet_len);
 	}
 }
 

@@ -81,6 +81,8 @@ extern pthread_attr_t pthr_attrs;  /* used to setup new threads */
 #define F_DUPE    	(1 << 0)	/* Duplicate of a previously seen packet */
 #define F_HASPOS  	(1 << 1)	/* This packet has valid parsed position */
 #define F_HAS_TCPIP	(1 << 2)	/* There is a TCPIP* in the path */
+#define F_FROM_UPSTR	(1 << 3)	/* Packet is from an upstream server */
+#define F_FROM_DOWNSTR	(1 << 4)	/* Packet is from a downstream server */
 
 struct client_t; /* forward declarator */
 

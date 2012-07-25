@@ -99,7 +99,8 @@ struct peerip_config_t {
 	
 	const char *name;			/* name of socket */
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
-	int port;
+	int remote_port;
+	int local_port;
 
 	struct addrinfo *ai;
 

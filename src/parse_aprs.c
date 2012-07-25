@@ -1022,7 +1022,6 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		return 0;
 
 	pb->packettype = T_ALL;
-	pb->flags      = 0;
 
 	if (pb->data[0] == 'C' && /* Perhaps CWOP ? */
 	    pb->data[1] == 'W') {

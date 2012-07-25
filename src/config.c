@@ -426,7 +426,8 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		pe = hmalloc(sizeof(*pe));
 		pe->name = hstrdup(host_s);
 		pe->host = hstrdup(host_s);
-		pe->port = localport;
+		pe->local_port = localport;
+		pe->remote_port = port;
 		pe->client_flags = 0; // ???
 		pe->ai = ai;
 		

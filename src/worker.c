@@ -634,14 +634,22 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		/* Existing system doesn't send keepalives via UDP.. */
 		i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
 			    &c->udpaddr.sa, c->udpaddrlen );
+		if (i < 0) {
+			hlog(LOG_ERR, "UDP transmit error to %s udp port %d: %s",
+				c->addr_rem, c->udp_port, strerror(errno));
+		} else if (i != len -2) {
+			hlog(LOG_ERR, "UDP transmit incomplete to %s udp port %d: wrote %d of %d bytes, errno: %s",
+				c->addr_rem, c->udp_port, i, len-2, strerror(errno));
+		}
 
-		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d",
-		//       c->udpclient->portnum, c->udp_port, i );
+		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
 
 		if (i > 0)
 			clientaccount_add_udp( c, 0, 0, i, 1);
 	}
-	if (c->state == CSTATE_UDP)
+	// Should this return happen already in the previous block?
+	// Is this a leftover from times before UDP support?
+	if (c->state == CSTATE_UDP || c->state == CSTATE_COREPEER)
 		return 0;
 
 	if (len > 0) {

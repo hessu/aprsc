@@ -513,9 +513,20 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		return -9; // No room :-(
 	}
 	pb->next = NULL; // pbuf arrives pre-zeroed
+	pb->flags = 0;
 	
 	/* store the source reference */
 	pb->origin = c;
+	
+	/* classify the packet as coming from an uplink or client */
+	if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+		pb->flags |= F_FROM_UPSTR;
+	} else if (c->flags & CLFLAGS_INPORT) {
+		pb->flags |= F_FROM_DOWNSTR;
+	} else {
+		hlog(LOG_ERR, "fd %d: incoming_parse failed to classify packet", c->fd);
+		return -10;
+	}
 	
 	/* when it was received ? */
 	pb->t = now;
@@ -541,7 +552,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
 		fprintf(stderr, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
-		return -10;
+		return -1;
 	}
 	
 	/* Copy the modified or appended part of the packet header -- qcons */

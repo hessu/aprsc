@@ -341,21 +341,22 @@ void peerip_clients_config(void)
 	
 	for (pe = peerip_config; (pe); pe = pe->next) {
 		hlog(LOG_DEBUG, "Setting up UDP peer %s (%s)", pe->name, pe->host);
-		udpclient = client_udp_find(pe->port);
+		udpclient = client_udp_find(pe->local_port);
 		
 		if (!udpclient) {
-			hlog(LOG_ERR, "Failed to find UDP socket on port %d for peer %s (%s)", pe->port, pe->name, pe->host);
+			hlog(LOG_ERR, "Failed to find UDP socket on port %d for peer %s (%s)", pe->local_port, pe->name, pe->host);
 			continue;
 		}
 
 		c = client_alloc();
 		c->fd = -1; // Right, this client will never have a socket of it's own.
-		c->portnum = pe->port;
+		c->portnum = pe->local_port; // local port
 		c->state = CSTATE_COREPEER;
 		c->flags = 0;
 		c->handler = &incoming_handler;
 		memcpy((void *)&c->udpaddr.sa, (void *)pe->ai->ai_addr, pe->ai->ai_addrlen);
 		c->udpaddrlen = pe->ai->ai_addrlen;
+		c->udp_port = pe->remote_port; // remote port
 		c->addr = c->udpaddr;
 		c->udpclient = udpclient;
 		//c->portaccount = l->portaccount;

@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 37 };
+BEGIN { plan tests => 38 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -273,6 +273,17 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,DIGI1,DIGI2*,qAI,$login:testing qAI (3)",
 	"SRC>DST,DIGI1,DIGI2*,qAI,$login,$server_call:testing qAI (3)");
+
+#
+# qAS appending bug, in javaprssrvr 3.15:
+# packet coming from a broken DPRS gateway with no dstcall gets a new
+# qAS,$login appended at every javaprssrvr on the way, and becomes
+# qAS,FOO,qAS,BAR,qAS,ASDF...
+#
+
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"K1FRA>qAR,K1RFI-C,qAS,$login:/281402z4144.72N/07125.65W>178/001",
+	"K1FRA>qAR,K1RFI-C,qAS,$login:/281402z4144.72N/07125.65W>178/001");
 
 # disconnect
 

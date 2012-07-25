@@ -55,6 +55,9 @@ Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
 
 Uplink full1 full tcp 127.0.0.1 10153
 
+# UDP peering, first address is my local address, the rest are remote.
+PeerGroup LOCALTEST udp 127.0.0.1:16404 127.0.0.1:16405 127.0.0.1:16406
+
 ### HTTP listener ##########
 # Status port provides a status view to web browsers.
 # It starts up by default on 0.0.0.0:14501.

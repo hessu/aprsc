@@ -11,9 +11,13 @@ disallowUnverified=false
 #
 # Server Adjunct
 #
-ServerAdjunct=ServerAdjunct
+ServerAdjunct=
+#ServerAdjunct=ServerAdjunct
 #
 # Console and Log Ports
+#
+# Core peers, first one is the local address to bind, the next ones remote
+srvrToSrvrPorts=127.0.0.1\:16404;127.0.0.1\:16405
 #
 consolePorts=127.0.0.1:14500
 logList=127.0.0.1
@@ -28,7 +32,7 @@ TNCLogPorts=127.0.0.1:14508
 # Status Page Parameters
 #
 statusPorts=55501
-plainStatusPorts554511
+plainStatusPorts=55511
 portTable=10152;Full APRS-IS Feed;14580;User-defined Filtered Feed;14581;User-defined Filtered Feed;1314;Message-only Feed
 #
 # Client Port Properties
@@ -37,4 +41,5 @@ noEchoPorts=55152u
 msgOnlyPorts=55314u
 IGatePorts=55580u
 clientOnlyPorts=55581u
+#
 #

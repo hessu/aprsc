@@ -314,6 +314,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	struct listen_config_t *li;
 	struct addrinfo req, *ai, *a;
 	char *fullhost, *host_s, *port_s;
+	int af;
 
 	if (argc < 4)
 		return -1;
@@ -368,10 +369,14 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		return -2;
 	}
 	
+	af = ai->ai_family;
+	
 	hlog(LOG_DEBUG, "PeerGroup: configuring with local address %s:%s (local port %d)", host_s, port_s, localport);
 	
 	/* Configure a listener */
 	li = hmalloc(sizeof(*li));
+	memset(li, 0, sizeof(*li));
+	li->corepeer = 1;
 	li->name = hstrdup(argv[1]);
 	li->host = fullhost;
 	li->portnum      = localport;
@@ -423,7 +428,13 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 			return -2;
 		}
 		
+		if (ai->ai_family != af) {
+			hlog(LOG_ERR, "PeerGroup: remote address %s has different address family than the local address - mixing IPv4 and IPv6, are we?", host_s);
+			return -2;
+		}
+		
 		pe = hmalloc(sizeof(*pe));
+		memset(pe, 0, sizeof(*pe));
 		pe->name = hstrdup(host_s);
 		pe->host = hstrdup(host_s);
 		pe->local_port = localport;
@@ -513,7 +524,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 		freeaddrinfo(ai);
 #endif
 	l = hmalloc(sizeof(*l));
-
+	memset(l, 0, sizeof(*l));
 	l->name  = hstrdup(argv[1]);
 	l->proto = hstrdup(argv[3]);
 	l->host  = hstrdup(argv[4]);
@@ -650,6 +661,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	}
 	
 	l = hmalloc(sizeof(*l));
+	memset(l, 0, sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
 	l->portnum      = port;

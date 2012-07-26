@@ -48,6 +48,7 @@ struct listen_t {
 	int clientflags;
 	int portnum;
 	int clients_max;
+	int corepeer;
 	struct client_udp_t *udp;
 	struct portaccount_t *portaccount;
 	struct acl_t *acl;
@@ -201,7 +202,7 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	int fd, i;
 	struct client_udp_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
-
+	
 	hlog(LOG_INFO, "Binding listening UDP socket: %s", l->addr_s);
 	
 	if ((fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
@@ -223,7 +224,7 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 		return -1;
 	}
 
-	c = client_udp_alloc(fd, l->portnum);
+	c = client_udp_alloc((l->corepeer) ? &udppeers : &udpclients, fd, l->portnum);
 	c->portaccount = l->portaccount;
 
 	inbound_connects_account(3, c->portaccount); /* "3" = udp, not listening.. 
@@ -257,7 +258,7 @@ static int open_listeners(void)
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
 		l = listener_alloc();
-
+		l->corepeer = lc->corepeer;
 		l->clientflags = lc->client_flags;
 		l->clients_max = lc->clients_max;
 
@@ -341,7 +342,7 @@ void peerip_clients_config(void)
 	
 	for (pe = peerip_config; (pe); pe = pe->next) {
 		hlog(LOG_DEBUG, "Setting up UDP peer %s (%s)", pe->name, pe->host);
-		udpclient = client_udp_find(pe->local_port);
+		udpclient = client_udp_find(udppeers, pe->local_port);
 		
 		if (!udpclient) {
 			hlog(LOG_ERR, "Failed to find UDP socket on port %d for peer %s (%s)", pe->local_port, pe->name, pe->host);
@@ -352,7 +353,8 @@ void peerip_clients_config(void)
 		c->fd = -1; // Right, this client will never have a socket of it's own.
 		c->portnum = pe->local_port; // local port
 		c->state = CSTATE_COREPEER;
-		c->flags = 0;
+		c->validated = 1;
+		c->flags = CLFLAGS_UPLINKPORT;
 		c->handler = &incoming_handler;
 		memcpy((void *)&c->udpaddr.sa, (void *)pe->ai->ai_addr, pe->ai->ai_addrlen);
 		c->udpaddrlen = pe->ai->ai_addrlen;
@@ -425,14 +427,18 @@ static struct client_t *do_accept(struct listen_t *l)
 	static time_t last_EMFILE_report;
 	char *s;
 
-
 	while (l->udp) {
+		/* This should not really happen any more, since accept_thread
+		 * does not poll() UDP sockets, that's left to worker 0.
+		 */
+		 
 		/* Received data will be discarded, so receiving it  */
 		/* TRUNCATED is just fine.  Sender isn't interesting either.  */
 		/* Receive as much as there is -- that is, LOOP...  */
-
+		
 		i = recv( l->udp->fd, buf, sizeof(buf), MSG_DONTWAIT|MSG_TRUNC );
-
+		hlog(LOG_DEBUG, "accept thread discarded an UDP packet on a listening socket");
+		
 		if (i < 0)
 			return 0;  /* no more data */
 	}
@@ -510,7 +516,7 @@ static struct client_t *do_accept(struct listen_t *l)
 	c->flags     = l->clientflags;
 	/* use the default login handler */
 	c->handler = &login_handler;
-	c->udpclient = client_udp_find(l->portnum);
+	c->udpclient = client_udp_find(udpclients, l->portnum);
 	c->portaccount = l->portaccount;
 	c->keepalive = tick;
 	c->connect_time = tick;
@@ -587,7 +593,10 @@ static struct client_t *do_accept(struct listen_t *l)
 	 * need to investigate a bit. High delays can cause packets getting past
 	 * the dupe filters.
 	 */
-	//setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg)); // Maybe?
+#ifdef SO_NODELAY
+	int arg = 1;
+	setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg));
+#endif
 
 #if 1
 	/* Use simple round-robin on client feeding.  Least clients is
@@ -680,7 +689,23 @@ void accept_thread(void *asdf)
 			acceptpfd = hmalloc(listen_n * sizeof(*acceptpfd));
 			n = 0;
 			for (l = listen_list; (l); l = l->next) {
-				int fd = l->udp ? l->udp->fd : l->fd;
+				/* The accept thread does not poll() UDP sockets for core peers.
+				 * Worker 0 takes care of that, and processes the incoming packets.
+				 */
+				if (l->corepeer) {
+					hlog(LOG_DEBUG, "... %d: fd %d (%s) - not polled, is corepeer", n, (l->udp) ? l->udp->fd : l->fd, l->addr_s);
+					listen_n--;
+					continue;
+				}
+				
+				int fd;
+				if (l->udp) {
+					l->udp->polled = 1;
+					fd = l->udp->fd;
+				} else {
+					fd = l->fd;
+				}
+				
 				hlog(LOG_DEBUG, "... %d: fd %d (%s)", n, fd, l->addr_s);
 				acceptpfd[n].fd = fd;
 				acceptpfd[n].events = POLLIN|POLLPRI|POLLERR|POLLHUP;

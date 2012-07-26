@@ -84,6 +84,7 @@ struct listen_config_t {
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	int   portnum;
 	int   clients_max;
+	int   corepeer;
 
 	struct addrinfo *ai;
 	struct acl_t *acl;
@@ -134,6 +135,8 @@ struct uplink_config_t {
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
 extern struct uplink_config_t *uplink_config;
+
+#define MAX_COREPEERS		16
 
 /* http server config */
 extern char *http_bind;

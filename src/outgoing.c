@@ -25,6 +25,8 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
 	
+	/*
+	// debug dump
 	if (self->id == 0) {
 		hlog(LOG_DEBUG, "o: %*s", pb->packet_len-2, pb->data);
 		hlog(LOG_DEBUG, "b:%s%s",
@@ -32,6 +34,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			(pb->flags & F_FROM_DOWNSTR) ? " from_downstr" : ""
 			);
 	}
+	*/
 	
 	for (c = self->clients; (c); c = cnext) {
 		cnext = c->next; // the client_write() MAY destroy the client object!
@@ -73,7 +76,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			 * to see if the packet should be sent.
 			 */
 			if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1) {
-				hlog(LOG_DEBUG, "fd %d: Not fullfeed or not matching filter, not sending.", c->fd);
+				//hlog(LOG_DEBUG, "fd %d: Not fullfeed or not matching filter, not sending.", c->fd);
 				continue;
 			}
 		} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
@@ -81,7 +84,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			 * coming from a downstream client.
 			 */
 			if ((pb->flags & F_FROM_DOWNSTR) != F_FROM_DOWNSTR) {
-				hlog(LOG_DEBUG, "fd %d: Not from downstr, not sending to upstr.", c->fd);
+				//hlog(LOG_DEBUG, "fd %d: Not from downstr, not sending to upstr.", c->fd);
 				continue;
 			}
 		} else {

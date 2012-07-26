@@ -40,9 +40,9 @@ time_t tick;	/* real monotonous clock, may or may not be wallclock */
 extern int ibuf_size;
 
 struct worker_t *worker_threads;
-struct client_udp_t *udppeer;	/* list of listening/receiving UDP peer sockets */
+struct client_udp_t *udppeers;	/* list of listening/receiving UDP peer sockets */
 
-struct client_udp_t *udpclient;	/* list of listening/receiving UDP client sockets */
+struct client_udp_t *udpclients;	/* list of listening/receiving UDP client sockets */
 /* mutex to protect udpclient chain refcounts */
 pthread_mutex_t udpclient_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -83,6 +83,9 @@ struct portaccount_t client_connects_sctp = {
   .mutex    = PTHREAD_MUTEX_INITIALIZER,
   .refcount = 99,	/* Global static blocks have extra-high initial refcount */
 };
+
+int worker_corepeer_client_count = 0;
+struct client_t *worker_corepeer_clients[MAX_COREPEERS];
 
 #ifndef _FOR_VALGRIND_
 cellarena_t *client_cells;
@@ -228,14 +231,14 @@ void client_udp_free(struct client_udp_t *u)
 	i = pthread_mutex_unlock(& udpclient_mutex );
 }
 
-struct client_udp_t *client_udp_find(const int portnum)
+struct client_udp_t *client_udp_find(struct client_udp_t *root, const int portnum)
 {
 	struct client_udp_t *u;
 	int i;
 
 	i = pthread_mutex_lock(& udpclient_mutex );
 
-	for (u = udpclient ; u ; u = u->next ) {
+	for (u = root ; u ; u = u->next ) {
 		if (u->portnum == portnum) {
 			++ u->refcount;
 			break;
@@ -251,7 +254,7 @@ struct client_udp_t *client_udp_find(const int portnum)
 }
 
 
-struct client_udp_t *client_udp_alloc(int fd, int portnum)
+struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int portnum)
 {
 	struct client_udp_t *c;
 	int i;
@@ -261,14 +264,15 @@ struct client_udp_t *client_udp_alloc(int fd, int portnum)
 
 	c = hmalloc(sizeof(*c));
 	c->configured = 1;
+	c->polled     = 0;
 	c->fd         = fd;
 	c->refcount   = 1; /* One reference already on creation */
 	c->portnum    = portnum;
 
 	/* Add this to special list of UDP sockets */
-	c->next  =   udpclient;
-	c->prevp = & udpclient;
-	udpclient = c;
+	c->next  =   *root;
+	c->prevp = root;
+	*root = c;
 
 	i = pthread_mutex_unlock(& udpclient_mutex );
 
@@ -809,7 +813,68 @@ int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const ch
 	return 0;
 }
 
+int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
+{
+	struct client_t *rc; // real client
+	union sockaddr_u addr;
+	socklen_t addrlen;
+	int i;
+	int r;
+	char *addrs;
+	
+	addrlen = sizeof(addr);
+	r = recvfrom( c->udpclient->fd, c->ibuf, c->ibuf_size-1,
+		MSG_DONTWAIT|MSG_TRUNC, (struct sockaddr *)&addr, &addrlen );
+	
+	if (r < 0) {
+		if (errno == EINTR || errno == EAGAIN)
+			return 0; /* D'oh..  return again latter */
 
+		hlog( LOG_DEBUG, "recv: Error from corepeer UDP socket fd %d (%s): %s",
+			c->udpclient->fd, c->addr_rem, strerror(errno));
+		
+		return 0;
+	}
+	
+	if (r == 0)
+		return 0;
+	
+	// TODO: figure the correct client based on the remote IP address. Now we're just assuming
+	// it's one of our core peers!
+	for (i = 0; i < worker_corepeer_client_count; i++) {
+		rc = worker_corepeer_clients[i];
+		if (rc->udpaddrlen != addrlen)
+			continue;
+		if (rc->udpaddr.sa.sa_family != addr.sa.sa_family)
+			continue;
+		if (addr.sa.sa_family == AF_INET) {
+			if (memcmp(&rc->udpaddr.si.sin_addr, &addr.si.sin_addr, sizeof(addr.si.sin_addr)) != 0)
+				continue;
+			if (rc->udpaddr.si.sin_port != addr.si.sin_port)
+				continue;
+			rc = worker_corepeer_clients[i];
+			break;
+		}
+	}
+	
+	if (i == worker_corepeer_client_count) {
+		addrs = strsockaddr(&addr.sa, addrlen);
+		hlog(LOG_INFO, "recv: Received UDP peergroup packet from unknown peer address %s: %*s", addrs, r, c->ibuf);
+		hfree(addrs);
+		return 0;
+	}
+	
+	/*
+	addrs = strsockaddr(&addr.sa, addrlen);
+	hlog(LOG_DEBUG, "worker thread passing UDP packet from %s to handler: %*s", addrs, r, c->ibuf);
+	hfree(addrs);
+	*/
+	clientaccount_add(rc, r, 0, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	
+	c->handler(self, rc, c->ibuf, r);
+	
+	return 0;
+}
 
 /*
  *	handle an event on an fd
@@ -821,26 +886,31 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	char *s;
 	char *ibuf_end;
 	char *row_start;
-
+	
+	/* Worker 0 takes care of reading corepeer UDP sockets and processes the incoming packets. */
+	if (c->state == CSTATE_COREPEER && c->udpclient) {
+		hlog(LOG_DEBUG, "client_readable with UDP polling client");
+		return handle_corepeer_readable(self, c);
+	}
+	
 	if (c->fd < 0) {
 		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_rem);
 		client_close(self, c, 0);
 		return -1;
 	}
-
-	/* WORKER never reads from UDP client sockets, ACCEPT does that.. */
-
+	
 	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
-
+	
 	if (r == 0) {
 		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
 		      c->fd, c->addr_rem, c->addr_loc );
 		client_close(self, c, -1);
 		return -1;
 	}
+	
 	if (r < 0) {
 		if (errno == EINTR || errno == EAGAIN)
-			return 0; /* D'oh..  return again latter */
+			return 0; /* D'oh..  return again later */
 
 		hlog( LOG_DEBUG, "read: Error from socket fd %d (%s): %s",
 		      c->fd, c->addr_rem, strerror(errno));
@@ -978,7 +1048,7 @@ void collect_new_clients(struct worker_t *self)
 	/* unlock */
 	if ((pe = pthread_mutex_unlock(&self->new_clients_mutex))) {
 		hlog(LOG_ERR, "collect_new_clients(worker %d): could not unlock new_clients_mutex: %s", self->id, strerror(pe));
-		/* we'd going to deadlock here... */
+		/* we'd be going to deadlock here... */
 		exit(1);
 	}
 	
@@ -1003,11 +1073,31 @@ void collect_new_clients(struct worker_t *self)
 		self->clients = c;
 		c->prevp = &self->clients;
 		
-		/* If the new client is an UDP core peer, it does not have an fd, so it
-		 * won't go to the polling list. No identification sent, either.
+		/* If the new client is an UDP core peer, we will add it's FD to the
+		 * polling list, but only once. There is only a single listener socket
+		 * for a single peer group.
 		 */
-		if (c->state == CSTATE_COREPEER)
+		if (c->state == CSTATE_COREPEER) {
+			/* add to corepeer client list and polling list */
+			hlog(LOG_DEBUG, "collect_new_clients(worker %d): got core peergroup client, UDP fd %d", self->id, c->udpclient->fd);
+			
+			if (worker_corepeer_client_count == MAX_COREPEERS) {
+				hlog(LOG_ERR, "worker: Too many core peergroup peers (max %d)", MAX_COREPEERS);
+				exit(1);
+			}
+			
+			/* build a static array of clients, for quick searching based on address */
+			worker_corepeer_clients[worker_corepeer_client_count] = c;
+			worker_corepeer_client_count++;
+			
+			if (!c->udpclient->polled) {
+				c->udpclient->polled = 1;
+				c->xfd = xpoll_add(&self->xp, c->udpclient->fd, (void *)c);
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d", self->id, c->udpclient->fd);
+			}
+			
 			continue;
+		}
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);

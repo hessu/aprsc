@@ -481,7 +481,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (strlen(c->username) == src_end - s && memcmp(c->username, s, (int)(src_end - s)) == 0)
 		originated_by_client = 1;
 	
-	/* if disallow_unverified is anabled, don't allow unverified clients
+	/* if disallow_unverified is enabled, don't allow unverified clients
 	 * to send packets where srccall != login
 	 */
 	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))

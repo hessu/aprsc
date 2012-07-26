@@ -23,14 +23,23 @@ use Time::HiRes qw(sleep);
 
 my $p = new runproduct('basic');
 
+# UDP peer socket
+my $udp = new Ham::APRS::IS_Fake_UDP('127.0.0.1:16405', 'N0UDP');
+ok(defined $udp, (1), "Failed to set up UDP server socket");
+ok($udp->bind_and_listen(), 1, "Failed to bind UDP server socket");
+$udp->set_destination('127.0.0.1:16404');
+
+# TCP server socket
 my $upstream_call = 'FAKEUP';
 my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:10153', $upstream_call);
 ok(defined $iss1, 1, "Test failed to initialize listening server socket (IPv4)");
 $iss1->bind_and_listen();
 
+# Start software
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
 
+# Set up client and connect
 my $login = "N5CAL-1";
 my $server_call = "TESTING";
 my $client = new Ham::APRS::IS("localhost:55152", $login);
@@ -40,14 +49,10 @@ my $ret;
 $ret = $client->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $client->{'error'});
 
+# Accept connection from server
 my $is1 = $iss1->accept();
 ok(defined $is1, (1), "Failed to accept connection 1 from server");
 ok($iss1->process_login($is1), 'ok', "Failed to accept login 1 from server");
-
-my $udp = new Ham::APRS::IS_Fake_UDP('127.0.0.1:16405', 'N0UDP');
-ok(defined $udp, (1), "Failed to set up UDP server socket");
-ok($udp->bind_and_listen(), 1, "Failed to bind UDP server socket");
-$udp->set_destination('127.0.0.1:16404');
 
 # test ###########################
 

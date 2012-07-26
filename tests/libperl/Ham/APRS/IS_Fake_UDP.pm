@@ -63,7 +63,7 @@ sub bind_and_listen($)
 		return 0;
         }
         
-        warn "bound udp port $localaddr $localport\n";
+        #warn "bound udp port $localaddr $localport\n";
         
         $self->{'state'} = 'connected';
         return 1;
@@ -107,12 +107,12 @@ sub getline($;$)
 		if ($nfound) {
 			my $rbuf;
 			if (($rout & $rin) eq $rin) {
-				warn "getline: got udp\n";
+				#warn "getline: got udp\n";
 				my $msg;
 				my $raddr = $self->{'usock'}->recv($msg, 1500);
 				my($port, $ipaddr) = sockaddr_in($raddr);
 				my $hishost = inet_ntoa($ipaddr);
-				warn "got udp from $hishost $port: $msg\n";
+				#warn "got udp from $hishost $port: $msg\n";
 				return $msg;
 			}
 		}
@@ -128,14 +128,14 @@ sub sendline($$)
 {
 	my($self, $line) = @_;
 	
-	warn "udp sendline: $line\n";
+	#warn "udp sendline: $line\n";
 	
 	return undef if ($self->{'state'} ne 'connected');
 	
-	warn "sending\n";
+	#warn "sending\n";
 	$self->{'usock'}->send($line, 0, $self->{'dest'});
 	
-	warn "sent, returning 1\n";
+	#warn "sent, returning 1\n";
 	return 1;
 }
 

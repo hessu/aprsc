@@ -43,3 +43,6 @@ IGatePorts=55580u
 clientOnlyPorts=55581u
 #
 #
+# servers
+upstreamHubs=127.0.0.1:10153
+#

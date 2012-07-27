@@ -12,7 +12,7 @@ aprsc.c
 	and start a graceful shutdown.
 
 accept.c
-	Contains the accept thread, which listens on the configured TCP
+	Contains the accept thread, which listens on the configured TCP/UDP
 	sockets, accepts (or denies) new connections, and passes them
 	to the worker thread with least existing connections. When
 	a lot of connections arrive quickly, multiple connections
@@ -24,22 +24,41 @@ worker.h
 	Contains the body of the worker thread. worker.h defines most
 	of the interesting data structures and is a good place to
 	start digging.
+	
+	Worker threads process incoming and outgoing data. There are 1..n
+	workers, where N is 1 to 4 (more really doesn't make sense at this
+	point, and 1 is probably good too). Incoming data is parsed,
+	preprocessed, and passed on to the dupecheck thread which
+	marks duplicate packets as such. Dupecheck returns the packets to
+	the workers which then pass on them to the right clients.
 
 login.c
 	Contains a login_handler() function which is called by the
-	worker thread to process an incoming "user" command.
+	worker thread to process an incoming "user" command from
+	a new client.
+
+uplink.c
+	The uplink management thread takes care of connecting to
+	remote upstream servers as needed. It also contains the handlers
+	necessary for logging in to a server. After a successful connect()
+	the connection is passed to a worker thread, but the login
+	handshake incoming data handlers for the login phase can be found
+	in uplink.c.
 
 incoming.c
 	Contains the incoming_handler() function which is called
-	by the worker thread to process incoming APRS-IS data.
+	by the worker thread to process incoming APRS-IS data
+	line by line. Decodes basic IS packet format and calls
+	the Q construct processor and the APRS decoder.
 
 outgoing.c
-	Checks which outgoing packets should be sent each client by
+	Checks which outgoing packets should be sent to each client by
 	calling filter functions, and does the actual sending.
 
 filter.c
-	Filter used by the outgoing packet processing.
-	It tells if the packet should be sent out on given client socket.
+	APRS-IS filter used by the outgoing packet processing.
+	It tells if the packet should be sent out on given client socket,
+	depending on the user's preferences.
 
 parse_aprs.c
 	A simple APRS parser for aprsc. Translated from Ham::APRS::FAP
@@ -106,6 +125,9 @@ passcode.c
 	"password" int the APRS-IS login command. Released to the
 	open source APRS community by Steve Dimse, K4HG, on April 11,
 	2000. Obtained from the aprsd sources, which are GPL.
+
+acl.c
+	Access list code for limiting server access based on IP address.
 
 hlog.c
 	A logging library written by Heikki Hannikainen, OH7LZB,

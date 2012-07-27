@@ -68,6 +68,20 @@ profile:
 	@echo "Did you do 'make clean' before 'make profile' ?"
 	make all PROF=-pg
 
+
+# -------------------------------------------------------------------- #
+
+DATAMODE = 0644
+DATAINSTALL = install --preserve-timestamps -m $(DATAMODE)
+
+WEBFILES = \
+	src/web/aprsc.css src/web/aprsc.js \
+	src/web/index.html \
+	src/web/*.png
+
+testinstall:
+	$(DATAINSTALL) $(WEBFILES) ../tests/web/
+
 # -------------------------------------------------------------------- #
 
 OBJS = aprsc.o accept.o worker.o \

@@ -338,9 +338,9 @@ int make_uplink(struct uplink_config_t *l)
 	l->state = UPLINK_ST_CONNECTING;
 	i = getaddrinfo(l->host, l->port, &req, &ai);
 	if (i != 0) {
-		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'", l->host, l->port);
+		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s': %s", l->host, l->port, gai_strerror(i));
 		l->state = UPLINK_ST_NOT_LINKED;
-		return i;
+		return -2;
 	}
 
 	i = 0;

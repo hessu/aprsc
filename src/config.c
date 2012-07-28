@@ -234,6 +234,51 @@ void free_uplink_config(struct uplink_config_t **lc)
 }
 
 /*
+ *	Match two addrinfo chains, return 1 if there are matching
+ *	addresses in the chains
+ */
+ 
+int ai_comp(struct addrinfo *a, struct addrinfo *b)
+{
+	struct addrinfo *ap, *bp;
+	union sockaddr_u *au, *bu;
+	
+	for (ap = a; ap; ap = ap->ai_next) {
+		for (bp = b; bp; bp = bp->ai_next) {
+			if (ap->ai_family != bp->ai_family)
+				continue;
+			if (ap->ai_addrlen != bp->ai_addrlen)
+				continue;
+			if (ap->ai_addr->sa_len != bp->ai_addr->sa_len)
+				continue;
+				
+			au = (union sockaddr_u *)ap->ai_addr;
+			bu = (union sockaddr_u *)bp->ai_addr;
+			
+			if (ap->ai_family == AF_INET) {
+				if (memcmp(&au->si.sin_addr, &bu->si.sin_addr, sizeof(au->si.sin_addr)) != 0)
+					continue;
+				if (au->si.sin_port != bu->si.sin_port)
+					continue;
+					
+				return 1; // Oops, there is a match
+			}
+			
+			if (ap->ai_family == AF_INET6) {
+				if (memcmp(&au->si6.sin6_addr, &bu->si6.sin6_addr, sizeof(au->si6.sin6_addr)) != 0)
+					continue;
+				if (au->si6.sin6_port != bu->si6.sin6_port)
+					continue;
+					
+				return 1; // Oops, there is a match
+			}
+		}
+	}
+	
+	return 0;
+}
+
+/*
  *	parse an interval specification
  */
  
@@ -291,9 +336,11 @@ int do_interval(int *dest, int argc, char **argv)
  *
  */
 
+
 int parse_hostport(char *s, char **host_s, char **port_s)
 {
 	char *colon;
+	char *bracket;
 	
 	colon = strrchr(s, ':');
 	if (colon == NULL)
@@ -304,6 +351,15 @@ int parse_hostport(char *s, char **host_s, char **port_s)
 	*host_s = s;
 	*port_s = colon+1;
 	
+	if (**host_s == '[') {
+		bracket = strrchr(*host_s, ']');
+		if (!bracket)
+			return -1;
+			
+		*bracket = 0;
+		*host_s = *host_s + 1;
+	}
+	
 	return 0;
 }
 
@@ -312,7 +368,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	int localport, port, i, d;
 	struct peerip_config_t *pe;
 	struct listen_config_t *li;
-	struct addrinfo req, *ai, *a;
+	struct addrinfo req, *my_ai, *ai, *a;
 	char *fullhost, *host_s, *port_s;
 	int af;
 
@@ -324,7 +380,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	req.ai_socktype = SOCK_STREAM;
 	req.ai_protocol = IPPROTO_TCP;
 	req.ai_flags    = 0;
-	ai = NULL;
+	my_ai = NULL;
 
 	// Only UDP and SCTP are acceptable for peergroups
 	if (strcasecmp(argv[2], "udp") == 0) {
@@ -343,35 +399,29 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	fullhost = hstrdup(argv[3]);
 	
 	if (parse_hostport(argv[3], &host_s, &port_s)) {
-		hlog(LOG_ERR, "PeerGroup: Invalid local host:port specification '%s'", argv[3]);
-		hfree(fullhost);
+		hlog(LOG_ERR, "PeerGroup: Invalid local host:port specification '%s'", fullhost);
 		return -2;
 	}
 	
 	localport = atoi(port_s);
-	if (localport < 1 || localport > 65535) {
-		hlog(LOG_ERR, "PeerGroup: Invalid local port number '%s'", port_s);
+	i = getaddrinfo(host_s, port_s, &req, &my_ai);
+	if (i != 0) {
+		hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s: %s", fullhost, gai_strerror(i));
 		hfree(fullhost);
 		return -2;
-	}
-	
-	i = getaddrinfo(host_s, port_s, &req, &ai);
-	if (i != 0) {
-		hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s : %s", host_s, port_s);
-		hfree(fullhost);
-		return i;
 	}
 	
 	d = 0;
-	for (a = ai; (a); a = a->ai_next, ++d);
+	for (a = my_ai; (a); a = a->ai_next, ++d);
 	if (d != 1) {
-		hlog(LOG_ERR, "PeerGroup: address parsing for local address %s returned %d addresses - can only have one", host_s, d);
+		hlog(LOG_ERR, "PeerGroup: address parsing for local address %s returned %d addresses - can only have one", fullhost, d);
+		hfree(fullhost);
 		return -2;
 	}
 	
-	af = ai->ai_family;
+	af = my_ai->ai_family;
 	
-	hlog(LOG_DEBUG, "PeerGroup: configuring with local address %s:%s (local port %d)", host_s, port_s, localport);
+	hlog(LOG_DEBUG, "PeerGroup: configuring with local address %s (local port %d)", fullhost, localport);
 	
 	/* Configure a listener */
 	li = hmalloc(sizeof(*li));
@@ -382,7 +432,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	li->portnum      = localport;
 	li->client_flags = 0;
 	li->clients_max  = 1;
-	li->ai = ai;
+	li->ai = my_ai;
 	li->acl = NULL;
 	li->next = NULL;
 	li->prevp = NULL;
@@ -397,42 +447,67 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		li->next->prevp = &li->next;
 	listen_config_new = li;
 	
+	// TODO: when returning, should free the whole li tree
 	for (i = 4; i < argc; i++) {
 		hlog(LOG_DEBUG, "PeerGroup: configuring peer %s", argv[i]);
 		
+		/* Parse address */
+		fullhost = hstrdup(argv[i]);
 		if (parse_hostport(argv[i], &host_s, &port_s)) {
-			hlog(LOG_ERR, "PeerGroup: Invalid remote host:port specification '%s'", argv[i]);
-			//hfree(fullhost);
+			hlog(LOG_ERR, "PeerGroup: Invalid remote host:port specification '%s'", fullhost);
+			hfree(fullhost);
 			return -2;
 		}
 		
 		port = atoi(port_s);
 		if (port < 1 || port > 65535) {
-			hlog(LOG_ERR, "PeerGroup: Invalid port number '%s' for host '%s'", port_s, host_s);
-			//hfree(fullhost);
+			hlog(LOG_ERR, "PeerGroup: Invalid port number '%s' for remote address '%s'", port_s, fullhost);
+			hfree(fullhost);
 			return -2;
 		}
 		
+		ai = NULL;
 		d = getaddrinfo(host_s, port_s, &req, &ai);
 		if (d != 0) {
-			hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s : %s", host_s, port_s);
-			//hfree(fullhost);
-			return d;
+			hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s: %s", fullhost, gai_strerror(d));
+			hfree(fullhost);
+			return -2;
 		}
 		
-		/* we can only allow one address per peer at this point, SCTP multihoming ignored */
+		/* we can only take one address per peer at this point, SCTP multihoming ignored */
 		d = 0;
 		for (a = ai; (a); a = a->ai_next, ++d);
 		if (d != 1) {
-			hlog(LOG_ERR, "PeerGroup: address parsing for remote %s returned %d addresses - can only have one", host_s, d);
+			hlog(LOG_ERR, "PeerGroup: address parsing for remote %s returned %d addresses - can only have one", fullhost, d);
+			hfree(fullhost);
 			return -2;
 		}
 		
 		if (ai->ai_family != af) {
-			hlog(LOG_ERR, "PeerGroup: remote address %s has different address family than the local address - mixing IPv4 and IPv6, are we?", host_s);
+			hlog(LOG_ERR, "PeerGroup: remote address %s has different address family than the local address - mixing IPv4 and IPv6, are we?", fullhost);
+			hfree(fullhost);
 			return -2;
 		}
 		
+		/* check that the address is not mine (loop!), and that we don't have
+		 * it configured already (dupes!)
+		 */
+		
+		if (ai_comp(ai, my_ai)) {
+			hlog(LOG_ERR, "PeerGroup: remote address %s is the same as my local address, would cause a loop!", fullhost);
+			hfree(fullhost);
+			return -2;
+		}
+		
+		for (pe = *lq; (pe); pe = pe->next) {
+			if (ai_comp(ai, pe->ai)) {
+				hlog(LOG_ERR, "PeerGroup: remote address %s is configured as a peer twice, would cause duplicate transmission!", fullhost);
+				hfree(fullhost);
+				return -2;
+			}
+		}
+		
+		/* Ok, enough checks. Go for it! */
 		pe = hmalloc(sizeof(*pe));
 		memset(pe, 0, sizeof(*pe));
 		pe->name = hstrdup(host_s);
@@ -515,6 +590,11 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	}
 
 #if 0
+	/* For uplinks, we don't really wish to do the lookup at this point
+	 * - we do it when connecting, the address might have changed at that
+	 * point. Also, the lookup might slow up the startup considerably if
+	 * servers time out.
+	 */
 	i = getaddrinfo(argv[4], argv[5], &req, &ai);
 	if (i != 0) {
 		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'",argv[4],argv[5]);
@@ -523,6 +603,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	if (ai)
 		freeaddrinfo(ai);
 #endif
+
 	l = hmalloc(sizeof(*l));
 	memset(l, 0, sizeof(*l));
 	l->name  = hstrdup(argv[1]);
@@ -656,8 +737,8 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 
 	i = getaddrinfo(argv[4], argv[5], &req, &ai);
 	if (i != 0) {
-		hlog(LOG_ERR, "Listen: address parse failure of '%s' '%s'", argv[4], argv[5]);
-		return i;
+		hlog(LOG_ERR, "Listen: address parse failure of '%s' '%s': %s", argv[4], argv[5], gai_strerror(i));
+		return -2;
 	}
 	
 	l = hmalloc(sizeof(*l));

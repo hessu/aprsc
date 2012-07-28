@@ -113,7 +113,7 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 	// resolve the name
 	i = getaddrinfo(netspec, dummyservice, &req, &ai);
 	if (i != 0) {
-		hlog(LOG_ERR, "ACL: address parse failure of '%s'", netspec);
+		hlog(LOG_ERR, "ACL: address parse failure of '%s': %s", netspec, gai_strerror(i));
 		return -1;
 	}
 	

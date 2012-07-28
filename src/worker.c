@@ -638,6 +638,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		/* Existing system doesn't send keepalives via UDP.. */
 		i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
 			    &c->udpaddr.sa, c->udpaddrlen );
+			    
 		if (i < 0) {
 			hlog(LOG_ERR, "UDP transmit error to %s udp port %d: %s",
 				c->addr_rem, c->udp_port, strerror(errno));
@@ -650,7 +651,10 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 
 		if (i > 0)
 			clientaccount_add_udp( c, 0, 0, i, 1);
+			
+		return i;
 	}
+	
 	// Should this return happen already in the previous block?
 	// Is this a leftover from times before UDP support?
 	if (c->state == CSTATE_UDP || c->state == CSTATE_COREPEER)
@@ -839,20 +843,28 @@ int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	if (r == 0)
 		return 0;
 	
-	// TODO: figure the correct client based on the remote IP address. Now we're just assuming
-	// it's one of our core peers!
+	// Figure the correct client/peer based on the remote IP address.
 	for (i = 0; i < worker_corepeer_client_count; i++) {
 		rc = worker_corepeer_clients[i];
+		
 		if (rc->udpaddrlen != addrlen)
 			continue;
 		if (rc->udpaddr.sa.sa_family != addr.sa.sa_family)
 			continue;
+			
 		if (addr.sa.sa_family == AF_INET) {
 			if (memcmp(&rc->udpaddr.si.sin_addr, &addr.si.sin_addr, sizeof(addr.si.sin_addr)) != 0)
 				continue;
 			if (rc->udpaddr.si.sin_port != addr.si.sin_port)
 				continue;
-			rc = worker_corepeer_clients[i];
+				
+			break;
+		} else if (addr.sa.sa_family == AF_INET6) {
+			if (memcmp(&rc->udpaddr.si6.sin6_addr, &addr.si6.sin6_addr, sizeof(addr.si6.sin6_addr)) != 0)
+				continue;
+			if (rc->udpaddr.si6.sin6_port != addr.si6.sin6_port)
+				continue;
+				
 			break;
 		}
 	}

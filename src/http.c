@@ -30,6 +30,7 @@
 #include "hmalloc.h"
 #include "worker.h"
 #include "status.h"
+#include "passcode.h"
 
 int http_shutting_down;
 int http_reconfiguring;
@@ -120,12 +121,66 @@ int http_date(char *buf, int len, time_t t)
 }
 
 /*
+ *	Parse the login string in a POST
+ *	Argh, why are these not in standard POST parameters?
+ */
+
+int http_upload_login(char *addr_rem, char *s, char **username)
+{
+	int argc;
+	char *argv[256];
+	int i;
+	
+	/* parse to arguments */
+	if ((argc = parse_args_noshell(argv, s)) == 0)
+		return -1;
+	
+	if (argc < 2) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, too few arguments: '%s'", addr_rem, s);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[0], "user") != 0) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, no 'user': '%s'", addr_rem, s);
+		return -1;
+	}
+	
+	*username = argv[1];
+	if (strlen(*username) > 9) /* limit length */
+		*username[9] = 0;
+	
+	int given_passcode = -1;
+	int validated = 0;
+	
+	for (i = 2; i < argc; i++) {
+		if (strcasecmp(argv[i], "pass") == 0) {
+			if (++i >= argc) {
+				hlog(LOG_WARNING, "%s (%s): HTTP POST: No passcode after pass command", addr_rem, username);
+				break;
+			}
+			
+			given_passcode = atoi(argv[i]);
+			if (given_passcode >= 0)
+				if (given_passcode == aprs_passcode(*username))
+					validated = 1;
+		} else if (strcasecmp(argv[i], "vers") == 0) {
+			if (i+2 >= argc) {
+				hlog(LOG_WARNING, "%s (%s): No application name and version after vers command", addr_rem, username);
+				break;
+			}
+		}
+	}
+	
+	return validated;
+}
+
+/*
  *	Accept a POST containing a position
  */
 
 #define MAX_HTTP_POST_DATA 2048
 
-void http_upload_position(struct evhttp_request *r)
+void http_upload_position(struct evhttp_request *r, char *remote_host)
 {
 	struct evbuffer *bufin, *bufout;
 	struct evkeyvalq *req_headers;
@@ -135,6 +190,7 @@ void http_upload_position(struct evhttp_request *r)
 	ev_ssize_t l;
 	char *cr, *lf, *end;
 	char *packet;
+	char validated;
 	
 	req_headers = evhttp_request_get_input_headers(r);
 	ctype = evhttp_find_header(req_headers, "Content-Type");
@@ -203,6 +259,18 @@ void http_upload_position(struct evhttp_request *r)
 	
 	hlog(LOG_DEBUG, "login string: %s", post);
 	hlog(LOG_DEBUG, "packet: %s", packet);
+	
+	char *username;
+	validated = http_upload_login(remote_host, post, &username);
+	if (validated < 0) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Invalid login string");
+		return;
+	}
+	
+	if (validated != 1) {
+		evhttp_send_error(r, 403, "Invalid passcode");
+		return;
+	}
 	
 	bufout = evbuffer_new();
 	evbuffer_add(bufout, "ok\n", 3);
@@ -360,7 +428,7 @@ void http_router(struct evhttp_request *r, void *which_server)
 	/* position upload server routing */
 	if (which_server == (void *)2) {
 		if (strncmp(uri, "/", 7) == 0) {
-			http_upload_position(r);
+			http_upload_position(r, remote_host);
 			return;
 		}
 		

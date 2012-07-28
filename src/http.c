@@ -41,6 +41,9 @@ struct http_static_t {
 	char	*filename;
 };
 
+struct evhttp_bound_socket *http_status_handle = NULL;
+struct evhttp_bound_socket *http_upload_handle = NULL;
+
 /*
  *	This is a list of files that the http server agrees to serve.
  *	Due to security concerns the list is static.
@@ -172,7 +175,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	
 	if (stat(fname, &st) == -1) {
 		hlog(LOG_ERR, "http static file '%s' not found", fname);
-		evhttp_send_error(r, HTTP_NOTFOUND, "Really not found");
+		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 		return;
 	}
 	
@@ -237,7 +240,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
  *	HTTP request router
  */
 
-void http_router(struct evhttp_request *r, void *arg)
+void http_router(struct evhttp_request *r, void *which_server)
 {
 	char *remote_host;
 	ev_uint16_t remote_port;
@@ -245,20 +248,42 @@ void http_router(struct evhttp_request *r, void *arg)
 	struct evhttp_connection *conn = evhttp_request_get_connection(r);
 	evhttp_connection_get_peer(conn, &remote_host, &remote_port);
 	
-	hlog(LOG_DEBUG, "http [%s] request %s", remote_host, uri);
+	hlog(LOG_DEBUG, "http %s [%s] request %s", (which_server == (void *)1) ? "status" : "upload", remote_host, uri);
 	
 	http_requests++;
 	
-	if (strncmp(uri, "/status.json", 12) == 0) {
-		http_status(r);
+	/* status server routing */
+	if (which_server == (void *)1) {
+		if (strncmp(uri, "/status.json", 12) == 0) {
+			http_status(r);
+			return;
+		}
+		
+		http_route_static(r, uri);
 		return;
 	}
 	
-	http_route_static(r, uri);
+	/* position upload server routing */
+	if (which_server == (void *)2) {
+		if (strncmp(uri, "/upload", 7) == 0) {
+			http_status(r);
+			return;
+		}
+		
+		hlog(LOG_DEBUG, "http request on upload server for '%s': 404 not found", uri);
+		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+		return;
+	}
+	
+	hlog(LOG_ERR, "http request on unknown server for '%s': 404 not found", uri);
+	evhttp_send_error(r, HTTP_NOTFOUND, "Server not found");
+	
+	return;
 }
 
 struct event *ev_timer = NULL;
-struct evhttp *libsrvr = NULL;
+struct evhttp *srvr_status = NULL;
+struct evhttp *srvr_upload = NULL;
 struct event_base *libbase = NULL;
 
 /*
@@ -280,6 +305,17 @@ void http_timer(evutil_socket_t fd, short events, void *arg)
 	}
 	
 	event_add(ev_timer, &http_timer_tv);
+}
+
+void http_srvr_defaults(struct evhttp *srvr)
+{
+	// limit what the clients can do a bit
+	evhttp_set_allowed_methods(srvr, EVHTTP_REQ_GET);
+	evhttp_set_timeout(srvr, 30);
+	evhttp_set_max_body_size(srvr, 10*1024);
+	evhttp_set_max_headers_size(srvr, 10*1024);
+	
+	// TODO: How to limit the amount of concurrent HTTP connections?
 }
 
 /*
@@ -321,9 +357,9 @@ void http_thread(void *asdf)
 			if (ev_timer) {
 				event_del(ev_timer);
 			}
-			if (libsrvr) {
-				evhttp_free(libsrvr);
-				libsrvr = NULL;
+			if (srvr_status) {
+				evhttp_free(srvr_status);
+				srvr_status = NULL;
 			}
 			if (libbase) {
 				event_base_free(libbase);
@@ -332,32 +368,39 @@ void http_thread(void *asdf)
 			
 			// do init
 			libbase = event_base_new();
-			libsrvr = evhttp_new(libbase);
 			
-			// limit what the clients can do a bit
-			evhttp_set_allowed_methods(libsrvr, EVHTTP_REQ_GET);
-			evhttp_set_timeout(libsrvr, 30);
-			evhttp_set_max_body_size(libsrvr, 10*1024);
-			evhttp_set_max_headers_size(libsrvr, 10*1024);
-			
-			// TODO: How to limit the amount of concurrent HTTP connections?
-			
+			// timer for the whole libevent, to catch shutdown signal
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			
-			hlog(LOG_INFO, "Binding HTTP status socket %s:%d", http_bind, http_port);
-			if (evhttp_bind_socket(libsrvr, http_bind, http_port)) {
-				hlog(LOG_ERR, "Failed to bind HTTP status socket %s:%d: %s", http_bind, http_port, strerror(errno));
+			if (http_bind) {
+				hlog(LOG_INFO, "Binding HTTP status socket %s:%d", http_bind, http_port);
+				
+				srvr_status = evhttp_new(libbase);
+				http_srvr_defaults(srvr_status);
+				
+				http_status_handle = evhttp_bind_socket_with_handle(srvr_status, http_bind, http_port);
+				if (!http_status_handle) {
+					hlog(LOG_ERR, "Failed to bind HTTP status socket %s:%d: %s", http_bind, http_port, strerror(errno));
+				}
+				
+				evhttp_set_gencb(srvr_status, http_router, (void *)1);
 			}
 			
 			if (http_bind_upload) {
 				hlog(LOG_INFO, "Binding HTTP upload socket %s:%d", http_bind_upload, http_port_upload);
-				if (evhttp_bind_socket(libsrvr, http_bind_upload, http_port_upload)) {
+				
+				srvr_upload = evhttp_new(libbase);
+				http_srvr_defaults(srvr_upload);
+				
+				http_upload_handle = evhttp_bind_socket_with_handle(srvr_upload, http_bind_upload, http_port_upload);
+				if (!http_upload_handle) {
 					hlog(LOG_ERR, "Failed to bind HTTP upload socket %s:%d: %s", http_bind_upload, http_port_upload, strerror(errno));
 				}
+				
+				evhttp_set_gencb(srvr_upload, http_router, (void *)2);
 			}
 			
-			evhttp_set_gencb(libsrvr, http_router, NULL);
 			
 			hlog(LOG_INFO, "HTTP thread ready.");
 		}

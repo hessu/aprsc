@@ -133,6 +133,8 @@ void http_upload_position(struct evhttp_request *r)
 	int clength_i;
 	char post[MAX_HTTP_POST_DATA+1];
 	ev_ssize_t l;
+	char *cr, *lf, *end;
+	char *packet;
 	
 	req_headers = evhttp_request_get_input_headers(r);
 	ctype = evhttp_find_header(req_headers, "Content-Type");
@@ -169,6 +171,38 @@ void http_upload_position(struct evhttp_request *r)
 	}
 	
 	hlog(LOG_DEBUG, "got post data: %s", post);
+	
+	// find line feed, terminate string
+	end = post + l;
+	lf = memchr(post, '\n', l);
+	if (!lf) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "No newline (LF) found in data");
+		return;
+	}
+	*lf = 0;
+	
+	// find optional carriage return, terminate string
+	cr = memchr(post, '\r', lf-post);
+	if (cr)
+		*cr = 0;
+	
+	// now the first line contains a login string. Go for the packet body:
+	packet = lf + 1;
+	lf = memchr(packet, '\n', end-packet);
+	if (lf) {
+		*lf = 0;
+		end = lf;
+	}
+	
+	// find optional carriage return, terminate string
+	cr = memchr(packet, '\r', end-packet);
+	if (cr) {
+		*cr = 0;
+		end = cr;
+	}
+	
+	hlog(LOG_DEBUG, "login string: %s", post);
+	hlog(LOG_DEBUG, "packet: %s", packet);
 	
 	bufout = evbuffer_new();
 	evbuffer_add(bufout, "ok\n", 3);

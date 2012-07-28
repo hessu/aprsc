@@ -120,6 +120,67 @@ int http_date(char *buf, int len, time_t t)
 }
 
 /*
+ *	Accept a POST containing a position
+ */
+
+#define MAX_HTTP_POST_DATA 2048
+
+void http_upload_position(struct evhttp_request *r)
+{
+	struct evbuffer *bufin, *bufout;
+	struct evkeyvalq *req_headers;
+	const char *ctype, *clength;
+	int clength_i;
+	char post[MAX_HTTP_POST_DATA+1];
+	ev_ssize_t l;
+	
+	req_headers = evhttp_request_get_input_headers(r);
+	ctype = evhttp_find_header(req_headers, "Content-Type");
+	
+	if (!ctype || strcasecmp(ctype, "application/octet-stream") != 0) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, wrong or missing content-type");
+		return;
+	}
+	
+	clength = evhttp_find_header(req_headers, "Content-Length");
+	if (!clength) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, missing content-length");
+		return;
+	}
+	
+	clength_i = atoi(clength);
+	if (clength_i > MAX_HTTP_POST_DATA) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, too large body");
+		return;
+	}
+	
+	/* get the HTTP POST body */
+	bufin = evhttp_request_get_input_buffer(r);
+	l = evbuffer_copyout(bufin, post, MAX_HTTP_POST_DATA);
+	
+	/* Just for convenience and safety, null-terminate. Easier to log. */
+	post[MAX_HTTP_POST_DATA] = 0;
+	if (l <= MAX_HTTP_POST_DATA)
+		post[l] = 0;
+	
+	if (l != clength_i) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Body size does not match content-length");
+		return;
+	}
+	
+	hlog(LOG_DEBUG, "got post data: %s", post);
+	
+	bufout = evbuffer_new();
+	evbuffer_add(bufout, "ok\n", 3);
+	
+	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Content-Type", "text/plain; charset=UTF-8");
+	
+	evhttp_send_reply(r, HTTP_OK, "OK", bufout);
+	evbuffer_free(bufout);
+}
+
+/*
  *	Generate a status JSON response
  */
 
@@ -231,7 +292,6 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	evbuffer_add(buffer, buf, n);
 	hfree(buf);
 	
-	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
 	evbuffer_free(buffer);
 }
@@ -265,8 +325,8 @@ void http_router(struct evhttp_request *r, void *which_server)
 	
 	/* position upload server routing */
 	if (which_server == (void *)2) {
-		if (strncmp(uri, "/upload", 7) == 0) {
-			http_status(r);
+		if (strncmp(uri, "/", 7) == 0) {
+			http_upload_position(r);
 			return;
 		}
 		
@@ -382,6 +442,7 @@ void http_thread(void *asdf)
 				http_status_handle = evhttp_bind_socket_with_handle(srvr_status, http_bind, http_port);
 				if (!http_status_handle) {
 					hlog(LOG_ERR, "Failed to bind HTTP status socket %s:%d: %s", http_bind, http_port, strerror(errno));
+					// TODO: should exit?
 				}
 				
 				evhttp_set_gencb(srvr_status, http_router, (void *)1);
@@ -392,15 +453,16 @@ void http_thread(void *asdf)
 				
 				srvr_upload = evhttp_new(libbase);
 				http_srvr_defaults(srvr_upload);
+				evhttp_set_allowed_methods(srvr_upload, EVHTTP_REQ_POST); /* uploads are POSTs, after all */
 				
 				http_upload_handle = evhttp_bind_socket_with_handle(srvr_upload, http_bind_upload, http_port_upload);
 				if (!http_upload_handle) {
 					hlog(LOG_ERR, "Failed to bind HTTP upload socket %s:%d: %s", http_bind_upload, http_port_upload, strerror(errno));
+					// TODO: should exit?
 				}
 				
 				evhttp_set_gencb(srvr_upload, http_router, (void *)2);
 			}
-			
 			
 			hlog(LOG_INFO, "HTTP thread ready.");
 		}

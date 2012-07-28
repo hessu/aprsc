@@ -52,6 +52,7 @@ Listen "Igate port"                               igate       tcp 0.0.0.0  55580
 Listen "Igate port, UDP"                          igate       udp 0.0.0.0  55580
 Listen "Client-only port"                         clientonly  tcp 0.0.0.0  55581
 Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
+#Listen "UDP submit port"                         udpsubmit   udp ::0      55080
 
 Uplink full1 full tcp 127.0.0.1 10153
 
@@ -65,7 +66,7 @@ PeerGroup TEST6 udp [::1]:16504 [::1]:16505 [::1]:16506
 HTTPStatus :: 55501
 # Upload port allows position uploads.
 # It does not start up by default.
-HTTPUpload 127.0.0.1 55080
+HTTPUpload :: 55080
 
 ### Internals ############
 # Only use 3 threads in these basic tests, to keep startup/shutdown times

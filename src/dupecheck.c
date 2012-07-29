@@ -519,7 +519,7 @@ static void dupecheck_thread(void)
                         	&pb_out_count, &pb_out_dupe_count);
 		}
 		
-		if (http_worker->pbuf_incoming) {
+		if ((http_worker) && http_worker->pbuf_incoming) {
 			n += dupecheck_drain_worker(http_worker,
 				&pb_out_prevp, &pb_out_last,
 				&pb_out_dupe_prevp, &pb_out_dupe_last,

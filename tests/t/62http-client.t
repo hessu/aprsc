@@ -37,7 +37,7 @@ $ua->agent(
 # test ###########################
 
 my $data = "TEST>HTAPRS,TCPIP*:>http packet content";
-my $out = "TEST>HTAPRS,TCPIP*,qAU,TESTING:>http packet content";
+my $out = "TEST>HTAPRS,TCPIP*,qAC,TESTING:>http packet content";
 my $post = "user TEST pass 29939 vers httpaprstester 1.0\r\n"
 	. "$data\r\n";
 my $url = "http://127.0.0.1:55080/";

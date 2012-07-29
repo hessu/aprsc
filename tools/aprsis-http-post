@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+
+use LWP;
+use LWP::UserAgent;
+use HTTP::Request::Common;
+
+my $ua = LWP::UserAgent->new;
+
+$ua->agent(
+	agent => "httpaprstester/1.0",
+	timeout => 10,
+	max_redirect => 0,
+);
+
+# test ###########################
+
+my $data = "TEST>HTAPRS,TCPIP*:>http packet content";
+my $out = "TEST>HTAPRS,TCPIP*,qAC,TESTING:>http packet content";
+my $post = "user TEST pass 29939 vers httpaprstester 1.0\r\n"
+	. "$data\r\n";
+my $url = "http://127.0.0.1:55080/";
+my $req = HTTP::Request::Common::POST($url);
+$req->header('Accept-Type', 'text/plain');  # wat?
+#$req->header('Accept', 'text/plain'); # this is what HTTP uses, really
+$req->header('Content-Type', 'application/octet-stream');
+$req->header('Content-Length', length($post));
+$req->content($post);
+
+my $res = $ua->simple_request($req);
+
+print $res->code . " " . $res->message . "\n\n";
+print $res->content . "\n";
+

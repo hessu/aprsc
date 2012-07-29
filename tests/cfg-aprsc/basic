@@ -59,6 +59,7 @@ Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
 #	name: a name of the server or service you're connecting
 #	type: one of:
 #		full - full feed
+#		ro   - read-only, do not transmit anything upstream
 #
 Uplink full1 full tcp 127.0.0.1 10153
 

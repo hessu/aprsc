@@ -28,6 +28,7 @@
 #include "keyhash.h"
 #include "filter.h"
 #include "historydb.h"
+#include "http.h"
 
 extern int uplink_simulator;
 
@@ -402,7 +403,51 @@ int  outgoing_lag_report(struct worker_t *self, int *lag, int *dupelag)
 	return lag1; // Higher of the two..
 }
 
-
+static int dupecheck_drain_worker(struct worker_t *w,
+	struct pbuf_t ***pb_out_prevp, struct pbuf_t **pb_out_last,
+	struct pbuf_t ***pb_out_dupe_prevp, struct pbuf_t **pb_out_dupe_last,
+	int *pb_out_count, int *pb_out_dupe_count)
+{
+        struct pbuf_t *pb_list;
+	struct pbuf_t *pb, *pbnext;
+        int n = 0;
+        int c;
+        
+        /* grab worker's list of packets */
+	pthread_mutex_lock(&w->pbuf_incoming_mutex);
+	pb_list = w->pbuf_incoming;
+	w->pbuf_incoming = NULL;
+	w->pbuf_incoming_last = &w->pbuf_incoming;
+	c = w->pbuf_incoming_count;
+	w->pbuf_incoming_count = 0;
+	pthread_mutex_unlock(&w->pbuf_incoming_mutex);
+	
+	//hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
+	//     c, w->id, dupecheck_seqnum);
+	
+	for (pb = pb_list; (pb); pb = pbnext) {
+		int rc = dupecheck(pb);
+		pbnext = pb->next; // it may get modified below..
+		
+		if (rc == 0) { // Not duplicate
+			**pb_out_prevp = pb;
+			*pb_out_prevp = &pb->next;
+			*pb_out_last  = pb;
+			pb->seqnum = ++dupecheck_seqnum;
+			*pb_out_count = *pb_out_count + 1;
+                } else {       // Duplicate
+                	**pb_out_dupe_prevp = pb;
+                	*pb_out_dupe_prevp = &pb->next;
+                	*pb_out_dupe_last  = pb;
+                	pb->seqnum = ++dupecheck_dupe_seqnum;
+                	*pb_out_dupe_count = *pb_out_dupe_count + 1;
+                	//hlog(LOG_DEBUG, "is duplicate");
+		}
+		n++;
+	}
+	
+	return n;
+}
 
 /*
  *	Dupecheck thread
@@ -412,7 +457,6 @@ static void dupecheck_thread(void)
 {
 	sigset_t sigs_to_block;
 	struct worker_t *w;
-	struct pbuf_t *pb_list, *pb, *pbnext;
 	struct pbuf_t *pb_out, **pb_out_prevp, *pb_out_last;
 	struct pbuf_t *pb_out_dupe, **pb_out_dupe_prevp, *pb_out_dupe_last;
 	int n;
@@ -468,38 +512,18 @@ static void dupecheck_thread(void)
 			/* if there are items in the worker's pbuf_incoming, grab them and process */
 			if (!w->pbuf_incoming)
 				continue;
-
-			pthread_mutex_lock(&w->pbuf_incoming_mutex);
-			pb_list = w->pbuf_incoming;
-			w->pbuf_incoming = NULL;
-			w->pbuf_incoming_last = &w->pbuf_incoming;
-			c = w->pbuf_incoming_count;
-			w->pbuf_incoming_count = 0;
-			pthread_mutex_unlock(&w->pbuf_incoming_mutex);
-
-			//hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
-			//     c, w->id, dupecheck_seqnum);
-
-			for (pb = pb_list; (pb); pb = pbnext) {
-				int rc = dupecheck(pb);
-				pbnext = pb->next; // it may get modified below..
-
-				if (rc == 0) { // Not duplicate
-					*pb_out_prevp = pb;
-					 pb_out_prevp = &pb->next;
-					 pb_out_last  = pb;
-					 pb->seqnum = ++dupecheck_seqnum;
-					++pb_out_count;
-				} else {       // Duplicate
-					*pb_out_dupe_prevp = pb;
-					 pb_out_dupe_prevp = &pb->next;
-					 pb_out_dupe_last  = pb;
-					 pb->seqnum = ++dupecheck_dupe_seqnum;
-					++pb_out_dupe_count;
-					//hlog(LOG_DEBUG, "is duplicate");
-				}
-				n++;
-			}
+                        
+                        n += dupecheck_drain_worker(w,
+                        	&pb_out_prevp, &pb_out_last,
+                        	&pb_out_dupe_prevp, &pb_out_dupe_last,
+                        	&pb_out_count, &pb_out_dupe_count);
+		}
+		
+		if (http_worker->pbuf_incoming) {
+			n += dupecheck_drain_worker(http_worker,
+				&pb_out_prevp, &pb_out_last,
+				&pb_out_dupe_prevp, &pb_out_dupe_last,
+				&pb_out_count, &pb_out_dupe_count);
 		}
 		
 		// terminate those out-chains in every case..

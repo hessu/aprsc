@@ -840,8 +840,11 @@ int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		return 0;
 	}
 	
-	if (r == 0)
+	if (r == 0) {
+		hlog( LOG_DEBUG, "recv: EOF from corepeer UDP socket fd %d (%s)",
+			c->udpclient->fd, c->addr_rem);
 		return 0;
+	}
 	
 	// Figure the correct client/peer based on the remote IP address.
 	for (i = 0; i < worker_corepeer_client_count; i++) {
@@ -901,7 +904,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	
 	/* Worker 0 takes care of reading corepeer UDP sockets and processes the incoming packets. */
 	if (c->state == CSTATE_COREPEER && c->udpclient) {
-		hlog(LOG_DEBUG, "client_readable with UDP polling client");
+		hlog(LOG_DEBUG, "client_readable with UDP peer");
 		return handle_corepeer_readable(self, c);
 	}
 	

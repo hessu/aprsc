@@ -31,6 +31,7 @@
 #include "worker.h"
 #include "status.h"
 #include "passcode.h"
+#include "incoming.h"
 
 int http_shutting_down;
 int http_reconfiguring;
@@ -46,6 +47,7 @@ struct evhttp_bound_socket *http_status_handle = NULL;
 struct evhttp_bound_socket *http_upload_handle = NULL;
 
 struct worker_t *http_worker = NULL;
+struct client_t *http_pseudoclient = NULL;
 
 /*
  *	This is a list of files that the http server agrees to serve.
@@ -193,6 +195,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	char *cr, *lf, *end;
 	char *packet;
 	char validated;
+	int e;
 	
 	req_headers = evhttp_request_get_input_headers(r);
 	ctype = evhttp_find_header(req_headers, "Content-Type");
@@ -286,7 +289,36 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 		return;
 	}
 	
+	/* fill the user's information in the pseudoclient's structure
+	 * for the q construct handler's viewing pleasure
+	 */
+#ifdef FIXED_IOBUFS
+	strncpy(http_pseudoclient->username, username, sizeof(http_pseudoclient->username));
+	http_pseudoclient->username[sizeof(http_pseudoclient->username)-1] = 0;
+#else
+	http_pseudoclient->username = username;
+#endif	
 	/* ok, try to digest the packet */
+	e = incoming_parse(http_worker, http_pseudoclient, packet, end-packet);
+
+#ifdef FIXED_IOBUFS
+	http_pseudoclient->username[0] = 0;
+#else
+	http_pseudoclient->username = NULL;
+#endif
+	
+	if (e < 0) {
+		hlog(LOG_DEBUG, "http incoming packet parse failure code %d: %s", e, packet);
+		evhttp_send_error(r, HTTP_BADREQUEST, "Packet parsing failure");
+		return;
+	}
+	
+	/* if the packet parser managed to digest the packet and put it to
+	 * the thread-local incoming queue, flush it for dupecheck to
+	 * grab
+	 */
+	if (http_worker->pbuf_incoming_local)
+		incoming_flush(http_worker);
 	
 	bufout = evbuffer_new();
 	evbuffer_add(bufout, "ok\n", 3);
@@ -496,6 +528,24 @@ void http_srvr_defaults(struct evhttp *srvr)
 	// TODO: How to limit the amount of concurrent HTTP connections?
 }
 
+struct client_t *http_pseudoclient_setup(void)
+{
+	struct client_t *c;
+	
+	c = http_pseudoclient = client_alloc();
+	c->fd    = -1;
+	c->portnum = 80;
+	c->state = CSTATE_CONNECTED;
+	c->flags = CLFLAGS_INPORT|CLFLAGS_CLIENTONLY;
+	c->validated = 1; // we will validate on every packet
+	//c->portaccount = l->portaccount;
+	c->keepalive = tick;
+	c->connect_time = tick;
+	c->last_read = tick;
+	
+	return c;
+}
+
 /*
  *	HTTP server thread
  */
@@ -532,6 +582,11 @@ void http_thread(void *asdf)
 	 */
 	http_worker = worker_alloc();
 	http_worker->id = 80;
+	
+	/* we also need a client structure to be used with incoming
+	 * HTTP position uploads
+	 */
+	http_pseudoclient_setup();
 	
 	http_reconfiguring = 1;
 	while (!http_shutting_down) {
@@ -594,6 +649,10 @@ void http_thread(void *asdf)
 		
 		event_base_dispatch(libbase);
 	}
+	
+	/* free up the pseudo-client */
+	client_free(http_pseudoclient);
+	http_pseudoclient = NULL;
 	
 	/* free up the pseudo-worker structure */
 	worker_free_buffers(http_worker);

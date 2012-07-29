@@ -11,6 +11,8 @@
 #ifndef HTTP_H
 #define HTTP_H
 
+extern struct worker_t *http_worker;
+
 extern int http_reconfiguring;
 extern int http_shutting_down;
 

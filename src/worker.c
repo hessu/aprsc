@@ -1262,7 +1262,7 @@ void worker_thread(struct worker_t *self)
 	sigset_t sigs_to_block;
 	time_t next_keepalive = tick + 2;
 	char myname[20];
-	struct pbuf_t *p, *pn;
+	struct pbuf_t *p;
 #if 0
 	time_t next_lag_query = tick + 10;
 #endif
@@ -1360,20 +1360,8 @@ void worker_thread(struct worker_t *self)
 			self->id, self->pbuf_incoming_count);
 		
 	/* clean up thread-local pbuf pools */
-
-	for (p = self->pbuf_free_small; p; p = pn) {
-		pn = p->next;
-		pbuf_free(NULL, p); // free to global pool
-	}
-	for (p = self->pbuf_free_medium; p; p = pn) {
-		pn = p->next;
-		pbuf_free(NULL, p); // free to global pool
-	}
-	for (p = self->pbuf_free_large; p; p = pn) {
-		pn = p->next;
-		pbuf_free(NULL, p); // free to global pool
-	}
-
+	worker_free_buffers(self);
+	
 	hlog(LOG_DEBUG, "Worker %d shut down.", self->id);
 }
 
@@ -1423,6 +1411,58 @@ void workers_stop(int stop_all)
 }
 
 /*
+ *	Allocate a worker structure.
+ *	This is also called from the http thread which acts as a
+ *	"worker" for incoming packets.
+ */
+
+struct worker_t *worker_alloc(void)
+{
+	struct worker_t *w;
+	
+	w = hmalloc(sizeof(*w));
+	memset(w, 0, sizeof(*w));
+
+	pthread_mutex_init(&w->clients_mutex, NULL);
+	pthread_mutex_init(&w->new_clients_mutex, NULL);
+	
+	w->pbuf_incoming_local = NULL;
+	w->pbuf_incoming_local_last = &w->pbuf_incoming_local;
+	
+	w->pbuf_incoming      = NULL;
+	w->pbuf_incoming_last = &w->pbuf_incoming;
+	pthread_mutex_init(&w->pbuf_incoming_mutex, NULL);
+	
+	w->pbuf_global_prevp      = pbuf_global_prevp;
+	w->pbuf_global_dupe_prevp = pbuf_global_dupe_prevp;
+	
+	return w;
+}
+
+/*
+ *	Free a worker's local buffers
+ */
+
+void worker_free_buffers(struct worker_t *self)
+{
+	struct pbuf_t *p, *pn;
+	
+	/* clean up thread-local pbuf pools */
+	for (p = self->pbuf_free_small; p; p = pn) {
+		pn = p->next;
+		pbuf_free(NULL, p); // free to global pool
+	}
+	for (p = self->pbuf_free_medium; p; p = pn) {
+		pn = p->next;
+		pbuf_free(NULL, p); // free to global pool
+	}
+	for (p = self->pbuf_free_large; p; p = pn) {
+		pn = p->next;
+		pbuf_free(NULL, p); // free to global pool
+	}
+}
+
+/*
  *	Start workers - runs from accept_thread
  */
 
@@ -1437,6 +1477,7 @@ void workers_start(void)
 	
 	hlog(LOG_INFO, "Starting %d worker threads (configured: %d)...",
 		workers_configured - workers_running, workers_configured);
+		
 	while (workers_running < workers_configured) {
 		hlog(LOG_DEBUG, "Starting a worker thread...");
 		i = 0;
@@ -1448,27 +1489,13 @@ void workers_start(void)
 			i++;
 		}
 		
-		w = hmalloc(sizeof(*w));
+		w = worker_alloc();
 		*prevp = w;
-		memset(w, 0, sizeof(*w));
-
 		w->prevp = prevp;
-
+		
 		w->id = i;
-		pthread_mutex_init(&w->clients_mutex, NULL);
-		pthread_mutex_init(&w->new_clients_mutex, NULL);
 		xpoll_initialize(&w->xp, (void *)w, &handle_client_event);
 		
-		w->pbuf_incoming_local = NULL;
-		w->pbuf_incoming_local_last = &w->pbuf_incoming_local;
-		
-		w->pbuf_incoming      = NULL;
-		w->pbuf_incoming_last = &w->pbuf_incoming;
-		pthread_mutex_init(&w->pbuf_incoming_mutex, NULL);
-		
-		w->pbuf_global_prevp      = pbuf_global_prevp;
-		w->pbuf_global_dupe_prevp = pbuf_global_dupe_prevp;
-
 		/* start the worker thread */
 		if (pthread_create(&w->th, &pthr_attrs, (void *)worker_thread, w))
 			perror("pthread_create failed for worker_thread");

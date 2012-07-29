@@ -45,6 +45,8 @@ struct http_static_t {
 struct evhttp_bound_socket *http_status_handle = NULL;
 struct evhttp_bound_socket *http_upload_handle = NULL;
 
+struct worker_t *http_worker = NULL;
+
 /*
  *	This is a list of files that the http server agrees to serve.
  *	Due to security concerns the list is static.
@@ -260,6 +262,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	hlog(LOG_DEBUG, "login string: %s", post);
 	hlog(LOG_DEBUG, "packet: %s", packet);
 	
+	/* process the login string */
 	char *username;
 	validated = http_upload_login(remote_host, post, &username);
 	if (validated < 0) {
@@ -271,6 +274,19 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 		evhttp_send_error(r, 403, "Invalid passcode");
 		return;
 	}
+	
+	/* packet size limits */
+	if (end - packet < PACKETLEN_MIN) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Packet too short");
+		return;
+	}
+	
+	if (end - packet > PACKETLEN_MAX-2) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Packet too long");
+		return;
+	}
+	
+	/* ok, try to digest the packet */
 	
 	bufout = evbuffer_new();
 	evbuffer_add(bufout, "ok\n", 3);
@@ -510,6 +526,13 @@ void http_thread(void *asdf)
 	/* start the http thread, which will start server threads */
 	hlog(LOG_INFO, "HTTP thread starting...");
 	
+	/* we allocate a worker structure to be used within the http thread
+	 * for parsing incoming packets and passing them on to the dupecheck
+	 * thread.
+	 */
+	http_worker = worker_alloc();
+	http_worker->id = 80;
+	
 	http_reconfiguring = 1;
 	while (!http_shutting_down) {
 		if (http_reconfiguring) {
@@ -571,6 +594,11 @@ void http_thread(void *asdf)
 		
 		event_base_dispatch(libbase);
 	}
+	
+	/* free up the pseudo-worker structure */
+	worker_free_buffers(http_worker);
+	hfree(http_worker);
+	http_worker = NULL;
 	
 	hlog(LOG_DEBUG, "HTTP thread shutting down...");
 }

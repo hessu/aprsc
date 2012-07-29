@@ -391,6 +391,8 @@ extern void client_close(struct worker_t *self, struct client_t *c, int errnum);
 extern void client_init(void);
 
 extern struct worker_t *worker_threads;
+extern struct worker_t *worker_alloc(void);
+extern void worker_free_buffers(struct worker_t *self);
 extern void workers_stop(int stop_all);
 extern void workers_start(void);
 

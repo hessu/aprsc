@@ -503,42 +503,38 @@ void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbyt
 
 void clientaccount_add_udp(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets)
 {
-	/* Note: client traffic does not RECEIVE UDP data per se. */
-
-	// c->localaccount.rxbytes   += rxbytes;
+	c->localaccount.rxbytes   += rxbytes;
 	c->localaccount.txbytes   += txbytes;
-	// c->localaccount.rxpackets += rxpackets;
+	c->localaccount.rxpackets += rxpackets;
 	c->localaccount.txpackets += txpackets;
 
 	if (c->portaccount) {
 #ifdef HAVE_SYNC_FETCH_AND_ADD
-		// __sync_fetch_and_add(&c->portaccount->rxbytes, rxbytes);
+		__sync_fetch_and_add(&c->portaccount->rxbytes, rxbytes);
 		__sync_fetch_and_add(&c->portaccount->txbytes, txbytes);
-		// __sync_fetch_and_add(&c->portaccount->rxpackets, rxpackets);
+		__sync_fetch_and_add(&c->portaccount->rxpackets, rxpackets);
 		__sync_fetch_and_add(&c->portaccount->txpackets, txpackets);
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
-		// c->portaccount->rxbytes   += rxbytes;
+		c->portaccount->rxbytes   += rxbytes;
 		c->portaccount->txbytes   += txbytes;
-		// c->portaccount->rxpackets += rxpackets;
+		c->portaccount->rxpackets += rxpackets;
 		c->portaccount->txpackets += txpackets;
 #endif
 	}
 
 #ifdef HAVE_SYNC_FETCH_AND_ADD
-	// __sync_fetch_and_add(&client_connects_udp.rxbytes, rxbytes);
+	__sync_fetch_and_add(&client_connects_udp.rxbytes, rxbytes);
 	__sync_fetch_and_add(&client_connects_udp.txbytes, txbytes);
-	// __sync_fetch_and_add(&client_connects_udp.rxpackets, rxpackets);
+	__sync_fetch_and_add(&client_connects_udp.rxpackets, rxpackets);
 	__sync_fetch_and_add(&client_connects_udp.txpackets, txpackets);
 #else
 	// FIXME: MUTEX !! -- this may or may not need locks..
-	// client_connects_udp.rxbytes   += rxbytes;
+	client_connects_udp.rxbytes   += rxbytes;
 	client_connects_udp.txbytes   += txbytes;
-	// client_connects_udp.rxpackets += rxpackets;
+	client_connects_udp.rxpackets += rxpackets;
 	client_connects_udp.txpackets += txpackets;
 #endif
-
-	// FIXME: global UDP write statistics - or shall reporter make summaries ?
 }
 
 /*
@@ -817,6 +813,10 @@ int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const ch
 	return 0;
 }
 
+/*
+ *	Receive UDP packets from a core peer
+ */
+
 int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 {
 	struct client_t *rc; // real client
@@ -904,7 +904,6 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	
 	/* Worker 0 takes care of reading corepeer UDP sockets and processes the incoming packets. */
 	if (c->state == CSTATE_COREPEER && c->udpclient) {
-		hlog(LOG_DEBUG, "client_readable with UDP peer");
 		return handle_corepeer_readable(self, c);
 	}
 	

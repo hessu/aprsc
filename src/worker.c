@@ -231,7 +231,7 @@ void client_udp_free(struct client_udp_t *u)
 	i = pthread_mutex_unlock(& udpclient_mutex );
 }
 
-struct client_udp_t *client_udp_find(struct client_udp_t *root, const int portnum)
+struct client_udp_t *client_udp_find(struct client_udp_t *root, const int af, const int portnum)
 {
 	struct client_udp_t *u;
 	int i;
@@ -239,7 +239,7 @@ struct client_udp_t *client_udp_find(struct client_udp_t *root, const int portnu
 	i = pthread_mutex_lock(& udpclient_mutex );
 
 	for (u = root ; u ; u = u->next ) {
-		if (u->portnum == portnum) {
+		if (u->portnum == portnum && u->af == af) {
 			++ u->refcount;
 			break;
 		}

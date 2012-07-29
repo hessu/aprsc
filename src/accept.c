@@ -225,6 +225,7 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	}
 
 	c = client_udp_alloc((l->corepeer) ? &udppeers : &udpclients, fd, l->portnum);
+	c->af = ai->ai_family;
 	c->portaccount = l->portaccount;
 
 	inbound_connects_account(3, c->portaccount); /* "3" = udp, not listening.. 
@@ -342,7 +343,7 @@ void peerip_clients_config(void)
 	
 	for (pe = peerip_config; (pe); pe = pe->next) {
 		hlog(LOG_DEBUG, "Setting up UDP peer %s (%s)", pe->name, pe->host);
-		udpclient = client_udp_find(udppeers, pe->local_port);
+		udpclient = client_udp_find(udppeers, pe->af, pe->local_port);
 		
 		if (!udpclient) {
 			hlog(LOG_ERR, "Failed to find UDP socket on port %d for peer %s (%s)", pe->local_port, pe->name, pe->host);
@@ -516,7 +517,7 @@ static struct client_t *do_accept(struct listen_t *l)
 	c->flags     = l->clientflags;
 	/* use the default login handler */
 	c->handler = &login_handler;
-	c->udpclient = client_udp_find(udpclients, l->portnum);
+	c->udpclient = client_udp_find(udpclients, sa.sa.sa_family, l->portnum);
 	c->portaccount = l->portaccount;
 	c->keepalive = tick;
 	c->connect_time = tick;

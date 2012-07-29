@@ -197,7 +197,8 @@ struct client_udp_t {			/* UDP services can be available at multiple
 	int    fd;			/* file descriptor */
 	int    refcount;		/* Reference count */
 	int    polled;			/* Is there a thread polling this? */
-	uint16_t portnum;		/* Server UDP port... TODO: should have address family, too! */
+	uint16_t af;			/* Address family */
+	uint16_t portnum;		/* Server UDP port */
 	char	configured;		/* if not zero, refcount == 0 will not kill this */
 };
 
@@ -403,7 +404,7 @@ extern struct client_udp_t *udpclients;
 extern struct client_udp_t *udppeers;
 extern void client_udp_free(struct client_udp_t *u);
 extern struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int portnum);
-extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int portnum);
+extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int af, int portnum);
 
 extern void inbound_connects_account(const int add, struct portaccount_t *p);
 

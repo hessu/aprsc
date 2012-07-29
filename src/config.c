@@ -512,6 +512,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		memset(pe, 0, sizeof(*pe));
 		pe->name = hstrdup(host_s);
 		pe->host = hstrdup(host_s);
+		pe->af = af;
 		pe->local_port = localport;
 		pe->remote_port = port;
 		pe->client_flags = 0; // ???

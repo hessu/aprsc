@@ -249,8 +249,6 @@ int ai_comp(struct addrinfo *a, struct addrinfo *b)
 				continue;
 			if (ap->ai_addrlen != bp->ai_addrlen)
 				continue;
-			if (ap->ai_addr->sa_len != bp->ai_addr->sa_len)
-				continue;
 				
 			au = (union sockaddr_u *)ap->ai_addr;
 			bu = (union sockaddr_u *)bp->ai_addr;

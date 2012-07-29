@@ -398,7 +398,9 @@ int main(int argc, char **argv)
 	signal(SIGINT, (void *)sighandler);
 	signal(SIGTERM, (void *)sighandler);
 	signal(SIGQUIT, (void *)sighandler);
-	signal(SIGHUP, (void *)sighandler);
+	//signal(SIGHUP, (void *)sighandler);
+	/* ignore HUP for now, it's handling is buggy. */
+	signal(SIGHUP, SIG_IGN);
 	signal(SIGUSR1, (void *)sighandler);
 	signal(SIGUSR2, (void *)sighandler);
 	signal(SIGPIPE, SIG_IGN);

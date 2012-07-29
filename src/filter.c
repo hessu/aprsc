@@ -111,10 +111,11 @@
 
  #14 Exclusion filter
 
-All the above filters also support exclusion. Be prefixing the above filters with a
-dash the result will be the opposite. Any packet that match the exclusion filter will
-NOT pass. The exclusion filters will be processed first so if there is a match for an
-exclusion then the packet is not passed no matter any other filter definitions.
+All the above filters also support exclusion. Be prefixing the above filters
+with a dash the result will be the opposite. Any packet that match the exclusion
+filter will NOT pass. The exclusion filters will be processed first so if there
+is a match for an exclusion then the packet is not passed no matter any other
+filter definitions.
 
 */
 
@@ -131,11 +132,16 @@ struct filter_refcallsign_t {
 struct filter_head_t {
 	struct filter_t *next;
 	const char *text; /* filter text as is		*/
-	float   f_latN, f_lonE, f_latS, f_lonW;
+	float   f_latN, f_lonE;
+	union {
+	  float   f_latS;   /* for A filter */
+	  float   f_coslat; /* for R filter */
+	}; /* ANONYMOUS UNION */
+	union {
+	  float   f_lonW; /* for A filter */
+	  float   f_dist; /* for R filter */
+	}; /* ANONYMOUS UNION */
 	time_t  hist_age;
-			/* parsed floats, if any	*/
-#define f_dist   f_latS /* for R filter */
-#define f_coslat f_lonW /* for R filter */
 
 	char	type;	  /* 1 char			*/
 	int16_t	negation; /* boolean flag		*/
@@ -315,13 +321,19 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 	int idx, keylen;
 	const char qcons = pb->qconst_start[2];
 	const char *key = pb->qconst_start+4;
+        char uckey[CALLSIGNLEN_MAX+1];
 
 	for (keylen = 0; keylen <= CALLSIGNLEN_MAX; ++keylen) {
 		int c = key[keylen];
 		if (c == ',' || c == ':')
 			break;
+                if ('a' <= c && c <= 'z')
+                	c -= ('a' - 'A');
+                uckey[keylen] = c;
+                uckey[keylen+1] = 0;
 	}
-	if ((key[keylen] != ',' && key[keylen] != ':') || keylen < CALLSIGNLEN_MIN)
+	if ((key[keylen] != ',' && key[keylen] != ':') ||
+	    (keylen < CALLSIGNLEN_MIN))
 		return 0; /* Bad entry-station callsign */
 	
 	pb->entrycall_len = keylen; // FIXME: should be in incoming parser...
@@ -329,7 +341,7 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 	/* We insert only those that have Q-Constructs of qAR or qAr */
 	if (qcons != 'r' && qcons != 'R') return 0;
 
-	hash = keyhash(key, keylen, 0);
+	hash = keyhash(uckey, keylen, 0);
 	idx = (hash ^ (hash >> 11) ^ (hash >> 22) ) % FILTER_ENTRYCALL_HASHSIZE; /* Fold the hashbits.. */
 
 	rwl_wrlock(&filter_entrycall_rwlock);
@@ -339,7 +351,7 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 	while (( f = *fp )) {
 		if ( f->hash == hash ) {
 			if (f->len == keylen) {
-				int cmp = memcmp(f->callsign, key, keylen);
+				int cmp = memcmp(f->callsign, uckey, keylen);
 				if (cmp == 0) { /* Have key match */
 					f->expirytime = now + filter_entrycall_maxage;
 					f2 = f;
@@ -366,7 +378,7 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 			f->expirytime = now + filter_entrycall_maxage;
 			f->hash  = hash;
 			f->len   = keylen;
-			memcpy(f->callsign, key, keylen);
+			memcpy(f->callsign, uckey, keylen);
 			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
 
 			*fp = f2 = f;
@@ -398,7 +410,7 @@ static int filter_entrycall_lookup(const struct pbuf_t *pb)
 	const char *key  = pb->qconst_start+4;
 	const int keylen = pb->entrycall_len;
 
-	uint32_t  hash   = keyhash(key, keylen, 0);
+	uint32_t  hash   = keyhashuc(key, keylen, 0);
 	int idx = ( hash ^ (hash >> 11) ^ (hash >> 22) ) % FILTER_ENTRYCALL_HASHSIZE;   /* fold the hashbits.. */
 
 	f2 = NULL;
@@ -409,7 +421,7 @@ static int filter_entrycall_lookup(const struct pbuf_t *pb)
 	while (( f = *fp )) {
 		if ( f->hash == hash ) {
 			if (f->len == keylen) {
-				int rc =  memcmp(f->callsign, key, keylen);
+				int rc =  strncasecmp(f->callsign, key, keylen);
 				if (rc == 0) { /* Have key match, see if it is
 						  still valid entry ? */
 					if (f->expirytime < now - 60) {
@@ -534,12 +546,23 @@ int filter_wx_insert(struct pbuf_t *pb)
 	const int keylen = pb->srccall_end - key;
 	uint32_t hash;
 	int idx;
+        char uckey[CALLSIGNLEN_MAX+1];
 
 	/* If it is not a WX packet without position, we are not intrerested */
 	if (!((pb->packettype & T_WX) && !(pb->flags & F_HASPOS)))
 		return 0;
 
-	hash = keyhash(key, keylen, 0);
+	for (idx = 0; idx <= keylen; ++idx) {
+		int c = key[idx];
+		if (c == ',' || c == ':')
+			break;
+                if ('a' <= c && c <= 'z')
+                  c -= ('a' - 'A');
+                uckey[idx] = c;
+                uckey[idx+1] = 0;
+	}
+
+	hash = keyhash(uckey, keylen, 0);
 	idx = ( hash ^ (hash >> 10) ^ (hash >> 20) ) % FILTER_WX_HASHSIZE; /* fold the hashbits.. */
 
 	rwl_wrlock(&filter_wx_rwlock);
@@ -549,7 +572,7 @@ int filter_wx_insert(struct pbuf_t *pb)
 	while (( f = *fp )) {
 		if ( f->hash == hash ) {
 			if (f->len == keylen) {
-				int cmp = memcmp(f->callsign, key, keylen);
+				int cmp = memcmp(f->callsign, uckey, keylen);
 				if (cmp == 0) { /* Have key match */
 					f->expirytime = now + filter_wx_maxage;
 					f2 = f;
@@ -577,7 +600,7 @@ int filter_wx_insert(struct pbuf_t *pb)
 			f->expirytime = now + filter_wx_maxage;
 			f->hash  = hash;
 			f->len   = keylen;
-			memcpy(f->callsign, key, keylen);
+			memcpy(f->callsign, uckey, keylen);
 			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
 
 			*fp = f2 = f;
@@ -595,7 +618,7 @@ static int filter_wx_lookup(const struct pbuf_t *pb)
 	const char *key  = pb->data;
 	const int keylen = pb->srccall_end - key;
 
-	uint32_t  hash   = keyhash(key, keylen, 0);
+	uint32_t  hash   = keyhashuc(key, keylen, 0);
 	int idx = ( hash ^ (hash >> 10) ^ (hash >> 20) ) % FILTER_WX_HASHSIZE; /* fold the hashbits.. */
 
 	f2 = NULL;
@@ -606,7 +629,7 @@ static int filter_wx_lookup(const struct pbuf_t *pb)
 	while (( f = *fp )) {
 		if ( f->hash == hash ) {
 			if (f->len == keylen) {
-				int rc =  memcmp(f->callsign, key, keylen);
+				int rc =  strncasecmp(f->callsign, key, keylen);
 				if (rc == 0) { /* Have key match, see if it is
 						  still valid entry ? */
 					if (f->expirytime < now - 60) {
@@ -820,7 +843,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			break;
 		case MatchPrefix:
 			if (len > keylen || !len) {
-				/* reference string length is longer than our key */
+			/* reference string length is longer than our key */
 				continue;
 			}
 			if (strncasecmp( r1, r2, len ) != 0) continue;
@@ -829,7 +852,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			break;
 		case MatchWild:
 			if (len > keylen || !len) {
-				/* reference string length is longer than our key */
+			/* reference string length is longer than our key */
 				continue;
 			}
 
@@ -853,7 +876,8 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
  *	filter_parse_one_callsignset()  collects multiple callsigns
  *	on filters of types:  b, d, e, o, p, u
  *
- *	If previous filter was of same type as this one, that one's refbuf is extended.
+ *	If previous filter was of same type as this one, that one's
+ *	refbuf is extended.
  */
 
 static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, struct filter_t *f0, struct filter_t *ff, struct filter_t **ffp, MatchEnum wildok)
@@ -877,7 +901,8 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	}
 	if (refmax == 0) return -1; /* No prefixes ?? */
 
-	if (ff && ff->h.type == f0->h.type) { /* SAME TYPE, extend previous record! */
+	if (ff && ff->h.type == f0->h.type) { /* SAME TYPE,
+						 extend previous record! */
 		extend = 1;
 		refcount = ff->h.numnames + refmax;
 		refbuf   = hrealloc(ff->h.refcallsigns, sizeof(*refbuf) * refcount);
@@ -912,7 +937,9 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 			++k;
 		}
 		*k = 0;
-		/* OK, we have one prefix part collected, scan source until next '/' */
+		/* OK, we have one prefix part collected,
+		   scan source until next '/' */
+
 		if (*p != 0 && *p != '/') ++p;
 		if (*p == '/') ++p;
 		/* If there is more of patterns, the loop continues.. */
@@ -950,7 +977,8 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 			ff->h.text = s;     /* store new */
 		}
 	}
-	/* If not extending existing filter item, let main parser do the finalizations */
+	/* If not extending existing filter item,
+	   let main parser do the finalizations */
 
 	return extend;
 }
@@ -1027,7 +1055,8 @@ int filter_parse_one_s(struct client_t *c, const char *filt0, struct filter_t *f
 	  const char  *s1 = filt0+len1, *s2 = filt0+len3, *s3 = filt0+len5;
 	  int l1 = len2-len1, l2 = len4-len3, l3 = len6-len5;
 
-	  hlog( LOG_DEBUG, "parse s-filter:  '%.*s'  '%.*s'  '%.*s'", l1, s1, l2, s2, l3, s3 );
+	  hlog( LOG_DEBUG, "parse s-filter:  '%.*s'  '%.*s'  '%.*s'",
+		l1, s1, l2, s2, l3, s3 );
 	}
 #endif
 	return 0;
@@ -1129,7 +1158,9 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 			return -3; /* expect: lonW <= lonE */
 		}
 
-		// hlog(LOG_DEBUG, "Filter: %s -> A %.3f %.3f %.3f %.3f", filt0, f0.h.f_latN, f0.h.f_lonW, f0.h.f_latS, f0.h.f_lonE);
+		// hlog(LOG_DEBUG, "Filter: %s -> A %.3f %.3f %.3f %.3f",
+		//      filt0, f0.h.f_latN, f0.h.f_lonW,
+		//      f0.h.f_latS, f0.h.f_lonE);
 		
 		f0.h.f_latN = filter_lat2rad(f0.h.f_latN);
 		f0.h.f_lonW = filter_lon2rad(f0.h.f_lonW);

@@ -13,7 +13,9 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <math.h>
+#ifdef HAVE_ALLOCA_H
 #include <alloca.h>
+#endif
 
 #include "hmalloc.h"
 #include "hlog.h"

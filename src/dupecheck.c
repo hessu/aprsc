@@ -508,7 +508,7 @@ static void dupecheck_thread(void)
 
 		/* put packets in the global buffer */
 		if (pb_out || pb_out_dupe) {
-			if ((e = rwl_rdlock(&pbuf_global_rwlock))) {
+			if ((e = rwl_wrlock(&pbuf_global_rwlock))) {
 				hlog(LOG_CRIT, "dupecheck: Failed to wrlock pbuf_global_rwlock!");
 				exit(1);
 			}
@@ -527,7 +527,7 @@ static void dupecheck_thread(void)
 				pbuf_global_dupe_count += pb_out_dupe_count;
 			}
 			
-			if ((e = rwl_rdunlock(&pbuf_global_rwlock))) {
+			if ((e = rwl_wrunlock(&pbuf_global_rwlock))) {
 				hlog(LOG_CRIT, "dupecheck: Failed to wrunlock pbuf_global_rwlock!");
 				exit(1);
 			}

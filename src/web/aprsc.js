@@ -171,6 +171,7 @@ var val_convert = {
 };
 
 var listener_cols = {
+	'proto': 'Proto',
 	'addr': 'Address',
 	'name': 'Name',
 	'clients': 'Clients',

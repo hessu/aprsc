@@ -85,6 +85,7 @@ struct listen_config_t {
 	int   portnum;
 	int   clients_max;
 	int   corepeer;
+	int   hidden;
 
 	struct addrinfo *ai;
 	struct acl_t *acl;

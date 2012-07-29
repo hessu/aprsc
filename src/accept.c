@@ -49,6 +49,7 @@ struct listen_t {
 	int portnum;
 	int clients_max;
 	int corepeer;
+	int hidden;
 	struct client_udp_t *udp;
 	struct portaccount_t *portaccount;
 	struct acl_t *acl;
@@ -259,6 +260,7 @@ static int open_listeners(void)
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
 		l = listener_alloc();
+		l->hidden = lc->hidden;
 		l->corepeer = lc->corepeer;
 		l->clientflags = lc->client_flags;
 		l->clients_max = lc->clients_max;
@@ -781,9 +783,12 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 	*/
 	
 	for (l = listen_list; (l); l = l->next) {
+		if (l->corepeer || l->hidden)
+			continue;
 		cJSON *jl = cJSON_CreateObject();
 		cJSON_AddNumberToObject(jl, "fd", l->fd);
 		cJSON_AddStringToObject(jl, "name", l->name);
+		cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);
 		cJSON_AddNumberToObject(jl, "clients", l->portaccount->gauge);
 		cJSON_AddNumberToObject(jl, "clients_peak", l->portaccount->gauge_max);

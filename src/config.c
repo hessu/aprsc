@@ -802,6 +802,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 				return -2;
 			}
 			
+		} else if (strcasecmp(argv[i], "hidden") == 0) {
+			/* Hide the listener from status view */
+			l->hidden = 1;
 		} else {
 			hlog(LOG_ERR, "Listen: Unknown argument '%s' for '%s'", argv[i], argv[1]);
 			free_listen_config(&l);

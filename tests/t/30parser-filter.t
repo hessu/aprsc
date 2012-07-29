@@ -29,7 +29,7 @@ ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 # third for mic-e, fourth for prefix filter test.
 # The first and last one also test upper-case letters as filter keys.
 my $i_rx = new Ham::APRS::IS("localhost:55581", "N5CAL-2",
-	'filter' => 'R/60.4752/25.0947/1 r/60.0520/24.5045/1 r/37.0887/-76.4585/100 P/OG/OF3/N');
+	'filter' => 'R/60.4752/25.0947/1 r/60.0520/24.5045/1 r/37.0887/-76.4585/100 P/OG/of3/N');
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;

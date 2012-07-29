@@ -810,7 +810,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 			if (len != keylen)
 				continue; /* no match */
 			/* length OK, compare content */
-			if (memcmp( r1, r2, len ) != 0) continue;
+			if (strncasecmp( r1, r2, len ) != 0) continue;
 			/* So it was an exact match
 			** Precisely speaking..  we should check that there is
 			** no WildCard flag, or such.  But then this match
@@ -823,7 +823,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 				/* reference string length is longer than our key */
 				continue;
 			}
-			if (memcmp( r1, r2, len ) != 0) continue;
+			if (strncasecmp( r1, r2, len ) != 0) continue;
 
 			return ( reflen & NegationFlag ? 2 : 1 );
 			break;
@@ -833,7 +833,7 @@ static int filter_match_on_callsignset(struct filter_refcallsign_t *ref, int key
 				continue;
 			}
 
-			if (memcmp( r1, r2, len ) != 0) continue;
+			if (strncasecmp( r1, r2, len ) != 0) continue;
 
 			if (reflen & WildCard)
 				return ( reflen & NegationFlag ? 2 : 1 );

@@ -47,7 +47,7 @@ struct client_udp_t *udpclients;	/* list of listening/receiving UDP client socke
 pthread_mutex_t udpclient_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int workers_running;
-int sock_write_expire  = 60;    /* 60 seconds OK ?       */
+int sock_write_expire  = 25;    /* 25 seconds, smaller than the 30-second dupe check window. */
 int keepalive_interval = 20;    /* 20 seconds for individual socket, NOT all in sync! */
 int keepalive_poll_freq = 2;	/* keepalive analysis scan interval */
 int obuf_writes_treshold = 5;	/* This many writes per keepalive scan interval switch socket
@@ -673,8 +673,17 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				return -9;
 			}
 			if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-				// FIXME: WHAT TO DO ?
-				// USE WBUF_ADJUSTER ?
+				/* Kernel's transmit buffer is full. They're pretty
+				 * big, so we'll assume the client is dead and disconnect.
+				 */
+				hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+				client_close(self, c, e);
+				return -1;
+			}
+			if (i < 0) {
+				hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+				client_close(self, c, e);
+				return -1;
 			}
 			if (i > 0) {
 				c->obuf_start += i;
@@ -683,23 +692,9 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			/* Is it still out of space ? */
 			if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 				/* Oh crap, the data will still not fit! */
-
-#if WBUF_ADJUSTER
-			  // Fails to write, consider enlarging socket buffer..  Maybe..
-
-			  // Do Socket wbuf size adjustment (double it) and try to write again
-			  // ... until some limit.
-			  int wbuf = c->wbuf_size;
-			  wbuf *= 2;
-			  if (wbuf < 300000) { // FIXME: parametrize this limit!
-			    c->wbuf_size = wbuf;
-			    i = setsockopt(c->fd, SOL_SOCKET, SO_SNDBUF, &wbuf, sizeof(wbuf));
-			    hlog(LOG_DEBUG, "Enlarging client socket wbuf, now %d", wbuf);
-			    goto write_retry;
-			  }
-#endif
-			  hlog(LOG_DEBUG, "client_write(%s) fails/1; %s", c->addr_rem, strerror(e));
-			  return -1;
+				hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
+				client_close(self, c, e);
+				return -1;
 			}
 		}
 		/* okay, move stuff to the beginning to make space in the end */
@@ -716,6 +711,9 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
+		/*if (c->obuf_end > c->obuf_flushsize)
+		 *	hlog(LOG_DEBUG, "flushing fd %d since obuf_end %d > %d", c->fd, c->obuf_end, c->obuf_flushsize);
+		 */
 	write_retry_2:;
 		i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 		e = errno;
@@ -729,15 +727,16 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			return -9;
 		}
 		if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-			// FIXME: WHAT TO DO ?
-			// USE WBUF_ADJUSTER ?
-			/* tell the poller that we have outgoing data */
-			hlog(LOG_DEBUG, "client_write(%s) blocks/2; polling for write: %s", c->addr_rem, strerror(e));
-			xpoll_outgoing(&self->xp, c->xfd, 1);
-			return 0; // but could not write it at this time..
+			/* Kernel's transmit buffer is full. They're pretty
+			 * big, so we'll assume the client is dead and disconnect.
+			 */
+			hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+			client_close(self, c, e);
+			return -1;
 		}
 		if (i < 0 && len != 0) {
-			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+			client_close(self, c, e);
 			return -1;
 		}
 		if (i > 0) {
@@ -1221,13 +1220,13 @@ void send_keepalives(struct worker_t *self)
 		if (c->obuf_writes > obuf_writes_treshold) {
 			// Lots and lots of writes, switch to buffering...
 			if (c->obuf_flushsize == 0) {
-				hlog( LOG_DEBUG,"Switch connection fd %d (%s) to buffered writes", c->fd, c->addr_rem );
 				c->obuf_flushsize = c->obuf_size / 2;
+				hlog( LOG_DEBUG,"Switch fd %d (%s) to buffered writes, flush at %d", c->fd, c->addr_rem, c->obuf_flushsize);
 			}
 		} else {
 			// Not so much writes, back to "write immediate"
 			if (c->obuf_flushsize != 0) {
-				hlog( LOG_DEBUG,"Switch connection fd %d (%s) to unbuffered writes", c->fd, c->addr_rem );
+				hlog( LOG_DEBUG,"Switch fd %d (%s) to unbuffered writes", c->fd, c->addr_rem);
 				c->obuf_flushsize = 0;
 			}
 		}

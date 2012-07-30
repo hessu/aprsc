@@ -200,7 +200,7 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai)
 static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 {
 	int arg;
-	int fd, i;
+	int fd;
 	struct client_udp_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	
@@ -236,9 +236,13 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 		int len, arg;
 		/* Set bigger SNDBUF size for the UDP port..  */
 		len = sizeof(arg);
-		arg = 128*1024;
-		/* i = setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &arg, len); */
-		i = setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, len);
+		arg = 12*1024; /* 20 Kbytes is good for about 5 seconds of APRS-IS full feed */
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &arg, len)) {
+			hlog(LOG_ERR, "UDP listener setup: setsockopt(SO_RCVBUF, %d) failed: %s", arg, strerror(errno));
+		}
+		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, len)) {
+			hlog(LOG_ERR, "UDP listener setup: setsockopt(SO_SNDBUF, %d) failed: %s", arg, strerror(errno));
+		}
 	}
 
 	/* set non-blocking mode */

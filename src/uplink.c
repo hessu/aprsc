@@ -145,7 +145,7 @@ void uplink_close(struct client_t *c, int errnum)
  *	an upstream server after our "user" command has been sent.
  */
 
-int uplink_logresp_handler(struct worker_t *self, struct client_t *c, char *s, int len)
+int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
 {
 	int argc;
 	char *argv[256];
@@ -222,7 +222,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, char *s, i
  *	an upstream server.
  */
 
-int uplink_login_handler(struct worker_t *self, struct client_t *c, char *s, int len)
+int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
 {
 	char buf[1000];
 	int passcode, rc;

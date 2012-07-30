@@ -617,7 +617,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
  *	Handler called by the socket reading function for uplink-simulator APRS-IS traffic
  */
 
-int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, char *s, int len)
+int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
 {
 	int e;
 	
@@ -674,7 +674,7 @@ int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, char *
  *	Handler called by the socket reading function for normal APRS-IS traffic
  */
 
-int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len)
+int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
 {
 	int e;
 	
@@ -693,11 +693,15 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#') {
-		/* filter adjunct commands ? */
-		if (strncasecmp(s, "#filter", 7) == 0)
-			return filter_commands(self, c, s, len);
+		if (l4proto != IPPROTO_UDP) {
+			/* filter adjunct commands ? */
+			/* TODO: check if the socket type allows filter commands! */
+			if (strncasecmp(s, "#filter", 7) == 0)	
+				return filter_commands(self, c, s, len);
 			
-		hlog(LOG_DEBUG, "#-in: '%.*s'", len, s);
+			hlog(LOG_DEBUG, "#-in: '%.*s'", len, s);
+		}
+		
 		return 0;
 	}
 
@@ -719,7 +723,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, char *s, int len
 	 * Incoming bytes were already accounted earlier.
 	 */
 	int q_drop = (e == -20 || e == -21) ? 1 : 0;
-	clientaccount_add(c, 0, 1, 0, 0, q_drop, (e >= 0 || q_drop) ? 0 : 1);
+	clientaccount_add(c, l4proto, 0, 1, 0, 0, q_drop, (e >= 0 || q_drop) ? 0 : 1);
 	
 	return 0;
 }

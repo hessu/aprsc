@@ -282,7 +282,7 @@ struct client_t {
 #endif
 	
 	/* the current handler function for incoming lines */
-	int	(*handler)	(struct worker_t *self, struct client_t *c, char *s, int len);
+	int	(*handler)	(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 
 	/* outbound filter chain head */
 	struct filter_t *posdefaultfilters;
@@ -414,8 +414,7 @@ extern void port_accounter_drop(struct portaccount_t *p);
 
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
-extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
-extern void clientaccount_add_udp(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets);
+extern void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
 
 extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory);
 

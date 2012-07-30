@@ -648,6 +648,8 @@ int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, int l4
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#') {
 		/* filter adjunct commands ? */
+		/* TODO: is some client sending "# filter" instead? Should accept maybe? */
+		/* Yes, aprssrvr accept #kjhflawhiawuhglawuhfilter too - as long as it has filter in the end. */
 		if (strncasecmp(s, "#filter", 7) == 0)
 			return filter_commands(self, c, s, len);
 		return 0;

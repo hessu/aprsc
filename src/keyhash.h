@@ -13,5 +13,6 @@
 
 extern void     keyhash_init(void);
 extern uint32_t keyhash(const void *s, int slen, uint32_t hash0);
+extern uint32_t keyhashuc(const void *s, int slen, uint32_t hash0);
 
 #endif

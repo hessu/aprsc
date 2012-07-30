@@ -415,6 +415,7 @@ extern void port_accounter_drop(struct portaccount_t *p);
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
 extern void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
+extern void clientaccount_add_udp(struct client_t *c, int rxbytes, int rxpackets, int txbytes, int txpackets);
 
 extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory);
 

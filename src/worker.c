@@ -487,7 +487,6 @@ void clientaccount_add(struct client_t *c, int rxbytes, int rxpackets, int txbyt
 	__sync_fetch_and_add(&client_connects_tcp.txbytes, txbytes);
 	__sync_fetch_and_add(&client_connects_tcp.rxpackets, rxpackets);
 	__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
-	__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
 	__sync_fetch_and_add(&client_connects_tcp.rxqdrops, rxqdrops);
 	__sync_fetch_and_add(&client_connects_tcp.rxparsefails, rxparsefails);
 #else
@@ -646,7 +645,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
 
 		if (i > 0)
-			clientaccount_add_udp( c, 0, 0, i, 1);
+			clientaccount_add_udp( c, 0, 0, i, 0);
 			
 		return i;
 	}

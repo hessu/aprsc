@@ -304,6 +304,7 @@ int main(int argc, char **argv)
 	struct rlimit rlim;
 	time_t cleanup_tick;
 	time_t stats_tick;
+	struct addrinfo *ai;
 	
 	/* close stdin */
 	close(0);
@@ -350,6 +351,15 @@ int main(int argc, char **argv)
 	/* if setuid is needed, find the user UID */
 	if (setuid_s)
 		find_uid(setuid_s);
+	
+	/* prepare for a possible chroot, force loading of
+	 * resolver libraries at this point, so that we don't
+	 * need a copy of the shared libs within the chroot dir
+	 */
+	ai = NULL;
+	getaddrinfo("startup.aprsc.he.fi", "80", NULL, &ai);
+	if (ai)
+		freeaddrinfo(ai);
 	
 	/* do a chroot if required */
 	if (chrootdir) {

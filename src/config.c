@@ -692,23 +692,19 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 
 	if (strcasecmp(argv[2], "userfilter") == 0) {
 	  clflags |= CLFLAGS_USERFILTEROK;
+	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "fullfeed") == 0) {
 	  clflags |= CLFLAGS_FULLFEED;
+	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "dupefeed") == 0) {
 	  clflags |= CLFLAGS_DUPEFEED;
-	} else if (strcasecmp(argv[2], "messageonly") == 0) {
-	  clflags |= CLFLAGS_MESSAGEONLY;
-	  clflags |= CLFLAGS_USERFILTEROK;
 	} else if (strcasecmp(argv[2], "clientonly") == 0) {
-	  clflags |= CLFLAGS_MESSAGEONLY;
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_USERFILTEROK;
-	} else if (strcasecmp(argv[2], "igate") == 0) {
-	  clflags |= CLFLAGS_MESSAGEONLY;
 	  clflags |= CLFLAGS_IGATE;
+	} else if (strcasecmp(argv[2], "igate") == 0) {
 	  clflags |= CLFLAGS_USERFILTEROK;
-	} else if (strcasecmp(argv[2], "uplinksim") == 0) {
-	  clflags = CLFLAGS_UPLINKSIM; /* _removes_ INPORT flag! */
+	  clflags |= CLFLAGS_IGATE;
 	} else {
 	  hlog(LOG_ERR, "Listen: unknown quality token: %s", argv[2]);
 	}

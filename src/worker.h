@@ -205,9 +205,15 @@ struct client_udp_t {			/* UDP services can be available at multiple
 
 #define FILTER_S_SIZE 256 /* how many bytes of filter to store for status display */
 
+/* These are the currently used buffer sizes.
+ * Do not increase them too much - we wish to disconnect stuck sockets pretty
+ * quickly, so that hanging servers will not cause data to overflow
+ * the 30-second dupe check window. The current APRS-IS rate is somewhere around
+ * 3-4 Kbytes/second, and then we have the operating system TCP socket buffers too.
+ */
 #define FIXED_IOBUFS 1
 #ifdef FIXED_IOBUFS
-#define OBUF_SIZE 32000
+#define OBUF_SIZE  8000
 #define IBUF_SIZE  8000
 #endif
 

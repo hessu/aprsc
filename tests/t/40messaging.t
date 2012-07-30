@@ -18,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 9 + 1 + 2 + 2 + 6 + 4 };
+BEGIN { plan tests => 8 + 9 + 1 + 2 + 2 + 1 + 6 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -127,6 +127,14 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 $rx = $tx = "$msg_src>APRS,TCPIP*,qAC,$msg_src:!5528.51N/00505.68E# should pass TCPIP*";
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
+
+#
+# Message to the client's callsign
+#
+
+$tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message", $login_tx, $login_rx);
+$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message", $login_tx, $login_rx);
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 #
 # Message to an OBJECT

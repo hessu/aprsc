@@ -298,6 +298,8 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 #else
 	http_pseudoclient->username = username;
 #endif	
+	http_pseudoclient->username_len = strlen(http_pseudoclient->username);
+	
 	/* ok, try to digest the packet */
 	e = incoming_parse(http_worker, http_pseudoclient, packet, end-packet);
 

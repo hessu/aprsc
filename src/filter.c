@@ -2340,11 +2340,15 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	 * recently on the port, gate the message.
 	 */
 	if (c->flags & CLFLAGS_IGATE) {
-		if ((pb->packettype & T_MESSAGE)
-			&& client_heard_check(c, pb->dstname, pb->dstname_len)) {
+		if (pb->packettype & T_MESSAGE) {
+			if (
+				(pb->dstname_len == c->username_len && memcmp(pb->dstname, c->username, c->username_len) == 0)
+				|| (client_heard_check(c, pb->dstname, pb->dstname_len))
+			) {
 				/* insert the source callsign to the courtesy position list */
 				client_courtesy_update(c, pb);
 				return 1;
+			}
 		}
 		/* Courtesy position: if a message from this source callsign has been
 		 * passed to this socket within 30 minutes, do pass on the next

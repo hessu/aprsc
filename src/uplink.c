@@ -459,7 +459,7 @@ int make_uplink(struct uplink_config_t *l)
 	strncpy(c->username, mycall, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 #endif
-
+	c->username_len = strlen(c->username);
 
 	/* These peer/sock name calls can not fail -- or the socket closed
 	   on us in which case it gets abandoned a bit further below. */

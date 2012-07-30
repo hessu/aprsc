@@ -59,6 +59,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	strncpy(c->username, username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 #endif
+	c->username_len = strlen(c->username);
+	
 	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
 	if (c->flags & CLFLAGS_UPLINKSIM)
 		c->handler = &incoming_uplinksim_handler;

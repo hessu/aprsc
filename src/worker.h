@@ -275,12 +275,14 @@ struct client_t {
 	CStateEnum state;   /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */
 	char  validated;    /* did the client provide a valid passcode */
+	char  username_len; /* length of user name */
+	
 #ifndef FIXED_IOBUFS
 	char *username;     /* The callsign */
 	char *app_name;     /* application name, from 'user' command */
 	char *app_version;  /* application version, from 'user' command */
 #endif
-	
+
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 

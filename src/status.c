@@ -44,7 +44,7 @@ void status_uname(cJSON *root)
 		return;
 	}
 	
-	snprintf(s, UNAME_LEN, "%s %s %s", ut.sysname, ut.release, ut.machine);
+	snprintf(s, UNAME_LEN, "%s %s", ut.sysname, ut.machine);
 	
 	cJSON_AddStringToObject(root, "os", s);
 }

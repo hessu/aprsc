@@ -326,6 +326,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	evbuffer_add(bufout, "ok\n", 3);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
 	evhttp_add_header(headers, "Content-Type", "text/plain; charset=UTF-8");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", bufout);
@@ -346,6 +347,7 @@ void http_status(struct evhttp_request *r)
 	free(json);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
@@ -401,6 +403,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	//hlog(LOG_DEBUG, "found content-type %s", contenttype);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
 	evhttp_add_header(headers, "Content-Type", contenttype);
 	evhttp_add_header(headers, "Last-Modified", last_modified);
 	

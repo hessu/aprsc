@@ -282,6 +282,7 @@ struct client_t {
 	char  warned;       /* the client has been warned that it has bad filter definition */
 	char  validated;    /* did the client provide a valid passcode */
 	char  username_len; /* length of user name */
+	char  hidden;       /* is the user on a hidden listener socket, not shown on status */
 	
 #ifndef FIXED_IOBUFS
 	char *username;     /* The callsign */

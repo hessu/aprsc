@@ -455,6 +455,8 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 
 void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails)
 {
+	struct portaccount_t *pa = NULL;
+	
 	/* worker local accounters do not need locks */
 	c->localaccount.rxbytes   += rxbytes;
 	c->localaccount.txbytes   += txbytes;
@@ -462,23 +464,29 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 	c->localaccount.txpackets += txpackets;
 	c->localaccount.rxqdrops += rxqdrops;
 	c->localaccount.rxparsefails += rxparsefails;
-
-	if (c->portaccount) {
+	
+	if (l4proto == IPPROTO_UDP && c->udpclient && c->udpclient->portaccount) {
+		pa = c->udpclient->portaccount;
+	} else if (c->portaccount) {
+		pa = c->portaccount;
+	}
+	
+	if (pa) {
 #ifdef HAVE_SYNC_FETCH_AND_ADD
-		__sync_fetch_and_add(&c->portaccount->rxbytes, rxbytes);
-		__sync_fetch_and_add(&c->portaccount->txbytes, txbytes);
-		__sync_fetch_and_add(&c->portaccount->rxpackets, rxpackets);
-		__sync_fetch_and_add(&c->portaccount->txpackets, txpackets);
-		__sync_fetch_and_add(&c->portaccount->rxqdrops, rxqdrops);
-		__sync_fetch_and_add(&c->portaccount->rxparsefails, rxparsefails);
+		__sync_fetch_and_add(&pa->rxbytes, rxbytes);
+		__sync_fetch_and_add(&pa->txbytes, txbytes);
+		__sync_fetch_and_add(&pa->rxpackets, rxpackets);
+		__sync_fetch_and_add(&pa->txpackets, txpackets);
+		__sync_fetch_and_add(&pa->rxqdrops, rxqdrops);
+		__sync_fetch_and_add(&pa->rxparsefails, rxparsefails);
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
-		c->portaccount->rxbytes   += rxbytes;
-		c->portaccount->txbytes   += txbytes;
-		c->portaccount->rxpackets += rxpackets;
-		c->portaccount->txpackets += txpackets;
-		c->portaccount->rxqdrops += rxqdrops;
-		c->portaccount->rxparsefails += rxparsefails;
+		pa->rxbytes   += rxbytes;
+		pa->txbytes   += txbytes;
+		pa->rxpackets += rxpackets;
+		pa->txpackets += txpackets;
+		pa->rxqdrops += rxqdrops;
+		pa->rxparsefails += rxparsefails;
 #endif
 	}
 
@@ -1520,11 +1528,17 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 		cJSON_AddNumberToObject(jw, "pbuf_incoming_local_count", w->pbuf_incoming_local_count);
 		
 		for (c = w->clients; (c); c = c->next) {
+			/* clients on hidden listener sockets are not shown */
+			if (c->hidden)
+				continue;
+				
 			cJSON *jc = cJSON_CreateObject();
 			cJSON_AddNumberToObject(jc, "fd", c->fd);
 			cJSON_AddStringToObject(jc, "addr_rem", c->addr_rem);
 			cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
 			cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
+			if (c->udp_port && c->udpclient)
+				cJSON_AddNumberToObject(jc, "udp_downstream", 1);
 			cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
 			cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);
 			cJSON_AddNumberToObject(jc, "since_last_read", tick - c->last_read);

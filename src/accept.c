@@ -519,8 +519,9 @@ static struct client_t *do_accept(struct listen_t *l)
 	c->fd    = fd;
 	c->addr  = sa;
 	c->portnum = l->portnum;
-	c->state = CSTATE_LOGIN;
-	c->flags     = l->clientflags;
+	c->hidden  = l->hidden;
+	c->state   = CSTATE_LOGIN;
+	c->flags   = l->clientflags;
 	/* use the default login handler */
 	c->handler = &login_handler;
 	c->udpclient = client_udp_find(udpclients, sa.sa.sa_family, l->portnum);

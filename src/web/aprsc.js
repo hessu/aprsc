@@ -141,7 +141,7 @@ var key_translate = {
 	
 	// totals block
 	'clients': 'Clients',
-	'connects': 'Connections',
+	'connects': 'Connects',
 	'tcp_pkts_tx': 'Packets Tx TCP',
 	'tcp_pkts_rx': 'Packets Rx TCP',
 	'tcp_bytes_tx': 'Bytes Tx TCP',
@@ -158,7 +158,7 @@ var key_tooltips = {
 	'uniques_out': 'Unique packets passed by the dupecheck thread',
 	
 	// totals block
-	'clients': 'Number of clients allocated currently (including some pseudoclients for UDP sockets and such)',
+	'clients': 'Number of clients allocated currently (including Uplinks, Peers and pseudoclients for UDP listener sockets)',
 	'connects': 'Number of accepted TCP connections since startup',
 	'tcp_pkts_tx': 'APRS-IS packets transmitted over a TCP connection',
 	'tcp_pkts_rx': 'APRS-IS packets received over a TCP connection',
@@ -258,6 +258,9 @@ function render_clients(element, d, cols)
 	for (var ci in d) {
 		s = '<tr>';
 		var c = d[ci];
+		
+		if (c['udp_downstream'])
+			c['addr_rem'] += ' +UDP';
 		
 		if (linkable[c['app_name']])
 			c['addr_rem'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem']) + '</a>';

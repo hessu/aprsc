@@ -32,7 +32,7 @@ function conv_verified(i)
 
 function port_conn_rates(c, k)
 {
-	var ckey = 'l_' + c['addr'] + ':' + k;
+	var ckey = 'l_' + c['proto'] + c['addr'] + ':' + k;
 	var c = calc_rate(ckey + ':c', c['connects'], 1);
 	if (!isUndefined(c[1]) && c[1] !== '')
 		return c[1];
@@ -43,7 +43,7 @@ function client_bytes_rates(c, k)
 {
 	var ckey;
 	if (isUndefined(c['addr_rem']))
-		ckey = 'l_' + c['addr'] + ':' + k;
+		ckey = 'l_' + c['proto'] + c['addr'] + ':' + k;
 	else
 		ckey = c['addr_rem'] + ':' + k;
 	var tx = calc_rate(ckey + ':tx', c['bytes_tx'], 1);

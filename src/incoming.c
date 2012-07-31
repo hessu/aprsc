@@ -525,6 +525,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* classify the packet as coming from an uplink or client */
 	if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
 		pb->flags |= F_FROM_UPSTR;
+	} else if (c->flags & CLFLAGS_DUPEFEED) {
+		/* we ignore packets from duplicate feeds */
+		return 0;
 	} else if (c->flags & CLFLAGS_INPORT) {
 		pb->flags |= F_FROM_DOWNSTR;
 	} else {

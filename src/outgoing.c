@@ -71,7 +71,12 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			continue;
 		}
 		
-		if (c->flags & CLFLAGS_INPORT) {
+		if (c->flags & CLFLAGS_DUPEFEED) {
+			/* Duplicate packets feed? Don't send unless the packet is a duplicate. */
+			if (!(pb->flags & F_DUPE)) {
+				continue;
+			}
+		} else if (c->flags & CLFLAGS_INPORT) {
 			/* Downstream client? If not full feed, process filters
 			 * to see if the packet should be sent.
 			 */

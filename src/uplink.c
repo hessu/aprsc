@@ -263,8 +263,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 #endif
 	}
 
-	// FIXME: Send the login string... (filters missing ???)
-
+	// TODO: The uplink login command here could maybe be improved to send a filter command.
 	len = sprintf(buf, "user %s pass %d vers %s\r\n", c->username, passcode, VERSTR);
 
 	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_rem, len-2, buf, len);
@@ -365,7 +364,7 @@ int make_uplink(struct uplink_config_t *l)
 	fd = -1;
 	while (( a = ap[i++] )) {
 
-		// FIXME: format socket IP address to text
+		// FIXME: format actual socket IP address to text
 		sprintf(addr_s, "%s:%s", l->host, l->port);
 
 		hlog(LOG_INFO, "Uplink: Connecting to %s:%s", l->host, l->port);
@@ -502,11 +501,6 @@ int make_uplink(struct uplink_config_t *l)
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;
 	
-	// for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-	// 	if (l->filters[i])
-	// 		filter_parse(c, l->filters[i], 0); /* system filters */
-	// }
-
 	/* Push it on the first worker, which ever it is..
 	 */
 

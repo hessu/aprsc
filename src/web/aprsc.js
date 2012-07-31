@@ -142,14 +142,32 @@ var key_translate = {
 	// totals block
 	'clients': 'Clients',
 	'connects': 'Connections',
-	'tcp_pkts_tx': 'TCP Packets Tx',
-	'tcp_pkts_rx': 'TCP Packets Rx',
-	'tcp_bytes_tx': 'TCP Bytes Tx',
-	'tcp_bytes_rx': 'TCP Bytes Rx',
-	'udp_pkts_tx': 'UDP Packets Tx',
-	'udp_pkts_rx': 'UDP Packets Rx',
-	'udp_bytes_tx': 'UDP Bytes Tx',
-	'udp_bytes_rx': 'UDP Bytes Rx'
+	'tcp_pkts_tx': 'Packets Tx TCP',
+	'tcp_pkts_rx': 'Packets Rx TCP',
+	'tcp_bytes_tx': 'Bytes Tx TCP',
+	'tcp_bytes_rx': 'Bytes Rx TCP',
+	'udp_pkts_tx': 'Packets Tx UDP',
+	'udp_pkts_rx': 'Packets Rx UDP',
+	'udp_bytes_tx': 'Bytes Tx UDP',
+	'udp_bytes_rx': 'Bytes Rx UDP'
+};
+
+var key_tooltips = {
+	// dupecheck block
+	'dupes_dropped': 'Duplicate APRS-IS packets dropped in the dupecheck thread (per-client counts not available for performance reasons)',
+	'uniques_out': 'Unique packets passed by the dupecheck thread',
+	
+	// totals block
+	'clients': 'Number of clients allocated currently (including some pseudoclients for UDP sockets and such)',
+	'connects': 'Number of accepted TCP connections since startup',
+	'tcp_pkts_tx': 'APRS-IS packets transmitted over a TCP connection',
+	'tcp_pkts_rx': 'APRS-IS packets received over a TCP connection',
+	'tcp_bytes_tx': 'APRS-IS data transmitted over a TCP connection',
+	'tcp_bytes_rx': 'APRS-IS data received over a TCP connection',
+	'udp_pkts_tx': 'APRS-IS packets transmitted over UDP',
+	'udp_pkts_rx': 'APRS-IS packets received over UDP',
+	'udp_bytes_tx': 'APRS-IS data transmitted over UDP',
+	'udp_bytes_rx': 'APRS-IS data received over UDP'
 };
 
 var val_convert_c = {

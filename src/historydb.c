@@ -26,7 +26,7 @@ cellarena_t *historydb_cells;
 #endif
 
 
-/* FIXME: Possibly multiple parallel locks (like 1000 ?) that keep
+/* OPTIMIZE: Possibly multiple parallel locks (like 1000 ?) that keep
 //control on a subset of historydb hash bucket chains ???
 // Note: mutex lock size is about 1/4 of rwlock size...
 */

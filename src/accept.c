@@ -23,6 +23,7 @@
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 
@@ -597,13 +598,13 @@ static struct client_t *do_accept(struct listen_t *l)
 		goto err;
 	}
 	
-	/* Use SO_NODELAY for APRS-IS sockets. High delays can cause packets getting past
+	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
 	 * the dupe filters.
 	 */
-#ifdef SO_NODELAY
+#ifdef TCP_NODELAY
 	int arg = 1;
-	if (setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(SO_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
 #endif
 
 #if 1

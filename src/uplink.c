@@ -22,6 +22,9 @@
 #include <time.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
 #include "config.h"
 #include "uplink.h"
@@ -287,7 +290,6 @@ int make_uplink(struct uplink_config_t *l)
 {
 	int fd, i, arg;
 	int uplink_index;
-	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len;
 	struct addrinfo *ai, *a, *ap[21];
@@ -387,13 +389,13 @@ int make_uplink(struct uplink_config_t *l)
 			continue;
 		}
 		
-		/* Use SO_NODELAY for APRS-IS sockets. High delays can cause packets getting past
+		/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
 		 * the dupe filters.
 		 */
-#ifdef SO_NODELAY
+#ifdef TCP_NODELAY
 		int arg = 1;
-		if (setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg)))
-			hlog(LOG_ERR, "%s - Accept: setsockopt(SO_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
+		if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
+			hlog(LOG_ERR, "Uplink: %s: setsockopt(TCP_NODELAY, %d) failed: %s", addr_s, arg, strerror(errno));
 #endif
 
 		if (connect(fd, a->ai_addr, a->ai_addrlen) && errno != EINPROGRESS) {
@@ -449,7 +451,7 @@ int make_uplink(struct uplink_config_t *l)
 		return -3; /* No successfull connection at any address.. */
 	}
 
-	c = client_alloc();
+	struct client_t *c = client_alloc();
 	l->client_ptr = (void *)c;
 	c->uplink_index = uplink_index;
 	c->fd    = fd;

@@ -53,6 +53,11 @@ char *new_serverid;
 char *new_myemail;
 char *new_myadmin;
 
+struct sockaddr_in uplink_bind_v4;
+socklen_t uplink_bind_v4_len = 0;
+struct sockaddr_in6 uplink_bind_v6;
+socklen_t uplink_bind_v6_len = 0;
+
 struct uplink_config_t *uplink_config;
 struct uplink_config_t *new_uplink_config;
 struct peerip_config_t *peerip_config;
@@ -113,6 +118,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv);
 int do_interval(int *dest, int argc, char **argv);
 int do_peergroup(struct peerip_config_t **lq, int argc, char **argv);
 int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
+int do_uplinkbind(void *new, int argc, char **argv);
 
 /*
  *	Configuration file commands
@@ -137,6 +143,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
+	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
 	{ "disallow_unverified",	_CFUNC_ do_boolean,	&disallow_unverified	},
@@ -635,6 +642,62 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	
 	return 0;
 }
+
+/*
+ *	Uplink source address binding configuration
+ */
+
+int do_uplinkbind(void *new, int argc, char **argv)
+{
+	struct addrinfo req, *ai, *a;
+	int i, d;
+
+	if (argc < 2)
+		return -1;
+	
+	memset(&req, 0, sizeof(req));
+	req.ai_family   = 0;
+	req.ai_socktype = SOCK_STREAM;
+	req.ai_protocol = IPPROTO_TCP;
+	req.ai_flags    = 0;
+	
+	for (i = 1; i < argc; i++) {
+		hlog(LOG_DEBUG, "UplinkBind: looking up %s", argv[i]);
+		
+		ai = NULL;
+		d = getaddrinfo(argv[i], "0", &req, &ai);
+		if (d != 0) {
+			hlog(LOG_ERR, "UplinkBind: address parsing or hostname lookup failure for %s: %s", argv[i], gai_strerror(d));
+			return -2;
+		}
+		
+		/* we can only take one address per peer at this point, SCTP multihoming ignored */
+		d = 0;
+		for (a = ai; (a); a = a->ai_next, ++d);
+		if (d != 1) {
+			hlog(LOG_ERR, "UplinkBind: address parsing for %s returned %d addresses - can only have one", argv[i], d);
+			freeaddrinfo(ai);
+			return -2;
+		}
+		
+		if (ai->ai_family == AF_INET) {
+			memcpy(&uplink_bind_v4, ai->ai_addr, ai->ai_addrlen);
+			uplink_bind_v4_len = ai->ai_addrlen;
+		} else if (ai->ai_family == AF_INET6) {
+			memcpy(&uplink_bind_v6, ai->ai_addr, ai->ai_addrlen);
+			uplink_bind_v6_len = ai->ai_addrlen;
+		} else {
+			hlog(LOG_ERR, "UplinkBind: address %s has unknown address family %d", argv[i], ai->ai_family);
+			freeaddrinfo(ai);
+			return -2;
+		}
+		
+		freeaddrinfo(ai);
+	}
+	
+	return 0;
+}
+
 
 /*
  *	Parse a Listen directive

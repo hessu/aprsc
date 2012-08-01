@@ -300,6 +300,8 @@ int make_uplink(struct uplink_config_t *l)
 	int port;
 	int pe;
 	struct worker_t *wc;
+	struct sockaddr *srcaddr;
+	socklen_t srcaddr_len;
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -376,9 +378,31 @@ int make_uplink(struct uplink_config_t *l)
 			hlog(LOG_CRIT, "Uplink: socket(): %s\n", strerror(errno));
 			continue;
 		}
-
+		
 		arg = 1;
-		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg));
+		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)))
+			hlog(LOG_ERR, "Uplink: Failed to set SO_REUSEADDR on new socket: %s", strerror(errno));
+		
+		/* bind source address */
+		srcaddr_len = 0;
+		if (a->ai_family == AF_INET && uplink_bind_v4_len != 0) {
+			srcaddr = (struct sockaddr *)&uplink_bind_v4;
+			srcaddr_len = uplink_bind_v4_len;
+		} else if (a->ai_family == AF_INET6 && uplink_bind_v6_len != 0) {
+			srcaddr = (struct sockaddr *)&uplink_bind_v6;
+			srcaddr_len = uplink_bind_v6_len;
+		}
+		
+		if (srcaddr_len) {
+			if (bind(fd, srcaddr, srcaddr_len)) {
+				char *s = strsockaddr(srcaddr, srcaddr_len);
+				hlog(LOG_ERR, "Uplink: Failed to bind source address '%s': %s", s, strerror(errno));
+				hfree(s);
+				close(fd);
+				fd = -1;
+				continue;
+			}
+		}
 		
 		/* set non-blocking mode at this point, so that we can make a
 		 * non-blocking connect() with a short timeout

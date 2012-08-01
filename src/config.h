@@ -12,7 +12,7 @@
 #define CONFIG_H
 
 #define PROGNAME "aprsc"
-#define VERSION "0.2.8"
+#define VERSION "0.2.9"
 #define VERSTR  PROGNAME " v" VERSION
 #define SERVERID PROGNAME " " VERSION
 #define CRLF "\r\n"
@@ -137,6 +137,11 @@ struct uplink_config_t {
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
 extern struct uplink_config_t *uplink_config;
+
+extern struct sockaddr_in uplink_bind_v4;		/* address to bind when connecting out */
+extern socklen_t uplink_bind_v4_len;
+extern struct sockaddr_in6 uplink_bind_v6;		/* and the same for IPv6 */
+extern socklen_t uplink_bind_v6_len;
 
 #define MAX_COREPEERS		16
 

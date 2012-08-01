@@ -686,12 +686,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				 */
 				hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
 				client_close(self, c, e);
-				return -1;
+				return -10;
 			}
 			if (i < 0) {
 				hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
 				client_close(self, c, e);
-				return -1;
+				return -11;
 			}
 			if (i > 0) {
 				c->obuf_start += i;
@@ -702,7 +702,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				/* Oh crap, the data will still not fit! */
 				hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
 				client_close(self, c, e);
-				return -1;
+				return -12;
 			}
 		}
 		/* okay, move stuff to the beginning to make space in the end */
@@ -740,12 +740,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			 */
 			hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
 			client_close(self, c, e);
-			return -1;
+			return -10;
 		}
 		if (i < 0 && len != 0) {
 			hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
 			client_close(self, c, e);
-			return -1;
+			return -11;
 		}
 		if (i > 0) {
 			//hlog(LOG_DEBUG, "client_write(%s) wrote %d", c->addr_rem, i);

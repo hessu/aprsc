@@ -12,6 +12,8 @@
  *	incoming.c: processes incoming data within the worker thread
  */
 
+#include "ac-hdrs.h"
+
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>

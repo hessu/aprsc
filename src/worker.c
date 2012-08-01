@@ -411,7 +411,7 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 	char eb[200];
 	union sockaddr_u su, *sup;
 	struct sockaddr_in *sa_in;
-	u_int8_t *in6;
+	uint8_t *in6;
 
 	sup = (union sockaddr_u *)sa;
 #ifdef IN6_IS_ADDR_V4MAPPED
@@ -442,7 +442,7 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 			);
 	} else {
 		/* presumption: IPv6 */
-		in6 = (u_int8_t *)&sup->si6.sin6_addr.s6_addr;
+		in6 = (uint8_t *)&sup->si6.sin6_addr.s6_addr;
 		sprintf(eb, "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
 			in6[0], in6[1], in6[2], in6[3], in6[4], in6[5], in6[6], in6[7],
 			in6[8], in6[9], in6[10], in6[11], in6[12], in6[13], in6[14], in6[15]);

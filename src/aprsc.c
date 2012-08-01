@@ -243,7 +243,6 @@ void find_uid(char *uid_s)
 {
 	struct passwd *pwbufp;
 	int buflen;
-	int e;
 	
 	buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
 	if (buflen < 10)
@@ -251,12 +250,16 @@ void find_uid(char *uid_s)
 	
 	pw_buf_s = hmalloc(buflen);
 	
-	e = getpwnam_r(uid_s, &pwbuf, pw_buf_s, buflen, &pwbufp);
+#ifdef sun
+	pwbufp = getpwnam_r(uid_s, &pwbuf, pw_buf_s, buflen);
+#else
+	int e = getpwnam_r(uid_s, &pwbuf, pw_buf_s, buflen, &pwbufp);
 	
 	if (e) {
 		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: %s\n", uid_s, strerror(e));
 		exit(1);
 	}
+#endif
 	
 	if (pwbufp == NULL) {
 		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: user not found\n", uid_s);

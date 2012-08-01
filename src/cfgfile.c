@@ -240,7 +240,7 @@ int cmdparse(struct cfgcmd *cmds, char *cmdline)
 		return 0;
 	strlwr(argv[0]);
 	for (cmdp = cmds; cmdp->function != NULL; cmdp++)
-		if (strncasecmp(cmdp->name, argv[0], strlen(argv[0])) == 0)
+		if (strncasecmp(cmdp->name, argv[0], strlen(argv[0])) == 0 && strlen(argv[0]) == strlen(cmdp->name))
 			break;
 	if (cmdp->function == NULL) {
 		fprintf(stderr, "No such configuration file directive: %s\n", argv[0]);

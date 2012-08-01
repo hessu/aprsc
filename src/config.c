@@ -94,7 +94,7 @@ int pbuf_global_expiration       = 10;//35*60; /* 35 minutes */
 int pbuf_global_dupe_expiration  = 10;//10*60; /* 10 minutes */
 
 int upstream_timeout      = 60;		/* after N seconds of no input from an upstream, disconnect */
-int client_timeout        = 30*60;	/* after N seconds of no input from a client, disconnect */
+int client_timeout        = 24*60*60;	/* after N seconds of no input from a client, disconnect */
 int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
 /* These two are not currently used. The fixed defines are in worker.h,

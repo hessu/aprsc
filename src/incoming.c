@@ -30,6 +30,7 @@
 #include "parse_aprs.h"
 #include "parse_qc.h"
 #include "filter.h"
+#include "clientlist.h"
 #include "client_heard.h"
 
 #include "cellmalloc.h"
@@ -493,6 +494,15 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))
 		return -8;
 	
+	/* if the packet is sourced by a local login, but the packet is not
+	 * originated by that station, drop it.
+	 */
+	if (!originated_by_client && clientlist_check_if_validated_client(s, src_end - s) != -1) {
+		// TODO: should dump to a loop log
+		//hlog(LOG_DEBUG, "dropping due to source call '%.*s' being logged in on another socket", src_end - s, s);
+		return -9;
+	}
+	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
 	 */
@@ -516,7 +526,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (!pb) {
 		// This should never happen...
 		hlog(LOG_INFO, "pbuf_get failed to get a block");
-		return -9; // No room :-(
+		return -10; // No room :-(
 	}
 	pb->next = NULL; // pbuf arrives pre-zeroed
 	pb->flags = 0;
@@ -534,7 +544,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->flags |= F_FROM_DOWNSTR;
 	} else {
 		hlog(LOG_ERR, "fd %d: incoming_parse failed to classify packet", c->fd);
-		return -10;
+		return -11;
 	}
 	
 	/* when it was received ? */

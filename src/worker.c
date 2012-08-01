@@ -807,7 +807,7 @@ int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const ch
 
 int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 {
-	struct client_t *rc; // real client
+	struct client_t *rc = NULL; // real client
 	union sockaddr_u addr;
 	socklen_t addrlen;
 	int i;
@@ -860,7 +860,7 @@ int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		}
 	}
 	
-	if (i == worker_corepeer_client_count) {
+	if (i == worker_corepeer_client_count || !rc) {
 		addrs = strsockaddr(&addr.sa, addrlen);
 		hlog(LOG_INFO, "recv: Received UDP peergroup packet from unknown peer address %s: %*s", addrs, r, c->ibuf);
 		hfree(addrs);

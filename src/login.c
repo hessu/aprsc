@@ -181,7 +181,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			    (c->validated) ? "verified" : "unverified",
 			    serverid );
 	if (rc < -2)
-		return i; // The client probably got destroyed!
+		return rc; // The client probably got destroyed!
 
 	c->keepalive = now + keepalive_interval;
 	c->state = CSTATE_CONNECTED;

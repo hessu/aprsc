@@ -169,9 +169,12 @@ int http_upload_login(char *addr_rem, char *s, char **username)
 					validated = 1;
 		} else if (strcasecmp(argv[i], "vers") == 0) {
 			if (i+2 >= argc) {
-				hlog(LOG_WARNING, "%s (%s): No application name and version after vers command", addr_rem, username);
+				hlog(LOG_DEBUG, "%s (%s): HTTP POST: No application name and version after vers command", addr_rem, username);
 				break;
 			}
+			
+			// skip app name and version
+			i += 2;
 		}
 	}
 	

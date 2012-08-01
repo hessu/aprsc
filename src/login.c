@@ -79,20 +79,37 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				if (given_passcode == aprs_passcode(c->username))
 					c->validated = 1;
 		} else if (strcasecmp(argv[i], "vers") == 0) {
-			if (i+2 >= argc) {
-				hlog(LOG_WARNING, "%s (%s): No application name and version after vers command", c->addr_rem, username);
+			/* Collect application name and version separately.
+			 * Some clients only give out application name but
+			 * no version. If those same applications do try to
+			 * use filter or udp, the filter/udp keyword will end
+			 * up as the version number. So good luck with that.
+			 */
+			 
+			if (i+1 >= argc) {
+				hlog(LOG_INFO, "%s (%s): No application name after 'vers' in login", c->addr_rem, username);
 				break;
 			}
 			
 #ifndef FIXED_IOBUFS
-			c->app_name = hstrdup(argv[++i]);
 			c->app_version = hstrdup(argv[++i]);
 #else
 			strncpy(c->app_name,    argv[++i], sizeof(c->app_name));
 			c->app_name[sizeof(c->app_name)-1] = 0;
+#endif
+
+			if (i+1 >= argc) {
+				hlog(LOG_DEBUG, "%s (%s): No application version after 'vers' in login", c->addr_rem, username);
+				break;
+			}
+			
+#ifndef FIXED_IOBUFS
+			c->app_version = hstrdup(argv[++i]);
+#else
 			strncpy(c->app_version, argv[++i], sizeof(c->app_version));
 			c->app_version[sizeof(c->app_version)-1] = 0;
 #endif
+
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {
 				hlog(LOG_WARNING, "%s (%s): Missing UDP port number after UDP command", c->addr_rem, username);
@@ -159,7 +176,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
 			    username,
 			    (c->validated) ? "verified" : "unverified",
-			    mycall );
+			    serverid );
 	if (rc < -2) {
 		return i; // The client probably got destroyed!
 	}

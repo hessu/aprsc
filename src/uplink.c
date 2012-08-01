@@ -174,8 +174,8 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 		return 0;
 	}
 	
-	if (strcmp(argv[2], mycall) != 0) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it", c->addr_rem, mycall);
+	if (strcmp(argv[2], serverid) != 0) {
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it", c->addr_rem, serverid);
 		client_close(self, c, -3);
 		return 0;
 	}
@@ -453,9 +453,9 @@ int make_uplink(struct uplink_config_t *l)
 	c->connect_time = tick;
 	c->last_read = tick; /* not simulated time */
 #ifndef FIXED_IOBUFS
-	c->username = hstrdup(mycall);
+	c->username = hstrdup(serverid);
 #else
-	strncpy(c->username, mycall, sizeof(c->username));
+	strncpy(c->username, serverid, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 #endif
 	c->username_len = strlen(c->username);

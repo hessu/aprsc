@@ -53,7 +53,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	char *qcallv[MAX_Q_CALLS+1];
 	int qcallc;
 	char *p;
-	int mycall_len, username_len;
+	int serverid_len, username_len;
 	int login_in_path = 0;
 	int i, j, l;
 	
@@ -102,9 +102,9 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 */
 	
 	if (q_start) {
-		mycall_len = strlen(mycall);
-		p = memstr(mycall, q_start+4, path_end);
-		if (p && *(p-1) == ',' && ( *(p+mycall_len) == ',' || p+mycall_len == path_end || *(p+mycall_len) == ':' )) {
+		serverid_len = strlen(serverid);
+		p = memstr(serverid, q_start+4, path_end);
+		if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "dropping due to my callsign appearing in path");
 			return -21; /* drop the packet */
@@ -216,7 +216,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 			//hlog(LOG_DEBUG, "qAI appending hex address, starting at %d, got %d left in buffer", new_q_len, new_q_size - new_q_len);
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
 		}
-		//hlog(LOG_DEBUG, "qAI append done, new_q_len %d, new_q_size %d, q_replace %d, going to append %d more", new_q_len, new_q_size, *q_replace, strlen(mycall)+1);
+		//hlog(LOG_DEBUG, "qAI append done, new_q_len %d, new_q_size %d, q_replace %d, going to append %d more", new_q_len, new_q_size, *q_replace, strlen(serverid)+1);
 		
 		if (new_q_size - new_q_len < 20) {
 			hlog(LOG_DEBUG, "dropping due to buffer being too tight when appending my login for qAI");
@@ -224,7 +224,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		}
 		
 		/* Append ,SERVERLOGIN */
-		new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", mycall);
+		new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", serverid);
 	}
 	
 	return new_q_len;
@@ -308,7 +308,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			// where to replace from
 			*q_replace = via_start;
 			//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
-			return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", mycall);
+			return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
 		}
 	}
 	
@@ -341,10 +341,10 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				 * Replace the q construct with ,qAU,SERVERLOGIN
 				 */
 				*path_end = q_start;
-				return snprintf(new_q, new_q_size, ",qAU,%s", mycall);
+				return snprintf(new_q, new_q_size, ",qAU,%s", serverid);
 			} else {
 				/* Append ,qAU,SERVERLOGIN */
-				return snprintf(new_q, new_q_size, ",qAU,%s", mycall);
+				return snprintf(new_q, new_q_size, ",qAU,%s", serverid);
 			}
 		}
 		
@@ -371,7 +371,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				 * Replace the q construct with ,qAX,SERVERLOGIN
 				 */
 				*path_end = via_start;
-				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", mycall);
+				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", serverid);
 			} else if (q_proto && q_nextcall_end < *path_end) {
 				/* more than a single call exists after the q construct,
 				 * invalid header, drop the packet as error
@@ -380,7 +380,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			} else {
 				/* Append ,qAX,SERVERLOGIN (well, javaprssrvr replaces the via path too) */
 				*path_end = via_start;
-				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", mycall);
+				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", serverid);
 			}
 		}
 		
@@ -542,9 +542,9 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			/* FROMCALL matches the login */
 			/* Add TCPIP* in the end of the path only if it's not there already */
 			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
-				return snprintf(new_q, new_q_size, ",qAC,%s", mycall);
+				return snprintf(new_q, new_q_size, ",qAC,%s", serverid);
 			else
-				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", mycall);
+				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
 		} else {
 			/* Append ,qAS,login */
 			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->username);

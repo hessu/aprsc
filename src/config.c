@@ -46,10 +46,10 @@ char *setuid_s = NULL;
 char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */
 
-char *mycall;
+char *serverid;
 char *myemail;
 char *myadmin;
-char *new_mycall;
+char *new_serverid;
 char *new_myemail;
 char *new_myadmin;
 
@@ -123,7 +123,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 static struct cfgcmd cfg_cmds[] = {
 	{ "rundir",		_CFUNC_ do_string,	&new_rundir		},
 	{ "logdir",		_CFUNC_ do_string,	&new_logdir		},
-	{ "mycall",		_CFUNC_ do_string,	&new_mycall		},
+	{ "serverid",		_CFUNC_ do_string,	&new_serverid		},
 	{ "myemail",		_CFUNC_ do_string,	&new_myemail		},
 	{ "myadmin",		_CFUNC_ do_string,	&new_myadmin		},
 	{ "workerthreads",	_CFUNC_ do_int,		&workers_configured	},
@@ -908,23 +908,23 @@ int read_config(void)
 		}
 	}
 	
-	/* mycall is only applied when running for the first time. */
-	if (mycall) {
-		if (new_mycall && strcasecmp(new_mycall, mycall) != 0)
-			hlog(LOG_WARNING, "Config: Not changing mycall while running.");
-		hfree(new_mycall);
-		new_mycall = NULL;
+	/* serverid is only applied when running for the first time. */
+	if (serverid) {
+		if (new_serverid && strcasecmp(new_serverid, serverid) != 0)
+			hlog(LOG_WARNING, "Config: Not changing serverid while running.");
+		hfree(new_serverid);
+		new_serverid = NULL;
 	} else {
-		if (!new_mycall) {
-			hlog(LOG_CRIT, "Config: mycall is not defined.");
+		if (!new_serverid) {
+			hlog(LOG_CRIT, "Config: serverid is not defined.");
 			failed = 1;
-		} else if (!valid_aprsis_call(new_mycall)) {
-			hlog(LOG_CRIT, "Config: mycall '%s' is not valid.", new_mycall);
+		} else if (!valid_aprsis_call(new_serverid)) {
+			hlog(LOG_CRIT, "Config: serverid '%s' is not valid.", new_serverid);
 			failed = 1;
 		} else {
-			strupr(new_mycall);
-			mycall = new_mycall;
-			new_mycall = NULL;
+			strupr(new_serverid);
+			serverid = new_serverid;
+			new_serverid = NULL;
 		}
 	}
 	
@@ -1068,10 +1068,10 @@ void free_config(void)
 		hfree(logname);
 	if (webdir != def_webdir)
 		hfree(webdir);
-	hfree(mycall);
+	hfree(serverid);
 	hfree(myemail);
 	hfree(myadmin);
-	mycall = myemail = myadmin = NULL;
+	serverid = myemail = myadmin = NULL;
 	logname = NULL;
 	free_listen_config(&listen_config);
 	free_uplink_config(&uplink_config);

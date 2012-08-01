@@ -12,7 +12,7 @@
 #define CONFIG_H
 
 #define PROGNAME "aprsc"
-#define VERSION "0.2.4"
+#define VERSION "0.2.5"
 #define VERSTR  PROGNAME " v" VERSION
 #define SERVERID PROGNAME " " VERSION
 #define CRLF "\r\n"
@@ -61,7 +61,7 @@ extern int disallow_unverified;		/* don't allow unverified clients to transmit p
 
 extern int verbose;
 
-extern char *mycall;
+extern char *serverid;
 extern char *myemail;
 extern char *myadmin;
 

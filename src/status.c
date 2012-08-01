@@ -77,7 +77,7 @@ char *status_json_string(int no_cache)
 	cJSON *root = cJSON_CreateObject();
 	
 	cJSON *server = cJSON_CreateObject();
-	cJSON_AddStringToObject(server, "server_id", mycall);
+	cJSON_AddStringToObject(server, "server_id", serverid);
 	cJSON_AddStringToObject(server, "admin", myadmin);
 	cJSON_AddStringToObject(server, "email", myemail);
 	cJSON_AddStringToObject(server, "software", "aprsc");

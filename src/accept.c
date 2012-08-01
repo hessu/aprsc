@@ -597,13 +597,13 @@ static struct client_t *do_accept(struct listen_t *l)
 		goto err;
 	}
 	
-	/* Pete heavily recommends SO_NODELY for APRS-IS sockets. I'm not so sure,
-	 * need to investigate a bit. High delays can cause packets getting past
+	/* Use SO_NODELAY for APRS-IS sockets. High delays can cause packets getting past
 	 * the dupe filters.
 	 */
 #ifdef SO_NODELAY
 	int arg = 1;
-	setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg));
+	if (setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(SO_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
 #endif
 
 #if 1

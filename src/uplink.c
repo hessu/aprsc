@@ -387,6 +387,15 @@ int make_uplink(struct uplink_config_t *l)
 			continue;
 		}
 		
+		/* Use SO_NODELAY for APRS-IS sockets. High delays can cause packets getting past
+		 * the dupe filters.
+		 */
+#ifdef SO_NODELAY
+		int arg = 1;
+		if (setsockopt(c->fd, SOL_SOCKET, SO_NODELAY, (char *)&arg, sizeof(arg)))
+			hlog(LOG_ERR, "%s - Accept: setsockopt(SO_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
+#endif
+
 		if (connect(fd, a->ai_addr, a->ai_addrlen) && errno != EINPROGRESS) {
 			hlog(LOG_ERR, "Uplink: connect(%s) failed: %s", addr_s, strerror(errno));
 			close(fd);

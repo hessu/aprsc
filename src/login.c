@@ -134,7 +134,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				/* Sorry, no UDP service for this port.. */
 				hlog(LOG_DEBUG, "%s (%s): Requested UDP on client port with no UDP configured", c->addr_rem, username);
 				c->udp_port = 0;
-				client_printf(self, c, "# No UDP service available on this port\r\n");
+				rc = client_printf(self, c, "# No UDP service available on this port\r\n");
+				if (rc < -2)
+					return rc; // client got destroyed
+					
 			}
 
 		} else if (strcasecmp(argv[i], "filter") == 0) {
@@ -177,9 +180,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			    username,
 			    (c->validated) ? "verified" : "unverified",
 			    serverid );
-	if (rc < -2) {
+	if (rc < -2)
 		return i; // The client probably got destroyed!
-	}
 
 	c->keepalive = now + keepalive_interval;
 	c->state = CSTATE_CONNECTED;

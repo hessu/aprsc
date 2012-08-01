@@ -269,7 +269,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_rem, len-2, buf, len);
 
 	rc = client_write(self, c, buf, len);
-	if (rc < -2) return rc;
+	if (rc < -2) return rc; // the client was destroyed by client_write, don't touch it
 
 	c->handler = uplink_logresp_handler;
 	c->state   = CSTATE_LOGRESP;

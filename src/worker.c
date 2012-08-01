@@ -1112,6 +1112,8 @@ void collect_new_clients(struct worker_t *self)
 		 * initially transmit it's software name and version string.
 		 */
 		client_printf(self, c, "# " SERVERID "\r\n");
+		
+		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */
 	}
 	
 	if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {

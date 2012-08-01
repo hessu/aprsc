@@ -29,7 +29,7 @@
 #include "keyhash.h"
 #include "client_heard.h"
 
-#define FILTER_CLIENT_DEBUGGING
+//#define FILTER_CLIENT_DEBUGGING
 
 #ifdef FILTER_CLIENT_DEBUGGING
 #define FILTER_CLIENT_DEBUG(worker, c, fmt, ...) \

@@ -494,15 +494,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))
 		return -8;
 	
-	/* if the packet is sourced by a local login, but the packet is not
-	 * originated by that station, drop it.
-	 */
-	if (!originated_by_client && clientlist_check_if_validated_client(s, src_end - s) != -1) {
-		// TODO: should dump to a loop log
-		//hlog(LOG_DEBUG, "dropping due to source call '%.*s' being logged in on another socket", src_end - s, s);
-		return -9;
-	}
-	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
 	 */
@@ -528,11 +519,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		hlog(LOG_INFO, "pbuf_get failed to get a block");
 		return -10; // No room :-(
 	}
-	pb->next = NULL; // pbuf arrives pre-zeroed
+	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?
 	pb->flags = 0;
 	
 	/* store the source reference */
 	pb->origin = c;
+	
+	/* when it was received ? */
+	pb->t = tick;
 	
 	/* classify the packet as coming from an uplink or client */
 	if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
@@ -547,8 +541,16 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		return -11;
 	}
 	
-	/* when it was received ? */
-	pb->t = now;
+	/* if the packet is sourced by a local login, but the packet is not
+	 * originated by that station, drop it.
+	 */
+	if (!originated_by_client && clientlist_check_if_validated_client(s, src_end - s) != -1) {
+		/* TODO: should probably just mark as a dupe, since dropping it completely
+		 * will break rx stats for logged-in clients
+		 */
+		//hlog(LOG_DEBUG, "dropping due to source call '%.*s' being logged in on another socket", src_end - s, s);
+		pb->flags |= F_DUPE;
+	}
 	
 	/* Copy the unmodified part of the packet header */
 	if (q_replace) {

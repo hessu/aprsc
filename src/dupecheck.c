@@ -101,7 +101,8 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global;
-	if (pb) lastage1 = pb->t;
+	if (pb)
+		lastage1 = pb->t;
 	n = 0;
 	n1 = 0;
 	while ( pbuf_global_count > pbuf_global_count_limit && pb ) {
@@ -129,7 +130,8 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global_dupe;
-	if (pb) lastage2 = pb->t;
+	if (pb)
+		lastage2 = pb->t;
 	n = 0;
 	n2 = 0;
 	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb ) {
@@ -168,7 +170,8 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		// report only when there is something to report...
 		hlog( LOG_DEBUG,
 		      "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs, lags: %d/%d  Ages: %d/%d",
-		      n1, pbuf_global_count, n2, pbuf_global_dupe_count, pbuf_lag, pbuf_dupe_lag,
+		      n1, pbuf_global_count, n2, pbuf_global_dupe_count,
+		      pbuf_lag, pbuf_dupe_lag,
 		      (int)(now-lastage1), (int)(now-lastage2) );
 
 		if (!(n1 || n2 || pbuf_lag || pbuf_dupe_lag))
@@ -426,16 +429,26 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	//     c, w->id, dupecheck_seqnum);
 	
 	for (pb = pb_list; (pb); pb = pbnext) {
+		if (pb->t > tick) {
+			hlog(LOG_ERR, "dupecheck: drain got packet from future %d with t %d > tick %d!\n%s*",
+				pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
+		} else if (tick - pb->t > 10) {
+			hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
+				pb->seqnum, tick - pb->t, pb->packet_len-2, w->id, pb->data);
+		}
+		
 		int rc = dupecheck(pb);
 		pbnext = pb->next; // it may get modified below..
 		
-		if (rc == 0) { // Not duplicate
+		if (rc == 0) {
+			// Not duplicate
 			**pb_out_prevp = pb;
 			*pb_out_prevp = &pb->next;
 			*pb_out_last  = pb;
 			pb->seqnum = ++dupecheck_seqnum;
 			*pb_out_count = *pb_out_count + 1;
-                } else {       // Duplicate
+                } else {
+                	// Duplicate
                 	**pb_out_dupe_prevp = pb;
                 	*pb_out_dupe_prevp = &pb->next;
                 	*pb_out_dupe_last  = pb;
@@ -504,10 +517,10 @@ static void dupecheck_thread(void)
 			c = pbuf_seqnum_lag(dupecheck_seqnum, w->last_pbuf_seqnum);
 			if (w->last_pbuf_seqnum == 0) c = 2000000000;
 			if (c > worker_pbuf_lag)
-			  worker_pbuf_lag = c;
+				worker_pbuf_lag = c;
 			c = pbuf_seqnum_lag(dupecheck_dupe_seqnum, w->last_pbuf_dupe_seqnum);
 			if (c > worker_pbuf_dupe_lag)
-			  worker_pbuf_dupe_lag = c;
+				worker_pbuf_dupe_lag = c;
 
 			/* if there are items in the worker's pbuf_incoming, grab them and process */
 			if (!w->pbuf_incoming)

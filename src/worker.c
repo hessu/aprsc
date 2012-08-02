@@ -673,9 +673,9 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				c->obuf_start = 0;
 				goto write_retry;
 			}
-			if (i < 0 && (e == EPIPE)) {
+			if (i < 0 && e == EPIPE) {
 				/* Remote socket closed.. */
-				hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
+				hlog(LOG_DEBUG, "client_write(%s) fails/2 EPIPE; %s", c->addr_rem, strerror(e));
 				// WARNING: This also destroys the client object!
 				client_close(self, c, e);
 				return -9;
@@ -684,12 +684,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 				/* Kernel's transmit buffer is full. They're pretty
 				 * big, so we'll assume the client is dead and disconnect.
 				 */
-				hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+				hlog(LOG_DEBUG, "client_write(%s) fails/2a; disconnecting; %s", c->addr_rem, strerror(e));
 				client_close(self, c, e);
 				return -10;
 			}
 			if (i < 0) {
-				hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+				hlog(LOG_DEBUG, "client_write(%s) fails/2b; disconnecting; %s", c->addr_rem, strerror(e));
 				client_close(self, c, e);
 				return -11;
 			}
@@ -727,9 +727,9 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		e = errno;
 		if (i < 0 && e == EINTR)
 			goto write_retry_2;
-		if (i < 0 && (e == EPIPE)) {
+		if (i < 0 && e == EPIPE) {
 			/* Remote socket closed.. */
-			hlog(LOG_DEBUG, "client_write(%s) fails/2; %s", c->addr_rem, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2 EPIPE; disconnecting; %s", c->addr_rem, strerror(e));
 			// WARNING: This also destroys the client object!
 			client_close(self, c, e);
 			return -9;
@@ -738,12 +738,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			/* Kernel's transmit buffer is full. They're pretty
 			 * big, so we'll assume the client is dead and disconnect.
 			 */
-			hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2c; disconnecting; %s", c->addr_rem, strerror(e));
 			client_close(self, c, e);
 			return -10;
 		}
 		if (i < 0 && len != 0) {
-			hlog(LOG_DEBUG, "client_write(%s) fails/2; disconnecting; %s", c->addr_rem, strerror(e));
+			hlog(LOG_DEBUG, "client_write(%s) fails/2d; disconnecting; %s", c->addr_rem, strerror(e));
 			client_close(self, c, e);
 			return -11;
 		}

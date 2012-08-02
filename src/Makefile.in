@@ -93,7 +93,7 @@ OBJS = aprsc.o accept.o worker.o \
 	rwlock.o hmalloc.o hlog.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
-	status.o cJSON.o \
+	counterdata.o status.o cJSON.o \
 	http.o \
 	@LIBOBJS@
 

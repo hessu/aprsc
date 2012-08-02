@@ -50,8 +50,9 @@ int workers_running;
 int sock_write_expire  = 25;    /* 25 seconds, smaller than the 30-second dupe check window. */
 int keepalive_interval = 20;    /* 20 seconds for individual socket, NOT all in sync! */
 int keepalive_poll_freq = 2;	/* keepalive analysis scan interval */
-int obuf_writes_treshold = 5;	/* This many writes per keepalive scan interval switch socket
+int obuf_writes_threshold = 16;	/* This many writes per keepalive scan interval switch socket
 				   output to buffered. */
+int obuf_writes_threshold_hys = 6; /* Less than this, and switch back. */
 
 /* global packet buffer */
 rwlock_t pbuf_global_rwlock = RWL_INITIALIZER;
@@ -1220,26 +1221,26 @@ void send_keepalives(struct worker_t *self)
 			continue;
 		}
 		
-		/* adjust buffering */
-		/* TODO: This algorithm has a tendency of oscillating between
-		 * buffered and unbuffered writes. Right after enabling buffered
-		 * writes, the writes count goes to 1, resulting in a disabling
-		 * of the buffered writes. Furthermore, if writes are buffered,
-		 * there should be an upper *time* limit for buffering packets.
+		/* Adjust buffering, try not to jump back and forth between buffered and unbuffered.
+		 * Please note that the we always flush the buffer at the end of a round if the
+		 * client socket is writable (OS buffer not full), so we don't really wait for
+		 * obuf_flushsize to be reached. Buffering will just make a couple of packets sent
+		 * go in the same write().
 		 */
-		if (c->obuf_writes > obuf_writes_treshold) {
+		if (c->obuf_writes > obuf_writes_threshold) {
 			// Lots and lots of writes, switch to buffering...
 			if (c->obuf_flushsize == 0) {
 				c->obuf_flushsize = c->obuf_size / 2;
-				hlog( LOG_DEBUG,"Switch fd %d (%s) to buffered writes, flush at %d", c->fd, c->addr_rem, c->obuf_flushsize);
+				hlog( LOG_DEBUG,"Switch fd %d (%s) to buffered writes (%d writes), flush at %d",
+					c->fd, c->addr_rem, c->obuf_writes, c->obuf_flushsize);
 			}
-		} else {
+		} else if (c->obuf_flushsize != 0 && c->obuf_writes < obuf_writes_threshold_hys) {
 			// Not so much writes, back to "write immediate"
-			if (c->obuf_flushsize != 0) {
-				hlog( LOG_DEBUG,"Switch fd %d (%s) to unbuffered writes", c->fd, c->addr_rem);
-				c->obuf_flushsize = 0;
-			}
+			hlog( LOG_DEBUG,"Switch fd %d (%s) to unbuffered writes (%d writes)",
+				 c->fd, c->addr_rem, c->obuf_writes);
+			c->obuf_flushsize = 0;
 		}
+		
 		c->obuf_writes = 0;
 	}
 }

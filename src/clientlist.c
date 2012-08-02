@@ -70,7 +70,7 @@ static int check_if_validated_client(char *username, int len)
 	struct clientlist_t *cl;
 	
 	for (cl = clientlist; cl; cl = cl->next) {
-		if (strncasecmp(username, cl->username, len) == 0
+		if (memcmp(username, cl->username, len) == 0
 		  && strlen(cl->username) == len && cl->validated) {
 		  	return cl->fd;
 		}

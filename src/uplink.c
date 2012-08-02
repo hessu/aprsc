@@ -295,8 +295,7 @@ int make_uplink(struct uplink_config_t *l)
 	socklen_t addr_len;
 	struct addrinfo *ai, *a, *ap[21];
 	struct addrinfo req;
-	char addr_s[180];
-	char *s;
+	char *addr_s;
 	int port;
 	int pe;
 	struct worker_t *wc;
@@ -316,7 +315,7 @@ int make_uplink(struct uplink_config_t *l)
 			break;
 	}
 	if (uplink_index == MAX_UPLINKS) {
-		hlog(LOG_ERR, "Uplink: No available uplink slots, %d used", MAX_UPLINKS);
+		hlog(LOG_ERR, "Uplink %s: No available uplink slots, %d used", l->name, MAX_UPLINKS);
 		return -2;
 	}
 	
@@ -331,24 +330,26 @@ int make_uplink(struct uplink_config_t *l)
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		hlog(LOG_ERR, "Uplink: Unsupported protocol '%s'\n", l->proto);
+		hlog(LOG_ERR, "Uplink %s: Unsupported protocol '%s'\n", l->name, l->proto);
 		return -2;
 	}
 	
 	port = atoi(l->port);
 	if (port < 1 || port > 65535) {
-		hlog(LOG_ERR, "Uplink: unsupported port number '%s'\n", l->port);
+		hlog(LOG_ERR, "Uplink %s: unsupported port number '%s'\n", l->name, l->port);
 		return -2;
 	}
 
 	l->state = UPLINK_ST_CONNECTING;
 	i = getaddrinfo(l->host, l->port, &req, &ai);
 	if (i != 0) {
-		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s': %s", l->host, l->port, gai_strerror(i));
+		hlog(LOG_INFO, "Uplink %s: address resolving failure of '%s' '%s': %s", l->name, l->host, l->port, gai_strerror(i));
 		l->state = UPLINK_ST_NOT_LINKED;
 		return -2;
 	}
 
+	// TODO: should probably just use the first one. Resolver rotates and
+	// gai.conf might sort according to user's preferences.
 	i = 0;
 	for (a = ai; a && i < 20 ; a = a->ai_next, ++i) {
 		ap[i] = a; /* Up to 20 first addresses */
@@ -368,20 +369,19 @@ int make_uplink(struct uplink_config_t *l)
 	/* Then lets try making socket and connection in address order */
 	fd = -1;
 	while (( a = ap[i++] )) {
+		addr_s = strsockaddr(a->ai_addr, ai->ai_addrlen);
 
-		// FIXME: format actual socket IP address to text
-		sprintf(addr_s, "%s:%s", l->host, l->port);
-
-		hlog(LOG_INFO, "Uplink: Connecting to %s:%s", l->host, l->port);
-	
+		hlog(LOG_INFO, "Uplink %s: Connecting to %s", l->name, addr_s);
+		
 		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
-			hlog(LOG_CRIT, "Uplink: socket(): %s\n", strerror(errno));
+			hlog(LOG_CRIT, "Uplink %s: socket(): %s\n", l->name, strerror(errno));
+			hfree(addr_s);
 			continue;
 		}
 		
 		arg = 1;
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)))
-			hlog(LOG_ERR, "Uplink: Failed to set SO_REUSEADDR on new socket: %s", strerror(errno));
+			hlog(LOG_ERR, "Uplink %s: Failed to set SO_REUSEADDR on new socket: %s", l->name, strerror(errno));
 		
 		/* bind source address */
 		srcaddr_len = 0;
@@ -396,10 +396,11 @@ int make_uplink(struct uplink_config_t *l)
 		if (srcaddr_len) {
 			if (bind(fd, srcaddr, srcaddr_len)) {
 				char *s = strsockaddr(srcaddr, srcaddr_len);
-				hlog(LOG_ERR, "Uplink: Failed to bind source address '%s': %s", s, strerror(errno));
+				hlog(LOG_ERR, "Uplink %s: Failed to bind source address '%s': %s", l->name, s, strerror(errno));
 				hfree(s);
 				close(fd);
 				fd = -1;
+				hfree(addr_s);
 				continue;
 			}
 		}
@@ -408,9 +409,10 @@ int make_uplink(struct uplink_config_t *l)
 		 * non-blocking connect() with a short timeout
 		 */
 		if (fcntl(fd, F_SETFL, O_NONBLOCK)) {
-			hlog(LOG_CRIT, "Uplink: Failed to set non-blocking mode on new socket: %s", strerror(errno));
+			hlog(LOG_CRIT, "Uplink %s: Failed to set non-blocking mode on new socket: %s", l->name, strerror(errno));
 			close(fd);
 			fd = -1;
+			hfree(addr_s);
 			continue;
 		}
 		
@@ -420,13 +422,14 @@ int make_uplink(struct uplink_config_t *l)
 #ifdef TCP_NODELAY
 		int arg = 1;
 		if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
-			hlog(LOG_ERR, "Uplink: %s: setsockopt(TCP_NODELAY, %d) failed: %s", addr_s, arg, strerror(errno));
+			hlog(LOG_ERR, "Uplink %s: %s: setsockopt(TCP_NODELAY, %d) failed: %s", l->name, addr_s, arg, strerror(errno));
 #endif
 
 		if (connect(fd, a->ai_addr, a->ai_addrlen) && errno != EINPROGRESS) {
-			hlog(LOG_ERR, "Uplink: connect(%s) failed: %s", addr_s, strerror(errno));
+			hlog(LOG_ERR, "Uplink %s: connect(%s) failed: %s", l->name, addr_s, strerror(errno));
 			close(fd);
 			fd = -1;
+			hfree(addr_s);
 			continue;
 		}
 		
@@ -440,19 +443,21 @@ int make_uplink(struct uplink_config_t *l)
 		connect_fd.revents = 0;
 		
 		int r = poll(&connect_fd, 1, 3000);
-		hlog(LOG_DEBUG, "Uplink: poll after connect returned %d, revents %d", r, connect_fd.revents);
+		hlog(LOG_DEBUG, "Uplink %s: poll after connect returned %d, revents %d", l->name, r, connect_fd.revents);
 		
 		if (r < 0) {
-			hlog(LOG_ERR, "Uplink: connect to %s: poll failed: %s", addr_s, strerror(errno));
+			hlog(LOG_ERR, "Uplink %s: connect to %s: poll failed: %s", l->name, addr_s, strerror(errno));
 			close(fd);
 			fd = -1;
+			hfree(addr_s);
 			continue;
 		}
 		
 		if (r < 1) {
-			hlog(LOG_ERR, "Uplink: connect to %s timed out", addr_s);
+			hlog(LOG_ERR, "Uplink %s: connect to %s timed out", l->name, addr_s);
 			close(fd);
 			fd = -1;
+			hfree(addr_s);
 			continue;
 		}
 		
@@ -460,13 +465,14 @@ int make_uplink(struct uplink_config_t *l)
 		getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&arg, &optlen);
 		if (arg == 0) {
 			/* Successful connect! */
-			hlog(LOG_DEBUG, "Uplink: successfull connect");
+			hlog(LOG_DEBUG, "Uplink %s: successfull connect", l->name);
 			break;
 		}
 		
-		hlog(LOG_ERR, "Uplink: connect to %s failed: %s", addr_s, strerror(arg));
+		hlog(LOG_ERR, "Uplink %s: connect to %s failed: %s", l->name, addr_s, strerror(arg));
 		close(fd);
 		fd = -1;
+		hfree(addr_s);
 	}
 
 	freeaddrinfo(ai); /* Not needed anymore.. */
@@ -501,18 +507,18 @@ int make_uplink(struct uplink_config_t *l)
 
 	addr_len = sizeof(sa);
 	getpeername(fd, (struct sockaddr *)&sa, &addr_len);
-	s = strsockaddr( &sa.sa, addr_len ); /* server side address */
+	//s = strsockaddr( &sa.sa, addr_len ); /* server side address */
 #ifndef FIXED_IOBUFS
-	c->addr_rem = s;
+	c->addr_rem = addr_s;
 #else
-	strncpy(c->addr_rem, s, sizeof(c->addr_rem));
+	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
 	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
-	hfree(s);
+	hfree(addr_s);
 #endif
 
 	/* hex format of client's IP address + port */
 
-	s = hexsockaddr( &sa.sa, addr_len );
+	char *s = hexsockaddr( &sa.sa, addr_len );
 #ifndef FIXED_IOBUFS
 	c->addr_hex = s;
 #else
@@ -532,7 +538,7 @@ int make_uplink(struct uplink_config_t *l)
 	hfree(s);
 #endif
 
-	hlog(LOG_INFO, "%s: %s: Uplink connection established fd %d using source address %s", c->addr_rem, l->name, c->fd, c->addr_loc);
+	hlog(LOG_INFO, "%s: %s: Uplink connection established fd %d using source address %s", l->name, c->addr_rem, c->fd, c->addr_loc);
 
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;
@@ -542,7 +548,7 @@ int make_uplink(struct uplink_config_t *l)
 
 	wc = worker_threads;
 	
-	hlog(LOG_DEBUG, "... passing to worker thread %d with %d users", wc->id, wc->client_count);
+	hlog(LOG_DEBUG, "%s: ... passing to worker thread %d with %d users", l->name, wc->id, wc->client_count);
 	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
 		hlog(LOG_ERR, "make_uplink(): could not lock new_clients_mutex: %s", strerror(pe));
 		goto err;

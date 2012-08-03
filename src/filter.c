@@ -325,7 +325,7 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 	const char *key = pb->qconst_start+4;
         char uckey[CALLSIGNLEN_MAX+1];
 
-	for (keylen = 0; keylen <= CALLSIGNLEN_MAX; ++keylen) {
+	for (keylen = 0; keylen < CALLSIGNLEN_MAX; ++keylen) {
 		int c = key[keylen];
 		if (c == ',' || c == ':')
 			break;
@@ -554,9 +554,9 @@ int filter_wx_insert(struct pbuf_t *pb)
 	if (!((pb->packettype & T_WX) && !(pb->flags & F_HASPOS)))
 		return 0;
 
-	for (idx = 0; idx <= keylen; ++idx) {
+	for (idx = 0; idx < keylen; ++idx) {
 		int c = key[idx];
-		if (c == ',' || c == ':')
+		if (c == '>')
 			break;
                 if ('a' <= c && c <= 'z')
                   c -= ('a' - 'A');

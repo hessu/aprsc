@@ -26,12 +26,20 @@
 #include "incoming.h"
 #include "accept.h"
 #include "cJSON.h"
+#include "counterdata.h"
 
 time_t startup_tick;
 
 pthread_mutex_t status_json_mt = PTHREAD_MUTEX_INITIALIZER;
 char *status_json_cached = NULL;
 time_t status_json_cache_t = 0;
+
+struct cdata_t *cdata_clients = NULL;
+struct cdata_t *cdata_connects = NULL;
+struct cdata_t *cdata_tcp_bytes_rx = NULL;
+struct cdata_t *cdata_tcp_bytes_tx = NULL;
+struct cdata_t *cdata_udp_bytes_rx = NULL;
+struct cdata_t *cdata_udp_bytes_tx = NULL;
 
 #define UNAME_LEN 512
 void status_uname(cJSON *root)
@@ -49,10 +57,11 @@ void status_uname(cJSON *root)
 	cJSON_AddStringToObject(root, "os", s);
 }
 
-char *status_json_string(int no_cache)
+char *status_json_string(int no_cache, int periodical)
 {
 	char *out = NULL;
 	int pe;
+	cJSON *cv;
 	
 	/* if we have a very recent status JSON available, return it instead. */
 	if (!no_cache) {
@@ -220,12 +229,33 @@ char *status_json_string(int no_cache)
 	cJSON_AddItemToObject(root, "peers", json_peers);
 	cJSON_AddItemToObject(root, "clients", json_clients);
 	
+	/* if this is a periodical per-minute dump, collect historical data */
+	if (periodical) {
+		cv = cJSON_GetObjectItem(json_totals, "clients");
+		cdata_gauge_sample(cdata_clients, (cv) ? cv->valueint : -1);
+		cv = cJSON_GetObjectItem(json_totals, "connects");
+		cdata_counter_sample(cdata_connects, (cv) ? cv->valueint : -1);
+		cv = cJSON_GetObjectItem(json_totals, "tcp_bytes_rx");
+		cdata_counter_sample(cdata_tcp_bytes_rx, (cv) ? cv->valueint : -1);
+		cv = cJSON_GetObjectItem(json_totals, "tcp_bytes_tx");
+		cdata_counter_sample(cdata_tcp_bytes_tx, (cv) ? cv->valueint : -1);
+		cv = cJSON_GetObjectItem(json_totals, "udp_bytes_rx");
+		cdata_counter_sample(cdata_udp_bytes_rx, (cv) ? cv->valueint : -1);
+		cv = cJSON_GetObjectItem(json_totals, "udp_bytes_tx");
+		cdata_counter_sample(cdata_udp_bytes_tx, (cv) ? cv->valueint : -1);
+	}
+	
+	cJSON_AddNumberToObject(json_totals, "tcp_bytes_rx_rate", cdata_get_last_value(cdata_tcp_bytes_rx) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "tcp_bytes_tx_rate", cdata_get_last_value(cdata_tcp_bytes_tx) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "udp_bytes_rx_rate", cdata_get_last_value(cdata_udp_bytes_rx) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "udp_bytes_tx_rate", cdata_get_last_value(cdata_udp_bytes_tx) / CDATA_INTERVAL);
+	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
 	
 	if ((pe = pthread_mutex_lock(&status_json_mt))) {
 		hlog(LOG_ERR, "status_json_string(): could not lock status_json_mt: %s", strerror(pe));
-		return NULL;
+                                return NULL;
 	}
 	if (status_json_cached)
 		hfree(status_json_cached);
@@ -243,7 +273,7 @@ char *status_json_string(int no_cache)
 
 int status_dump_fp(FILE *fp)
 {
-	char *out = status_json_string(1);
+	char *out = status_json_string(1, 1);
 	fputs(out, fp);
 	free(out);
 	
@@ -281,3 +311,12 @@ int status_dump_file(void)
 	return 0;
 }
 
+void status_init(void)
+{
+	cdata_clients = cdata_alloc("clients");
+	cdata_connects = cdata_alloc("connects");
+	cdata_tcp_bytes_tx = cdata_alloc("tcp_bytes_tx");
+	cdata_tcp_bytes_rx = cdata_alloc("tcp_bytes_rx");
+	cdata_udp_bytes_tx = cdata_alloc("udp_bytes_tx");
+	cdata_udp_bytes_rx = cdata_alloc("udp_bytes_rx");
+}

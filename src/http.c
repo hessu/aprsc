@@ -345,7 +345,7 @@ void http_status(struct evhttp_request *r)
 	char *json;
 	struct evbuffer *buffer = evbuffer_new();
 	
-	json = status_json_string(0);
+	json = status_json_string(0, 0);
 	evbuffer_add(buffer, json, strlen(json));
 	free(json);
 	

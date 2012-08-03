@@ -15,7 +15,9 @@
 
 extern time_t startup_tick;
 
-extern char *status_json_string(int no_cache);
+extern char *status_json_string(int no_cache, int periodical);
 extern int status_dump_file(void);
+
+extern void status_init(void);
 
 #endif

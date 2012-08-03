@@ -429,6 +429,7 @@ int main(int argc, char **argv)
 	historydb_init();
 	client_init();
 	xpoll_init();
+	status_init();
 
 	time(&cleanup_tick);
 
@@ -475,15 +476,10 @@ int main(int argc, char **argv)
 		if (cleanup_tick < tick || cleanup_tick > tick + 60) {
 			cleanup_tick = tick + 60;
 
+			status_dump_file();
 			historydb_cleanup();
 			filter_wx_cleanup();
 			filter_entrycall_cleanup();
-		}
-		
-		if (stats_tick < tick || stats_tick > tick + stats_interval) {
-			stats_tick = tick + stats_interval;
-			hlog(LOG_DEBUG, "Dumping status to file");
-			status_dump_file();
 		}
 	}
 	

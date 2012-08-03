@@ -554,7 +554,7 @@ int filter_wx_insert(struct pbuf_t *pb)
 	if (!((pb->packettype & T_WX) && !(pb->flags & F_HASPOS)))
 		return 0;
 
-	for (idx = 0; idx < keylen; ++idx) {
+	for (idx = 0; idx < keylen && idx < CALLSIGNLEN_MAX; ++idx) {
 		int c = key[idx];
 		if (c == '>')
 			break;

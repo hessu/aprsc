@@ -286,7 +286,7 @@ function render_clients(element, d, cols)
 	}
 }
 
-function render_block(element, d)
+function render_block(graph_tree, element, d)
 {
 	$(element).empty();
 	
@@ -308,7 +308,12 @@ function render_block(element, d)
 			o = '<td class="ar">' + o + '</td>';
 		}
 		
-		$(element).append('<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
+		if (graph_tree) {
+			var id = graph_tree + '.' + k;
+			$(element).append('<tr><td class="grtd" id="' + id + '" onclick="gr_switch(\'' + id + '\')">' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
+		} else {
+			$(element).append('<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
+		}
 	}
 }
 
@@ -410,7 +415,7 @@ function render(d)
 		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
 			s['software'] = s['software'] + ' ' + s['software_version'];
 			
-		render_block('#server', s);
+		render_block(0, '#server', s);
 	} else {
 		return;
 	}
@@ -421,7 +426,7 @@ function render(d)
 		var u = d['dupecheck'];
 		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
 		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
-		render_block('#dupecheck', u);
+		render_block('dupecheck', '#dupecheck', u);
 	}
 	
 	if (d['totals']) {
@@ -433,7 +438,7 @@ function render(d)
 		for (var i in ks) {
 			u[ks[i]] = calc_rate('totals.' + ks[i], u[ks[i]]);
 		}
-		render_block('#totals', u);
+		render_block('totals', '#totals', u);
 	}
 	
 	if (d['listeners'])
@@ -463,6 +468,76 @@ function update_status()
 			setTimeout(function() { update_status(); }, 10000);
 		}
 	});
+}
+
+function graph_fill(cdata, opts)
+{
+	var vals = cdata['values'];
+	if (opts['div']) {
+		var div = opts['div'];
+		for (var i = 0; i < vals.length; i++)
+			vals[i][1] = vals[i][1] / div;
+	}
+	for (var i = 0; i < vals.length; i++)
+		vals[i][0] = vals[i][0] * 1000;
+		
+	var _d = [ { label: opts['label'], data: vals } ];
+	
+	var _x_opt = {
+		mode: 'time'
+	};
+	
+	var _y_opt = {
+		min: 0
+	};
+	
+	var _o = {
+		grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
+		legend: { position: 'nw' },
+		colors: [ '#0000ff' ],
+		xaxis: _x_opt,
+		yaxis: _y_opt
+	};
+	
+	$.plot($('#graph'), _d, _o);
+}
+
+var graphs = {
+	'totals.clients': { 'label': 'Clients allocated' },
+	'totals.connects': { 'label': 'Incoming connections/min' },
+	'totals.tcp_bytes_rx': { 'label': 'Bytes/s Rx, TCP', 'div' : 60 },
+	'totals.tcp_bytes_tx': { 'label': 'Bytes/s Tx, TCP', 'div' : 60 },
+	'totals.udp_bytes_rx': { 'label': 'Bytes/s Rx, UDP', 'div' : 60 },
+	'totals.udp_bytes_tx': { 'label': 'Bytes/s Tx, UDP', 'div' : 60 },
+	'totals.tcp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, TCP', 'div' : 60 },
+	'totals.tcp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, TCP', 'div' : 60 },
+	'totals.udp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, UDP', 'div' : 60 },
+	'totals.udp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, UDP', 'div' : 60 },
+	'dupecheck.dupes_dropped': { 'label': 'Duplicate packets dropped/s', 'div' : 60 },
+	'dupecheck.uniques_out': { 'label': 'Unique packets/s', 'div' : 60 }
+};
+
+function load_graph(k)
+{
+	var d = graphs[k];
+	
+	$.ajax({
+		url: '/counterdata?' + k,
+		dataType: 'json',
+		success: function(data) {
+			graph_fill(data, d);
+		}
+	});
+}
+
+function gr_switch(id)
+{
+	load_graph(id);
+}
+
+function init_graph()
+{
+	load_graph('totals.tcp_bytes_rx');
 }
 
 //-->

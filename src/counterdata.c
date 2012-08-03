@@ -33,6 +33,7 @@ struct cdata_t {
 	time_t times[CDATA_SAMPLES];
 	long values[CDATA_SAMPLES];
 	int last_index;
+	int is_gauge;
 };
 
 struct cdata_t *counterdata = NULL;
@@ -49,6 +50,7 @@ struct cdata_t *cdata_alloc(const char *name)
 	pthread_mutex_init(&cd->mt, NULL);
 	cd->name = hstrdup(name);
 	cd->last_index = -1; // no data inserted yet
+	cd->is_gauge = 0;
 	
 	if ((e = pthread_mutex_lock(&counterdata_mt))) {
 		hlog(LOG_CRIT, "cdata_allocate: failed to lock counterdata_mt: %s", strerror(e));
@@ -151,6 +153,7 @@ void cdata_gauge_sample(struct cdata_t *cd, long value)
 	cd->last_raw_value = value;
 	cd->values[cd->last_index] = value;
 	cd->times[cd->last_index] = tick;
+	cd->is_gauge = 1;
 	
 	if ((e = pthread_mutex_unlock(&cd->mt))) {
 		hlog(LOG_CRIT, "cdata_gauge_sample %s: could not unlock counterdata_mt: %s", cd->name, strerror(e));
@@ -196,6 +199,9 @@ char *cdata_json_string(const char *name)
 	
 	cJSON *root = cJSON_CreateObject();
 	cJSON *values = cJSON_CreateArray();
+	if (cd->is_gauge)
+		cJSON_AddNumberToObject(root, "gauge", 1);
+	cJSON_AddNumberToObject(root, "interval", CDATA_INTERVAL);
 	cJSON_AddItemToObject(root, "values", values);
 	
 	if (cd->last_index >= 0) {

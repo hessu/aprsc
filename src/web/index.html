@@ -17,6 +17,7 @@
 <table id='server'></table>
 
 <h3>Totals</h3>
+<div style='float: right; clear: right; height: 230px; width: 600px;' id='graph'></div> 
 <table id='totals'></table>
 
 <h3>Duplicate filter</h3>
@@ -35,9 +36,12 @@
 <table id='memory'></table>
 
 <script type="text/JavaScript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.5.1/jquery.min.js"></script>
+<!--[if lte IE 8]><script type="text/JavaScript" src="excanvas.min.js"></script><![endif]-->
+<script type="text/JavaScript" src="jquery.flot.min.js"></script>
 <script type="text/JavaScript" src="aprsc.js"></script>
 <script type="text/JavaScript">
 update_status();
+init_graph();
 </script>
 
 </body>

@@ -27,6 +27,10 @@ td {
 	vertical-align: top;
 }
 
+td.grtd {
+	color: #0000ff; cursor: pointer;
+}
+
 th {
 	vertical-align: top;
 }

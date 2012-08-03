@@ -39,6 +39,7 @@ struct cdata_list_t {
 	const char *name;
 	struct cdata_list_t *next;
 	struct cdata_t *cd;
+	int gauge;
 } *cdata_list = NULL;
 
 #define UNAME_LEN 512
@@ -235,7 +236,10 @@ char *status_json_string(int no_cache, int periodical)
 		for (cl = cdata_list; (cl); cl = cl->next) {
 			ct = cJSON_GetObjectItem(root, cl->tree);
 			cv = cJSON_GetObjectItem(ct, cl->name);
-			cdata_gauge_sample(cl->cd, (cv) ? cv->valueint : -1);
+			if (cl->gauge)
+				cdata_gauge_sample(cl->cd, (cv) ? cv->valueint : -1);
+			else
+				cdata_counter_sample(cl->cd, (cv) ? cv->valueint : -1);
 		}
 	}
 	
@@ -312,13 +316,19 @@ void status_init(void)
 	int i;
 	char *n;
 	
-	static const char *cdata_start[][2] = {
-		{ "totals", "clients" },
-		{ "totals", "connects" },
-		{ "totals", "tcp_bytes_rx" },
-		{ "totals", "tcp_bytes_tx" },
-		{ "totals", "udp_bytes_rx" },
-		{ "totals", "udp_bytes_tx" }, 
+	static const char *cdata_start[][3] = {
+		{ "totals", "clients", "g" },
+		{ "totals", "connects", "c" },
+		{ "totals", "tcp_bytes_rx", "c" },
+		{ "totals", "tcp_bytes_tx", "c" },
+		{ "totals", "udp_bytes_rx", "c" },
+		{ "totals", "udp_bytes_tx", "c" }, 
+		{ "totals", "tcp_pkts_rx", "c" },
+		{ "totals", "tcp_pkts_tx", "c" },
+		{ "totals", "udp_pkts_rx", "c" },
+		{ "totals", "udp_pkts_tx", "c" }, 
+		{ "dupecheck", "dupes_dropped", "c" },
+		{ "dupecheck", "uniques_out", "c" },
 		{ NULL, NULL }
 	};
 	
@@ -331,6 +341,7 @@ void status_init(void)
 		cl->name = cdata_start[i][1];
 		cl->next = cdata_list;
 		cl->cd = cdata_alloc(n);
+		cl->gauge = cdata_start[i][2][0] == 'g' ? 1 : 0;
 		cdata_list = cl;
 		i++;
 	}

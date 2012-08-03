@@ -286,6 +286,8 @@ function render_clients(element, d, cols)
 	}
 }
 
+var graph_selected = '';
+
 function render_block(graph_tree, element, d)
 {
 	$(element).empty();
@@ -310,7 +312,8 @@ function render_block(graph_tree, element, d)
 		
 		if (graph_tree) {
 			var id = graph_tree + '.' + k;
-			$(element).append('<tr><td class="grtd" id="' + id + '" onclick="gr_switch(\'' + id + '\')">' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
+			var cl = (graph_selected == id) ? 'grtd grtd_sel' : 'grtd';
+			$(element).append('<tr><td class="' + cl + '" id="' + id.replace('.', '_') + '" onclick="gr_switch(\'' + id + '\')">' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
 		} else {
 			$(element).append('<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
 		}
@@ -520,6 +523,10 @@ var graphs = {
 function load_graph(k)
 {
 	var d = graphs[k];
+	
+	graph_selected = k;
+	$('.grtd').removeClass('grtd_sel');
+	$('#' + k.replace('.', '_')).addClass('grtd_sel');
 	
 	$.ajax({
 		url: '/counterdata?' + k,

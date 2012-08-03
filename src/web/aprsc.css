@@ -28,7 +28,11 @@ td {
 }
 
 td.grtd {
-	color: #0000ff; cursor: pointer;
+	background: #e1f6ff; color: #0000ff; cursor: pointer;
+}
+
+td.grtd_sel {
+	background: #f6e1ff; cursor: pointer;
 }
 
 th {

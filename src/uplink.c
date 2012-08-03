@@ -295,7 +295,7 @@ int make_uplink(struct uplink_config_t *l)
 	socklen_t addr_len;
 	struct addrinfo *ai, *a, *ap[21];
 	struct addrinfo req;
-	char *addr_s;
+	char *addr_s = NULL;
 	int port;
 	int pe;
 	struct worker_t *wc;
@@ -355,6 +355,7 @@ int make_uplink(struct uplink_config_t *l)
 		ap[i] = a; /* Up to 20 first addresses */
 	}
 	ap[i] = NULL;
+#if 0
 	/* If more than one, pick one at random, and place it as list leader */
 	if (i > 0)
 		i = random() % i;
@@ -364,12 +365,13 @@ int make_uplink(struct uplink_config_t *l)
 		ap[i] = ap[0];
 		ap[0] = a;
 	}
+#endif
 	i = 0;
 
 	/* Then lets try making socket and connection in address order */
 	fd = -1;
 	while (( a = ap[i++] )) {
-		addr_s = strsockaddr(a->ai_addr, ai->ai_addrlen);
+		addr_s = strsockaddr(a->ai_addr, a->ai_addrlen);
 
 		hlog(LOG_INFO, "Uplink %s: Connecting to %s", l->name, addr_s);
 		

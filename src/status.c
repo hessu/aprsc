@@ -249,6 +249,8 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(json_totals, "tcp_bytes_tx_rate", cdata_get_last_value(cdata_tcp_bytes_tx) / CDATA_INTERVAL);
 	cJSON_AddNumberToObject(json_totals, "udp_bytes_rx_rate", cdata_get_last_value(cdata_udp_bytes_rx) / CDATA_INTERVAL);
 	cJSON_AddNumberToObject(json_totals, "udp_bytes_tx_rate", cdata_get_last_value(cdata_udp_bytes_tx) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "bytes_rx_rate", (cdata_get_last_value(cdata_tcp_bytes_rx) + cdata_get_last_value(cdata_udp_bytes_rx)) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "bytes_tx_rate", (cdata_get_last_value(cdata_tcp_bytes_tx) + cdata_get_last_value(cdata_udp_bytes_tx)) / CDATA_INTERVAL);
 	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);

@@ -20,6 +20,7 @@ struct cdata_t;
 extern struct cdata_t *cdata_alloc(const char *name);
 extern void cdata_counter_sample(struct cdata_t *cd, long value);
 extern void cdata_gauge_sample(struct cdata_t *cd, long value);
-extern long cdata_get_last_value(struct cdata_t *cd);
+extern long cdata_get_last_value(const char *name);
+extern char *cdata_json_string(const char *name);
 
 #endif

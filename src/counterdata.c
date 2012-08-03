@@ -71,6 +71,33 @@ struct cdata_t *cdata_alloc(const char *name)
 	return cd;
 }
 
+struct cdata_t *cdata_find_and_lock(const char *name)
+{
+	struct cdata_t *cd = NULL;
+	int e;
+	
+	if ((e = pthread_mutex_lock(&counterdata_mt))) {
+		hlog(LOG_CRIT, "cdata_find_and_lock: failed to lock counterdata_mt: %s", strerror(e));
+		exit(1);
+	}
+	
+	for (cd = counterdata; (cd); cd = cd->next)
+		if (strcmp(name, cd->name) == 0) {
+			if ((e = pthread_mutex_lock(&cd->mt))) {
+				hlog(LOG_CRIT, "cdata_find_and_lock: could not lock cd: %s", strerror(e));
+				exit(1);
+			}
+			break;
+		}
+	
+	if ((e = pthread_mutex_unlock(&counterdata_mt))) {
+		hlog(LOG_CRIT, "cdata_find_and_lock: could not unlock counterdata_mt: %s", strerror(e));
+		exit(1);
+	}
+	
+	return cd;
+}
+
 void cdata_counter_sample(struct cdata_t *cd, long value)
 {
 	int e;
@@ -131,15 +158,16 @@ void cdata_gauge_sample(struct cdata_t *cd, long value)
 	}
 }
 
-long cdata_get_last_value(struct cdata_t *cd)
+long cdata_get_last_value(const char *name)
 {
 	int e;
 	long v;
+	struct cdata_t *cd;
 	
-	if ((e = pthread_mutex_lock(&cd->mt))) {
-		hlog(LOG_CRIT, "cdata_get_last_value %s: failed to lock mt: %s", cd->name, strerror(e));
-		exit(1);
-	}
+	cd = cdata_find_and_lock(name);
+	
+	if (!cd)
+		return -1;
 	
 	if (cd->last_index < 0) {
 		v = -1;
@@ -154,3 +182,50 @@ long cdata_get_last_value(struct cdata_t *cd)
 	
 	return v;
 }
+
+char *cdata_json_string(const char *name)
+{
+	struct cdata_t *cd;
+	char *out = NULL;
+	int i, e;
+	
+	cd = cdata_find_and_lock(name);
+	
+	if (!cd)
+		return NULL;
+	
+	cJSON *root = cJSON_CreateObject();
+	cJSON *values = cJSON_CreateArray();
+	cJSON_AddItemToObject(root, "values", values);
+	
+	if (cd->last_index >= 0) {
+		i = cd->last_index + 1;
+		do {
+			if (i == CDATA_SAMPLES)
+				i = 0;
+			//hlog(LOG_DEBUG, "cdata_json_string, sample %d", i);
+			
+			if (cd->times[i] > 0) {
+				cJSON *val = cJSON_CreateArray();
+				cJSON_AddItemToArray(val, cJSON_CreateNumber(cd->times[i]));
+				cJSON_AddItemToArray(val, cJSON_CreateNumber(cd->values[i]));
+				cJSON_AddItemToArray(values, val);
+			}
+			
+			if (i == cd->last_index)
+				break;
+			i ++;
+		} while (1);
+	}
+	
+	if ((e = pthread_mutex_unlock(&cd->mt))) {
+		hlog(LOG_CRIT, "cdata_get_last_value %s: could not unlock counterdata_mt: %s", cd->name, strerror(e));
+		exit(1);
+	}
+	
+	out = cJSON_Print(root);
+	cJSON_Delete(root);
+	
+	return out;
+}
+

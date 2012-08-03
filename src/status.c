@@ -34,12 +34,12 @@ pthread_mutex_t status_json_mt = PTHREAD_MUTEX_INITIALIZER;
 char *status_json_cached = NULL;
 time_t status_json_cache_t = 0;
 
-struct cdata_t *cdata_clients = NULL;
-struct cdata_t *cdata_connects = NULL;
-struct cdata_t *cdata_tcp_bytes_rx = NULL;
-struct cdata_t *cdata_tcp_bytes_tx = NULL;
-struct cdata_t *cdata_udp_bytes_rx = NULL;
-struct cdata_t *cdata_udp_bytes_tx = NULL;
+struct cdata_list_t {
+	const char *tree;
+	const char *name;
+	struct cdata_list_t *next;
+	struct cdata_t *cd;
+} *cdata_list = NULL;
 
 #define UNAME_LEN 512
 void status_uname(cJSON *root)
@@ -61,7 +61,6 @@ char *status_json_string(int no_cache, int periodical)
 {
 	char *out = NULL;
 	int pe;
-	cJSON *cv;
 	
 	/* if we have a very recent status JSON available, return it instead. */
 	if (!no_cache) {
@@ -231,26 +230,21 @@ char *status_json_string(int no_cache, int periodical)
 	
 	/* if this is a periodical per-minute dump, collect historical data */
 	if (periodical) {
-		cv = cJSON_GetObjectItem(json_totals, "clients");
-		cdata_gauge_sample(cdata_clients, (cv) ? cv->valueint : -1);
-		cv = cJSON_GetObjectItem(json_totals, "connects");
-		cdata_counter_sample(cdata_connects, (cv) ? cv->valueint : -1);
-		cv = cJSON_GetObjectItem(json_totals, "tcp_bytes_rx");
-		cdata_counter_sample(cdata_tcp_bytes_rx, (cv) ? cv->valueint : -1);
-		cv = cJSON_GetObjectItem(json_totals, "tcp_bytes_tx");
-		cdata_counter_sample(cdata_tcp_bytes_tx, (cv) ? cv->valueint : -1);
-		cv = cJSON_GetObjectItem(json_totals, "udp_bytes_rx");
-		cdata_counter_sample(cdata_udp_bytes_rx, (cv) ? cv->valueint : -1);
-		cv = cJSON_GetObjectItem(json_totals, "udp_bytes_tx");
-		cdata_counter_sample(cdata_udp_bytes_tx, (cv) ? cv->valueint : -1);
+		cJSON *ct, *cv;
+		struct cdata_list_t *cl;
+		for (cl = cdata_list; (cl); cl = cl->next) {
+			ct = cJSON_GetObjectItem(root, cl->tree);
+			cv = cJSON_GetObjectItem(ct, cl->name);
+			cdata_gauge_sample(cl->cd, (cv) ? cv->valueint : -1);
+		}
 	}
 	
-	cJSON_AddNumberToObject(json_totals, "tcp_bytes_rx_rate", cdata_get_last_value(cdata_tcp_bytes_rx) / CDATA_INTERVAL);
-	cJSON_AddNumberToObject(json_totals, "tcp_bytes_tx_rate", cdata_get_last_value(cdata_tcp_bytes_tx) / CDATA_INTERVAL);
-	cJSON_AddNumberToObject(json_totals, "udp_bytes_rx_rate", cdata_get_last_value(cdata_udp_bytes_rx) / CDATA_INTERVAL);
-	cJSON_AddNumberToObject(json_totals, "udp_bytes_tx_rate", cdata_get_last_value(cdata_udp_bytes_tx) / CDATA_INTERVAL);
-	cJSON_AddNumberToObject(json_totals, "bytes_rx_rate", (cdata_get_last_value(cdata_tcp_bytes_rx) + cdata_get_last_value(cdata_udp_bytes_rx)) / CDATA_INTERVAL);
-	cJSON_AddNumberToObject(json_totals, "bytes_tx_rate", (cdata_get_last_value(cdata_tcp_bytes_tx) + cdata_get_last_value(cdata_udp_bytes_tx)) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "tcp_bytes_rx_rate", cdata_get_last_value("totals.tcp_bytes_rx") / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "tcp_bytes_tx_rate", cdata_get_last_value("totals.tcp_bytes_tx") / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "udp_bytes_rx_rate", cdata_get_last_value("totals.udp_bytes_rx") / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "udp_bytes_tx_rate", cdata_get_last_value("totals.udp_bytes_tx") / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "bytes_rx_rate", (cdata_get_last_value("totals.tcp_bytes_rx") + cdata_get_last_value("totals.udp_bytes_rx")) / CDATA_INTERVAL);
+	cJSON_AddNumberToObject(json_totals, "bytes_tx_rate", (cdata_get_last_value("totals.tcp_bytes_tx") + cdata_get_last_value("totals.udp_bytes_tx")) / CDATA_INTERVAL);
 	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
@@ -315,10 +309,29 @@ int status_dump_file(void)
 
 void status_init(void)
 {
-	cdata_clients = cdata_alloc("clients");
-	cdata_connects = cdata_alloc("connects");
-	cdata_tcp_bytes_tx = cdata_alloc("tcp_bytes_tx");
-	cdata_tcp_bytes_rx = cdata_alloc("tcp_bytes_rx");
-	cdata_udp_bytes_tx = cdata_alloc("udp_bytes_tx");
-	cdata_udp_bytes_rx = cdata_alloc("udp_bytes_rx");
+	int i;
+	char *n;
+	
+	static const char *cdata_start[][2] = {
+		{ "totals", "clients" },
+		{ "totals", "connects" },
+		{ "totals", "tcp_bytes_rx" },
+		{ "totals", "tcp_bytes_tx" },
+		{ "totals", "udp_bytes_rx" },
+		{ "totals", "udp_bytes_tx" }, 
+		{ NULL, NULL }
+	};
+	
+	i = 0;
+	while (cdata_start[i][0] != NULL) {
+		n = hmalloc(strlen(cdata_start[i][0]) + 1 + strlen(cdata_start[i][1]) + 1);
+		sprintf(n, "%s.%s", cdata_start[i][0], cdata_start[i][1]);
+		struct cdata_list_t *cl = hmalloc(sizeof(*cl));
+		cl->tree = cdata_start[i][0];
+		cl->name = cdata_start[i][1];
+		cl->next = cdata_list;
+		cl->cd = cdata_alloc(n);
+		cdata_list = cl;
+		i++;
+	}
 }

@@ -32,6 +32,7 @@
 #include "status.h"
 #include "passcode.h"
 #include "incoming.h"
+#include "counterdata.h"
 
 int http_shutting_down;
 int http_reconfiguring;
@@ -352,6 +353,38 @@ void http_status(struct evhttp_request *r)
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
 	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
+	evhttp_add_header(headers, "Cache-Control", "no-cache");
+	
+	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
+	evbuffer_free(buffer);
+}
+
+/*
+ *	Return counterdata in JSON
+ */
+
+void http_counterdata(struct evhttp_request *r, const char *uri)
+{
+	char *json;
+	const char *query;
+	
+	query = evhttp_uri_get_query(evhttp_request_get_evhttp_uri(r));
+	hlog(LOG_DEBUG, "counterdata query: %s", query);
+	
+	json = cdata_json_string(query);
+	if (!json) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, no such counter");
+		return;
+	}
+	
+	struct evbuffer *buffer = evbuffer_new();
+	evbuffer_add(buffer, json, strlen(json));
+	free(json);
+	
+	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
+	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
+	evhttp_add_header(headers, "Cache-Control", "no-cache");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
 	evbuffer_free(buffer);
@@ -474,6 +507,11 @@ void http_router(struct evhttp_request *r, void *which_server)
 	if (which_server == (void *)1) {
 		if (strncmp(uri, "/status.json", 12) == 0) {
 			http_status(r);
+			return;
+		}
+		
+		if (strncmp(uri, "/counterdata?", 13) == 0) {
+			http_counterdata(r, uri);
 			return;
 		}
 		

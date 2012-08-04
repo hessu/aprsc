@@ -572,7 +572,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	} else if (q_start > s && q_start < path_end) {
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
-		fprintf(stderr, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
+		hlog(LOG_INFO, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
 		return -1;
 	}
 	

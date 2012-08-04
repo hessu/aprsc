@@ -335,7 +335,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 		 * }
 		 */
 		if (c->udp_port) {
-			fprintf(stderr, "\tUDP packet\n");
+			//fprintf(stderr, "\tUDP packet\n");
 			if (q_proto) {
 				/* a q construct with a exists in the packet,
 				 * Replace the q construct with ,qAU,SERVERLOGIN
@@ -363,7 +363,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 		 *    Quit q processing
 		 * }
 		 */
-		if (!c->validated && originated_by_client) {
+		if ((!c->validated) && originated_by_client) {
 			// fprintf(stderr, "\tunvalidated client sends packet originated by itself\n");
 			// FIXME: how to check if TCPXX conversion is done? Just assume?
 			if (q_proto && q_nextcall_end == *path_end) {
@@ -443,7 +443,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				*new_q_start = q_start + 1;
 				add_qAO = 0;
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
-				// fprintf(stderr, "\tpath has ,I in the end\n");
+				hlog(LOG_DEBUG, "path has ,I in the end: %s", pdata);
 				/* the path is terminated with ,I - lookup previous callsign in path */
 				char *p = *path_end - 3;
 				while (p > via_start && *p != ',')
@@ -451,11 +451,11 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				if (*p == ',') {
 					const char *prevcall = p+1;
 					const char *prevcall_end = *path_end - 2;
-					// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
+					hlog(LOG_DEBUG, "previous callsign is %.*s\n", (int)(prevcall_end - prevcall), prevcall);
 					/* if the path is terminated with ,login,I */
 					// TODO: Should validate that prevcall is a nice callsign
 					if (1) {
-						/* Replace ,login,I with qAo,login */
+						/* Replace ,login,I with qAo,previouscall */
 						*path_end = p;
 						new_q_len = snprintf(new_q, new_q_size, ",qAo,%.*s", (int)(prevcall_end - prevcall), prevcall);
 						q_proto = 'A';
@@ -600,8 +600,11 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	}
 	
 	/* If we haven't generated a new Q construct, return a pointer to the existing one */
-	if (!new_q_len)
+	if (!new_q_len) {
+		if (q_start == NULL)
+			hlog(LOG_ERR, "q: Did not find or generate a Q construct: %s", pdata);
 		*new_q_start = q_start + 1;
+	}
 	
 	return q_dropcheck(c, pdata, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 }

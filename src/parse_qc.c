@@ -159,16 +159,16 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 				 * TODO: should dump...
 				 */
 				/* TODO: The reject log should really log the offending packet */
-				hlog(LOG_DEBUG, "dropping due to login callsign not being the last viacall after Q construct");
+				hlog(LOG_DEBUG, "dropping due to login callsign %s not being the last viacall after Q construct", c->username);
 				return -21;
 			}
 		} else if (clientlist_check_if_validated_client(qcallv[i], l) != -1) {
 			/* 2) hits: TODO: should dump to a loop log */
 			/* TODO: The reject log should really log the offending packet */
-			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being logged in on another socket", l, qcallv[i]);
+			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being logged in on another socket, arrived from %s", l, qcallv[i], c->username);
 			return -21;
 		} else if (check_invalid_q_callsign(qcallv[i], l)) {
-			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being invalid as an APRS-IS server name", l, qcallv[i]);
+			hlog(LOG_DEBUG, "dropping due to callsign '%.*s' after Q construct being invalid as an APRS-IS server name, arrived from %s", l, qcallv[i], c->username);
 			return -21;
 		}
 		

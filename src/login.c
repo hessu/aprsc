@@ -55,15 +55,11 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		username[9] = 0;
 #ifndef FIXED_IOBUFS
 	c->username = hstrdup(username);
-#else
+#elseu
 	strncpy(c->username, username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 #endif
 	c->username_len = strlen(c->username);
-	
-	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
-	if (c->flags & CLFLAGS_UPLINKSIM)
-		c->handler = &incoming_uplinksim_handler;
 	
 	int given_passcode = -1;
 	
@@ -145,7 +141,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
                          * end is OK.
                          */
 			if (!(c->flags & CLFLAGS_USERFILTEROK)) {
-				return client_printf(self, c, "# No user-specified filters on this port\r\n");
+				rc = client_printf(self, c, "# No user-specified filters on this port\r\n");
+				if (rc < -2)
+                        		return rc; // client got destroyed
+				break;
 			}
 			
 			/* copy the null-separated filter arguments back to a space-separated
@@ -178,6 +177,11 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			}
 		}
 	}
+	
+	/* ok, login succeeded, switch handler */
+	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
+	if (c->flags & CLFLAGS_UPLINKSIM)
+		c->handler = &incoming_uplinksim_handler;
 	
 	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
 			    username,

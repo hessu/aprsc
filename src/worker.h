@@ -324,7 +324,7 @@ struct client_t {
 #ifdef FIXED_IOBUFS
 	char  username[16];     /* The callsign */
 	char  app_name[32];     /* application name, from 'user' command */
-	char  app_version[16];  /* application version, from 'user' command */
+	char  app_version[32];  /* application version, from 'user' command */
 	
 	char  addr_rem[80];	    /* client IP address in text format */
 	char  addr_hex[36];	    /* client IP address in hex format */

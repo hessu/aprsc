@@ -667,8 +667,9 @@ int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, int l4
 		/* filter adjunct commands ? */
 		/* TODO: is some client sending "# filter" instead? Should accept maybe? */
 		/* Yes, aprssrvr accept #kjhflawhiawuhglawuhfilter too - as long as it has filter in the end. */
-		if (strncasecmp(s, "#filter", 7) == 0)
-			return filter_commands(self, c, s, len);
+		char *filtercmd = strstr(s, "filter");
+		if (filtercmd)
+			return filter_commands(self, c, filtercmd, len - (filtercmd - s));
 		return 0;
 	}
 	
@@ -715,8 +716,9 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 		if (l4proto != IPPROTO_UDP) {
 			/* filter adjunct commands ? */
 			/* TODO: check if the socket type allows filter commands! */
-			if (strncasecmp(s, "#filter", 7) == 0)	
-				return filter_commands(self, c, s, len);
+			char *filtercmd = strstr(s, "filter");
+			if (filtercmd)
+				return filter_commands(self, c, filtercmd, len - (filtercmd - s));
 			
 			hlog(LOG_DEBUG, "#-in: '%.*s'", len, s);
 		}

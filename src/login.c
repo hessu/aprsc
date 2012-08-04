@@ -140,7 +140,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 					
 			}
 
-		} else if (strcasecmp(argv[i], "filter") == 0) {
+		} else if (strstr(argv[i], "filter")) {
+                        /* Follows javaaprssrvr's example - any command having 'filter' in the
+                         * end is OK.
+                         */
 			if (!(c->flags & CLFLAGS_USERFILTEROK)) {
 				return client_printf(self, c, "# No user-specified filters on this port\r\n");
 			}

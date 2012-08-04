@@ -7,6 +7,8 @@
 # the positions in these packets, and also quickly try out the
 # p/ prefix filter
 #
+# TODO: add more filter test cases for the rest of the filters
+#
 
 use Test;
 BEGIN { plan tests => 17 };

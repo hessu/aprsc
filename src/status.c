@@ -48,7 +48,7 @@ void status_uname(cJSON *root)
 	struct utsname ut;
 	char s[UNAME_LEN];
 	
-	if (uname(&ut)) {
+	if (uname(&ut) < 0) {
 		hlog(LOG_ERR, "status_uname: uname() failed: %s", strerror(errno));
 		return;
 	}

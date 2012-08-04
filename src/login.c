@@ -55,7 +55,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		username[9] = 0;
 #ifndef FIXED_IOBUFS
 	c->username = hstrdup(username);
-#elseu
+#else
 	strncpy(c->username, username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 #endif

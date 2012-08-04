@@ -12,7 +12,7 @@
 #define CONFIG_H
 
 #define PROGNAME "aprsc"
-#define VERSION "0.3.1"
+#define VERSION "0.3.2"
 #define VERSTR  PROGNAME " v" VERSION
 #define SERVERID PROGNAME " " VERSION
 #define CRLF "\r\n"

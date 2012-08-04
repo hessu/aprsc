@@ -211,7 +211,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		if (c->validated && !login_in_path) {
 			/* Append ,login */
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
-		} else if (!(c->flags & CLFLAGS_INPORT)) {
+		} else if (!(c->flags & CLFLAGS_INPORT) && !login_in_path) {
 			/* from an outbound connection, append client's hexaddr */
 			//hlog(LOG_DEBUG, "qAI appending hex address, starting at %d, got %d left in buffer", new_q_len, new_q_size - new_q_len);
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);

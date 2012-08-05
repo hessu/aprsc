@@ -1,7 +1,6 @@
 /*
  *  This code is from the book "Programming with POSIX Threads", by
- *  David R. Butenhof. Appears in modified and GPL'ed form in at least
- *  the Bacula sources.
+ *  David R. Butenhof.
  */
 
 /*

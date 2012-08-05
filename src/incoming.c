@@ -392,6 +392,22 @@ char *memstr(char *needle, char *haystack, char *haystack_end)
 }
 
 /*
+ *	Check if the digipeater path includes elements indicating that the
+ *	packet should be dropped.
+ */
+
+int digi_path_drop(char *via_start, char *path_end)
+{
+	if (memstr(",NOGATE", via_start, path_end))
+		return 1;
+		
+	if (memstr(",RFONLY", via_start, path_end))
+		return 1;
+		
+	return 0;
+}
+
+/*
  *	Parse an incoming packet.
  *
  *	Returns -1 if the packet is pathologically invalid on APRS-IS
@@ -494,6 +510,16 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))
 		return -8;
 	
+	/* check if the path contains NOGATE or other signs which tell the
+	 * packet should be dropped
+	 */
+	if (digi_path_drop(via_start, path_end))
+		return -9;
+	
+	/* check for 3rd party packets */
+	if (*(data + 1) == '}')
+		return -10;
+	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
 	 */
@@ -517,7 +543,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (!pb) {
 		// This should never happen...
 		hlog(LOG_INFO, "pbuf_get failed to get a block");
-		return -10; // No room :-(
+		return -11; // No room :-(
 	}
 	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?
 	pb->flags = 0;
@@ -538,7 +564,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->flags |= F_FROM_DOWNSTR;
 	} else {
 		hlog(LOG_ERR, "fd %d: incoming_parse failed to classify packet", c->fd);
-		return -11;
+		return -12;
 	}
 	
 	/* if the packet is sourced by a local login, but the packet is not
@@ -573,7 +599,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
 		hlog(LOG_INFO, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
-		return -1;
+		return -13;
 	}
 	
 	/* Copy the modified or appended part of the packet header -- qcons */
@@ -607,7 +633,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	/* just try APRS parsing */
 	rc = parse_aprs(self, pb);
-
+	
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
 	

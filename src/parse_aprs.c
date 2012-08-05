@@ -1230,6 +1230,10 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 	case '{':
 		pb->packettype |= T_USERDEF;
 		return 0;
+        
+        case '}':
+		pb->packettype |= T_3RDPARTY;
+		return 0;
 
 	default:
 		break;

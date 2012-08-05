@@ -127,6 +127,22 @@ int http_date(char *buf, int len, time_t t)
 		tb.tm_hour, tb.tm_min, tb.tm_sec);
 }
 
+void http_header_base(struct evkeyvalq *headers, int last_modified)
+{
+	char dbuf[80];
+	
+	http_date(dbuf, sizeof(dbuf), tick);
+	
+	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	evhttp_add_header(headers, "Date", dbuf);
+	
+	if (last_modified) {
+		http_date(dbuf, sizeof(dbuf), last_modified);
+		evhttp_add_header(headers, "Last-Modified", dbuf);
+	}
+}
+
+
 /*
  *	Parse the login string in a POST
  *	Argh, why are these not in standard POST parameters?
@@ -332,7 +348,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	evbuffer_add(bufout, "ok\n", 3);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
-	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	http_header_base(headers, 0);
 	evhttp_add_header(headers, "Content-Type", "text/plain; charset=UTF-8");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", bufout);
@@ -353,9 +369,9 @@ void http_status(struct evhttp_request *r)
 	free(json);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
-	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	http_header_base(headers, tick);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
-	evhttp_add_header(headers, "Cache-Control", "no-cache");
+	evhttp_add_header(headers, "Cache-Control", "max-age=9");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
 	evbuffer_free(buffer);
@@ -384,9 +400,9 @@ void http_counterdata(struct evhttp_request *r, const char *uri)
 	free(json);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
-	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	http_header_base(headers, tick);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
-	evhttp_add_header(headers, "Cache-Control", "no-cache");
+	evhttp_add_header(headers, "Cache-Control", "max-age=58");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
 	evbuffer_free(buffer);
@@ -432,18 +448,14 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 		return;
 	}
 	
-	/* Generate Last-Modified header, and other headers
-	 * (they need to be present in an IMS hit)
-	 */
 	http_date(last_modified, sizeof(last_modified), st.st_mtime);
 	
 	contenttype = http_content_type(cmdp->filename);
 	//hlog(LOG_DEBUG, "found content-type %s", contenttype);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
-	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	http_header_base(headers, st.st_mtime);
 	evhttp_add_header(headers, "Content-Type", contenttype);
-	evhttp_add_header(headers, "Last-Modified", last_modified);
 	
 	/* Consider an IMS hit */
 	req_headers = evhttp_request_get_input_headers(r);

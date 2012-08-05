@@ -393,7 +393,7 @@ function calc_rate(key, value, no_s)
 			rate = rate.toFixed(0);
 		else if (rate >= 1)
 			rate = rate.toFixed(1);
-		else if (rate >= 0.1)
+		else if (rate > 0)
 			rate = rate.toFixed(2);
 		else if (rate == 0)
 			rate = '0';

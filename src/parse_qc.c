@@ -602,7 +602,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	/* If we haven't generated a new Q construct, return a pointer to the existing one */
 	if (!new_q_len) {
 		if (q_start == NULL)
-			hlog(LOG_ERR, "q: Did not find or generate a Q construct: %s", pdata);
+			hlog(LOG_ERR, "q: Did not find or generate a Q construct (from client %s fd %d): %s", c->username, c->fd, pdata);
 		*new_q_start = q_start + 1;
 	}
 	

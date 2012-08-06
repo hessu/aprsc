@@ -53,7 +53,7 @@ char *log_levelnames[] = {
 	"EMERG",
 	"ALERT",
 	"CRIT",
-	"ERR",
+	"ERROR",
 	"WARNING",
 	"NOTICE",
 	"INFO",

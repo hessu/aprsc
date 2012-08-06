@@ -66,7 +66,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	for (i = 2; i < argc; i++) {
 		if (strcasecmp(argv[i], "pass") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): No passcode after pass command", c->addr_rem, username);
+				hlog(LOG_WARNING, "%s/%s: No passcode after pass command", c->addr_rem, username);
 				break;
 			}
 			
@@ -83,7 +83,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			 */
 			 
 			if (i+1 >= argc) {
-				hlog(LOG_INFO, "%s (%s): No application name after 'vers' in login", c->addr_rem, username);
+				hlog(LOG_INFO, "%s/%s: No application name after 'vers' in login", c->addr_rem, username);
 				break;
 			}
 			
@@ -95,7 +95,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 #endif
 
 			if (i+1 >= argc) {
-				hlog(LOG_DEBUG, "%s (%s): No application version after 'vers' in login", c->addr_rem, username);
+				hlog(LOG_DEBUG, "%s/%s: No application version after 'vers' in login", c->addr_rem, username);
 				break;
 			}
 			
@@ -108,12 +108,12 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): Missing UDP port number after UDP command", c->addr_rem, username);
+				hlog(LOG_WARNING, "%s/%s: Missing UDP port number after UDP command", c->addr_rem, username);
 				break;
 			}
 			c->udp_port = atoi(argv[i]);
 			if (c->udp_port < 1024 || c->udp_port > 65535) {
-				hlog(LOG_WARNING, "%s (%s): UDP port number %s is out of range", c->addr_rem, username, argv[i]);
+				hlog(LOG_WARNING, "%s/%s: UDP port number %s is out of range", c->addr_rem, username, argv[i]);
 				c->udp_port = 0;
 			}
 
@@ -128,7 +128,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				}
 			} else {
 				/* Sorry, no UDP service for this port.. */
-				hlog(LOG_DEBUG, "%s (%s): Requested UDP on client port with no UDP configured", c->addr_rem, username);
+				hlog(LOG_DEBUG, "%s/%s: Requested UDP on client port with no UDP configured", c->addr_rem, username);
 				c->udp_port = 0;
 				rc = client_printf(self, c, "# No UDP service available on this port\r\n");
 				if (rc < -2)

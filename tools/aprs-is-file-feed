@@ -4,6 +4,7 @@ $VERSION = 'filefeed 1.0';
 
 
 use POSIX;
+use Time::HiRes qw(time sleep);
 
 select STDOUT; $| = 1;    
 
@@ -22,26 +23,49 @@ if (!defined($APRSIS)) {
 
 print "connected\n";
 
-
+my $sleeprange = 12;
 
 my $now = time;
 my $last = $now + 60*60;
 my $next = 100;
 my $cnt = 0;
 
+my $next_sleep;
+$next_sleep = $now + rand($sleeprange) if ($sleeprange);
+
+my $rin;
+vec($rin, $APRSIS->{'sock'}, 1) = 1;
+
 while (<>) {
     my $line = $_;
     chomp $line;
     next if ($line !~ /^(\d+) (.*)$/);
     $line = $2;
+    
+    if ($sleeprange) {
+        $now = time();
+        if ($now >= $next_sleep) {
+            my $sl = rand($sleeprange);
+            warn sprintf("sleeping %.3f s\n", $sl);
+            sleep($sl);
+            warn "done sleeping\n";
+            $next_sleep = time() + rand(3);
+        }
+    }
 
 #    $APRSIS->sendline(sprintf("%d",$now)."\t".$line);
     $APRSIS->sendline("$line\r\n");
     #print "$line\n";
 
     ++$cnt;
-    $APRSIS->flush() if ($cnt % 30 == 0);
-    #$now += 0.03; ## magic 
+    $APRSIS->flush() if ($cnt % 3 == 0);
+    
+    my $rout;
+    while (select($rout = $rin, '', '', 0)) {
+        my $in = $APRSIS->getline();
+        last if ($in eq '');
+        warn "got: $in\n";
+    }
 
     #if ($cnt >= $next) {
 #	$APRSIS->flush();

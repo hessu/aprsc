@@ -136,10 +136,8 @@ struct pbuf_t {
 /* global packet buffer */
 extern rwlock_t pbuf_global_rwlock;
 extern struct pbuf_t  *pbuf_global;
-extern struct pbuf_t  *pbuf_global_last;
 extern struct pbuf_t **pbuf_global_prevp;
 extern struct pbuf_t  *pbuf_global_dupe;
-extern struct pbuf_t  *pbuf_global_dupe_last;
 extern struct pbuf_t **pbuf_global_dupe_prevp;
 
 /* a network client */
@@ -315,13 +313,11 @@ struct client_t {
 
 	// Maybe we use these four items, or maybe not.
 	// They are there for experimenting with outgoing queue processing algorithms.
-
 	/* Pointer to last pointer in pbuf_global(_dupe) */
-	struct pbuf_t **pbuf_global_prevp;
-	struct pbuf_t **pbuf_global_dupe_prevp;
-
-	uint32_t	last_pbuf_seqnum;
-	uint32_t	last_pbuf_dupe_seqnum;
+	//struct pbuf_t **pbuf_global_prevp;
+	//struct pbuf_t **pbuf_global_dupe_prevp;
+	//uint32_t	last_pbuf_seqnum;
+	//uint32_t	last_pbuf_dupe_seqnum;
 
 #ifdef FIXED_IOBUFS
 	char  username[16];     /* The callsign */

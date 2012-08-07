@@ -150,6 +150,8 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 	int smallcnt = 0, mediumcnt = 0, largecnt = 0;
 
 	for (i = 0; i < numbufs; ++i) {
+		array[i]->is_free = 1;
+		//__sync_synchronize();
 		switch (array[i]->buf_len) {
 		case PACKETLEN_MAX_SMALL:
 			arraysmall [smallcnt++]  = array[i];
@@ -282,6 +284,7 @@ struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 
 	for ( i = 1;  i < bunchlen; ++i ) {
 		pb = allocarray[i];
+		pb->is_free = 0;
 		pb->next    = *pool;
 		pb->buf_len = len; // this is necessary for worker local pool discard at worker shutdown
 		*pool = pb;
@@ -529,7 +532,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	if (path_append_len < 0) {
 		/* the q construct algorithm decided to drop the packet */
-		hlog(LOG_DEBUG, "q construct drop: %d", path_append_len);
+		hlog(LOG_DEBUG, "%s/%s: q construct drop: %d", c->addr_rem, c->username, path_append_len);
 		return path_append_len;
 	}
 	
@@ -542,7 +545,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb = pbuf_get(self, new_len);
 	if (!pb) {
 		// This should never happen...
-		hlog(LOG_INFO, "pbuf_get failed to get a block");
+		hlog(LOG_ERR, "pbuf_get failed to get a block");
 		return -11; // No room :-(
 	}
 	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?
@@ -563,7 +566,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	} else if (c->flags & CLFLAGS_INPORT) {
 		pb->flags |= F_FROM_DOWNSTR;
 	} else {
-		hlog(LOG_ERR, "fd %d: incoming_parse failed to classify packet", c->fd);
+		hlog(LOG_ERR, "%s/%s (fd %d): incoming_parse failed to classify packet", c->addr_rem, c->username, c->fd);
 		return -12;
 	}
 	
@@ -574,7 +577,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		/* TODO: should probably just mark as a dupe, since dropping it completely
 		 * will break rx stats for logged-in clients
 		 */
-		//hlog(LOG_DEBUG, "dropping due to source call '%.*s' being logged in on another socket", src_end - s, s);
+		//hlog(LOG_DEBUG, "%s/%s: dropping due to source call '%.*s' being logged in on another socket", c->addr_rem, c->username, src_end - s, s);
 		pb->flags |= F_DUPE;
 	}
 	
@@ -598,7 +601,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	} else if (q_start > s && q_start < path_end) {
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
-		hlog(LOG_INFO, "q construct bug: did not find a good construct or produce a new one for:\n%s\n", s);
+		hlog(LOG_INFO, "%s/%s: q construct bug: did not find a good construct or produce a new one for:\n%s\n", c->addr_rem, c->username, s);
 		return -13;
 	}
 	
@@ -733,7 +736,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	 * commands.
 	 */
 	if (len > PACKETLEN_MAX-2) {
-		hlog(LOG_WARNING, "Packet too long (%d): %.*s", len, len, s);
+		hlog(LOG_WARNING, "%s/%s: Packet too long (%d): %.*s", c->addr_rem, c->username, len, len, s);
 		return 0;
 	}
 
@@ -746,7 +749,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 			if (filtercmd)
 				return filter_commands(self, c, filtercmd, len - (filtercmd - s));
 			
-			hlog(LOG_DEBUG, "#-in: '%.*s'", len, s);
+			hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
 		}
 		
 		return 0;
@@ -761,9 +764,11 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	if (e < 0) {
 		/* failed parsing */
 		if (e == -42)
-			hlog(LOG_DEBUG, "Packet too short (%d): %.*s", len, len, s);
+			hlog(LOG_DEBUG, "%s/%s: Packet too short (%d): %.*s",
+				c->addr_rem, c->username, len, len, s);
 		else
-			hlog(LOG_DEBUG, "Failed parsing (%d): %.*s",e,len,s);
+			hlog(LOG_DEBUG, "%s/%s: Failed parsing (%d): %.*s",
+				c->addr_rem, c->username, e, len, s);
 	}
 	
 	/* Account the one incoming packet.

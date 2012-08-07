@@ -121,12 +121,16 @@ void process_outgoing(struct worker_t *self)
 	}
 	
 	while ((pb = *self->pbuf_global_prevp)) {
-		if (pb->t > tick) {
-			hlog(LOG_ERR, "worker: process_outgoing got packet from future %d with t %d > tick %d!\n%s*",
-				pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
+		//__sync_synchronize();
+		if (pb->is_free) {
+			hlog(LOG_ERR, "worker %d: process_outgoing got pbuf %d marked free, age %d (now %d t %d)\n%*s",
+				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
+		} if (pb->t > tick) {
+			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d from future with t %d > tick %d!\n%*s",
+				self->id, pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
 		} else if (tick - pb->t > 5) {
-			hlog(LOG_ERR, "worker: process_outgoing got packet %d aged %d sec\n%*s",
-				pb->seqnum, tick - pb->t, pb->packet_len-2, pb->data);
+			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d aged %d sec (now %d t %d)\n%*s",
+				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
 		} else {
 			process_outgoing_single(self, pb);
 		}

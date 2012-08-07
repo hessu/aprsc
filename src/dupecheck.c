@@ -41,8 +41,8 @@ long dupecheck_cellgauge;
 int pbuf_global_count;
 int pbuf_global_dupe_count;
 
-int pbuf_global_count_limit      =  5000; /* Real criteria is expirer..		 */
-int pbuf_global_dupe_count_limit =     1; /* .. but we set some minimum packet counts
+int pbuf_global_count_limit      =   5000; /* Real criteria is expirer..		 */
+int pbuf_global_dupe_count_limit =   5000; /* .. but we set some minimum packet counts
 					     into the global pbuf queue anyway.  */
 
 long long dupecheck_outcount;  /* 64 bit counters for statistics */
@@ -586,8 +586,22 @@ static void dupecheck_thread(void)
 
 		if (cleanup_tick <= now) { // once in a (simulated) minute or so..
 			cleanup_tick = now + 10;
-
+			/*
+			if ((e = rwl_wrlock(&pbuf_global_rwlock))) {
+				hlog(LOG_CRIT, "dupecheck: Failed to wrlock pbuf_global_rwlock!");
+				exit(1);
+			}
+			*/
+			
 			global_pbuf_purger(0, worker_pbuf_lag, worker_pbuf_dupe_lag);
+			
+			/*
+			if ((e = rwl_wrunlock(&pbuf_global_rwlock))) {
+				hlog(LOG_CRIT, "dupecheck: Failed to wrunlock pbuf_global_rwlock!");
+				exit(1);
+			}
+			*/
+			
 			dupecheck_cleanup();
 		}
 

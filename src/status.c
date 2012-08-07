@@ -236,10 +236,14 @@ char *status_json_string(int no_cache, int periodical)
 		for (cl = cdata_list; (cl); cl = cl->next) {
 			ct = cJSON_GetObjectItem(root, cl->tree);
 			cv = cJSON_GetObjectItem(ct, cl->name);
+			
+			/* cJSON's cv->valueint is just an integer, which will overflow
+			 * too quickly. So, let's take the more expensive valuedouble.
+			 */
 			if (cl->gauge)
-				cdata_gauge_sample(cl->cd, (cv) ? cv->valueint : -1);
+				cdata_gauge_sample(cl->cd, (cv) ? cv->valuedouble : -1);
 			else
-				cdata_counter_sample(cl->cd, (cv) ? cv->valueint : -1);
+				cdata_counter_sample(cl->cd, (cv) ? cv->valuedouble : -1);
 		}
 	}
 	

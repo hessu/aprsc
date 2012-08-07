@@ -29,9 +29,9 @@ struct cdata_t {
 	struct cdata_t **prevp;
 	pthread_mutex_t mt;
 	char *name;
-	long last_raw_value;
+	long long last_raw_value;
 	time_t times[CDATA_SAMPLES];
-	long values[CDATA_SAMPLES];
+	long long values[CDATA_SAMPLES];
 	int last_index;
 	int is_gauge;
 };
@@ -100,10 +100,10 @@ struct cdata_t *cdata_find_and_lock(const char *name)
 	return cd;
 }
 
-void cdata_counter_sample(struct cdata_t *cd, long value)
+void cdata_counter_sample(struct cdata_t *cd, long long value)
 {
 	int e;
-	long l;
+	long long l;
 	
 	if ((e = pthread_mutex_lock(&cd->mt))) {
 		hlog(LOG_CRIT, "cdata_counter_sample %s: failed to lock mt: %s", cd->name, strerror(e));
@@ -136,7 +136,7 @@ void cdata_counter_sample(struct cdata_t *cd, long value)
 	}
 }
 
-void cdata_gauge_sample(struct cdata_t *cd, long value)
+void cdata_gauge_sample(struct cdata_t *cd, long long value)
 {
 	int e;
 	

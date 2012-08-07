@@ -10,7 +10,7 @@ select STDOUT; $| = 1;
 my $quit = 0;
 my $APRSIS;
 
-my $mycall = 'F0FED';
+my $mycall = sprintf('F0FED-%d', rand(15));
 my $filter; # 'p/OH2R -p/OH2 p/OH ';
 
 $APRSIS = APRS::IS->new('127.0.0.1:55580', $mycall, $filter);

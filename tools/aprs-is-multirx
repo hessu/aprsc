@@ -1,45 +1,49 @@
 #!/usr/bin/perl 
 
-$VERSION = 'APRS-IS-RX version-1.0';
+$VERSION = 'APRS-IS-MULTIRX 1.0';
 
 use POSIX;
 use IO::Multiplex;
+use Ham::APRS::IS;
 
 select STDOUT; $| = 1;    
 
 my $quit = 0;
 my $APRSIS;
 
-my $mycall = 'MRX-';
+my $mycall = $ARGV[0] . '-';
 #my $filter = 'p/OH2R';
 #my $filter = 'p/OH';
 my $filter = 'p/OH2R -p/OH2 p/OH ';
 $filter = 'p/OH/OI/OJ/OF';
-#my $filter = 'p/CW ';
-
-#$APRSIS = APRS::IS->new('finland.aprs2.net:10152', $mycall, $filter);
 
 my @APRS = ();
 
-my $n =  300;
+my $n =  50;
 
 my $MUX = new IO::Multiplex;
 
 foreach my $i (1 .. $n) {
     my $call = sprintf("%s%d",$mycall,$i);
     if (($i % 3) == 0) { # filters only for 1/3'd of all contactees..
-	$APRSIS = APRS::IS->new('localhost:14580', $call, $filter );
-    } elsif (($i % 3) == 1) {
-	$call = sprintf("CW%04d",$i);
-	$APRSIS = APRS::IS->new('localhost:14580', $call, undef );
+	$APRSIS = Ham::APRS::IS->new('localhost:55580', $call, filter => $filter );
+#    } elsif (($i % 3) == 1) {
+#	$call = sprintf("CW%04d",$i);
+#	$APRSIS = Ham::APRS::IS->new('localhost:55152', $call);
     } else {
-	$APRSIS = APRS::IS->new('localhost:14580', $call, 'u/APZMDR' );
+	$APRSIS = Ham::APRS::IS->new('localhost:55152', $call);
     }
     if (!defined($APRSIS)) {
-	printf "aprsazel: Failed to open APRS-IS socket!\n";
+	printf "Failed to init Ham::APRS::IS socket!\n";
 	exit 4;
     }
-    $MUX->add( $APRSIS->sock() );
+    
+    if (!$APRSIS->connect()) {
+	printf "Failed to connect\n";
+	exit 4;
+    }
+    
+    $MUX->add( $APRSIS->{'sock'} );
 
     push @APRS, $APRSIS;
 }
@@ -78,137 +82,3 @@ sub mux_eof {
     $MUX->close($fh);
 }
 
-
-# -------------------------------------------------------------------------
-
-package APRS::IS;
-
-use 5.006;
-use strict;
-use warnings;
-
-use IO::Handle '_IOFBF';
-use IO::Socket::INET;
-use IO::Select;
-
-sub aprspass {
-    my ($a, $h) = (0, 0);
-    map($h ^= ord(uc) << ($a^=8),
-	pop =~ m/./g);
-    return ($h ^ 29666);
-}
-
-sub sock {
-    my $self = shift;
-    return $self->{sock};
-}
-
-sub new {
-    my $that = shift;
-    my $class = ref($that) || $that;
-    # my %atts = @_;
-    my ($url, $mycall, $target_filter_re) = @_; # Just one arg: APRS-IS URL (host:port)
-
-    # Register the callers package.
-    my $self = { caller_pkg => (caller)[0] };
-
-    bless ($self, $class);
-
-    # parse attrs
-    $self->{sock} = IO::Socket::INET->new($url);
-
-    if (!defined($self->{sock})) {
-        die(__PACKAGE__.": APRS::IS->new(".$url.")  failure: ".$!."\n");
-    }
-    
-
-    #$self->{select} = IO::Select->new( $self->{sock} );
-
-    $self->{aprsmycall} = uc( $mycall );
-    $mycall =~ s/-.*//;
-    $self->{aprspass}   = aprspass( uc($mycall) );
-    if ($self->{aprsmycall} =~ m/CW\d{4}/o) {
-	$self->{aprspass} = -1;
-    }
-
-    $self->{filterre} = $target_filter_re;
-
-#   printf ( "APRS::IS->new()  mycall='%s'  aprspass=%d   filterre='%s'\n",
-#            $self->{aprsmycall}, $self->{aprspass}, $self->{filterre} );
-
-
-##
-##    *  Need to send on initial connect the following logon line:
-##      user callsign pass passcode vers appname versionnum rest_of_line
-##
-##      callsign = login callsign-SSID
-##      passcode = login passcode per APRS-IS algorithm, -1 = read-only
-##      appname = application name (1 word)
-##      versionnum = application version number (no spaces)
-##      rest_of_line = server command if connecting to a port that supports commands (see Server Commands)
-##
-##      (appname and versionnum should not exceed 15 characters)
-##
-##       
-##    * Need to recognize both TCPIP and TCPXX as TCP/IP stations
-##    * Need to provide a means to perform the user validation. This can either be a user entered password,
-##      or a client program can automatically figure out the password given the callsign.
-##      If the later is used, it is the client programmer's responsibility to be certain that non-amateurs
-##      are not given registrations that can validate themselves in APRS-IS.
-##    * Probably a good idea to perform some feedback about the limitations of TCPIP without a registration number.
-##
-
-    $self->{sock}->blocking(1);
-    $self->{sock}->printf( "user %s pass %s vers %s filter %s\r\n",
-			   $self->{aprsmycall},
-			   $self->{aprspass}, # -- but we are read-only !
-			   $main::VERSION, $self->{filterre}
-    );
-
-    printf( "user %s pass %s vers %s filter %s\n",
-	    $self->{aprsmycall},
-	    $self->{aprspass}, # -- but we are read-only !
-	    $main::VERSION, $self->{filterre} );
-    $self->{sock}->flush;
-
-#    $self->{rbuf} = ' ' x 16000;   ############## grr..  not avaibale
-#    $self->{sock}->setbuf( $self->{rbuf} );
-
-    $self->{sock}->blocking(0);
-
-#    my $discard = $self->getline();
-
-    $self;
-}
-
-# -------------------------------------------------------------------------
-# Get a line, or wait 1 sec
-
-sub getline {
-    my $self = shift;
-
-    my @ready;
-
-#    if (@ready = $self->{select}->can_read(1)) { # Wait at most 1.0 seconds
-	# We have only one socket...
-    return $self->{sock}->getline;
-#    }
-#    undef;
-}
-
-sub sendline {
-    my $self = shift;
-    my $line = shift;
-
-    my @ready;
-
-    $self->{sock}->blocking(1);
-    $self->{sock}->printf( "%s\r\n", $line);
-    $self->{sock}->flush;
-
-    $self->{sock}->blocking(0);
-
-    undef;
-}
-
-# -------------------------------------------------------------------------

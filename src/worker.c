@@ -57,10 +57,8 @@ int obuf_writes_threshold_hys = 6; /* Less than this, and switch back. */
 /* global packet buffer */
 rwlock_t pbuf_global_rwlock = RWL_INITIALIZER;
 struct pbuf_t  *pbuf_global       = NULL;
-struct pbuf_t  *pbuf_global_last  = NULL;
 struct pbuf_t **pbuf_global_prevp = &pbuf_global;
 struct pbuf_t  *pbuf_global_dupe       = NULL;
-struct pbuf_t  *pbuf_global_dupe_last  = NULL;
 struct pbuf_t **pbuf_global_dupe_prevp = &pbuf_global_dupe;
 
 
@@ -1231,13 +1229,13 @@ void send_keepalives(struct worker_t *self)
 			// Lots and lots of writes, switch to buffering...
 			if (c->obuf_flushsize == 0) {
 				c->obuf_flushsize = c->obuf_size / 2;
-				hlog( LOG_DEBUG,"Switch fd %d (%s) to buffered writes (%d writes), flush at %d",
-					c->fd, c->addr_rem, c->obuf_writes, c->obuf_flushsize);
+				//hlog( LOG_DEBUG,"Switch fd %d (%s) to buffered writes (%d writes), flush at %d",
+				//	c->fd, c->addr_rem, c->obuf_writes, c->obuf_flushsize);
 			}
 		} else if (c->obuf_flushsize != 0 && c->obuf_writes < obuf_writes_threshold_hys) {
 			// Not so much writes, back to "write immediate"
-			hlog( LOG_DEBUG,"Switch fd %d (%s) to unbuffered writes (%d writes)",
-				 c->fd, c->addr_rem, c->obuf_writes);
+			//hlog( LOG_DEBUG,"Switch fd %d (%s) to unbuffered writes (%d writes)",
+			//	 c->fd, c->addr_rem, c->obuf_writes);
 			c->obuf_flushsize = 0;
 		}
 		

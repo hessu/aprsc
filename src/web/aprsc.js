@@ -1,5 +1,15 @@
 <!--
 
+function top_status(c, s)
+{
+	if (!c) {
+		$('#status').hide('fast');
+		return;
+	}
+	
+	$('#status').hide().html('<div class="' + c + '">' + s + '</div>').show('fast');
+}
+
 function isUndefined(v)
 {
 	var undef;
@@ -389,7 +399,8 @@ function calc_rate(key, value, no_s)
 			rate *= -1;
 			prefix = '-';
 		}
-		else if (rate >= 10)
+		
+		if (rate >= 10)
 			rate = rate.toFixed(0);
 		else if (rate >= 1)
 			rate = rate.toFixed(1);
@@ -398,7 +409,7 @@ function calc_rate(key, value, no_s)
 		else if (rate == 0)
 			rate = '0';
 		else
-			rate = rate.toFixed(3);
+			rate = rate.toFixed(2);
 		if (!no_s)
 			rate += '/s';
 		rate = prefix + rate;
@@ -413,9 +424,11 @@ function render(d)
 	if (d['server'] && d['server']['t_now']) {
 		var s = d['server'];
 		
-		if (s['server_id'])
+		if (s['server_id']) {
 			document.title = htmlent(s['server_id']) + ' aprsc status';
-			
+			$('#serverid').html(htmlent(s['server_id']));
+		}
+		
 		if (s['t_now'])
 			$('#upt').html(' at ' + timestr(s['t_now']));
 		
@@ -467,10 +480,25 @@ function update_status()
 		url: '/status.json',
 		dataType: 'json',
 		cache: false,
-		error: function() {
+		timeout: 5000,
+		error: function(jqXHR, stat, errorThrown) {
+			var msg = '';
+			if (stat == 'timeout')
+				msg = 'Status download timed out. Network or server down?';
+			else if (stat == 'error')
+				msg = 'Status download failed with an error. Network or server down?';
+			else
+				msg = 'Status download failed (' + stat + ').';
+				
+			if (errorThrown)
+				msg += '<br />HTTP error: ' + htmlent(errorThrown);
+				
+			top_status('msg_e', msg);
+			
 			setTimeout(function() { update_status(); }, 10000);
 		},
 		success: function(data) {
+			top_status();
 			render(data);
 			setTimeout(function() { update_status(); }, 10000);
 		}
@@ -524,9 +552,17 @@ var graphs = {
 	'dupecheck.uniques_out': { 'label': 'Unique packets/s', 'div' : 60 }
 };
 
+var graph_timer;
+
 function load_graph(k)
 {
 	var d = graphs[k];
+	
+	if (graph_timer) { 
+		clearTimeout(graph_timer);
+		graph_timer = 0;
+	}
+		
 	
 	graph_selected = k;
 	$('.grtd').removeClass('grtd_sel');
@@ -535,8 +571,20 @@ function load_graph(k)
 	$.ajax({
 		url: '/counterdata?' + k,
 		dataType: 'json',
+		timeout: 5000,
 		success: function(data) {
+			top_status();
 			graph_fill(data, d);
+			graph_timer = setTimeout(function() { load_graph(graph_selected); }, 60000);
+		},
+		error: function(jqXHR, stat, errorThrown) {
+			msg = 'Graph data download failed (' + stat + '). Server or network down?';
+			
+			if (errorThrown)
+				msg += '<br />HTTP error: ' + htmlent(errorThrown);
+				
+			top_status('msg_e', msg);
+			graph_timer = setTimeout(function() { load_graph(graph_selected); }, 60000);
 		}
 	});
 }

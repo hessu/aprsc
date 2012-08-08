@@ -43,3 +43,25 @@ td.ar {
 	text-align: right;
 }
 
+
+/* message */
+div.msg_e {
+	background-color: #f2d2d2;
+}
+
+div.msg_i {
+	background-color: #ecf581;
+}
+
+div.msg_s {
+	background-color: #c8ffc4;
+}
+
+div.msg_e, div.msg_i, div.msg_s {
+	border: thin solid #bdbdbd;
+	padding: 5px;
+	margin: 5px 25px 5px 0px;
+	border-radius: 5px;
+	width: 450px;
+}
+

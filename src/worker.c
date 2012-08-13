@@ -1166,8 +1166,9 @@ void send_keepalives(struct worker_t *self)
 		if ( c->state == CSTATE_COREPEER )
 			continue;
 		
-		/* Is it time for keepalive ? */
-		if (c->keepalive <= tick && c->obuf_wtime < w_keepalive) {
+		/* Is it time for keepalive? Also send a keepalive if clock jumped backwards. */
+		if ((c->keepalive <= tick && c->obuf_wtime < w_keepalive)
+		    || (c->keepalive > tick + keepalive_interval)) {
 			int flushlevel = c->obuf_flushsize;
 			c->keepalive = tick + keepalive_interval;
 
@@ -1184,7 +1185,9 @@ void send_keepalives(struct worker_t *self)
 			if (rc < -2) continue; // destroyed..
 		}
 		
-		/* check for input timeouts */
+		/* Check for input timeouts. These will currently also kick in if the
+		 * real-time clock jumps backwards for some reason.
+		 */
 		if (c->flags & CLFLAGS_INPORT) {
 			if (c->state != CSTATE_CONNECTED) {
 				if (c->connect_time < tick - client_login_timeout) {

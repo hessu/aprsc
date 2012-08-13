@@ -291,25 +291,34 @@ int status_dump_file(void)
 	char path[PATHLEN+1];
 	char tmppath[PATHLEN+1];
 	FILE *fp;
+	time_t start_t, end_t;
+	
+	time(&start_t);
 	
 	snprintf(path, PATHLEN, "%s/aprsc-status.json", rundir);
 	snprintf(tmppath, PATHLEN, "%s.tmp", path);
 	fp = fopen(tmppath,"w");
 	if (!fp) {
-		hlog(LOG_ERR, "status dump failed: Could not open %s for writing: %s", tmppath, strerror(errno));
+		hlog(LOG_ERR, "status file update failed: Could not open %s for writing: %s", tmppath, strerror(errno));
 		return -1;
 	}
 	
 	status_dump_fp(fp);
 	
 	if (fclose(fp)) {
-		hlog(LOG_ERR, "status dump failed: close(%s): %s", tmppath, strerror(errno));
+		hlog(LOG_ERR, "status file update failed: close(%s): %s", tmppath, strerror(errno));
 		return -1;
 	}
 	
 	if (rename(tmppath, path)) {
-		hlog(LOG_ERR, "status dump failed: Could not rename %s to %s: %s", tmppath, path, strerror(errno));
+		hlog(LOG_ERR, "status file update failed: Could not rename %s to %s: %s", tmppath, path, strerror(errno));
 		return -1;
+	}
+	
+	/* check if we're having I/O delays */
+	time(&end_t);
+	if (end_t - start_t > 2) {
+		hlog(LOG_ERR, "status file update took %d seconds", end_t - start_t);
 	}
 	
 	return 0;

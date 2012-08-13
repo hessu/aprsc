@@ -307,6 +307,7 @@ int main(int argc, char **argv)
 	struct rlimit rlim;
 	time_t cleanup_tick;
 	time_t stats_tick;
+	time_t previous_tick;
 	struct addrinfo *ai;
 	
 	/* close stdin */
@@ -432,6 +433,7 @@ int main(int argc, char **argv)
 	status_init();
 
 	time(&cleanup_tick);
+	time(&previous_tick);
 
 	pthread_attr_init(&pthr_attrs);
 	/* 128 kB stack is enough for each thread,
@@ -452,7 +454,18 @@ int main(int argc, char **argv)
 		time(&tick);
 		if (!uplink_simulator)
 			now = tick;
-
+		
+		/* catch some oddities with time keeping */
+		if (tick != previous_tick) {
+			if (previous_tick > tick) {
+				hlog(LOG_WARNING, "time keeping: Time jumped backwards by %d seconds!", previous_tick - tick);
+			} else if (previous_tick < tick-1) {
+				hlog(LOG_WARNING, "time keeping: Time jumped forwards by %d seconds!", tick - previous_tick);
+			}
+			
+			previous_tick = tick;
+		}
+		
 		if (want_dbdump) {
 			dbdump_all();
 			want_dbdump = 0;

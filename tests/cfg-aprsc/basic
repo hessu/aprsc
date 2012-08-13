@@ -45,7 +45,6 @@ ClientTimeout		48h
 #		msgonly - messages only
 #		userfilter - user-specified filters
 #
-Listen "Messages only"                            messageonly tcp 0.0.0.0  55314   filter t/m
 Listen "Full feed with CWOP"                      fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl"
 Listen "Full feed with CWOP, UDP"                 fullfeed    udp ::0      55152
 Listen "Igate port"                               igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"

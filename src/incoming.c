@@ -533,7 +533,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_append_len < 0) {
 		/* the q construct algorithm decided to drop the packet */
 		hlog(LOG_DEBUG, "%s/%s: q construct drop: %d", c->addr_rem, c->username, path_append_len);
-		return path_append_len;
+		return -20;
 	}
 	
 	/* get a packet buffer */
@@ -742,6 +742,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#') {
+		hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
 		if (l4proto != IPPROTO_UDP) {
 			/* filter adjunct commands ? */
 			/* TODO: check if the socket type allows filter commands! */
@@ -749,26 +750,24 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 			if (filtercmd)
 				return filter_commands(self, c, filtercmd, len - (filtercmd - s));
 			
-			hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
 		}
 		
 		return 0;
 	}
-
-	/* do some parsing */
-	if (len < PACKETLEN_MIN-2)
+	
+	if (len < PACKETLEN_MIN-2) {
 		e = -42;
-	else
+		hlog(LOG_DEBUG, "%s/%s: Packet too short (%d bytes): %.*s",
+			c->addr_rem, c->username, len, len, s);
+	} else {
+		/* parse and process the packet */
 		e = incoming_parse(self, c, s, len);
 	
-	if (e < 0) {
-		/* failed parsing */
-		if (e == -42)
-			hlog(LOG_DEBUG, "%s/%s: Packet too short (%d): %.*s",
-				c->addr_rem, c->username, len, len, s);
-		else
-			hlog(LOG_DEBUG, "%s/%s: Failed parsing (%d): %.*s",
+		if (e < 0) {
+			/* failed parsing */
+			hlog(LOG_DEBUG, "%s/%s: Dropped packet (%d): %.*s",
 				c->addr_rem, c->username, e, len, s);
+		}
 	}
 	
 	/* Account the one incoming packet.

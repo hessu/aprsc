@@ -299,10 +299,22 @@ void check_uid(void)
  *	Time-keeping thread
  */
 
+static double timeval_diff(struct timeval start, struct timeval end)
+{
+	double diff;
+	
+	diff = (end.tv_sec - start.tv_sec)
+		+ ((end.tv_usec - start.tv_usec) / 1000000.0);
+	
+	return diff;
+}
+
 void time_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
 	time_t previous_tick;
+	struct timespec sleep_req;
+	struct timeval sleep_start, sleep_end;
 
 	pthreads_profiling_reset("time");
 	
@@ -320,18 +332,27 @@ void time_thread(void *asdf)
 	
 	time(&previous_tick);
 	
+	sleep_req.tv_sec = 0;
+	sleep_req.tv_nsec = 210 * 1000 * 1000; /* 210 ms */
+	
 	while (!accept_shutting_down) {
-		usleep(300000); /* 300 ms */
+		gettimeofday(&sleep_start, NULL);
+		nanosleep(&sleep_req, NULL);
+		gettimeofday(&sleep_end, NULL);
 		time(&tick);
 		if (!uplink_simulator)
 			now = tick;
 		
+		double slept = timeval_diff(sleep_start, sleep_end);
+		if (slept > 1.0)
+			hlog(LOG_WARNING, "time keeping: sleep of %d ms took %.6f s!", sleep_req.tv_nsec / 1000 / 1000, slept);
+		
 		/* catch some oddities with time keeping */
 		if (tick != previous_tick) {
 			if (previous_tick > tick) {
-				hlog(LOG_WARNING, "time keeping: Time jumped backwards by %d seconds!", previous_tick - tick);
+				hlog(LOG_WARNING, "time keeping: Time jumped backward by %d seconds!", previous_tick - tick);
 			} else if (previous_tick < tick-1) {
-				hlog(LOG_WARNING, "time keeping: Time jumped forwards by %d seconds!", tick - previous_tick);
+				hlog(LOG_WARNING, "time keeping: Time jumped forward by %d seconds!", tick - previous_tick);
 			}
 			
 			previous_tick = tick;

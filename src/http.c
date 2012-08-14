@@ -429,7 +429,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	const char *ims;
 	
 	for (cmdp = http_static_files; cmdp->name != NULL; cmdp++)
-		if (strncasecmp(cmdp->name, uri, strlen(uri)) == 0)
+		if (strcmp(cmdp->name, uri) == 0)
 			break;
 			
 	if (cmdp->name == NULL) {

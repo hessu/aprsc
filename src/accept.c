@@ -39,8 +39,6 @@
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 
-extern int uplink_simulator;
-
 struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
@@ -579,9 +577,6 @@ static struct client_t *do_accept(struct listen_t *l)
 	    c->wbuf_size = 8192; // default is syscall fails
 	}
 #endif
-
-	if (c->flags & CLFLAGS_UPLINKSIM)
-		uplink_simulator = 1;
 
 	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	

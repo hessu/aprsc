@@ -48,7 +48,6 @@ struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 int shutting_down;		// are we shutting down now?
 int reopen_logs;		// should we reopen log files now?
 int reconfiguring;		// should we reconfigure now?
-int uplink_simulator;
 int fileno_limit;
 int dbdump_at_exit;
 int want_dbdump;
@@ -340,8 +339,7 @@ void time_thread(void *asdf)
 		nanosleep(&sleep_req, NULL);
 		gettimeofday(&sleep_end, NULL);
 		time(&tick);
-		if (!uplink_simulator)
-			now = tick;
+		now = tick;
 		
 		double slept = timeval_diff(sleep_start, sleep_end);
 		if (slept > 0.90)

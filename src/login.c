@@ -180,8 +180,6 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	/* ok, login succeeded, switch handler */
 	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
-	if (c->flags & CLFLAGS_UPLINKSIM)
-		c->handler = &incoming_uplinksim_handler;
 	
 	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
 			    username,

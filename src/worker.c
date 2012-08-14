@@ -552,7 +552,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	int pe;
 	
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d err %d: %s",
-	      self->id, ( (c->flags & (CLFLAGS_UPLINKPORT|CLFLAGS_UPLINKSIM))
+	      self->id, ( (c->flags & CLFLAGS_UPLINKPORT)
 			  ? "uplink":"client" ), c->fd, errnum, c->addr_rem);
 
 	/* close */

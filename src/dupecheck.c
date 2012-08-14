@@ -30,9 +30,6 @@
 #include "historydb.h"
 #include "http.h"
 
-extern int uplink_simulator;
-
-
 int dupecheck_shutting_down;
 int dupecheck_running;
 pthread_t dupecheck_th;

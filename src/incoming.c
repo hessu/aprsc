@@ -658,67 +658,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	return rc;
 }
 
-
-/*
- *	Handler called by the socket reading function for uplink-simulator APRS-IS traffic
- */
-
-int incoming_uplinksim_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
-{
-	int e;
-	
-	/* note: len does not include CRLF, it's reconstructed here... we accept
-	 * CR, LF or CRLF on input but make sure to use CRLF on output.
-	 */
-	
-	/* Make sure it looks somewhat like an APRS-IS packet... len is without CRLF.
-	 * Do not do PACKETLEN_MIN test here, since it would drop the 'filter'
-	 * commands.
-	 */
-	if (len > PACKETLEN_MAX-2) {
-		hlog(LOG_WARNING, "Packet too long (%d): %.*s", len, len, s);
-		return 0;
-	}
-	
-//	hlog(LOG_DEBUG, "Incoming: %.*s", len, s);
-	
-	long t;
-	char *p = s;
-	for (;*p != '\t' && p - s < len; ++p);
-	if (*p == '\t') *p++ = 0;
-	sscanf(s, "%ld", &t);
-	now = t;
-	len -= (p - s);
-	s = p;
-	
-	/* starts with '#' => a comment packet, timestamp or something */
-	if (*s == '#') {
-		/* filter adjunct commands ? */
-		/* TODO: is some client sending "# filter" instead? Should accept maybe? */
-		/* Yes, aprssrvr accept #kjhflawhiawuhglawuhfilter too - as long as it has filter in the end. */
-		char *filtercmd = strstr(s, "filter");
-		if (filtercmd)
-			return filter_commands(self, c, filtercmd, len - (filtercmd - s));
-		return 0;
-	}
-	
-	/* do some parsing */
-	if (len < PACKETLEN_MIN-2)
-		e = -42;
-	else
-		e = incoming_parse(self, c, s, len);
-	
-	if (e < 0) {
-		/* failed parsing */
-		if (e == -42)
-			hlog(LOG_DEBUG, "Uplinksim: Packet too short (%d): %.*s", len, len, s);
-		else
-			hlog(LOG_DEBUG, "Uplinksim: Failed parsing (%d): %.*s",e,len,s);
-	}
-	
-	return 0;
-}
-
 /*
  *	Handler called by the socket reading function for normal APRS-IS traffic
  */

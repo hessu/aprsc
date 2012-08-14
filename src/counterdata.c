@@ -68,7 +68,7 @@ struct cdata_t *cdata_alloc(const char *name)
 		exit(1);
 	}
 	
-	hlog(LOG_DEBUG, "cdata: allocated: %s", cd->name);
+	//hlog(LOG_DEBUG, "cdata: allocated: %s", cd->name);
 	
 	return cd;
 }

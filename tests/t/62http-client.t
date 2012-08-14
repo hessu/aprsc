@@ -44,8 +44,8 @@ my $url = "http://127.0.0.1:55080/";
 #$url = "http://he.fi/";
 my $req = HTTP::Request::Common::POST($url);
 #$req->header('Accept', 'text/plain');
-$req->header('Accept-Type', 'text/plain');
-$req->header('Content-Type', 'application/octet-stream');
+$req->header('Accept-type', 'text/plain');
+$req->header('Content-type', 'application/octet-stream');
 $req->header('Content-Length', length($post));
 $req->content($post);
 

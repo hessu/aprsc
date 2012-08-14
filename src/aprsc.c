@@ -344,7 +344,7 @@ void time_thread(void *asdf)
 			now = tick;
 		
 		double slept = timeval_diff(sleep_start, sleep_end);
-		if (slept > 1.0)
+		if (slept > 0.90)
 			hlog(LOG_WARNING, "time keeping: sleep of %d ms took %.6f s!", sleep_req.tv_nsec / 1000 / 1000, slept);
 		
 		/* catch some oddities with time keeping */

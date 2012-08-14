@@ -759,6 +759,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	if (strcasecmp(argv[2], "userfilter") == 0) {
 	  clflags |= CLFLAGS_USERFILTEROK;
 	  clflags |= CLFLAGS_IGATE;
+	} else if (strcasecmp(argv[2], "igate") == 0) {
+	  clflags |= CLFLAGS_USERFILTEROK;
+	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "fullfeed") == 0) {
 	  clflags |= CLFLAGS_FULLFEED;
 	  clflags |= CLFLAGS_IGATE;
@@ -768,11 +771,8 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_USERFILTEROK;
 	  clflags |= CLFLAGS_IGATE;
-	} else if (strcasecmp(argv[2], "igate") == 0) {
-	  clflags |= CLFLAGS_USERFILTEROK;
-	  clflags |= CLFLAGS_IGATE;
 	} else {
-	  hlog(LOG_ERR, "Listen: unknown quality token: %s", argv[2]);
+	  hlog(LOG_ERR, "Listen: unknown port type: %s", argv[2]);
 	}
 	
 	if (strcasecmp(argv[3], "tcp") == 0) {

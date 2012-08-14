@@ -296,6 +296,52 @@ void check_uid(void)
 }
 
 /*
+ *	Time-keeping thread
+ */
+
+void time_thread(void *asdf)
+{
+	sigset_t sigs_to_block;
+	time_t previous_tick;
+
+	pthreads_profiling_reset("time");
+	
+	sigemptyset(&sigs_to_block);
+	sigaddset(&sigs_to_block, SIGALRM);
+	sigaddset(&sigs_to_block, SIGINT);
+	sigaddset(&sigs_to_block, SIGTERM);
+	sigaddset(&sigs_to_block, SIGQUIT);
+	sigaddset(&sigs_to_block, SIGHUP);
+	sigaddset(&sigs_to_block, SIGURG);
+	sigaddset(&sigs_to_block, SIGPIPE);
+	sigaddset(&sigs_to_block, SIGUSR1);
+	sigaddset(&sigs_to_block, SIGUSR2);
+	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
+	
+	time(&previous_tick);
+	
+	while (!accept_shutting_down) {
+		usleep(300000); /* 300 ms */
+		time(&tick);
+		if (!uplink_simulator)
+			now = tick;
+		
+		/* catch some oddities with time keeping */
+		if (tick != previous_tick) {
+			if (previous_tick > tick) {
+				hlog(LOG_WARNING, "time keeping: Time jumped backwards by %d seconds!", previous_tick - tick);
+			} else if (previous_tick < tick-1) {
+				hlog(LOG_WARNING, "time keeping: Time jumped forwards by %d seconds!", tick - previous_tick);
+			}
+			
+			previous_tick = tick;
+		}
+		
+	}
+	
+}	
+
+/*
  *	Main
  */
 
@@ -303,11 +349,11 @@ int main(int argc, char **argv)
 {
 	pthread_t accept_th;
 	pthread_t http_th;
+	pthread_t time_th;
 	int e;
 	struct rlimit rlim;
 	time_t cleanup_tick;
 	time_t stats_tick;
-	time_t previous_tick;
 	struct addrinfo *ai;
 	
 	/* close stdin */
@@ -420,8 +466,6 @@ int main(int argc, char **argv)
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGURG, SIG_IGN);
 	
-
-
 	/* Early inits in single-thread mode */
 	keyhash_init();
 	filter_init();
@@ -433,12 +477,15 @@ int main(int argc, char **argv)
 	status_init();
 
 	time(&cleanup_tick);
-	time(&previous_tick);
 
 	pthread_attr_init(&pthr_attrs);
 	/* 128 kB stack is enough for each thread,
 	   default of 10 MB is way too much...*/
 	pthread_attr_setstacksize(&pthr_attrs, 128*1024);
+
+	/* start the time thread, which will update the current time */
+	if (pthread_create(&time_th, &pthr_attrs, (void *)time_thread, NULL))
+		perror("pthread_create failed for time_thread");
 
 	/* start the accept thread, which will start server threads */
 	if (pthread_create(&accept_th, &pthr_attrs, (void *)accept_thread, NULL))
@@ -451,20 +498,6 @@ int main(int argc, char **argv)
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
 		poll(NULL, 0, 300); // 0.300 sec -- or there abouts..
-		time(&tick);
-		if (!uplink_simulator)
-			now = tick;
-		
-		/* catch some oddities with time keeping */
-		if (tick != previous_tick) {
-			if (previous_tick > tick) {
-				hlog(LOG_WARNING, "time keeping: Time jumped backwards by %d seconds!", previous_tick - tick);
-			} else if (previous_tick < tick-1) {
-				hlog(LOG_WARNING, "time keeping: Time jumped forwards by %d seconds!", tick - previous_tick);
-			}
-			
-			previous_tick = tick;
-		}
 		
 		if (want_dbdump) {
 			dbdump_all();
@@ -488,7 +521,7 @@ int main(int argc, char **argv)
 		
 		if (cleanup_tick < tick || cleanup_tick > tick + 60) {
 			cleanup_tick = tick + 60;
-
+			
 			status_dump_file();
 			historydb_cleanup();
 			filter_wx_cleanup();
@@ -513,6 +546,9 @@ int main(int argc, char **argv)
 	else
 		hlog(LOG_INFO, "Accept thread has terminated.");
 		
+	if ((e = pthread_join(time_th, NULL)))
+		hlog(LOG_ERR, "Could not pthread_join time_th: %s", strerror(e));
+	
 	if (dbdump_at_exit) {
 		dbdump_all();
 	}

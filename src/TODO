@@ -4,12 +4,6 @@ TODO ITEMS LIST
       to 9 or A to F as this would indicate a server generated IP address
       for the q construct.
 
-    - Permit only one logged in socket from any given userid.
-      The "more than one -> kick previous" is neat denial-of-service way on
-      third parties...
-
-    - CORE-PEER communication
-
     - UDP communication
 	- "Client" version exists -- unidirectional data flow from server to client,
 	  server discards all data sent to it
@@ -20,24 +14,7 @@ TODO ITEMS LIST
     - complete output filters
 	- s-filter is still missing
 
-    - Timeout processing client vs. uplink vs. core vs. history dumpping client
-
-    - Global packet queue expiration  (done, but needs review..)
-
-    - remove the UPLINKSIM code (svn diff -r 99:100) before release and
-      final testing
-
-    - Filter parse and error reporting for  aprsc.conf  defined filters
-      (e.g.  "t/c*" meaning "full feed"), sysadmin wants to see that info.
-		done -- goes to log as ERROR level message.
-
-    - Smarter 
-
 To Consider:
-
-    - multiple parallel uplink connections, but send data on only one
-      (resilient mesh) (CANNOT DO - will increase bandwidth on core servers
-      if used with full feeds)
 
     - SCTP sockets
 
@@ -46,12 +23,4 @@ To Consider:
       has been in transit, AND binary transparency capability...
       ( network byte order 32-bit value telling seconds since 2000-01-01 ? )
 
-    - IPv6 support (core-peer encodes IP address in hex into delivery path..)
-
-    - history dumps
-	- Turn around the idea of worker scanning onwards the pbuf chain,
-	  and feeding same pbuf to all clients -- new would be to scan clients,
-	  and let each to forward the pbuf chain, and track the lag parameter.
-	- This way each client can have multiple modes -- write() errno EAGAIN
-	  is acceptable for history dump, while it is not so for regular feeds.
 

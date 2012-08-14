@@ -31,6 +31,10 @@ extern int log_dest;    /* Logging destination */
 extern int log_level;	/* Logging level */
 extern char *log_dir;	/* Log directory */
 
+extern int log_rotate_size;	/* Rotate log when it reaches a given size */
+extern int log_rotate_num;	/* How many logs to keep around */
+
+
 extern char *str_append(char *s, const char *fmt, ...);
 
 extern int pick_loglevel(char *s, char **names);

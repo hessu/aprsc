@@ -121,6 +121,7 @@ int do_interval(int *dest, int argc, char **argv);
 int do_peergroup(struct peerip_config_t **lq, int argc, char **argv);
 int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 int do_uplinkbind(void *new, int argc, char **argv);
+int do_logrotate(int *dest, int argc, char **argv);
 
 /*
  *	Configuration file commands
@@ -131,6 +132,7 @@ int do_uplinkbind(void *new, int argc, char **argv);
 static struct cfgcmd cfg_cmds[] = {
 	{ "rundir",		_CFUNC_ do_string,	&new_rundir		},
 	{ "logdir",		_CFUNC_ do_string,	&new_logdir		},
+	{ "logrotate",		_CFUNC_ do_logrotate,	&log_rotate_size	},
 	{ "serverid",		_CFUNC_ do_string,	&new_serverid		},
 	{ "myemail",		_CFUNC_ do_string,	&new_myemail		},
 	{ "myadmin",		_CFUNC_ do_string,	&new_myadmin		},
@@ -935,6 +937,43 @@ int do_httpupload(char *new, int argc, char **argv)
 {
 	return do_http_listener("HTTPUpload", 1, argc, argv);
 }
+
+/*
+ *	Log rotation config
+ */
+ 
+int do_logrotate(int *dest, int argc, char **argv)
+{
+	int i;
+	
+	if (argc != 3) {
+		hlog(LOG_ERR, "LogRotate: Invalid number of arguments");
+		return -1;
+	}
+	
+	i = atoi(argv[1]);
+	if (i < 1) {
+		hlog(LOG_ERR, "LogRotate: Invalid megabytes value: %s", argv[1]);
+		return -1;
+	}
+	
+	log_rotate_size = i * 1024 * 1024;
+	
+	i = atoi(argv[2]);
+	if (i < 1) {
+		hlog(LOG_ERR, "LogRotate: Invalid file count: %s", argv[2]);
+		log_rotate_size = 0;
+		return -1;
+	}
+	
+	log_rotate_num = i;
+	
+	hlog(LOG_DEBUG, "LogRotate: Enabled at %d megabytes, %d files",
+		log_rotate_size/1024/1024, log_rotate_num);
+	
+	return 0;
+}
+
 
 /*
  *	Validate an APRS-IS callsign

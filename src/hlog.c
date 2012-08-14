@@ -49,6 +49,9 @@ char *accesslog_fname = NULL;	/* Access log file name */
 int accesslog_file = -1;	/* Access log fd */
 rwlock_t accesslog_lock = RWL_INITIALIZER;
 
+int log_rotate_size = 0;	/* Rotate log when it reaches a given size */
+int log_rotate_num = 5;		/* How many logs to keep around */
+
 char *log_levelnames[] = {
 	"EMERG",
 	"ALERT",
@@ -121,7 +124,7 @@ int open_log(char *name, int reopen)
 		hfree(log_name);
 		
 	if (!(log_name = hstrdup(name))) {
-		fprintf(stderr, "logger: out of memory!\n");
+		fprintf(stderr, "aprsc logger: out of memory!\n");
 		exit(1);
 	}
 	
@@ -137,7 +140,7 @@ int open_log(char *name, int reopen)
 		
 		log_file = open(log_fname, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP);
 		if (log_file < 0) {
-			fprintf(stderr, "logger: Could not open %s: %s\n", log_fname, strerror(errno));
+			fprintf(stderr, "aprsc logger: Could not open %s: %s\n", log_fname, strerror(errno));
 			exit(1);
 		}
 	}
@@ -169,7 +172,7 @@ int close_log(int reopen)
 		closelog();
 	} else if (log_dest == L_FILE) {
 		if (close(log_file))
-			fprintf(stderr, "hemserv logger: Could not close log file %s: %s\n", log_fname, strerror(errno));
+			fprintf(stderr, "aprsc logger: Could not close log file %s: %s\n", log_fname, strerror(errno));
 		log_file = -1;
 		hfree(log_fname);
 		log_fname = NULL;
@@ -182,6 +185,71 @@ int close_log(int reopen)
 		rwl_wrunlock(&log_file_lock);
 	
 	hfree(s);
+	
+	return 0;
+}
+
+/*
+ *	Rotate the log file
+ */
+
+int rotate_log(void)
+{
+	char *tmp;
+	int i;
+	char *r1, *r2;
+	
+	if (rwl_trywrlock(&log_file_lock)) {
+		fprintf(stderr, "failed to wrlock log_file_lock for rotation\n");
+		return 0;
+	}
+	
+	// check if still oversize and not rotated by another thread
+	off_t l = lseek(log_file, 0, SEEK_CUR);
+	if (l < log_rotate_size) {
+		rwl_wrunlock(&log_file_lock);
+		return 0;
+	}
+	
+	// rename
+	tmp = hmalloc(strlen(log_fname) + 6);
+	sprintf(tmp, "%s.tmp", log_fname);
+	if (rename(log_fname, tmp) != 0) {
+		fprintf(stderr, "aprsc logger: Failed to rename %s to %s: %s\n", log_fname, tmp, strerror(errno));
+		// continue anyway, try to reopen
+	}
+	
+	// reopen
+	if (close(log_file))
+		fprintf(stderr, "aprsc logger: Could not close log file %s: %s\n", log_fname, strerror(errno));
+	
+	log_file = open(log_fname, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR|S_IWUSR|S_IRGRP);
+	if (log_file < 0) {
+		fprintf(stderr, "aprsc logger: Could not open %s: %s\n", log_fname, strerror(errno));
+		log_file = -1;
+	}
+	
+	rwl_wrunlock(&log_file_lock);
+	
+	// do the rest of the rotation
+	r1 = hmalloc(strlen(log_fname) + 16);
+	r2 = hmalloc(strlen(log_fname) + 16);
+	
+	for (i = log_rotate_num-1; i > 0; i--) {
+		sprintf(r1, "%s.%d", log_fname, i-1);
+		sprintf(r2, "%s.%d", log_fname, i);
+		if (rename(r1, r2) != 0 && errno != ENOENT) {
+			fprintf(stderr, "rename %s => %s failed:%s\n", r1, r2, strerror(errno));
+		}
+	}
+	
+	if (rename(tmp, r1) != 0) {
+		fprintf(stderr, "aprsc logger: Failed to rename %s to %s: %s\n", tmp, r1, strerror(errno));
+	}
+	
+	hfree(tmp);
+	hfree(r1);
+	hfree(r2);
 	
 	return 0;
 }
@@ -233,8 +301,15 @@ int hlog(int priority, const char *fmt, ...)
 		wb[LOG_LEN-1] = 0;
 		rwl_rdlock(&log_file_lock);
 		if ((w = write(log_file, wb, len)) != len)
-			fprintf(stderr, "logger: Could not write to %s (fd %d): %s\n", log_fname, log_file, strerror(errno));
+			fprintf(stderr, "aprsc logger: Could not write to %s (fd %d): %s\n", log_fname, log_file, strerror(errno));
 		rwl_rdunlock(&log_file_lock);
+		
+		if (log_rotate_size) {
+			off_t l = lseek(log_file, 0, SEEK_CUR);
+			if (l >= log_rotate_size) {
+				rotate_log();
+			}
+		}
 		
 	} else if (log_dest == L_SYSLOG) {
 		rwl_rdlock(&log_file_lock);

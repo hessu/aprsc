@@ -63,6 +63,8 @@ struct uplink_config_t *new_uplink_config;
 struct peerip_config_t *peerip_config;
 struct peerip_config_t *new_peerip_config;
 
+struct http_config_t *http_config = NULL;
+struct http_config_t *new_http_config = NULL;
 char http_bind_default[] = "0.0.0.0";
 char *http_bind = http_bind_default;	/* http address string to listen on */
 int http_port = 14501;
@@ -216,6 +218,22 @@ void free_peerip_config(struct peerip_config_t **lc)
 			if (this->filters[i])
 				hfree((void*)this->filters[i]);
 		freeaddrinfo(this->ai);
+		hfree(this);
+	}
+}
+
+/*
+ *	Free a http config tree
+ */
+
+void free_http_config(struct http_config_t **lc)
+{
+	struct http_config_t *this;
+
+	while (*lc) {
+		this = *lc;
+		*lc = this->next;
+		hfree((void*)this->host);
 		hfree(this);
 	}
 }
@@ -884,27 +902,38 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	return 0;
 }
 
-int do_http_listener(char *what, char **bind, int *port, int argc, char **argv)
+int do_http_listener(char *what, int upload_type, int argc, char **argv)
 {
+	struct http_config_t *l;
+	
 	if (argc != 3) {
 		hlog(LOG_ERR, "%s: Invalid number of arguments", what);
 		return -1;
 	}
 	
-	*bind = hstrdup(argv[1]);
-	*port = atoi(argv[2]);
+	l = hmalloc(sizeof(*l));
+	memset(l, 0, sizeof(*l));
+	l->host = hstrdup(argv[1]);
+	l->port = atoi(argv[2]);
+	l->upload_port = upload_type;
+	
+	l->next = new_http_config;
+	if (new_http_config)
+		new_http_config->prevp = &l->next;
+	new_http_config = l;
+	l->prevp = &new_http_config;
 	
 	return 0;
 }
 
 int do_httpstatus(char *new, int argc, char **argv)
 {
-	return do_http_listener("HTTPStatus", &new_http_bind, &new_http_port, argc, argv);
+	return do_http_listener("HTTPStatus", 0, argc, argv);
 }
 
 int do_httpupload(char *new, int argc, char **argv)
 {
-	return do_http_listener("HTTPUpload", &new_http_bind_upload, &new_http_port_upload, argc, argv);
+	return do_http_listener("HTTPUpload", 1, argc, argv);
 }
 
 /*
@@ -1094,7 +1123,13 @@ int read_config(void)
 	if (peerip_config)
 		peerip_config->prevp = &peerip_config;
 	new_peerip_config = NULL;
-
+	
+	/* put in new http config */
+	free_http_config(&http_config);
+	http_config = new_http_config;
+	if (http_config)
+		http_config->prevp = &http_config;
+	new_http_config = NULL;
 	
 	if (failed)
 		return -1;

@@ -44,9 +44,6 @@ struct http_static_t {
 	char	*filename;
 };
 
-struct evhttp_bound_socket *http_status_handle = NULL;
-struct evhttp_bound_socket *http_upload_handle = NULL;
-
 struct worker_t *http_worker = NULL;
 struct client_t *http_pseudoclient = NULL;
 
@@ -613,7 +610,7 @@ struct client_t *http_pseudoclient_setup(void)
 void http_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
-	
+	struct http_config_t *lc;
 	struct timeval http_timer_tv;
 	
 	http_timer_tv.tv_sec = 0;
@@ -661,6 +658,10 @@ void http_thread(void *asdf)
 				evhttp_free(srvr_status);
 				srvr_status = NULL;
 			}
+			if (srvr_upload) {
+				evhttp_free(srvr_upload);
+				srvr_upload = NULL;
+			}
 			if (libbase) {
 				event_base_free(libbase);
 				libbase = NULL;
@@ -673,35 +674,34 @@ void http_thread(void *asdf)
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			
-			if (http_bind) {
-				hlog(LOG_INFO, "Binding HTTP status socket %s:%d", http_bind, http_port);
+			for (lc = http_config; (lc); lc = lc->next) {
+				hlog(LOG_INFO, "Binding HTTP %s socket %s:%d", lc->upload_port ? "upload" : "status", lc->host, lc->port);
 				
-				srvr_status = evhttp_new(libbase);
-				http_srvr_defaults(srvr_status);
+				struct evhttp *srvr;
+				struct evhttp_bound_socket *handle;
 				
-				http_status_handle = evhttp_bind_socket_with_handle(srvr_status, http_bind, http_port);
-				if (!http_status_handle) {
-					hlog(LOG_ERR, "Failed to bind HTTP status socket %s:%d: %s", http_bind, http_port, strerror(errno));
-					// TODO: should exit?
+				if (lc->upload_port) {
+					if (!srvr_upload) {
+						srvr_upload = evhttp_new(libbase);
+						http_srvr_defaults(srvr_upload);
+						evhttp_set_allowed_methods(srvr_upload, EVHTTP_REQ_POST); /* uploads are POSTs, after all */
+						evhttp_set_gencb(srvr_upload, http_router, (void *)2);
+					}
+					srvr = srvr_upload;
+				} else {
+					if (!srvr_status) {
+						srvr_status = evhttp_new(libbase);
+						http_srvr_defaults(srvr_status);
+						evhttp_set_gencb(srvr_status, http_router, (void *)1);
+					}
+					srvr = srvr_status;
 				}
 				
-				evhttp_set_gencb(srvr_status, http_router, (void *)1);
-			}
-			
-			if (http_bind_upload) {
-				hlog(LOG_INFO, "Binding HTTP upload socket %s:%d", http_bind_upload, http_port_upload);
-				
-				srvr_upload = evhttp_new(libbase);
-				http_srvr_defaults(srvr_upload);
-				evhttp_set_allowed_methods(srvr_upload, EVHTTP_REQ_POST); /* uploads are POSTs, after all */
-				
-				http_upload_handle = evhttp_bind_socket_with_handle(srvr_upload, http_bind_upload, http_port_upload);
-				if (!http_upload_handle) {
-					hlog(LOG_ERR, "Failed to bind HTTP upload socket %s:%d: %s", http_bind_upload, http_port_upload, strerror(errno));
+				handle = evhttp_bind_socket_with_handle(srvr, lc->host, lc->port);
+				if (!handle) {
+					hlog(LOG_ERR, "Failed to bind HTTP socket %s:%d: %s", lc->host, lc->port, strerror(errno));
 					// TODO: should exit?
 				}
-				
-				evhttp_set_gencb(srvr_upload, http_router, (void *)2);
 			}
 			
 			hlog(LOG_INFO, "HTTP thread ready.");

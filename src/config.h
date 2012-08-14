@@ -12,7 +12,7 @@
 #define CONFIG_H
 
 #define PROGNAME "aprsc"
-#define VERSION "0.3.5"
+#define VERSION "0.4.0"
 #define VERSTR  PROGNAME " v" VERSION
 #define SERVERID PROGNAME " " VERSION
 #define CRLF "\r\n"
@@ -146,6 +146,21 @@ extern socklen_t uplink_bind_v6_len;
 #define MAX_COREPEERS		16
 
 /* http server config */
+
+struct http_config_t {
+	struct http_config_t *next;
+	struct http_config_t **prevp;
+	
+	char *host;			/* name of socket */
+	int port;
+	
+	int upload_port;
+	
+	struct acl_t *acl;
+};
+
+extern struct http_config_t *http_config;
+
 extern char *http_bind;
 extern int http_port;
 extern char *http_bind_upload;

@@ -551,9 +551,9 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_DEBUG, "Worker %d disconnecting %s fd %d err %d: %s",
+	hlog( LOG_DEBUG, "Worker %d disconnecting %s %s fd %d err %d",
 	      self->id, ( (c->flags & CLFLAGS_UPLINKPORT)
-			  ? "uplink":"client" ), c->fd, errnum, c->addr_rem);
+			  ? "uplink":"client" ), c->addr_rem, c->fd, errnum);
 
 	/* close */
 	if (c->fd >= 0) {
@@ -565,7 +565,23 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 
 	c->fd = -1;
 	
-	if ((pe = pthread_mutex_lock(&self->clients_mutex))) {
+	/* If this thread already owns the mutex (we're closing the socket
+	 * while traversing the thread's client list), FreeBSD's mutex lock
+	 * will fail with EDEADLK:
+	 *
+	 * 2012/08/15 10:03:34.065703 aprsc[41159:800f12fc0] ERROR:
+	 * client_close(worker 1): could not lock clients_mutex: Resource deadlock
+	 * avoided
+	 *
+	 * If this happens, let's remember we've locked the mutex earlier,
+	 * and let's not unlock it either.
+	 *
+	 * The current example of this is when collect_new_clients() sends
+	 * the "# aprsc VERSION" login string to new clients. The client_printf()
+	 * may fail if the client connects and disconnects very quickly, and
+	 * this will cause it to client_close() during the collection loop.
+	 */
+	if ((pe = pthread_mutex_lock(&self->clients_mutex)) && pe != EDEADLK) {
 		hlog(LOG_ERR, "client_close(worker %d): could not lock clients_mutex: %s", self->id, strerror(pe));
 		return;
 	}
@@ -591,9 +607,14 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	/* free it up */
 	client_free(c);
 	
-	if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {
-		hlog(LOG_ERR, "client_close(worker %d): could not unlock clients_mutex: %s", self->id, strerror(pe));
-		exit(1);
+	/* if we held the lock before locking, let's not unlock it either */
+	if (pe == EDEADLK) {
+		hlog(LOG_DEBUG, "client_close(worker %d): closed client while holding clients_mutex", self->id);
+	} else {
+		if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {
+			hlog(LOG_ERR, "client_close(worker %d): could not unlock clients_mutex: %s", self->id, strerror(pe));
+			exit(1);
+		}
 	}
 	
 	/* reduce client counter */
@@ -752,6 +773,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			c->obuf_wtime = tick;
 		}
 	}
+	
 	/* All done ? */
 	if (c->obuf_start >= c->obuf_end) {
 		//hlog(LOG_DEBUG, "client_write(%s) obuf empty", c->addr_rem);
@@ -1278,7 +1300,7 @@ void worker_thread(struct worker_t *self)
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
 	hlog(LOG_DEBUG, "Worker %d started.", self->id);
-
+	
 	while (!self->shutting_down) {
 		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
 		t1 = tick;

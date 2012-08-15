@@ -16,3 +16,6 @@ of other Unix-like platforms do work, but when it comes to building and
 installing, you're mostly on your own.
 
 
+TODO: DOCUMENT ON HOW TO CONFIGURE APT AND INSTALL WITH IT
+==========================================================
+

@@ -11,7 +11,7 @@ If you need igate or other radio-interfacing features, aprsc is not for you.
 If you need to run a server on Windows, aprsc is not for you. Sorry!
 
 
-A word of warning
+A word of caution
 --------------------
 
 The aprsc software is brand new, under active development, and release
@@ -42,7 +42,7 @@ servers:
 * UDP core peer links
 * Uplink server support
 * Passcode validation
-* Web status page + Machine-readable JSON status on HTTP server
+* Web status page + Machine-readable JSON status on an HTTP server
 * HTTP position upload using POST
 * Full IPv4 and IPv6 support
 * Configurable access lists on client ports
@@ -69,7 +69,7 @@ Licensing, environments and requirements
 
 aprsc is open source, licensed under the BSD license. It has about 11000
 lines of relatively clean C code, built using the usual ./configure && make
-&& make install method.  The embedded HTTP status server is built using the
+&& make install method.  The embedded HTTP status server is powered by the
 libevent2 library, no other extra libraries are needed.
 
 Linux and OS X are the main development environments and will receive
@@ -86,7 +86,7 @@ design goals were:
 
 * High throughput and small enough latency
 * Support for thousands of clients per server
-* Support for heavy bursts of new clients
+* Support for heavy bursts of new clients (CWOP hits every 5 or 10 minutes)
 * Scalability over multiple CPUs
 * Low context switch overhead
 * Low lock contention between threads
@@ -103,11 +103,11 @@ When the server is under heavy load, data transfers between threads happen
 in blocks of multiple data units, so that contention on mutexes and
 read-write locks will not block concurrent execution of the threads. Lock
 contention makes many multi-threaded servers effectively single-threaded and
-unable to use more than a single CPU core.
+unable to utilize more than a single CPU core.
 
 Main work is done by 1 to N worker threads. In real-world APRS-IS today, 1
 worker thread is enough, but if a server was really heavily loaded with
-thousands of clients, 1 less than the number of CPUs would be optimal.
+thousands of clients, 1 less than the number of CPU cores would be optimal.
 
 A worker thread's workflow goes like this:
 
@@ -115,7 +115,7 @@ A worker thread's workflow goes like this:
 2. Do initial APRS-IS packet parsing (SRCCALL>DSTCALL,PATH:DATA)
 3. Do Q-construct processing (,qAx in the PATH)
 4. Parse APRS formatted information in the DATA to extract enough details
-   to support filtering in the outgoing phase
+   to support filtering in the outgoing / filtering phase
 5. Pass on received packets to the dupecheck thread for duplicate removal
 6. Get packets, sorted to unique and duplicate packets, from the dupecheck
    thread
@@ -126,14 +126,14 @@ The Dupecheck thread maintains a cache of packets heard during the past 30
 seconds.  There is a dedicated thread for this cache, so that the worker
 threads do not need to compete for access to the shared resource. The thread
 gets packets from the worker threads, does dupe checking, and puts the
-unique and duplicate packets in two global ordered buffers. The workers then
-walk through those buffers and do filtering to decide which packets should
-be sent to which clients.
+unique and duplicate packets in two global ordered buffer queues. The
+workers then walk through those buffers and do filtering to decide which
+packets should be sent to which clients.
 
 An Uplink threads initiates connections to upstream servers and reconnects
 them as needed.  After a successful connection the socket will be passed on
 to a Worker thread which will proceed to exchange traffic with the remote
-server.
+server for the duration of the connection.
 
 An Accept thread listens on the TCP ports for new incoming connections, does
 access list checks, and distributes allowed connections evenly across worker

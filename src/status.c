@@ -279,12 +279,14 @@ int status_dump_fp(FILE *fp)
 {
 	char *out = status_json_string(1, 1);
 	fputs(out, fp);
-	free(out);
+	hfree(out);
 	
 	return 0;
 }
 
 #define PATHLEN 500
+
+#ifdef ENABLE_STATUS_DUMP_FILE
 
 int status_dump_file(void)
 {
@@ -323,6 +325,36 @@ int status_dump_file(void)
 	
 	return 0;
 }
+
+#else
+
+/*
+ *	The code to update counterdata is embedded in the status JSON
+ *	generator. If dump-status-to-file-per-minute is disabled,
+ *	do generate the JSON just to update the counters for graphs.
+ *	TODO: just update the cdata counters without generating the JSON.
+ */
+
+int status_dump_file(void)
+{
+	time_t start_t, end_t;
+	
+	time(&start_t);
+	
+	char *out = status_json_string(1, 1);
+	hfree(out);
+	
+	/* check if we're having delays */
+	time(&end_t);
+	if (end_t - start_t > 2) {
+		hlog(LOG_ERR, "status counters update took %d seconds", end_t - start_t);
+	}
+	
+	return 0;
+}
+
+#endif
+
 
 void status_init(void)
 {

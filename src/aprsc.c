@@ -541,7 +541,7 @@ int main(int argc, char **argv)
 		if (cleanup_tick < tick || cleanup_tick > tick + 80) {
 			cleanup_tick = tick + 60;
 			
-			/*status_dump_file();*/
+			status_dump_file();
 			historydb_cleanup();
 			filter_wx_cleanup();
 			filter_entrycall_cleanup();

@@ -585,6 +585,9 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 		hlog(LOG_ERR, "client_close(worker %d): could not lock clients_mutex: %s", self->id, strerror(pe));
 		return;
 	}
+	if (pe == EDEADLK) {
+		hlog(LOG_ERR, "client_close(worker %d): could not lock clients_mutex (ignoring): %s", self->id, strerror(pe));
+	}
 	
 	/* link the list together over this node */
 	if (c->next)
@@ -609,7 +612,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	
 	/* if we held the lock before locking, let's not unlock it either */
 	if (pe == EDEADLK) {
-		hlog(LOG_DEBUG, "client_close(worker %d): closed client while holding clients_mutex", self->id);
+		hlog(LOG_ERR, "client_close(worker %d): closed client while holding clients_mutex", self->id);
 	} else {
 		if ((pe = pthread_mutex_unlock(&self->clients_mutex))) {
 			hlog(LOG_ERR, "client_close(worker %d): could not unlock clients_mutex: %s", self->id, strerror(pe));
@@ -1435,11 +1438,21 @@ void workers_stop(int stop_all)
 struct worker_t *worker_alloc(void)
 {
 	struct worker_t *w;
+	pthread_mutexattr_t mut_recursive;
+	int e;
+	
+	if ((e = pthread_mutexattr_init(&mut_recursive))) {
+		hlog(LOG_ERR, "worker_alloc: pthread_mutexattr_init failed: %s", strerror(e));
+	}
+	
+	if ((e = pthread_mutexattr_settype(&mut_recursive, PTHREAD_MUTEX_RECURSIVE))) {
+		hlog(LOG_ERR, "worker_alloc: pthread_mutexattr_settype PTHREAD_MUTEX_RECURSIVE failed: %s", strerror(e));
+	}
 	
 	w = hmalloc(sizeof(*w));
 	memset(w, 0, sizeof(*w));
 
-	pthread_mutex_init(&w->clients_mutex, NULL);
+	pthread_mutex_init(&w->clients_mutex, &mut_recursive);
 	pthread_mutex_init(&w->new_clients_mutex, NULL);
 	
 	w->pbuf_incoming_local = NULL;

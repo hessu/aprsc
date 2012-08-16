@@ -11,6 +11,7 @@
 #ifndef WORKER_H
 #define WORKER_H
 
+#define __USE_UNIX98 /* to get PTHREAD_MUTEX_RECURSIVE on Linux */
 #include <pthread.h>
 #include <semaphore.h>
 #include <sys/types.h>

@@ -1305,7 +1305,7 @@ void worker_thread(struct worker_t *self)
 	hlog(LOG_DEBUG, "Worker %d started.", self->id);
 	
 	while (!self->shutting_down) {
-		//hlog(LOG_DEBUG, "Worker %d checking for clients...", self->id);
+		tick = now = time(NULL);
 		t1 = tick;
 		
 		/* if we have new stuff in the global packet buffer, process it */
@@ -1316,7 +1316,7 @@ void worker_thread(struct worker_t *self)
 
 		// TODO: calculate different delay based on outgoing lag ?
 		/* poll for incoming traffic */
-		xpoll(&self->xp, 50); // was 200, but gave too big latency
+		xpoll(&self->xp, 30); // was 200, but gave too big latency
 		
 		/* if we have stuff in the local queue, try to flush it and make
 		 * it available to the dupecheck thread

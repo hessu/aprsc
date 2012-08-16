@@ -600,7 +600,7 @@ static void dupecheck_thread(void)
 		//    hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little, if there was nothing to do */
 		if (n == 0)
-			poll(NULL, 0, 50); // 50 ms
+			poll(NULL, 0, 20); // 50 ms
 	}
 	
 	hlog( LOG_INFO, "Dupecheck thread shut down; seqnum=%u/%u",

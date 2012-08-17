@@ -8,7 +8,7 @@
  *	
  */
 
-#define HELPS	"Usage: floodconnect [-t <threads>] [-n <parallel-conns-per-thread>] [-a <close-after-seconds>] [-i (end-after-seconds)]\n"
+#define HELPS	"Usage: floodconnect [-t <threads>] [-n <parallel-conns-per-thread>] [-a <close-after-msec>] [-i (end-after-seconds)]\n"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -26,8 +26,11 @@
 
 int threads = 1;
 int parallel_conns_per_thread = 1;
-int close_after_seconds = 2;
+int close_after_msec = 1000;
 int end_after_seconds = 5;
+
+time_t start_t;
+time_t end_t;
 
 struct floodthread_t {
 	struct floodthread_t *next;
@@ -58,7 +61,7 @@ void parse_cmdline(int argc, char *argv[])
 			parallel_conns_per_thread = atoi(optarg);
 			break;
 		case 'a':
-			close_after_seconds = atoi(optarg);
+			close_after_msec = atoi(optarg);
 			break;
 		case 'i':
 			end_after_seconds = atoi(optarg);
@@ -97,12 +100,16 @@ void parse_cmdline(int argc, char *argv[])
  *	testing thread
  */
 
-void flood_thread(struct floodthread_t *self)
+void flood_round(struct floodthread_t *self)
 {
 	int *fds;
 	int i;
+	char login_cmd[] = "user floodcl pass -1\r\n";
+	int login_len;
 	
-	fprintf(stderr, "thread starting\n");
+	fprintf(stderr, "flood_round starting\n");
+	
+	login_len = strlen(login_cmd);
 	
 	fds = malloc(sizeof(int) * parallel_conns_per_thread);
 	if (!fds) {
@@ -134,9 +141,10 @@ void flood_thread(struct floodthread_t *self)
 			continue;
 		}
 		
+		write(fd, login_cmd, login_len);
 	}
 	
-	sleep(close_after_seconds);
+	usleep(close_after_msec*1000);
 	
 	for (i = 0; i < parallel_conns_per_thread; i++) {
 		if (fds[i] == -1)
@@ -148,12 +156,24 @@ void flood_thread(struct floodthread_t *self)
 	free(fds);
 }
 
+
+void flood_thread(struct floodthread_t *self)
+{
+	fprintf(stderr, "thread starting\n");
+	
+	while (1) {
+		flood_round(self);
+	}
+}
+
 void run_test(void)
 {
 	int t;
 	int e;
 	struct floodthread_t *thrs = NULL;
 	struct floodthread_t *th;
+	
+	time(&start_t);
 	
 	/* start threads up */
 	for (t = 0; t < threads; t++) {
@@ -180,6 +200,8 @@ void run_test(void)
 			fprintf(stderr, "thread has ended\n");
 		}
 	}
+	
+	time(&end_t);
 }
 
 /*

@@ -20,6 +20,9 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <locale.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 int threads = 1;
 int parallel_conns_per_thread = 1;
@@ -32,6 +35,8 @@ struct floodthread_t {
 	pthread_t th;
 };
 
+struct addrinfo *ai;
+
 pthread_attr_t pthr_attrs;
 
 /*
@@ -42,6 +47,7 @@ void parse_cmdline(int argc, char *argv[])
 {
 	int s;
 	int failed = 0;
+	struct addrinfo req;
 	
 	while ((s = getopt(argc, argv, "t:n:a:i:?h")) != -1) {
 	switch (s) {
@@ -63,6 +69,24 @@ void parse_cmdline(int argc, char *argv[])
 	}
 	}
 	
+	if (optind + 2 != argc) {
+		fprintf(stderr, "invalid number of parameters\n");
+		exit(1);
+	}
+
+	memset(&req, 0, sizeof(req));
+	req.ai_family   = 0;
+	req.ai_socktype = SOCK_STREAM;
+	req.ai_protocol = IPPROTO_TCP;
+	req.ai_flags    = 0;
+	ai = NULL;
+	
+	s = getaddrinfo(argv[optind], argv[optind+1], &req, &ai);
+	if (s != 0) {
+		fprintf(stderr, "Aaddress parsing or hostname lookup failure for %s: %s\n", argv[optind], gai_strerror(s));
+		exit(1);
+	}
+	
 	if (failed) {
 		fputs(HELPS, stderr);
 		exit(failed);
@@ -75,7 +99,53 @@ void parse_cmdline(int argc, char *argv[])
 
 void flood_thread(struct floodthread_t *self)
 {
+	int *fds;
+	int i;
+	
 	fprintf(stderr, "thread starting\n");
+	
+	fds = malloc(sizeof(int) * parallel_conns_per_thread);
+	if (!fds) {
+		fprintf(stderr, "flood_thread: out of memory, could not allocate fds\n");
+		return;
+	}
+	
+	int arg = 1;
+	
+	for (i = 0; i < parallel_conns_per_thread; i++) {
+		fds[i] = -1;
+		
+		int fd;
+		if ((fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
+			perror("socket");
+			exit(1);
+		}
+		fds[i] = fd;
+		
+		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg))) {
+			perror("Failed to set SO_REUSEADDR on new socket");
+			exit(1);
+		}
+		
+		if (connect(fd, ai->ai_addr, ai->ai_addrlen)) {
+			fprintf(stderr, "connect failed: %s", strerror(errno));
+			close(fd);
+			fds[i] = -1;
+			continue;
+		}
+		
+	}
+	
+	sleep(close_after_seconds);
+	
+	for (i = 0; i < parallel_conns_per_thread; i++) {
+		if (fds[i] == -1)
+			continue;
+		close(fds[i]);
+		fds[i] = -1;
+	}
+	
+	free(fds);
 }
 
 void run_test(void)

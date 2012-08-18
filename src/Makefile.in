@@ -5,13 +5,26 @@
 # -------------------------------------------------------------------- #
 # target paths
 
-VARRUN=		/var/run	# directory for aprx.state and pid-file
+VARRUN=		/var/run	# directory for aprsc.state and pid-file
 VARLOG=		/var/log/aprsc	# directory for direct logfiles
 CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
 SBINDIR=	@sbindir@	# installation path for programs
 MANDIR=		@mandir@	# installation path for manual pages
 
+# generate version strings
+VERSION:=$(shell cat VERSION)
+SVNVERSION:=$(shell if test -x /usr/bin/svnversion -a -d ../.svn  ; then /usr/bin/svnversion | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
+DATE:=$(shell date +"%Y %B %d")
+RFCDATE:=$(shell date +"%a, %d %b %Y %H:%M:%S %z")
+
 # -------------------------------------------------------------------- #
+
+# strip extra whitespace from paths
+VARRUN:=$(strip $(VARRUN))
+VARLOG:=$(strip $(VARLOG))
+CFGFILE:=$(strip $(CFGFILE))
+SBINDIR:=$(strip $(SBINDIR))
+MANDIR:=$(strip $(MANDIR))
 
 srcdir = @srcdir@
 VPATH = @srcdir@
@@ -32,7 +45,7 @@ INSTALL=	$(srcdir)/install-sh
 INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
 
-LIBS=		@LIBEVENT@ @LIBM@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@
+LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@
 
 #LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
 #CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include
@@ -111,6 +124,83 @@ aprsc: $(OBJS)
 %.o: %.c VERSION Makefile
 	$(CC) $(CFLAGS) -c $<
 	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
+
+# -------------------------------------------------------------------- #
+
+# target paths
+VARRUN=		/var/run	# directory for pid-file
+VARLOG=		/var/log/aprsc	# directory for direct logfiles
+CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
+SBINDIR=	@sbindir@# installation path for programs
+MANDIR=		@mandir@	# installation path for manual pages
+DATAROOTDIR=	@datarootdir@
+
+.PHONY:	install install-deb
+install: all
+	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
+#	$(INSTALL_PROGRAM) $(PROGSTAT) $(DESTDIR)$(SBINDIR)/$(PROGSTAT)
+#	$(INSTALL_DATA) $(MANAPRX) $(DESTDIR)$(MANDIR)/man8/$(PROGAPRX).8
+#	$(INSTALL_DATA) $(MANSTAT) $(DESTDIR)$(MANDIR)/man8/$(PROGSTAT).8
+	if [ ! -f  $(DESTDIR)$(CFGFILE) ] ; then \
+		$(INSTALL_DATA) aprsc.conf $(DESTDIR)$(CFGFILE) ; \
+	else true ; fi
+
+# -------------------------------------------------------------------- #
+
+DISTVERSION:=aprsc-$(VERSION).svn$(SVNVERSION)
+DISTTARGET:=../$(DISTVERSION)
+RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/apsc-//')
+.PHONY: dist
+dist:
+	# Special for the source maintainer only..
+	@if [ ! -z "$(shell echo -n $(SVNVERSION) | tr -d 0-9)" ]; then	    \
+	  echo "Mixed or modified tree ($(SVNVERSION)), ARE YOU SURE ??." ; \
+	  echo -n "Y/^C ? "; read var ;					    \
+	fi
+	if [ ! -d $(DISTTARGET) ] ; then	\
+		mkdir $(DISTTARGET) ;		\
+	fi
+	tar cf - --exclude-backups --exclude-vcs --exclude=windows --exclude=*.log* --exclude=*.conf . | (cd $(DISTTARGET) ; tar xf -)
+	echo "$(DISTVERSION)" > $(DISTTARGET)/VERSION
+	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
+		  \$$ver =~ tr/0-9.//cd;	\
+		  \$$ver .= '-1';		\
+		  s{\@VERSION\@}{\$$ver}g;	\
+		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
+		  print;"			\
+		  < $(DISTTARGET)/debian/changelog.release	\
+		  > $(DISTTARGET)/debian/changelog
+	rm -f $(DISTTARGET)/debian/changelog.release
+	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
+		  s{\@DATE0\@}{$(DATE0)}g;		\
+		  print;"				\
+		  < $(DISTTARGET)/rpm/aprsc.spec.in	\
+		  > $(DISTTARGET)/rpm/aprsc.spec
+	rm -f $(DISTTARGET)/rpm/aprsc.spec.in
+	make -C $(DISTTARGET) distclean
+	cd .. && 	\
+	tar czvf $(DISTVERSION).tar.gz $(DISTVERSION)
+
+# -------------------------------------------------------------------- #
+
+.PHONY: make-deb make-rpm
+
+make-deb:
+	if [ -f debian/changelog.release ] ; then \
+	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
+		  \$$ver =~ tr/0-9.//cd;	\
+		  \$$ver .= '-1';		\
+		  s{\@VERSION\@}{\$$ver}g;	\
+		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
+		  print;"			\
+		  < debian/changelog.release	\
+		  > debian/changelog ; \
+	fi
+	dpkg-buildpackage -b -us -uc -rfakeroot
+
+make-rpm: # actually just a reminder of how to do it..
+	rpmbuild --target i386 -ta ../$(DISTVERSION).tar.gz 
+
 
 # include object depencies if available
 @ifGNUmake@ -include $(OBJS:.o=.d)

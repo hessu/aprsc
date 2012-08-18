@@ -63,6 +63,11 @@ AC_CHECK_HEADERS([alloca.h], AC_DEFINE([HAVE_ALLOCA_H]))
 
 dnl Checks for libraries.
 
+dnl RT library for some timekeeping functions
+AC_SUBST(LIBRT)
+AC_CHECK_LIB(rt, clock_gettime,
+			    [LIBRT="-lrt"])
+
 dnl Checks for library functions.
 AC_SUBST(LIBM)
 AC_CHECK_FUNCS(atan2f,,

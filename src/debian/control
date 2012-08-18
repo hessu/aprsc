@@ -1,0 +1,17 @@
+Source: aprsc
+Section: hamradio
+Priority: extra
+Maintainer: Heikki Hannikainen <hessu@hes.iki.fi>
+Build-Depends: debhelper (>= 4)
+Standards-Version: 3.7.2
+
+Package: aprsc
+Architecture: any
+Depends: ${shlibs:Depends}
+Description: APRS-IS server
+ aprsc is an APRS-IS server intended to be used on core and Tier2 servers.
+ .
+ This software requires a valid (and unique) ham radio callsign to
+ operate fully and is therefore useful mainly for licensed radio
+ amateurs.
+

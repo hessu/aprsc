@@ -1,0 +1,10 @@
+#
+# STARTAPRSC: start aprsc on boot. Should be set to "yes" once you have
+#            configured aprsc.
+#
+STARTAPRSC="no"
+
+#
+# Additional options that are passed to the Daemon.
+#
+DAEMON_OPTS=""

@@ -20,7 +20,7 @@ VPATH = @srcdir@
 # Compiler and flags
 CC=		@CC@
 PROF=
-CFLAGS=		@CFLAGS@ @CPPFLAGS@ $(PROF) $(DEFS)
+CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ $(PROF) $(DEFS)
 
 # On solaris, should use -D_REENTRANT  CFLAGS
 

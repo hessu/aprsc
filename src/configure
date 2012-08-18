@@ -626,6 +626,7 @@ LIBGETNAMEINFO
 LIBPTHREAD
 LIBM
 LIBEVENT
+CFLAGS_ARCH
 LD
 EGREP
 GREP
@@ -3233,6 +3234,13 @@ if test -z "$LD" ; then
   LD="$CC"
 fi
 LD="$LD"
+
+
+MACHINE="`uname -m`"
+if test "$MACHINE" == "i686"; then
+  CFLAGS_ARCH="-march=i686"
+fi
+
 
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ANSI C header files" >&5

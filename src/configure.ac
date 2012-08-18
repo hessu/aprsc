@@ -194,7 +194,7 @@ AC_OUTPUT
 dnl If GNU make is not the default, deal with it
 if  ! test x$_cv_gnu_make_command = x ; then
 	mv Makefile GNUmakefile
-	echo .DEFAULT: > Makefile ;
+	echo all clean distclean install: > Makefile ;
 	echo \  $_cv_gnu_make_command \$@ >> Makefile;
 fi
 

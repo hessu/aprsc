@@ -5262,3 +5262,10 @@ if test -n "$ac_unrecognized_opts" && test "$enable_option_checking" != no; then
 $as_echo "$as_me: WARNING: unrecognized options: $ac_unrecognized_opts" >&2;}
 fi
 
+
+if  ! test x$_cv_gnu_make_command = x ; then
+	mv Makefile GNUmakefile
+	echo .DEFAULT: > Makefile ;
+	echo \  $_cv_gnu_make_command \$@ >> Makefile;
+fi
+

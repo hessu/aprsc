@@ -42,12 +42,21 @@ AC_SUBST(CFLAGS_ARCH)
 dnl Check for GNU make
 AX_CHECK_GNU_MAKE()
 
+AC_ARG_ENABLE([static-libevent],
+	[AS_HELP_STRING([--enable-static-libevent=path],
+	[link against static libevent.a @<:@default=do not@:>@])],
+	[static_libevent=$enableval],
+	[])
+
 dnl Check for libevent
 AC_CHECK_HEADER([event2/event.h],,[AC_MSG_ERROR([libevent2 header not found - remember to install the development package too])])
 AC_CHECK_HEADER([event2/http.h],,[AC_MSG_ERROR([libevent2 http header not found - remember to install the development package too])])
 AC_CHECK_HEADER([event2/buffer.h],,[AC_MSG_ERROR([libevent2 buffer header not found - remember to install the development package too])])
 AC_SUBST(LIBEVENT)
 AC_CHECK_LIB(event,event_base_new,[LIBEVENT="-levent"],[AC_MSG_ERROR([libevent2 not found])])
+
+AS_IF([test "x$static_libevent" != x],
+	[LIBEVENT="$static_libevent"])
 
 dnl Checks for system headers
 AC_CHECK_HEADERS([alloca.h], AC_DEFINE([HAVE_ALLOCA_H]))

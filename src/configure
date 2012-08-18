@@ -3242,6 +3242,7 @@ if test "$MACHINE" == "i686"; then
 fi
 
 
+AX_CHECK_GNU_MAKE()
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ANSI C header files" >&5
 $as_echo_n "checking for ANSI C header files... " >&6; }

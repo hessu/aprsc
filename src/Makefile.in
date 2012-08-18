@@ -113,5 +113,5 @@ aprsc: $(OBJS)
 	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
 
 # include object depencies if available
-@BSD_MAKE_COMMENT@-include $(OBJS:.o=.d)
+@ifGNUmake@ -include $(OBJS:.o=.d)
 

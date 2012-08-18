@@ -626,6 +626,7 @@ LIBGETNAMEINFO
 LIBPTHREAD
 LIBM
 LIBEVENT
+ifGNUmake
 CFLAGS_ARCH
 LD
 EGREP
@@ -3242,7 +3243,32 @@ if test "$MACHINE" == "i686"; then
 fi
 
 
-AX_CHECK_GNU_MAKE()
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking for GNU make" >&5
+$as_echo_n "checking for GNU make... " >&6; }
+if ${_cv_gnu_make_command+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  _cv_gnu_make_command='' ;
+                for a in "$MAKE" make gmake gnumake ; do
+                        if test -z "$a" ; then continue ; fi ;
+                        if  ( sh -c "$a --version" 2> /dev/null | grep GNU  2>&1 > /dev/null ) ;  then
+                                _cv_gnu_make_command=$a ;
+                                break;
+                        fi
+                done ;
+
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $_cv_gnu_make_command" >&5
+$as_echo "$_cv_gnu_make_command" >&6; } ;
+        if test  "x$_cv_gnu_make_command" != "x"  ; then
+                ifGNUmake='' ;
+        else
+                ifGNUmake='#' ;
+                { $as_echo "$as_me:${as_lineno-$LINENO}: result: \"Not found\"" >&5
+$as_echo "\"Not found\"" >&6; };
+        fi
+
+
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ANSI C header files" >&5
 $as_echo_n "checking for ANSI C header files... " >&6; }

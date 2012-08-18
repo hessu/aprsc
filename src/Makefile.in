@@ -160,7 +160,7 @@ dist:
 	if [ ! -d $(DISTTARGET) ] ; then	\
 		mkdir $(DISTTARGET) ;		\
 	fi
-	tar cf - --exclude-backups --exclude-vcs --exclude=windows --exclude=*.log* --exclude=*.conf . | (cd $(DISTTARGET) ; tar xf -)
+	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude=*.log* . | (cd $(DISTTARGET) ; tar xf -)
 	echo "$(DISTVERSION)" > $(DISTTARGET)/VERSION
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
@@ -171,12 +171,12 @@ dist:
 		  < $(DISTTARGET)/debian/changelog.release	\
 		  > $(DISTTARGET)/debian/changelog
 	rm -f $(DISTTARGET)/debian/changelog.release
-	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
-		  s{\@DATE0\@}{$(DATE0)}g;		\
-		  print;"				\
-		  < $(DISTTARGET)/rpm/aprsc.spec.in	\
-		  > $(DISTTARGET)/rpm/aprsc.spec
-	rm -f $(DISTTARGET)/rpm/aprsc.spec.in
+#	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
+#		  s{\@DATE0\@}{$(DATE0)}g;		\
+#		  print;"				\
+#		  < $(DISTTARGET)/rpm/aprsc.spec.in	\
+#		  > $(DISTTARGET)/rpm/aprsc.spec
+#	rm -f $(DISTTARGET)/rpm/aprsc.spec.in
 	make -C $(DISTTARGET) distclean
 	cd .. && 	\
 	tar czvf $(DISTVERSION).tar.gz $(DISTVERSION)

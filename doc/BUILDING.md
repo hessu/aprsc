@@ -35,7 +35,7 @@ aprsc also requires libevent2 (libevent version 2.0), since libevent's HTTP
 server is used to implement the status page and HTTP position upload
 services.
 
-libevent2 is available in the latest Linux distributions (apt-get install
+libevent2 is available in the most recent Linux distributions (apt-get install
 libevent or libevent2, but check if it's a 2.0).  Older versions do not come
 with it, so you need to download it and compile it from source
 (http://libevent.org/).
@@ -46,6 +46,8 @@ Downloading aprsc
 --------------------
 
 Head to http://he.fi/aprsc/down/
+
+    
 
 Compiling aprsc
 ------------------
@@ -62,11 +64,25 @@ Compiling aprsc
     Go to the newly-created directory and configure the build:
     $ cd aprsc-1.0.0
     $ ./configure
-    
+
 At this point the configuration either succeeds or fails. If it fails, it is
 probably due to a missing dependency, in which case it tries to tell clearly
 what is missing.  If your platform does not appear in the list of tested
 platforms, the failures might be more "interesting".
+
+On FreeBSD, with libevent2 installed from ports, you'll have to do this:
+
+    $ CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
+
+On Mac OS X, with libevent2 installed from MacPorts, use:
+
+    $ CFLAGS=-I/opt/local/include LDFLAGS=-L/opt/local/lib ./configure
+
+If you've installed libevent2 from sources with it's default configuration
+on any Unix-like system, the FreeBSD example above (pointing to /usr/local)
+should probably work.
+
+With build configuration done:
 
     Compile it:
     $ make
@@ -76,8 +92,4 @@ platforms, the failures might be more "interesting".
     
     Install example configuration:
     $ make installconf
-
-
-
-
 

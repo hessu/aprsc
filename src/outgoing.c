@@ -126,7 +126,10 @@ void process_outgoing(struct worker_t *self)
 			hlog(LOG_ERR, "worker %d: process_outgoing got pbuf %d marked free, age %d (now %d t %d)\n%*s",
 				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
 			abort();
-		} else if (pb->t > tick) {
+		} else if (pb->t > tick + 2) {
+			/* 1-second offset is normal in case of one thread updating tick earlier than another
+			 * and a little thread scheduling luck
+			 */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d from future with t %d > tick %d!\n%*s",
 				self->id, pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
 		} else if (tick - pb->t > 5) {

@@ -12,6 +12,7 @@ my $quit = 0;
 my $APRSIS;
 
 my $mycall = $ARGV[0] . '-';
+my $server = $ARGV[1];
 #my $filter = 'p/OH2R';
 #my $filter = 'p/OH';
 my $filter = 'p/OH2R -p/OH2 p/OH ';
@@ -19,20 +20,20 @@ $filter = 'p/OH/OI/OJ/OF';
 
 my @APRS = ();
 
-my $n =  50;
+my $n =  $ARGV[2];
 
 my $MUX = new IO::Multiplex;
 
-foreach my $i (1 .. $n) {
-    my $call = sprintf("%s%d",$mycall,$i);
-    if (($i % 3) == 0) { # filters only for 1/3'd of all contactees..
-	$APRSIS = Ham::APRS::IS->new('localhost:55580', $call, filter => $filter );
-#    } elsif (($i % 3) == 1) {
-#	$call = sprintf("CW%04d",$i);
-#	$APRSIS = Ham::APRS::IS->new('localhost:55152', $call);
-    } else {
-	$APRSIS = Ham::APRS::IS->new('localhost:55152', $call);
-    }
+warn "Connecting to $server as $mycall with $n sockets\n";
+
+my $call_n = 0;
+
+sub connect_new()
+{
+    my $call = sprintf("%s%d",$mycall,$call_n);
+    $call_n++; 
+    $APRSIS = Ham::APRS::IS->new($server, $call);
+    
     if (!defined($APRSIS)) {
 	printf "Failed to init Ham::APRS::IS socket!\n";
 	exit 4;
@@ -44,8 +45,10 @@ foreach my $i (1 .. $n) {
     }
     
     $MUX->add( $APRSIS->{'sock'} );
+}
 
-    push @APRS, $APRSIS;
+foreach my $i (1 .. $n) {
+	connect_new();
 }
 $MUX->set_callback_object(__PACKAGE__);
 $MUX->loop();
@@ -73,12 +76,17 @@ sub mux_input {
     $$data = '';
 }
 
+my $eofs = 0;
 
 sub mux_eof {
-    my $package = shift;
-    my $mux     = shift;
-    my $fh      = shift;
-
-    $MUX->close($fh);
+	my $package = shift;
+	my $mux     = shift;
+	my $fh      = shift;
+	$eofs++;
+	warn "eof $eofs\n";
+	
+	$MUX->close($fh);
+	
+	connect_new();
 }
 

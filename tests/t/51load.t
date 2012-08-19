@@ -35,7 +35,7 @@ sleep(0.5);
 ############################################
 
 my $flush_interval = 500;
-#$flush_interval = 300;
+$flush_interval = 300;
 my $bytelimit = 4*1024*1024;
 my $window = 64*1024;
 #my $window = 2*1024;

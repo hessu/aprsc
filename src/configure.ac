@@ -33,8 +33,9 @@ fi
 AC_SUBST(LD,"$LD")
 
 dnl If on i686, we'll need -march=i686 to get the atomic instructions
+dnl On FreeBSD, the architecture is i386.
 MACHINE="`uname -m`"
-if test "$MACHINE" == "i686"; then
+if test "$MACHINE" == "i686" -o "$MACHINE" == "i386"; then
   CFLAGS_ARCH="-march=i686"
 fi
 AC_SUBST(CFLAGS_ARCH)
@@ -206,9 +207,9 @@ AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
 
 dnl If GNU make is not the default, deal with it
-if  ! test x$_cv_gnu_make_command = x ; then
+if test "$_cv_gnu_make_command" != "" -a "$_cv_gnu_make_command" != "make" ; then
 	mv Makefile GNUmakefile
 	echo all clean distclean install: > Makefile ;
-	echo \  $_cv_gnu_make_command \$@ >> Makefile;
+	echo \	$_cv_gnu_make_command \$@ >> Makefile;
 fi
 

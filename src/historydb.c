@@ -115,7 +115,7 @@ void historydb_atend(void)
 
 void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
-	fprintf(fp, "%ld\t", hp->arrivaltime);
+	fprintf(fp, "%ld\t", (long)hp->arrivaltime);
 	fwrite(hp->key, hp->keylen, 1, fp);
 	fprintf(fp, "\t");
 	fprintf(fp, "%d\t%d\t", hp->packettype, hp->flags);

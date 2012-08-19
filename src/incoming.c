@@ -189,7 +189,7 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 
 static void pbuf_dump_entry(FILE *fp, struct pbuf_t *pb)
 {
-	fprintf(fp, "%ld\t",	pb->t); /* arrival time */
+	fprintf(fp, "%ld\t",	(long)pb->t); /* arrival time */
 	fprintf(fp, "%x\t",	pb->packettype);
 	fprintf(fp, "%x\t",	pb->flags);
       	fprintf(fp, "%.*s\t",	pb->srcname_len, pb->srcname);

@@ -72,11 +72,11 @@ platforms, the failures might be more "interesting".
 
 On FreeBSD, with libevent2 installed from ports, you'll have to do this:
 
-    $ CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib ./configure
+    CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib/event2 ./configure
 
 On Mac OS X, with libevent2 installed from MacPorts, use:
 
-    $ CFLAGS=-I/opt/local/include LDFLAGS=-L/opt/local/lib ./configure
+    CFLAGS=-I/opt/local/include LDFLAGS=-L/opt/local/lib ./configure
 
 If you've installed libevent2 from sources with it's default configuration
 on any Unix-like system, the FreeBSD example above (pointing to /usr/local)

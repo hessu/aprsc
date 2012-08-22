@@ -432,8 +432,17 @@ int main(int argc, char **argv)
 	
 	/* do a chroot if required */
 	if (chrootdir) {
+		if ((!setuid_s) || pwbuf.pw_uid == 0) {
+			fprintf(stderr, "aprsc: chroot requested but no setuid to non-root user - insecure\n"
+				"configuration detected. Using -u <username> required.\n");
+			exit(1);
+		}
+		if (chdir(chrootdir) != 0) {
+			fprintf(stderr, "aprsc: chdir(%s) failed before chroot: %s\n", chrootdir, strerror(errno));
+			exit(1);
+		}
 		if (chroot(chrootdir)) {
-			fprintf(stderr, "aprsc: chroot(%s) failed: %s", chrootdir, strerror(errno));
+			fprintf(stderr, "aprsc: chroot(%s) failed: %s\n", chrootdir, strerror(errno));
 			exit(1);
 		}
 	}

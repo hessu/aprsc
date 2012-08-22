@@ -187,7 +187,7 @@ dist:
 .PHONY: make-deb make-rpm
 
 make-deb:
-	@echo "Building deb for $(LINUXDIST)"
+	rm -f ../*.deb ../*.changes
 	if [ -f debian/changelog.release ] ; then \
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
@@ -199,7 +199,7 @@ make-deb:
 		  > debian/changelog ; \
 	fi
 	dpkg-buildpackage -b -us -uc -rfakeroot
-	# rename debs to match distribution and it's version
+	echo "$(LINUXDIST)" > ../aprsc-debian-distr.txt
 
 make-rpm: # actually just a reminder of how to do it..
 	rpmbuild --target i386 -ta ../$(DISTVERSION).tar.gz 

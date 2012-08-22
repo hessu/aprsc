@@ -16,6 +16,7 @@ VERSION:=$(shell cat VERSION)
 SVNVERSION:=$(shell if test -x /usr/bin/svnversion -a -d ../.svn  ; then /usr/bin/svnversion | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
 DATE:=$(shell date +"%Y %B %d")
 RFCDATE:=$(shell date +"%a, %d %b %Y %H:%M:%S %z")
+LINUXDIST:=$(shell if test -f /etc/lsb-release ; then . /etc/lsb-release && echo "$$DISTRIB_ID-$$DISTRIB_RELEASE-$$DISTRIB_CODENAME"; fi)
 
 # -------------------------------------------------------------------- #
 
@@ -186,6 +187,7 @@ dist:
 .PHONY: make-deb make-rpm
 
 make-deb:
+	@echo "Building deb for $(LINUXDIST)"
 	if [ -f debian/changelog.release ] ; then \
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
@@ -197,6 +199,7 @@ make-deb:
 		  > debian/changelog ; \
 	fi
 	dpkg-buildpackage -b -us -uc -rfakeroot
+	# rename debs to match distribution and it's version
 
 make-rpm: # actually just a reminder of how to do it..
 	rpmbuild --target i386 -ta ../$(DISTVERSION).tar.gz 

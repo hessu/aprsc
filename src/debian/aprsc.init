@@ -13,7 +13,8 @@
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-DAEMON=/opt/aprsc/sbin/aprsc
+BASEDIR=/opt/aprsc
+DAEMON=$BASEDIR/sbin/aprsc
 NAME=aprsc
 DESC="aprsc"
 
@@ -33,14 +34,14 @@ case "$1" in
   start)
 	echo -n "Starting $DESC: "
 	set -e
-	start-stop-daemon --start --quiet --pidfile /var/run/$NAME.pid \
+	start-stop-daemon --start --quiet --pidfile $BASEDIR/logs/$NAME.pid \
 		--exec $DAEMON -- $DAEMON_OPTS
 	echo
 	;;
   stop)
 	echo -n "Stopping $DESC: "
 	#set -e  # don't upset if it fails..
-	start-stop-daemon --stop --quiet --pidfile /var/run/$NAME.pid  \
+	start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$NAME.pid  \
 		--exec $DAEMON --oknodo
 	echo
 	;;
@@ -54,7 +55,7 @@ case "$1" in
 	#
 	echo "Reloading $DESC configuration files."
 	start-stop-daemon --stop --signal 1 --quiet --pidfile \
-		/var/run/$NAME.pid --exec $DAEMON
+		$BASEDIR/logs/$NAME.pid --exec $DAEMON
   ;;
   force-reload)
 	#
@@ -65,7 +66,7 @@ case "$1" in
 	# check wether $DAEMON is running. If so, restart
 	set -e
 	start-stop-daemon --stop --test --quiet --pidfile \
-		/var/run/$NAME.pid --exec $DAEMON \
+		$BASEDIR/logs/$NAME.pid --exec $DAEMON \
 	&& $0 restart \
 	|| exit 0
 	;;
@@ -73,9 +74,9 @@ case "$1" in
     echo -n "Restarting $DESC: "
 	set -e
 	start-stop-daemon --stop --quiet --pidfile \
-		/var/run/$NAME.pid --exec $DAEMON --oknodo
+		$BASEDIR/logs/$NAME.pid --exec $DAEMON --oknodo
 	start-stop-daemon --start --quiet --pidfile \
-		/var/run/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS
+		$BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS
 	echo "$NAME."
 	;;
   *)

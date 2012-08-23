@@ -95,8 +95,8 @@ int courtesy_list_storetime   =    30*60; /* how long to store "client X has bee
 int pbuf_global_expiration       = 10*60; /* 10 minutes */ /* 10 sec for load testing */
 int pbuf_global_dupe_expiration  = 10*60; /* 10 minutes */ /* 10 sec for load testing */
 
-int upstream_timeout      = 60;		/* after N seconds of no input from an upstream, disconnect */
-int client_timeout        = 24*60*60;	/* after N seconds of no input from a client, disconnect */
+int upstream_timeout      = 30;		/* after N seconds of no input from an upstream, disconnect */
+int client_timeout        = 48*60*60;	/* after N seconds of no input from a client, disconnect */
 int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
 /* These two are not currently used. The fixed defines are in worker.h,

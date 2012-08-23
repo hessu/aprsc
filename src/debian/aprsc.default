@@ -7,4 +7,4 @@ STARTAPRSC="no"
 #
 # Additional options that are passed to the Daemon.
 #
-DAEMON_OPTS=""
+DAEMON_OPTS="-u aprsc -t /opt/aprsc -f -e info -o file -r logs -c etc/aprsc.conf"

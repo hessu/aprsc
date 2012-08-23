@@ -5,11 +5,13 @@
 # -------------------------------------------------------------------- #
 # target paths
 
-VARRUN=		/var/run	# directory for aprsc.state and pid-file
-VARLOG=		/var/log/aprsc	# directory for direct logfiles
+VARRUN=		/opt/aprsc/logs	# directory for aprsc.state and pid-file
+VARLOG=		/opt/aprsc/logs	# directory for direct logfiles
 CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
 SBINDIR=	@sbindir@	# installation path for programs
 MANDIR=		@mandir@	# installation path for manual pages
+SBINDIR=	/opt/aprsc/sbin
+CFGFILE=	/opt/aprsc/etc/aprsc.conf
 
 # generate version strings
 VERSION:=$(shell cat VERSION)
@@ -45,6 +47,7 @@ LDFLAGS=	@LDFLAGS@ $(PROF)
 INSTALL=	$(srcdir)/install-sh
 INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
+INSTALL_DIR=$(INSTALL)  -m 755 -d
 
 LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@
 
@@ -131,13 +134,15 @@ aprsc: $(OBJS)
 # target paths
 VARRUN=		/var/run	# directory for pid-file
 VARLOG=		/var/log/aprsc	# directory for direct logfiles
-CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
-SBINDIR=	@sbindir@# installation path for programs
-MANDIR=		@mandir@	# installation path for manual pages
-DATAROOTDIR=	@datarootdir@
+#CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
+#SBINDIR=	@sbindir@# installation path for programs
+#MANDIR=		@mandir@	# installation path for manual pages
+#DATAROOTDIR=	@datarootdir@
 
 .PHONY:	install install-deb
 install: all
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/logs
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/data
 	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
 #	$(INSTALL_PROGRAM) $(PROGSTAT) $(DESTDIR)$(SBINDIR)/$(PROGSTAT)
 #	$(INSTALL_DATA) $(MANAPRX) $(DESTDIR)$(MANDIR)/man8/$(PROGAPRX).8

@@ -1,5 +1,6 @@
-etc/
-usr/sbin
-usr/share/man/man8
-var/log/aprsc
-var/run
+opt/
+opt/aprsc/
+opt/aprsc/etc
+opt/aprsc/sbin
+opt/aprsc/data
+opt/aprsc/logs

@@ -1,0 +1,35 @@
+#!/bin/sh -e
+
+action="$1"
+oldversion="$2"
+
+. /usr/share/debconf/confmodule
+db_version 2.0
+
+umask 022
+
+if [ "$action" != configure ]
+	then
+	exit 0
+fi
+
+# functions
+
+setup_aprsc_user() {
+        if ! getent passwd aprsc >/dev/null; then
+        	echo "Creating user account: 'aprsc'"
+                adduser --quiet --system --no-create-home --home /var/run/aprsc --shell /usr/sbin/nologin --group aprsc aprsc
+        fi
+}
+
+fix_permissions() {
+	chown aprsc:aprsc /opt/aprsc/logs /opt/aprsc/data
+}
+
+# main
+
+setup_aprsc_user
+fix_permissions
+
+exit 0
+

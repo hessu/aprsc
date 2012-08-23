@@ -1,0 +1,31 @@
+TODO ITEMS LIST
+
+    - Logins used on APRS-IS must not consist of exactly 8 characters from 0
+      to 9 or A to F as this would indicate a server generated IP address
+      for the q construct.
+
+    - UDP communication
+	- "Client" version exists -- unidirectional data flow from server to client,
+	  server discards all data sent to it
+	- Future todo:
+	    - network performance buffering of data into UDP packets is needed
+	    - client traffic flow in UDP form ?
+
+    - complete output filters
+	- s-filter is still missing
+
+
+- (re)configuring filter using an APRS message
+- "#filter" from the client should be parsed, too, after login
+
+
+To Consider:
+
+    - SCTP sockets
+
+    - UDP with multiple messages in same datagram (up to about 1400 bytes
+      in single UDP frame), AND with timestamp telling how long a message
+      has been in transit, AND binary transparency capability...
+      ( network byte order 32-bit value telling seconds since 2000-01-01 ? )
+
+

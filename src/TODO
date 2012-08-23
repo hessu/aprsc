@@ -14,6 +14,11 @@ TODO ITEMS LIST
     - complete output filters
 	- s-filter is still missing
 
+
+- (re)configuring filter using an APRS message
+- "#filter" from the client should be parsed, too, after login
+
+
 To Consider:
 
     - SCTP sockets

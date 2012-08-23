@@ -121,6 +121,9 @@ distclean: clean
 	rm -f aprsc
 	rm -f ac-hdrs.h Makefile config.log config.status
 	rm -rf autom4te.cache
+	rm -f build-stamp configure-stamp dpkg-arch.txt
+	rm -rf debian/aprsc debian/*.debhelper debian/*.log \
+		debian/aprsc.substvars debian/changelog
 
 aprsc: $(OBJS)
 	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)
@@ -154,7 +157,7 @@ install: all
 # -------------------------------------------------------------------- #
 
 DISTVERSION:=aprsc-$(VERSION).svn$(SVNVERSION)
-DISTTARGET:=../$(DISTVERSION)
+DISTTARGET:=../../$(DISTVERSION)
 RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/apsc-//')
 .PHONY: dist
 dist:
@@ -166,7 +169,9 @@ dist:
 	if [ ! -d $(DISTTARGET) ] ; then	\
 		mkdir $(DISTTARGET) ;		\
 	fi
-	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude=*.log* . | (cd $(DISTTARGET) ; tar xf -)
+	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude=*.log* \
+		--exclude=tools --exclude=*.pid \
+		.. | (cd $(DISTTARGET) ; tar xf -)
 	echo "$(DISTVERSION)" > $(DISTTARGET)/VERSION
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
@@ -174,18 +179,18 @@ dist:
 		  s{\@VERSION\@}{\$$ver}g;	\
 		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
 		  print;"			\
-		  < $(DISTTARGET)/debian/changelog.release	\
-		  > $(DISTTARGET)/debian/changelog
-	rm -f $(DISTTARGET)/debian/changelog.release
+		  < $(DISTTARGET)/src/debian/changelog.release	\
+		  > $(DISTTARGET)/src/debian/changelog
+	rm -f $(DISTTARGET)/src/debian/changelog.release
 #	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
 #		  s{\@DATE0\@}{$(DATE0)}g;		\
 #		  print;"				\
 #		  < $(DISTTARGET)/rpm/aprsc.spec.in	\
 #		  > $(DISTTARGET)/rpm/aprsc.spec
 #	rm -f $(DISTTARGET)/rpm/aprsc.spec.in
-	make -C $(DISTTARGET) distclean
-	cd .. && 	\
-	tar czvf $(DISTVERSION).tar.gz $(DISTVERSION)
+	make -C $(DISTTARGET)/src distclean
+	cd ../.. && 	\
+	tar czf $(DISTVERSION).tar.gz $(DISTVERSION)
 
 # -------------------------------------------------------------------- #
 
@@ -204,7 +209,6 @@ make-deb:
 		  > debian/changelog ; \
 	fi
 	dpkg-buildpackage -b -us -uc -rfakeroot
-	echo "$(LINUXDIST)" > ../aprsc-debian-distr.txt
 
 make-rpm: # actually just a reminder of how to do it..
 	rpmbuild --target i386 -ta ../$(DISTVERSION).tar.gz 

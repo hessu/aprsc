@@ -82,7 +82,7 @@ void close_uplinkers(void)
 {
 	int rc;
 	
-	hlog(LOG_INFO, "Closing all uplinks");
+	hlog(LOG_DEBUG, "Closing all uplinks");
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog( LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc) );

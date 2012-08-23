@@ -1,6 +1,6 @@
 #
 # First batch of Q construct tests:
-# Feed packets from a verified client
+# Feed packets from a verified client - CLIENT-ONLY PORT
 #
 
 use Test;
@@ -18,7 +18,7 @@ ok($p->start(), 1, "Failed to start product");
 
 my $login = "N5CAL-1";
 my $server_call = "TESTING";
-my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
+my $i_tx = new Ham::APRS::IS("localhost:55581", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $i_rx = new Ham::APRS::IS("localhost:55152", "N5CAL-2");
@@ -73,7 +73,7 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,DIGI1,DIGI5*,qAR:a4ufy",
-	"SRC>DST,DIGI1,DIGI5*,qAS,$login:a4ufy");
+	"SRC>DST,DIGI1,DIGI5*,qAO,$login:a4ufy");
 
 # It's not in the algorithm, but:
 # if a path element after the q construct has a '*' or other crap
@@ -106,19 +106,19 @@ istest::should_drop(\&ok, $i_tx, $i_rx,
 # (1)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*,qAR,$login:testing (1)",
-	"SRCCALL>DST,DIGI1*,qAR,$login:testing (1)");
+	"SRCCALL>DST,DIGI1*,qAo,$login:testing (1)");
 # (2)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*,$login,I:testing (2)",
-	"SRCCALL>DST,DIGI1*,qAR,$login:testing (2)");
+	"SRCCALL>DST,DIGI1*,qAo,$login:testing (2)");
 # (3)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*,IGATE,I:testing (3)",
-	"SRCCALL>DST,DIGI1*,qAr,IGATE:testing (3)");
+	"SRCCALL>DST,DIGI1*,qAo,IGATE:testing (3)");
 # (4)
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRCCALL>DST,DIGI1*:testing (4)",
-	"SRCCALL>DST,DIGI1*,qAS,$login:testing (4)");
+	"SRCCALL>DST,DIGI1*,qAO,$login:testing (4)");
 
 # (5) - any other (even unknown) q construct is passed intact
 istest::txrx(\&ok, $i_tx, $i_rx,

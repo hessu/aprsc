@@ -326,6 +326,16 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 		}
 	}
 	
+	/* If the packet's srccall == login,
+	 * put in a TCPIP* path element and append Q construct 
+	 */
+	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT) {
+		// where to replace from
+		*q_replace = via_start;
+		//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
+		return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
+	}
+	
 	// fprintf(stderr, "\tstep 2...\n");
 
 	/* ok, we now either have found an existing Q construct + the next callsign,
@@ -396,6 +406,14 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				*path_end = via_start;
 				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", serverid);
 			}
+		}
+		
+		if (c->validated && (c->flags & CLFLAGS_CLIENTONLY) && originated_by_client) {
+			if (q_start)
+				*path_end = q_start;
+			else
+				*path_end = via_start;
+			return snprintf(new_q, new_q_size, ",qAC,%s", serverid);
 		}
 		
 		/* OLD:

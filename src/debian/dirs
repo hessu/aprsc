@@ -3,4 +3,5 @@ opt/aprsc/
 opt/aprsc/etc
 opt/aprsc/sbin
 opt/aprsc/data
+opt/aprsc/web
 opt/aprsc/logs

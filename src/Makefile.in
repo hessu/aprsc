@@ -167,10 +167,12 @@ VARLOG=		/var/log/aprsc	# directory for direct logfiles
 install: all
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/logs
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/data
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/web
 	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
 #	$(INSTALL_PROGRAM) $(PROGSTAT) $(DESTDIR)$(SBINDIR)/$(PROGSTAT)
 #	$(INSTALL_DATA) $(MANAPRX) $(DESTDIR)$(MANDIR)/man8/$(PROGAPRX).8
 #	$(INSTALL_DATA) $(MANSTAT) $(DESTDIR)$(MANDIR)/man8/$(PROGSTAT).8
+	$(INSTALL_DATA) web/*.css web/*.js web/index.html web/aprsc-logo2.png $(DESTDIR)/opt/aprsc/web
 	if [ ! -f  $(DESTDIR)$(CFGFILE) ] ; then \
 		$(INSTALL_DATA) aprsc.conf $(DESTDIR)$(CFGFILE) ; \
 	else true ; fi

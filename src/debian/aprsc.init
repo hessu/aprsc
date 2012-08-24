@@ -16,9 +16,11 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 BASEDIR=/opt/aprsc
 DAEMON=$BASEDIR/sbin/aprsc
 NAME=aprsc
-DESC="aprsc"
+DESC="APRS-IS server"
 
 test -x $DAEMON || exit 0
+
+. /lib/lsb/init-functions
 
 # Include aprsc defaults if available
 if [ -f /etc/default/$NAME ] ; then
@@ -30,20 +32,30 @@ if [ "$STARTAPRSC" != "yes" ];then
 	exit 0
 fi
 
+# copy files required for chrooted operation
+prepare_chroot() {
+	cp /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
+}
+
 case "$1" in
   start)
-	echo -n "Starting $DESC: "
+  	log_daemon_msg "Starting $DESC" "aprsc"
+	prepare_chroot()
 	set -e
-	start-stop-daemon --start --quiet --pidfile $BASEDIR/logs/$NAME.pid \
-		--exec $DAEMON -- $DAEMON_OPTS
-	echo
+	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
 	;;
   stop)
-	echo -n "Stopping $DESC: "
+  	log_daemon_msg "Stopping $DESC" "aprsc"
 	#set -e  # don't upset if it fails..
-	start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$NAME.pid  \
-		--exec $DAEMON --oknodo
-	echo
+	if start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON --oknodo --retry 15; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
 	;;
   reload)
 	#
@@ -53,9 +65,12 @@ case "$1" in
 	#	If the daemon responds to changes in its config file
 	#	directly anyway, make this a do-nothing entry.
 	#
-	echo "Reloading $DESC configuration files."
-	start-stop-daemon --stop --signal 1 --quiet --pidfile \
-		$BASEDIR/logs/$NAME.pid --exec $DAEMON
+  	log_daemon_msg "Reloading $DESC configuration files" "aprsc"
+	if start-stop-daemon --stop --signal 1 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
   ;;
   force-reload)
 	#
@@ -66,18 +81,27 @@ case "$1" in
 	# check wether $DAEMON is running. If so, restart
 	set -e
 	start-stop-daemon --stop --test --quiet --pidfile \
-		$BASEDIR/logs/$NAME.pid --exec $DAEMON \
+		$BASEDIR/logs/$NAME.pid --retry 15 --exec $DAEMON \
 	&& $0 restart \
 	|| exit 0
 	;;
   restart)
-    echo -n "Restarting $DESC: "
+  	log_daemon_msg "Stopping $DESC" "aprsc"
+	#set -e  # don't upset if it fails..
+	if start-stop-daemon --stop --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON --retry 15; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
+	
+  	log_daemon_msg "Starting $DESC" "aprsc"
+	prepare_chroot()
 	set -e
-	start-stop-daemon --stop --quiet --pidfile \
-		$BASEDIR/logs/$NAME.pid --exec $DAEMON --oknodo
-	start-stop-daemon --start --quiet --pidfile \
-		$BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS
-	echo "$NAME."
+	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
 	;;
   *)
 	N=/etc/init.d/$NAME

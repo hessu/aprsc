@@ -7,7 +7,7 @@ Standards-Version: 3.7.2
 
 Package: aprsc
 Architecture: any
-Depends: ${shlibs:Depends}
+Depends: ${shlibs:Depends}, adduser (>= 2)
 Description: APRS-IS server
  aprsc is an APRS-IS server intended to be used on core and Tier2 servers.
  .

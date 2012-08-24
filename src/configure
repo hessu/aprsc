@@ -3397,28 +3397,19 @@ fi
 done
 
 
-ac_fn_c_check_header_mongrel "$LINENO" "event2/event.h" "ac_cv_header_event2_event_h" "$ac_includes_default"
-if test "x$ac_cv_header_event2_event_h" = xyes; then :
+for ac_header in event2/event.h event.h event2/http.h evhttp.h event2/buffer.h evutil.h
+do :
+  as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
+ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
+if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
+_ACEOF
 
-else
-  as_fn_error $? "libevent2 header not found - remember to install the development package too" "$LINENO" 5
 fi
 
+done
 
-ac_fn_c_check_header_mongrel "$LINENO" "event2/http.h" "ac_cv_header_event2_http_h" "$ac_includes_default"
-if test "x$ac_cv_header_event2_http_h" = xyes; then :
-
-else
-  as_fn_error $? "libevent2 http header not found - remember to install the development package too" "$LINENO" 5
-fi
-
-
-ac_fn_c_check_header_mongrel "$LINENO" "event2/buffer.h" "ac_cv_header_event2_buffer_h" "$ac_includes_default"
-if test "x$ac_cv_header_event2_buffer_h" = xyes; then :
-
-else
-  as_fn_error $? "libevent2 buffer header not found - remember to install the development package too" "$LINENO" 5
-fi
 
 
 
@@ -3511,6 +3502,29 @@ LIBS="${_LIBS}"
 if test "x$static_libevent" != x; then :
   LIBEVENT="$static_libevent"
 fi
+LIBS="${LIBEVENT} ${_LIBS}"
+ac_fn_c_check_func "$LINENO" "event_base_new" "ac_cv_func_event_base_new"
+if test "x$ac_cv_func_event_base_new" = xyes; then :
+
+$as_echo "#define HAVE_EVENT_BASE_NEW 1" >>confdefs.h
+
+fi
+
+ac_fn_c_check_func "$LINENO" "event_new" "ac_cv_func_event_new"
+if test "x$ac_cv_func_event_new" = xyes; then :
+
+$as_echo "#define HAVE_EVENT_NEW 1" >>confdefs.h
+
+fi
+
+ac_fn_c_check_func "$LINENO" "evhttp_new" "ac_cv_func_evhttp_new"
+if test "x$ac_cv_func_evhttp_new" = xyes; then :
+
+else
+  as_fn_error $? "No libevent with evhttp_new() in it." "$LINENO" 5
+fi
+
+LIBS="${_LIBS}"
 
 for ac_header in alloca.h
 do :

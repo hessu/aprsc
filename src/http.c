@@ -20,9 +20,15 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#ifndef HAVE_EVENT2_EVENT_H
 #include <event2/event.h>  
 #include <event2/http.h>  
-#include <event2/buffer.h>  
+#include <event2/buffer.h>
+#else // LIBEVENT 1.x
+#include <event.h>
+#include <evhttp.h>
+#include <evutil.h>
+#endif
 
 #include "http.h"
 #include "config.h"
@@ -669,7 +675,11 @@ void http_thread(void *asdf)
 			}
 			
 			// do init
-			libbase = event_base_new();
+#ifdef HAVE_EVENT_BASE_NEW
+			libbase = event_base_new(); // libevent 2.x
+#else
+                        libbase = event_init(); // libevent 1.x
+#endif
 			
 			// timer for the whole libevent, to catch shutdown signal
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);

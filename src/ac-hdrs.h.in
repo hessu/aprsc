@@ -1,10 +1,36 @@
-/* ac-hdrs.h.in.  Generated from configure.in by autoheader.  */
+/* ac-hdrs.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define to 1 if you have the <alloca.h> header file. */
 #undef HAVE_ALLOCA_H
 
 /* Define to 1 if you have the `atan2f' function. */
 #undef HAVE_ATAN2F
+
+/* Define to 1 if you have the <event2/buffer.h> header file. */
+#undef HAVE_EVENT2_BUFFER_H
+
+/* Define to 1 if you have the <event2/event.h> header file. */
+#undef HAVE_EVENT2_EVENT_H
+
+/* Define to 1 if you have the <event2/http.h> header file. */
+#undef HAVE_EVENT2_HTTP_H
+
+/* The event_base_new() function is found at event library, it is probably
+   libevent2 */
+#undef HAVE_EVENT_BASE_NEW
+
+/* Define to 1 if you have the <event.h> header file. */
+#undef HAVE_EVENT_H
+
+/* The event_new() function is found at event library, it is probably
+   libevent2 */
+#undef HAVE_EVENT_NEW
+
+/* Define to 1 if you have the <evhttp.h> header file. */
+#undef HAVE_EVHTTP_H
+
+/* Define to 1 if you have the <evutil.h> header file. */
+#undef HAVE_EVUTIL_H
 
 /* Define to 1 if you have the `gai_strerror' function. */
 #undef HAVE_GAI_STRERROR

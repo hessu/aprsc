@@ -20,6 +20,8 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <pwd.h>
 #include <time.h>
 #include <sys/time.h>
@@ -376,14 +378,11 @@ int main(int argc, char **argv)
 	time_t stats_tick;
 	struct addrinfo *ai;
 	
-	/* close stdin */
-	close(0);
 	time(&tick);
 	now = tick;
 	cleanup_tick = tick;
 	stats_tick = tick;
 	startup_tick = tick;
-	setlinebuf(stdout);
 	setlinebuf(stderr);
 	
 	/* set locale to C so that isalnum(), isupper() etc don't do anything
@@ -426,10 +425,47 @@ int main(int argc, char **argv)
 	 * resolver libraries at this point, so that we don't
 	 * need a copy of the shared libs within the chroot dir
 	 */
+	/*
 	ai = NULL;
 	getaddrinfo("startup.aprsc.he.fi", "80", NULL, &ai);
 	if (ai)
 		freeaddrinfo(ai);
+	*/
+	
+	/* fork a daemon */
+	if (fork_a_daemon) {
+		hlog(LOG_INFO, "Forking...");
+		int i = fork();
+		if (i < 0) {
+			hlog(LOG_CRIT, "Fork to background failed: %s", strerror(errno));
+			fprintf(stderr, "Fork to background failed: %s\n", strerror(errno));
+			exit(1);
+		} else if (i == 0) {
+			/* child */
+			hlog(LOG_INFO, "Child started...");
+			if (setsid() == -1) {
+				fprintf(stderr, "setsid() failed: %s\n", strerror(errno));
+				//exit(1);
+			}
+		} else {
+			/* parent, quitting */
+			hlog(LOG_DEBUG, "Forked daemon process %d, parent quitting", i);
+			exit(0);
+		}
+	}
+	
+	/* close stdin and stdout */
+	close(0);
+	close(1);
+	close(2);
+	
+	/* all of this fails in chroot */
+	if (open("/dev/null", O_RDWR) == -1) /* stdin */
+		hlog(LOG_ERR, "open(/dev/null) failed for stdin: %s", strerror(errno));
+	if (dup(0) == -1) /* stdout */
+		hlog(LOG_ERR, "dup(0) failed for stdout: %s", strerror(errno));
+	if (dup(0) == -1) /* stderr */
+		hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
 	
 	/* do a chroot if required */
 	if (chrootdir) {
@@ -461,22 +497,6 @@ int main(int argc, char **argv)
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);
-	}
-	
-	/* fork a daemon */
-	if (fork_a_daemon) {
-		int i = fork();
-		if (i < 0) {
-			hlog(LOG_CRIT, "Fork to background failed: %s", strerror(errno));
-			fprintf(stderr, "Fork to background failed: %s\n", strerror(errno));
-			exit(1);
-		} else if (i == 0) {
-			/* child */
-		} else {
-			/* parent, quitting */
-			hlog(LOG_DEBUG, "Forked daemon process %d, parent quitting", i);
-			exit(0);
-		}
 	}
 	
 	/* write pid file, now that we have our final pid... might fail, which is critical */

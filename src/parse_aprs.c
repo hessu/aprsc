@@ -1152,7 +1152,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 		// positions..
 		{
 			/* collect destination callsign of the message */
-			char keybuf[CALLSIGNLEN_MAX+1];
+			//char keybuf[CALLSIGNLEN_MAX+1];
 			const char *p;
 			int i;
 			//struct history_cell_t *history;
@@ -1160,14 +1160,14 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			pb->dstname = body;
 			p = body;
 			for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
-				keybuf[i] = *p;
+				//keybuf[i] = *p;
 				// the recipient address is space padded
 				// to 9 chars, while our historydb is not.
 				if (*p == 0 || *p == ' ' || *p == ':')
 					break;
 				p++;
 			}
-			keybuf[i] = 0;
+			//keybuf[i] = 0;
 			pb->dstname_len = p - body;
 			//hlog(LOG_DEBUG, "message: dstname len %d", pb->dstname_len);
 			

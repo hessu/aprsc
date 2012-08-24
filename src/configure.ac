@@ -54,8 +54,13 @@ AC_CHECK_HEADER([event2/event.h],,[AC_MSG_ERROR([libevent2 header not found - re
 AC_CHECK_HEADER([event2/http.h],,[AC_MSG_ERROR([libevent2 http header not found - remember to install the development package too])])
 AC_CHECK_HEADER([event2/buffer.h],,[AC_MSG_ERROR([libevent2 buffer header not found - remember to install the development package too])])
 AC_SUBST(LIBEVENT)
-AC_CHECK_LIB(event,event_base_new,[LIBEVENT="-levent"],[AC_MSG_ERROR([libevent2 not found])])
-
+_LIBS="$LIBS"
+LIBS="-levent"
+AC_CHECK_LIB(event_pthreads, evthread_set_condition_callbacks,
+             [LIBEVENT="-levent_pthreads -levent"],
+             [AC_CHECK_LIB(event, event_base_new,
+                           [LIBEVENT="-levent"],[AC_MSG_ERROR([libevent2 not found])])])
+LIBS="${_LIBS}"
 AS_IF([test "x$static_libevent" != x],
 	[LIBEVENT="$static_libevent"])
 

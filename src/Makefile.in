@@ -15,7 +15,7 @@ CFGFILE=	/opt/aprsc/etc/aprsc.conf
 
 # generate version strings
 VERSION:=$(shell cat VERSION)
-SVNVERSION:=$(shell if test -x /usr/bin/svnversion -a -d ../.svn  ; then /usr/bin/svnversion | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
+SVNVERSION:=$(shell if test -x /usr/bin/svnversion -a \( -d ../.svn -o -d ../../.svn \)  ; then /usr/bin/svnversion | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
 DATE:=$(shell TZ=UTC date +"%Y %B %d")
 RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
 BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")
@@ -73,7 +73,7 @@ DEFS=	-Wall -Wstrict-prototypes -D_REENTRANT
 
 .PHONY: 	all clean distclean valgrind profile
 
-all: aprsc
+all: aprsc aprsc.8
 
 
 ### "valgrind" is not for running the valgrind, rather for compiling
@@ -116,7 +116,7 @@ version_data.h:
 	@if test ! -f /version_data.h; then cp version_data.h.new version_data.h; fi
 	@diff -q version_data.h.new version_data.h || mv version_data.h.new version_data.h
 	@rm -f version_data.h.new
-	
+
 # -------------------------------------------------------------------- #
 
 OBJS = aprsc.o accept.o worker.o \
@@ -153,14 +153,23 @@ aprsc: $(OBJS)
 	$(CC) $(CFLAGS) -c $<
 	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
 
+aprsc.8 : % : %.in VERSION Makefile
+	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SVNVERSION) - $(DATE)}g;	\
+	          s{\@VARRUN\@}{$(VARRUN)}g;			\
+	          s{\@VARLOG\@}{$(VARLOG)}g;			\
+	          s{\@CFGFILE\@}{$(CFGFILE)}g;			\
+		  print;"					\
+	 < $< > $@
+
+
 # -------------------------------------------------------------------- #
 
 # target paths
-VARRUN=		/var/run	# directory for pid-file
-VARLOG=		/var/log/aprsc	# directory for direct logfiles
+#VARRUN=	/var/run	# directory for pid-file
+#VARLOG=	/var/log/aprsc	# directory for direct logfiles
 #CFGFILE=	@sysconfdir@/aprsc.conf	# default configuration file
 #SBINDIR=	@sbindir@# installation path for programs
-#MANDIR=		@mandir@	# installation path for manual pages
+#MANDIR=	@mandir@	# installation path for manual pages
 #DATAROOTDIR=	@datarootdir@
 
 .PHONY:	install install-deb
@@ -169,9 +178,7 @@ install: all
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/data
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/web
 	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
-#	$(INSTALL_PROGRAM) $(PROGSTAT) $(DESTDIR)$(SBINDIR)/$(PROGSTAT)
-#	$(INSTALL_DATA) $(MANAPRX) $(DESTDIR)$(MANDIR)/man8/$(PROGAPRX).8
-#	$(INSTALL_DATA) $(MANSTAT) $(DESTDIR)$(MANDIR)/man8/$(PROGSTAT).8
+	$(INSTALL_DATA) aprsc.8 $(DESTDIR)$(MANDIR)/man8/aprsc.8
 	$(INSTALL_DATA) web/*.css web/*.js web/index.html \
 		web/aprsc-logo2.png web/favicon.ico \
 		$(DESTDIR)/opt/aprsc/web
@@ -186,7 +193,7 @@ DISTTARGET:=../../$(DISTVERSION)
 RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/apsc-//')
 .PHONY: dist
 dist:
-	# Special for the source maintainer only..
+	@# Special for the source maintainer only..
 	@if [ ! -z "$(shell echo -n $(SVNVERSION) | tr -d 0-9)" ]; then	    \
 	  echo "Mixed or modified tree ($(SVNVERSION)), ARE YOU SURE ??." ; \
 	  echo -n "Y/^C ? "; read var ;					    \

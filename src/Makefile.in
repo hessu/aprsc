@@ -187,7 +187,6 @@ dist:
 		  print;"			\
 		  < $(DISTTARGET)/src/debian/changelog.release	\
 		  > $(DISTTARGET)/src/debian/changelog
-	rm -f $(DISTTARGET)/src/debian/changelog.release
 #	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
 #		  s{\@DATE0\@}{$(DATE0)}g;		\
 #		  print;"				\

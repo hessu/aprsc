@@ -34,7 +34,7 @@
 
 int log_dest = L_DEFDEST;	/* Logging destination */
 int log_level = LOG_INFO;	/* Logging level */
-int log_facility = LOG_LOCAL1;	/* Logging facility */
+int log_facility = LOG_DAEMON;	/* Logging facility */
 char *log_name = NULL;		/* Logging name */
 
 char log_basename[] = "aprsc.log";

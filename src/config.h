@@ -12,9 +12,6 @@
 #define CONFIG_H
 
 #define PROGNAME "aprsc"
-#define VERSION "0.5.5"
-#define VERSTR  PROGNAME " v" VERSION
-#define SERVERID PROGNAME " " VERSION
 #define CRLF "\r\n"
 
 #include <unistd.h>

@@ -33,6 +33,7 @@
 #include "clientlist.h"
 #include "client_heard.h"
 #include "cellmalloc.h"
+#include "version.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
 time_t tick;	/* real monotonous clock, may or may not be wallclock */
@@ -1135,7 +1136,7 @@ void collect_new_clients(struct worker_t *self)
 		/* According to http://www.aprs-is.net/ServerDesign.aspx, the server must
 		 * initially transmit it's software name and version string.
 		 */
-		client_printf(self, c, "# " SERVERID "\r\n");
+		client_printf(self, c, "# %s\r\n", verstr_aprsis);
 		
 		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */
 	}
@@ -1168,7 +1169,7 @@ void send_keepalives(struct worker_t *self)
 	// Example message:
 	// # javAPRSSrvr 3.12b12 1 Mar 2008 15:11:20 GMT T2FINLAND 85.188.1.32:14580
 
-	sprintf(buf, "# %.40s ",SERVERID);
+	sprintf(buf, "# %.40s ", verstr_aprsis);
 	s = buf + strlen(buf);
 
 	memset(&t, 0, sizeof(t));

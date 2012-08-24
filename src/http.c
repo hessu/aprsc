@@ -26,6 +26,7 @@
 
 #include "http.h"
 #include "config.h"
+#include "version.h"
 #include "hlog.h"
 #include "hmalloc.h"
 #include "worker.h"

@@ -16,9 +16,11 @@ CFGFILE=	/opt/aprsc/etc/aprsc.conf
 # generate version strings
 VERSION:=$(shell cat VERSION)
 SVNVERSION:=$(shell if test -x /usr/bin/svnversion -a -d ../.svn  ; then /usr/bin/svnversion | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
-DATE:=$(shell date +"%Y %B %d")
-RFCDATE:=$(shell date +"%a, %d %b %Y %H:%M:%S %z")
+DATE:=$(shell TZ=UTC date +"%Y %B %d")
+RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
+BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")
 LINUXDIST:=$(shell if test -f /etc/lsb-release ; then . /etc/lsb-release && echo "$$DISTRIB_ID-$$DISTRIB_RELEASE-$$DISTRIB_CODENAME"; fi)
+BUILD_USER:=$(shell whoami)
 
 # -------------------------------------------------------------------- #
 
@@ -101,6 +103,22 @@ testinstall:
 
 # -------------------------------------------------------------------- #
 
+.PHONY:	version_data.h
+version_data.h:
+	@echo "Generating version_data.h"
+	@echo "/* generated automatically by Makefile - mark your branch in version_branch.h */" > version_data.h.new
+	@echo "#ifndef VERSIONDATA_H" >> version_data.h.new
+	@echo "#define VERSIONDATA_H" >> version_data.h.new
+	@echo "#define SVNVERSION \"$(SVNVERSION)\"" >> version_data.h.new
+	@echo "#define BUILD_TIME \"$(BUILD_TIME)\"" >> version_data.h.new
+	@echo "#define BUILD_USER \"$(BUILD_USER)\"" >> version_data.h.new
+	@echo "#endif" >> version_data.h.new
+	@if test ! -f /version_data.h; then cp version_data.h.new version_data.h; fi
+	@diff -q version_data.h.new version_data.h || mv version_data.h.new version_data.h
+	@rm -f version_data.h.new
+	
+# -------------------------------------------------------------------- #
+
 OBJS = aprsc.o accept.o worker.o \
 	login.o incoming.o dupecheck.o outgoing.o \
 	clientlist.o client_heard.o \
@@ -111,7 +129,7 @@ OBJS = aprsc.o accept.o worker.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \
-	http.o \
+	http.o version.o \
 	@LIBOBJS@
 
 clean:

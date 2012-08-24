@@ -37,6 +37,7 @@
 #include "worker.h"
 #include "status.h"
 #include "http.h"
+#include "version.h"
 
 #include "dupecheck.h"
 #include "filter.h"
@@ -116,7 +117,7 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case '?':
 		case 'h':
-			fprintf(stderr, "%s\n", VERSTR);
+			fprintf(stderr, "%s\n", verstr);
 			failed = 1;
 	}
 	}

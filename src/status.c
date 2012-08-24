@@ -18,6 +18,7 @@
 #include "cellmalloc.h"
 #include "hmalloc.h"
 #include "config.h"
+#include "version.h"
 #include "hlog.h"
 #include "worker.h"
 #include "historydb.h"
@@ -90,7 +91,7 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddStringToObject(server, "admin", myadmin);
 	cJSON_AddStringToObject(server, "email", myemail);
 	cJSON_AddStringToObject(server, "software", "aprsc");
-	cJSON_AddStringToObject(server, "software_version", VERSION);
+	cJSON_AddStringToObject(server, "software_version", verstr);
 	cJSON_AddNumberToObject(server, "uptime", tick - startup_tick);
 	cJSON_AddNumberToObject(server, "t_started", startup_tick);
 	cJSON_AddNumberToObject(server, "t_now", tick);

@@ -11,4 +11,4 @@ const char verstr[] = VERSTR;
 const char verstr_aprsis[] = VERSTR_APRSIS;
 
 const char verstr_build_time[] = BUILD_TIME;
-const char verstr_build_by[] = BUILD_USER;
+const char verstr_build_user[] = BUILD_USER;

@@ -16,7 +16,7 @@
 
 extern const char verstr[];
 extern const char verstr_aprsis[];
-extern const char verstr_build_by[];
+extern const char verstr_build_time[];
 extern const char verstr_build_user[];
 
 #endif

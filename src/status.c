@@ -92,6 +92,8 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddStringToObject(server, "email", myemail);
 	cJSON_AddStringToObject(server, "software", "aprsc");
 	cJSON_AddStringToObject(server, "software_version", verstr);
+	cJSON_AddStringToObject(server, "software_build_time", verstr_build_time);
+	cJSON_AddStringToObject(server, "software_build_user", verstr_build_user);
 	cJSON_AddNumberToObject(server, "uptime", tick - startup_tick);
 	cJSON_AddNumberToObject(server, "t_started", startup_tick);
 	cJSON_AddNumberToObject(server, "t_now", tick);

@@ -106,11 +106,11 @@ sub vm_build($$$)
 	print "... extract sources ...\n";
 	system("ssh $vm 'cd buildtmp && tar xvfz $d_tgz'") == 0 or die "vm source extract failed: $?\n";
 	print "... build ...\n";
-	system("ssh $vm 'cd buildtmp/$dir && ./configure && make make-deb'") == 0 or die "vm build phase failed: $?\n";
+	system("ssh $vm 'cd buildtmp/$dir/src && ./configure && make make-deb'") == 0 or die "vm build phase failed: $?\n";
 	print "... download packages ...\n";
 	system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
 	mkdir($dir_build_down) || die "Could not mkdir $dir_build_down: $!\n";
-	system("scp $vm:buildtmp/*.deb $vm:buildtmp/*.changes $dir_build_down/") == 0 or die "vm build product download failed: $?\n";
+	system("scp $vm:buildtmp/$dir/*.deb $vm:buildtmp/$dir/*.changes $dir_build_down/") == 0 or die "vm build product download failed: $?\n";
 	
 	opendir(my $dh, $dir_build_down) || die "Could not opendir $dir_build_down: $!\n";
 	my @products = grep { /^aprsc.*\.(changes|deb)/ && -f "$dir_build_down/$_" } readdir($dh);
@@ -158,6 +158,8 @@ sub build($$)
 	vm_build($vm, $plat, $tgz);
 	vm_shutdown($vm);
 }
+
+# main
 
 foreach my $plat (@platforms) {
 	build($plat, $tgz);

@@ -1,7 +1,7 @@
 .TH aprsc 8 "@DATEVERSION@"
 .LO 8
 .SH NAME
-.B Aprsc
+.B aprsc
 \- An APRS-IS network server
 .SH SYNOPSIS
 .B aprsc
@@ -43,7 +43,7 @@ When running the
 in
 .IR chroot (2)
 subdirectory, it should be running there with a non-privileged user account.
-This option defines that account, which must be found at system account database.
+This option defines that account, which must be found at the system account database.
 .TP
 .BI "\-c " config_file_name
 Define explicit configuration file name.
@@ -51,15 +51,15 @@ Default is "aprsc.conf" in current directory.
 .TP
 .BI "\-f"
 .br
-.IR Fork (2)
-the program to be backgrounded server process instead of foreground client application.
+.IR fork (2)
+the program to be running in the background.
 .TP
 .BI "\-n " logname
 Define a name by which
 .I this
 instance of the
 .B aprsc
-is known at the log.
+is known in the log.
 Useful when you have multiple instances running.
 .TP
 .BI "\-r " log_dir

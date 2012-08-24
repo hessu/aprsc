@@ -14,6 +14,7 @@
  */
 #define VERSION "0.5.5"
 
+extern const char version_build[];
 extern const char verstr[];
 extern const char verstr_aprsis[];
 extern const char verstr_build_time[];

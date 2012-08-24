@@ -4,9 +4,11 @@
 #include "version_branch.h"
 #include "config.h"
 
-#define VERSTR PROGNAME " " VERSION "-" SVNVERSION VERSION_BRANCH
+#define VERSION_BUILD VERSION "-" SVNVERSION VERSION_BRANCH
+#define VERSTR PROGNAME " " VERSION_BUILD
 #define VERSTR_APRSIS VERSTR
 
+const char version_build[] = VERSION_BUILD;
 const char verstr[] = VERSTR;
 const char verstr_aprsis[] = VERSTR_APRSIS;
 

@@ -68,18 +68,17 @@ There is no default log directory.
 .TP
 .BI "\-e " loglevel_token
 The supported tokens are following with their corresponding priority values
-.IR EMERG (0),
-.IR ALERT (1),
-.IR CRIT (2),
-.IR ERROR (3),
-.IR WARNING (4),
-.IR NOTICE (5),
-.IR INFO (6),
-.IR DEBUG (7).
+.RI EMERG (0) ,
+.RI ALERT (1) ,
+.RI CRIT (2) ,
+.RI ERROR (3) ,
+.RI WARNING (4) ,
+.RI NOTICE (5) ,
+.RI INFO (6) ,
+.RI DEBUG (7) .
 This option defines a logging cutoff where events with higher numeric value
 than the given cutoff are dropped internally.
-The default cutoff is
-.IR INFO .
+The default cutoff is INFO.
 .TP
 .BI "\-o " logdestination_token
 The supported tokens are following:
@@ -124,9 +123,11 @@ Configuration of N and M is done with
 .IR aprsc.conf (7).
 .PP
 .SH SEE ALSO
-To be written
+To be written..
+.PP
+.I https://groups.google.com/forum/#!forum/aprsc
 .PP
 .SH AUTHORS
-Heikki Hannikainen OH7LZB,
-Matti Aarnio OH2MQK,
+Matti Aarnio OH2MQK (man page),
+Heikki Hannikainen OH7LZB (main software),
 Javier Henderson K4JH (lots of feedback).

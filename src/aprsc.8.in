@@ -52,7 +52,7 @@ Default is "aprsc.conf" in current directory.
 .BI "\-f"
 .br
 .IR fork (2)
-the program to be running in the background.
+the program ro tun in the background.
 .TP
 .BI "\-n " logname
 Define a name by which

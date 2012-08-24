@@ -115,15 +115,18 @@ OBJS = aprsc.o accept.o worker.o \
 	@LIBOBJS@
 
 clean:
-	rm -f *.o *~ */*~ core *.d
+	rm -f *.o *~ */*~ ../*~ core *.d
+	rm -f ../svn-commit* svn-commit*
 
 distclean: clean
 	rm -f aprsc
 	rm -f ac-hdrs.h Makefile config.log config.status
 	rm -rf autom4te.cache
 	rm -f build-stamp configure-stamp dpkg-arch.txt
+	rm -rf ../build/build-out ../build/build-down
 	rm -rf debian/aprsc debian/*.debhelper debian/*.log \
 		debian/aprsc.substvars debian/changelog
+	rm -f ../*.deb ../*.changes
 
 aprsc: $(OBJS)
 	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)
@@ -169,10 +172,13 @@ dist:
 	if [ ! -d $(DISTTARGET) ] ; then	\
 		mkdir $(DISTTARGET) ;		\
 	fi
-	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude=*.log* \
-		--exclude=tools --exclude=*.pid \
+	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude="*.log*" \
+		--exclude=tools --exclude="*.pid" \
+		--exclude="*~" \
+		--exclude="javaprssrvr" --exclude="javaprssrvr4" \
+		--exclude=build-out --exclude=build-down \
 		.. | (cd $(DISTTARGET) ; tar xf -)
-	echo "$(DISTVERSION)" > $(DISTTARGET)/VERSION
+	echo "$(DISTVERSION)" > $(DISTTARGET)/src/VERSION
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
 		  \$$ver .= '-1';		\
@@ -197,7 +203,6 @@ dist:
 .PHONY: make-deb make-rpm
 
 make-deb:
-	rm -f ../*.deb ../*.changes
 	if [ -f debian/changelog.release ] ; then \
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\

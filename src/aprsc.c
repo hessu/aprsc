@@ -421,17 +421,6 @@ int main(int argc, char **argv)
 	if (setuid_s)
 		find_uid(setuid_s);
 	
-	/* prepare for a possible chroot, force loading of
-	 * resolver libraries at this point, so that we don't
-	 * need a copy of the shared libs within the chroot dir
-	 */
-	/*
-	ai = NULL;
-	getaddrinfo("startup.aprsc.he.fi", "80", NULL, &ai);
-	if (ai)
-		freeaddrinfo(ai);
-	*/
-	
 	/* fork a daemon */
 	if (fork_a_daemon) {
 		hlog(LOG_INFO, "Forking...");
@@ -454,10 +443,12 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	/* close stdin and stdout */
-	close(0);
-	close(1);
-	close(2);
+	/* close stdin and stdout, and any other FDs that might be left open */
+	{
+		int i;
+		for (i = 0; i < 100; i++)
+			close(i);
+	}
 	
 	/* all of this fails in chroot */
 	if (open("/dev/null", O_RDWR) == -1) /* stdin */
@@ -466,6 +457,15 @@ int main(int argc, char **argv)
 		hlog(LOG_ERR, "dup(0) failed for stdout: %s", strerror(errno));
 	if (dup(0) == -1) /* stderr */
 		hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
+	
+	/* prepare for a possible chroot, force loading of
+	 * resolver libraries at this point, so that we don't
+	 * need a copy of the shared libs within the chroot dir
+	 */
+	ai = NULL;
+	getaddrinfo("startup.aprsc.he.fi", "80", NULL, &ai);
+	if (ai)
+		freeaddrinfo(ai);
 	
 	/* do a chroot if required */
 	if (chrootdir) {

@@ -195,8 +195,9 @@ LIBS="$t_oldLibs"
 AC_SUBST(LIBS,"$LIBS")
 
 dnl Check for the __sync_fetch_and_add builtin
+dnl the check needs to use long long x, since we're incrementing a long long in the stats.
 AC_CACHE_CHECK([for __sync_fetch_and_add], ac_cv_func_sync_fetch_and_add,
-[AC_TRY_LINK([],[int x;__sync_fetch_and_add(&x,1);],ac_cv_func_sync_fetch_and_add=yes,ac_cv_func_sync_fetch_and_add=no)])
+[AC_TRY_LINK([],[long long x;__sync_fetch_and_add(&x,1);],ac_cv_func_sync_fetch_and_add=yes,ac_cv_func_sync_fetch_and_add=no)])
 if test "$ac_cv_func_sync_fetch_and_add" = yes; then
   AC_DEFINE(HAVE_SYNC_FETCH_AND_ADD,1,[Define if you have the __sync_fetch_and_add function])
 fi

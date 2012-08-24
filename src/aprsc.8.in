@@ -22,7 +22,7 @@ The
 is a plain APRS-IS server intended to be used on the core and Tier2 APRS-IS servers.
 It is written in the C language, and it runs on Linux and Unix servers.
 .PP
-If you need igate or other radio-interfacing features, aprsc is not for you.
+If you need igate or other radio-interfacing features, the aprsc is not for you.
 .PP
 .SH OPTIONS
 The
@@ -83,10 +83,10 @@ The default cutoff is
 .TP
 .BI "\-o " logdestination_token
 The supported tokens are following:
-.BR none ,
-.BR stderr ,
-.BR syslog ", and"
-.BR file .
+.IR none ,
+.IR stderr ,
+.IR syslog ", and"
+.IR file .
 .PP
 .SH LOGGING
 The logging has multiple options:
@@ -105,11 +105,11 @@ is being used.
 .B syslog
 .br
 Use
-.RI syslog (3)
+.IR syslog (3)
 mechanism to send logging events to system
-.RI syslogd (8),
+.IR syslogd (8),
 When running under
-.RI chroot (2)
+.IR chroot (2)
 this may require that the syslogd is configured to have log event receiving
 named socket within that chroot area.
 .TP

@@ -1,0 +1,132 @@
+.TH aprsc 8 "@DATEVERSION@"
+.LO 8
+.SH NAME
+.B Aprsc
+\- An APRS-IS network server
+.SH SYNOPSIS
+.B aprsc
+.RB [ \-t " \fIchrootdir\fR]"
+.RB [ \-u " \fIsetuid_username\fR]"
+.RB [ \-c " \fIconfig_file_name\fR]"
+.RB [ \-f ]
+.RB [ \-n " \fIlogname\fR]"
+.RB [ \-r " \fIlog_dir\fR]"
+.RB [ \-e " \fIloglevel_token\fR]"
+.RB [ \-o " \fIlogdestination_token\fR]"
+.RB [ \-h ]
+.SH DESCRIPTION
+The
+.B aprsc
+(pronounced
+.IR a-purrs-c )
+is a plain APRS-IS server intended to be used on the core and Tier2 APRS-IS servers.
+It is written in the C language, and it runs on Linux and Unix servers.
+.PP
+If you need igate or other radio-interfacing features, aprsc is not for you.
+.PP
+.SH OPTIONS
+The
+.B aprsc
+has following runtime options:
+.TP
+.BI "\-t " chrootdir
+Run the
+.B aprsc
+in a
+.IR chroot (2)
+subdirectory.
+Use also the \-u option below.
+.TP
+.BI "\-u " setuid_username
+When running the
+.B aprsc
+in
+.IR chroot (2)
+subdirectory, it should be running there with a non-privileged user account.
+This option defines that account, which must be found at system account database.
+.TP
+.BI "\-c " config_file_name
+Define explicit configuration file name.
+Default is "aprsc.conf" in current directory.
+.TP
+.BI "\-f"
+.br
+.IR Fork (2)
+the program to be backgrounded server process instead of foreground client application.
+.TP
+.BI "\-n " logname
+Define a name by which
+.I this
+instance of the
+.B aprsc
+is known at the log.
+Useful when you have multiple instances running.
+.TP
+.BI "\-r " log_dir
+For file based logging, do it all in given directory.
+There is no default log directory.
+.TP
+.BI "\-e " loglevel_token
+The supported tokens are following with their corresponding priority values
+.IR EMERG (0),
+.IR ALERT (1),
+.IR CRIT (2),
+.IR ERROR (3),
+.IR WARNING (4),
+.IR NOTICE (5),
+.IR INFO (6),
+.IR DEBUG (7).
+This option defines a logging cutoff where events with higher numeric value
+than the given cutoff are dropped internally.
+The default cutoff is
+.IR INFO .
+.TP
+.BI "\-o " logdestination_token
+The supported tokens are following:
+.BR none ,
+.BR stderr ,
+.BR syslog ", and"
+.BR file .
+.PP
+.SH LOGGING
+The logging has multiple options:
+.TP
+.B none
+.br
+Disable logging completely
+.TP
+.B stderr
+.br
+Log to stderr of the running users console session
+Do not use this when runtime option
+.B "\-f"
+is being used.
+.TP
+.B syslog
+.br
+Use
+.RI syslog (3)
+mechanism to send logging events to system
+.RI syslogd (8),
+When running under
+.RI chroot (2)
+this may require that the syslogd is configured to have log event receiving
+named socket within that chroot area.
+.TP
+.B file
+.br
+The logging goes to configured directory using file names:
+.IR aprsc.log ", and"
+.IR aprsc.access.log .
+which autorotate with up to N older versions,
+each with M megabytes of size when the rotation happens.
+Configuration of N and M is done with
+.IR aprsc.conf (7).
+.PP
+.SH SEE ALSO
+To be written
+.PP
+.SH AUTHORS
+Heikki Hannikainen, OH7LZB,
+Matti Aarnio, OH2MQK,
+and a horde of testers sending feedback.

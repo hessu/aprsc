@@ -154,6 +154,8 @@ aprsc: $(OBJS)
 	$(CC) $(CFLAGS) -c $<
 	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
 
+version.o: version_data.h
+
 aprsc.8 : % : %.in VERSION Makefile
 	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SVNVERSION) - $(DATE)}g;	\
 	          s{\@VARRUN\@}{$(VARRUN)}g;			\

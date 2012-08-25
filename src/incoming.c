@@ -682,10 +682,9 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#') {
 		hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
-		if (l4proto != IPPROTO_UDP) {
+		if (l4proto != IPPROTO_UDP && (c->flags & CLFLAGS_USERFILTEROK)) {
 			/* filter adjunct commands ? */
-			/* TODO: check if the socket type allows filter commands! */
-			char *filtercmd = strstr(s, "filter");
+			char *filtercmd = memstr("filter", s, s + len);
 			if (filtercmd)
 				return filter_commands(self, c, filtercmd, len - (filtercmd - s));
 			

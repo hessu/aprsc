@@ -19,6 +19,7 @@ aprsc has been built and tested on:
 * Mac OS X 10.8 (Snow Leopard): x86
 * FreeBSD 8.2 and 9.0 on amd64, 7.2 on i386
 * Solaris 11 (SunOS 5.11 11.0 i86pc i386)
+* Raspberry Pi (Raspbian): ARM11/ARMv6
 
 If you wish to have decent support, please pick Debian or Ubuntu. The other
 platforms do work, but when it comes to building and installing, you're

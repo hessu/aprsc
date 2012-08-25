@@ -15,7 +15,8 @@ CFGFILE=	/opt/aprsc/etc/aprsc.conf
 
 # generate version strings
 VERSION:=$(shell cat VERSION)
-SVNVERSION:=$(shell if test -x /usr/bin/svnversion -a \( -d ../.svn -o -d ../../.svn \)  ; then /usr/bin/svnversion | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
+SVNVERSION_CMD:=$(shell which svnversion)
+SVNVERSION:=$(shell if test -x $(SVNVERSION_CMD) -a \( -d ../.svn -o -d ../../.svn \)  ; then $(SVNVERSION_CMD) | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
 DATE:=$(shell TZ=UTC date +"%Y %B %d")
 RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
 BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")

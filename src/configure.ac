@@ -38,6 +38,10 @@ MACHINE="`uname -m`"
 if test "$MACHINE" == "i686" -o "$MACHINE" == "i386"; then
   CFLAGS_ARCH="-march=i686"
 fi
+OS="`uname`"
+if test "$OS" == "Darwin"; then
+  CFLAGS_ARCH=""
+fi
 AC_SUBST(CFLAGS_ARCH)
 
 dnl Check for GNU make

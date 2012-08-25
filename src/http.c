@@ -20,14 +20,17 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#ifdef HAVE_EVENT2_EVENT_H
 #include <event2/event.h>  
 #include <event2/http.h>  
 #include <event2/buffer.h>
+
+#if 0
+#ifdef HAVE_EVENT2_EVENT_H
 #else // LIBEVENT 1.x
 #include <event.h>
 #include <evhttp.h>
 #include <evutil.h>
+#endif
 #endif
 
 #include "http.h"
@@ -675,7 +678,7 @@ void http_thread(void *asdf)
 			}
 			
 			// do init
-#ifdef HAVE_EVENT_BASE_NEW
+#if 1
 			libbase = event_base_new(); // libevent 2.x
 #else
                         libbase = event_init(); // libevent 1.x

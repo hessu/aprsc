@@ -50,31 +50,14 @@ AC_ARG_ENABLE([static-libevent],
 	[])
 
 dnl Check for libevent
-AC_CHECK_HEADERS(event2/event.h event.h event2/http.h evhttp.h event2/buffer.h evutil.h)
-
-dnl AC_CHECK_HEADER([event.h],,[
-dnl AC_MSG_ERROR([no libevent2 nor libevent header found - remember to install the development package too])
-dnl ])])
-dnl AC_CHECK_HEADER([event2/http.h],,[AC_MSG_ERROR([libevent2 http header not found - remember to install the development package too])])
-dnl AC_CHECK_HEADER([event2/buffer.h],,[AC_MSG_ERROR([libevent2 buffer header not found - remember to install the development package too])])
-
+AC_CHECK_HEADER([event2/event.h],,[AC_MSG_ERROR([libevent2 header not found - remember to install the development package too])])
+AC_CHECK_HEADER([event2/http.h],,[AC_MSG_ERROR([libevent2 http header not found - remember to install the development package too])])
+AC_CHECK_HEADER([event2/buffer.h],,[AC_MSG_ERROR([libevent2 buffer header not found - remember to install the development package too])])
 AC_SUBST(LIBEVENT)
-dnl Following odd bit supports Fedora / CentOS 
-_LIBS="$LIBS"
-LIBS="-levent"
-AC_CHECK_LIB(event_pthreads, evthread_set_condition_callbacks,
-             [LIBEVENT="-levent_pthreads -levent"],
-             [AC_CHECK_LIB(event, event_base_new,
-                           [LIBEVENT="-levent"],[AC_MSG_ERROR([libevent2 not found])])])
-LIBS="${_LIBS}"
+AC_CHECK_LIB(event,event_base_new,[LIBEVENT="-levent"],[AC_MSG_ERROR([libevent2 not found])])
+
 AS_IF([test "x$static_libevent" != x],
 	[LIBEVENT="$static_libevent"])
-LIBS="${LIBEVENT} ${_LIBS}"
-dnl Following exist at libevent2 library
-AC_CHECK_FUNC(event_base_new,AC_DEFINE([HAVE_EVENT_BASE_NEW],[1],[The event_base_new() function is found at event library, it is probably libevent2]))
-AC_CHECK_FUNC(event_new,AC_DEFINE([HAVE_EVENT_NEW],[1],[The event_new() function is found at event library, it is probably libevent2]))
-AC_CHECK_FUNC(evhttp_new,,[AC_MSG_ERROR([No libevent with evhttp_new() in it.])])
-LIBS="${_LIBS}"
 
 dnl Checks for system headers
 AC_CHECK_HEADERS([alloca.h], AC_DEFINE([HAVE_ALLOCA_H]))

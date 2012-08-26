@@ -115,7 +115,7 @@ version_data.h:
 	@echo "#define BUILD_USER \"$(BUILD_USER)\"" >> version_data.h.new
 	@echo "#endif" >> version_data.h.new
 	@if test ! -f /version_data.h; then cp version_data.h.new version_data.h; fi
-	@diff -q version_data.h.new version_data.h || mv version_data.h.new version_data.h
+	@diff version_data.h.new version_data.h > /dev/null || mv version_data.h.new version_data.h
 	@rm -f version_data.h.new
 
 # -------------------------------------------------------------------- #

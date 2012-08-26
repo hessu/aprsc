@@ -446,7 +446,11 @@ int main(int argc, char **argv)
 	/* close stdin and stdout, and any other FDs that might be left open */
 	{
 		int i;
-		for (i = 0; i < 100; i++)
+		close(0);
+		close(1);
+		if (log_dest != L_STDERR)
+			close(2);
+		for (i = 3; i < 100; i++)
 			close(i);
 	}
 	

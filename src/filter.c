@@ -2496,18 +2496,21 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
 	// FIXME: there is a danger of SEGV-blowing filter processing...
 
-	b = alloca(len+2);
+	b = hmalloc(len+2);
 	memcpy(b, s, len);
 	b[len] = 0;
 	
 	// archive a copy of the filters, for status display
-	strncpy(c->filter_s, s, FILTER_S_SIZE);
+	strncpy(c->filter_s, b, FILTER_S_SIZE);
+	
 	c->filter_s[FILTER_S_SIZE-1] = 0;
 	
 	argc = parse_args( argv, b );
 	for (i = 0; i < argc; ++i) {
 		filter_parse(c, argv[i], 1); /* user filters */
 	}
+	hfree(b);
+	
 	return client_printf(self, c, "# Parsed %d filter specifications\r\n", i);
 }
 

@@ -30,6 +30,7 @@
 #endif
 #include <sys/resource.h>
 #include <locale.h>
+#include <ctype.h>
 
 #include "hmalloc.h"
 #include "hlog.h"
@@ -54,6 +55,10 @@ int reconfiguring;		// should we reconfigure now?
 int fileno_limit;
 int dbdump_at_exit;
 int want_dbdump;
+
+/* random instance ID, alphanumeric low-case */
+#define INSTANCE_ID_LEN 8
+char instance_id[INSTANCE_ID_LEN+1];
 
 pthread_attr_t pthr_attrs;
 
@@ -241,7 +246,7 @@ static void dbdump_all(void)
 struct passwd pwbuf;
 char *pw_buf_s;
 
-void find_uid(char *uid_s)
+static void find_uid(const char *uid_s)
 {
 	struct passwd *pwbufp;
 	int buflen;
@@ -269,7 +274,7 @@ void find_uid(char *uid_s)
 	}
 }
 
-void set_uid(char *uid_s)
+static void set_uid(const char *uid_s)
 {
 	if (setgid(pwbuf.pw_gid)) {
 		fprintf(stderr, "aprsc: Failed to set GID %d: %s\n", pwbuf.pw_gid, strerror(errno));
@@ -286,7 +291,7 @@ void set_uid(char *uid_s)
  *	Check that we're not running as root. Bail out if we are
  */
 
-void check_uid(void)
+static void check_uid(void)
 {
 	if (getuid() == 0 || geteuid() == 0) {
 		fprintf(stderr,
@@ -295,6 +300,96 @@ void check_uid(void)
 			"it up as such an user.\n");
 		exit(1);
 	}
+}
+
+/*
+ *	Generate a pseudorandom instance ID by reading the pseudorandom
+ *	source and converting the binary data to lower-case alphanumeric
+ */
+
+static void generate_instance_id(void)
+{
+	unsigned char s[INSTANCE_ID_LEN];
+	int fd, l;
+	char c;
+	
+	if ((fd = open("/dev/urandom", O_RDONLY)) == -1) {
+		hlog(LOG_ERR, "open(/dev/urandom) failed: %s", strerror(errno));
+		return;
+	}
+	
+	l = read(fd, s, INSTANCE_ID_LEN);
+	if (l != INSTANCE_ID_LEN) {
+		hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", INSTANCE_ID_LEN, strerror(errno));
+		close(fd);
+	}
+	
+	for (l = 0; l < INSTANCE_ID_LEN; l++) {
+		/* 256 is not divisible by 36, the distribution is slightly skewed,
+		 * but that's not serious.
+		 */
+		c = s[l] % (26 + 10); /* letters and numbers */
+		if (c < 10)
+			c += 48; /* number */
+		else
+			c = c - 10 + 97; /* letter */
+		instance_id[l] = c;
+	}
+	instance_id[INSTANCE_ID_LEN] = 0;
+	
+	close(fd);
+}
+
+/*
+ *	Preload resolver libraries before performing a chroot,
+ *	so that we won't need copies of the .so files within the
+ *	chroot.
+ *
+ *	This is done by doing a DNS lookup which "accidentally"
+ *	phones home with the version information.
+ *
+ *	Tin foil hats off. Version information and instance statistics
+ *	make developers happy.
+ */
+
+void version_report(const char *state)
+{
+	struct addrinfo hints;
+	struct addrinfo *ai;
+	char v[80];
+	char n[32];
+	char s[300];
+	int i, l;
+	
+	/* normalize version string to fit in a DNS label */
+	strncpy(v, version_build, sizeof(v));
+	l = strlen(v);
+	for (i = 0; i < sizeof(v) && i < l; i++)
+		if (!isalnum(v[i]))
+			v[i] = '-';
+	
+	if (serverid) {
+		/* we're configured, include serverid and normalize it */
+		strncpy(n, serverid, sizeof(n));
+		l = strlen(n);
+		for (i = 0; i < sizeof(n) && i < l; i++)
+			if (!isalnum(n[i]))
+				n[i] = '-';
+		snprintf(s, 300, "%s.%s.%s.%s.aprsc.he.fi", n, v, instance_id, state);
+	} else {
+		snprintf(s, 300, "%s.%s.%s.aprsc.he.fi", v, instance_id, state);
+	}
+	
+	/* reduce the amount of lookups in case of a failure, don't do
+	 * separate AAAA + A lookups
+	 */
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	
+	ai = NULL;
+	getaddrinfo(s, NULL, &hints, &ai);
+	if (ai)
+		freeaddrinfo(ai);
 }
 
 /*
@@ -376,12 +471,14 @@ int main(int argc, char **argv)
 	struct rlimit rlim;
 	time_t cleanup_tick;
 	time_t stats_tick;
-	struct addrinfo *ai;
+	time_t version_tick;
 	
 	time(&tick);
+	srand(tick);
 	now = tick;
 	cleanup_tick = tick;
 	stats_tick = tick;
+	version_tick = tick + rand() % 60; /* some load distribution */
 	startup_tick = tick;
 	setlinebuf(stderr);
 	
@@ -444,6 +541,7 @@ int main(int argc, char **argv)
 	}
 	
 	/* close stdin and stdout, and any other FDs that might be left open */
+	/* closing stderr masks error logs between this point and opening the logs... suboptimal. */
 	{
 		int i;
 		close(0);
@@ -454,22 +552,22 @@ int main(int argc, char **argv)
 			close(i);
 	}
 	
-	/* all of this fails in chroot */
+	/* all of this fails in chroot, so do it before */
 	if (open("/dev/null", O_RDWR) == -1) /* stdin */
 		hlog(LOG_ERR, "open(/dev/null) failed for stdin: %s", strerror(errno));
 	if (dup(0) == -1) /* stdout */
 		hlog(LOG_ERR, "dup(0) failed for stdout: %s", strerror(errno));
-	if (dup(0) == -1) /* stderr */
-		hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
+	if (log_dest != L_STDERR) {
+		if (dup(0) == -1) /* stderr */
+			hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
+	}
 	
 	/* prepare for a possible chroot, force loading of
 	 * resolver libraries at this point, so that we don't
 	 * need a copy of the shared libs within the chroot dir
 	 */
-	ai = NULL;
-	getaddrinfo("startup.aprsc.he.fi", "80", NULL, &ai);
-	if (ai)
-		freeaddrinfo(ai);
+	generate_instance_id();
+	version_report("startup");
 	
 	/* do a chroot if required */
 	if (chrootdir) {
@@ -497,7 +595,7 @@ int main(int argc, char **argv)
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);
-	hlog(LOG_NOTICE, "Starting up...");
+	hlog(LOG_NOTICE, "Starting up, instance id %s ...", instance_id);
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);
@@ -579,6 +677,11 @@ int main(int argc, char **argv)
 			historydb_cleanup();
 			filter_wx_cleanup();
 			filter_entrycall_cleanup();
+		}
+		
+		if (version_tick < tick || version_tick > tick + 86500) {
+			version_tick = tick + 86400;
+			version_report("run");
 		}
 	}
 	

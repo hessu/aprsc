@@ -179,6 +179,21 @@ int parse_args_noshell(char *argv[],char *cmd)
 }
 
 /*
+ *	Sanitize an user-entered ASCII string to not contain control chars
+ */
+
+void sanitize_ascii_string(char *s)
+{
+	char *p;
+	
+	for (p = s; *p; p++) {
+		if (iscntrl(*p) || !(isascii(*p)))
+			*p = '_';
+	}
+}
+
+
+/*
  *	Free a listen config tree
  */
 
@@ -979,7 +994,7 @@ int do_logrotate(int *dest, int argc, char **argv)
  *	Validate an APRS-IS callsign
  */
 
-int valid_aprsis_call(char *s)
+int valid_aprsis_call(const char *s)
 {
 	// TODO: use the other function in q parser which is stricter
 	if (strlen(s) > 12)

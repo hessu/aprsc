@@ -284,6 +284,7 @@ struct client_t {
 	char  validated;    /* did the client provide a valid passcode */
 	char  username_len; /* length of user name */
 	char  hidden;       /* is the user on a hidden listener socket, not shown on status */
+	char  failed_cmds;  /* how many login commands have failed */
 	
 #ifndef FIXED_IOBUFS
 	char *username;     /* The callsign */

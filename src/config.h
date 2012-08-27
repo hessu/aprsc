@@ -164,6 +164,7 @@ extern char *http_bind_upload;
 extern int http_port_upload;
 
 extern int parse_args_noshell(char *argv[],char *cmd);
+extern void sanitize_ascii_string(char *s);
 
 extern int read_config(void);
 extern void free_config(void);

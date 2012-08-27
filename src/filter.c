@@ -26,6 +26,7 @@
 #include "cellmalloc.h"
 #include "historydb.h"
 #include "cfgfile.h"
+#include "config.h"
 #include "keyhash.h"
 #include "client_heard.h"
 
@@ -2504,6 +2505,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	strncpy(c->filter_s, b, FILTER_S_SIZE);
 	
 	c->filter_s[FILTER_S_SIZE-1] = 0;
+	sanitize_ascii_string(c->filter_s);
 	
 	argc = parse_args( argv, b );
 	for (i = 0; i < argc; ++i) {

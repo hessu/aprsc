@@ -13,6 +13,8 @@
 
 #include "worker.h" /* struct client_t */
 
+extern int check_invalid_q_callsign(const char *call, int len);
+
 extern int q_process(struct client_t *c, const char *pdata,
                      char *new_q, int new_q_size, char *via_start,
                      char **path_end, int pathlen, char **new_q_start, char **q_replace,

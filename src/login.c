@@ -20,6 +20,7 @@
 #include "config.h"
 #include "filter.h"
 #include "clientlist.h"
+#include "parse_qc.h"
 
 /*
  *	login.c: works in the context of the worker thread
@@ -42,12 +43,18 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	if (argc < 2) {
 		hlog(LOG_WARNING, "%s: Invalid login string, too few arguments: '%s'", c->addr_rem, s);
-		return 0;
+		rc = client_printf(self, c, "# Invalid login string, too few arguments\r\n");
+		goto failed_login;
 	}
 	
 	if (strcasecmp(argv[0], "user") != 0) {
+		if (strcasecmp(argv[0], "GET") == 0)
+			c->failed_cmds = 10; /* bail out right away for a HTTP client */
+		
+		c->failed_cmds++;
 		hlog(LOG_WARNING, "%s: Invalid login string, no 'user': '%s'", c->addr_rem, s);
-		return 0;
+		rc = client_printf(self, c, "# Invalid login command\r\n");
+		goto failed_login;
 	}
 	
 	char *username = argv[1];
@@ -60,6 +67,13 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	c->username[sizeof(c->username)-1] = 0;
 #endif
 	c->username_len = strlen(c->username);
+	
+	/* make sure the callsign is OK on the APRS-IS */
+	if (check_invalid_q_callsign(c->username, c->username_len)) {
+		hlog(LOG_WARNING, "%s: Invalid login string, invalid 'user': '%s'", c->addr_rem, c->username);
+		rc = client_printf(self, c, "# Invalid username format\r\n");
+		goto failed_login;
+	}
 	
 	int given_passcode = -1;
 	
@@ -93,6 +107,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			strncpy(c->app_name,    argv[++i], sizeof(c->app_name));
 			c->app_name[sizeof(c->app_name)-1] = 0;
 #endif
+			sanitize_ascii_string(c->app_name);
 
 			if (i+1 >= argc) {
 				hlog(LOG_DEBUG, "%s/%s: No application version after 'vers' in login", c->addr_rem, username);
@@ -105,6 +120,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			strncpy(c->app_version, argv[++i], sizeof(c->app_version));
 			c->app_version[sizeof(c->app_version)-1] = 0;
 #endif
+			sanitize_ascii_string(c->app_version);
 
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {
@@ -221,6 +237,18 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	}
 	
 	return 0;
+
+failed_login:
+	
+	/* if we already lost the client, just return */
+	if (rc < -2)
+		return rc;
+	
+	c->failed_cmds++;
+	if (c->failed_cmds >= 3)
+		shutdown(c->fd, SHUT_RDWR);
+	
+	return rc;
 }
 
 

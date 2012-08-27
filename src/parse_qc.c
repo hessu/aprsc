@@ -36,14 +36,24 @@
 #define QDROP_NONVAL_MULTI_Q_CALLS -69
 #define QDROP_I_NO_VIACALL -70
 
-static int check_invalid_q_callsign(const char *call, int len)
+/*
+ *	Check if a callsign is good for a Q construct
+ *	(valid APRS-IS callsign)
+ */
+
+int check_invalid_q_callsign(const char *call, int len)
 {
 	const char *p = call;
 	const char *e = call + len;
 	
 	while (p < e) {
+		/* these would be redundant, non-ascii and control chars are
+		 * not alphanumeric.
 		if (!isascii(*p))
 			return -1;
+		if (iscntrl(*p))
+			return -1;
+		*/
 		if ((!isalnum(*p)) && *p != '-')
 			return -1;
 		p++;

@@ -12,7 +12,7 @@
  * If you're making modifications, put your own variant version
  * identification in version_branch.h. Thanks!
  */
-#define VERSION "0.6.2"
+#define VERSION "0.6.3"
 
 extern const char version_build[];
 extern const char verstr[];

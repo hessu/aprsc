@@ -806,6 +806,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_USERFILTEROK;
 	  clflags |= CLFLAGS_IGATE;
+	} else if (strcasecmp(argv[2], "udpsubmit") == 0) {
+	  clflags |= CLFLAGS_CLIENTONLY;
+	  clflags |= CLFLAGS_UDPSUBMIT;
 	} else {
 	  hlog(LOG_ERR, "Listen: unknown port type: %s", argv[2]);
 	}
@@ -822,6 +825,11 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 #endif
 	} else {
 		hlog(LOG_ERR, "Listen: Unsupported protocol '%s'\n", argv[3]);
+		return -2;
+	}
+	
+	if ((clflags & CLFLAGS_UDPSUBMIT) && req.ai_protocol != IPPROTO_UDP) {
+		hlog(LOG_ERR, "Listen: Invalid protocol '%s' for udpsubmit port - only UDP is supported\n", argv[3]);
 		return -2;
 	}
 	
@@ -861,6 +869,12 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 			i++;
 			if (i >= argc) {
 				hlog(LOG_ERR, "Listen: 'filter' argument is missing the filter parameter for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			if (clflags & (CLFLAGS_UDPSUBMIT|CLFLAGS_DUPEFEED)) {
+				hlog(LOG_ERR, "Listen: 'filter' argument is not valid for port type of '%s'", argv[1]);
 				free_listen_config(&l);
 				return -2;
 			}

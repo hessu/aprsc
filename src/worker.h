@@ -269,7 +269,7 @@ struct client_t {
 
 #define CLFLAGS_INPORT         0x001
 #define CLFLAGS_UPLINKPORT     0x002
-#define CLFLAGS_unused         0x004
+#define CLFLAGS_UDPSUBMIT      0x004
 #define CLFLAGS_PORT_RO	       0x008
 #define CLFLAGS_USERFILTEROK   0x010 /* Permits entry of user defined filters */
 #define CLFLAGS_FULLFEED       0x100 /* Together with filter t/c* -- which really implements it */

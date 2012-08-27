@@ -443,10 +443,16 @@ static struct client_t *do_accept(struct listen_t *l)
 		/* Receive as much as there is -- that is, LOOP...  */
 		
 		i = recv( l->udp->fd, buf, sizeof(buf), MSG_DONTWAIT|MSG_TRUNC );
-		hlog(LOG_DEBUG, "accept thread discarded an UDP packet on a listening socket");
 		
 		if (i < 0)
 			return 0;  /* no more data */
+			
+		if (!(l->clientflags & CLFLAGS_UDPSUBMIT)) {
+			hlog(LOG_DEBUG, "accept thread discarded an UDP packet on a listening socket");
+			continue;
+		}
+		
+		hlog(LOG_DEBUG, "accept thread got an UDP packet on an udpsubmit socket");
 	}
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {

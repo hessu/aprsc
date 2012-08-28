@@ -90,6 +90,10 @@ sub start($)
 {
 	my($self) = @_;
 	
+	if ($ENV{'PRODUCT_NORUN'}) {
+		return 1;
+	}
+	
 	if (defined $self->{'pid'}) {
 		return "Product already running.";
 	}
@@ -165,6 +169,10 @@ sub check($)
 {
 	my($self) = @_;
 	
+	if ($ENV{'PRODUCT_NORUN'}) {
+		return 1;
+	}
+	
 	if (!defined $self->{'pid'}) {
 		return "Product not running.";
 	}
@@ -188,6 +196,10 @@ sub check($)
 sub stop($)
 {
 	my($self) = @_;
+	
+	if ($ENV{'PRODUCT_NORUN'}) {
+		return 1;
+	}
 	
 	my $ret = $self->check();
 	return $ret if ($ret ne 1);

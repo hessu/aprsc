@@ -391,8 +391,21 @@ void status_init(void)
 		cl->name = cdata_start[i][1];
 		cl->next = cdata_list;
 		cl->cd = cdata_alloc(n);
+		hfree(n);
 		cl->gauge = cdata_start[i][2][0] == 'g' ? 1 : 0;
 		cdata_list = cl;
 		i++;
 	}
 }
+
+void status_atend(void)
+{
+	struct cdata_list_t *cl, *cl_next;
+	
+	for (cl = cdata_list; (cl); cl = cl_next) {
+		cl_next = cl->next;
+		cdata_free(cl->cd);
+		hfree(cl);
+	}
+}
+

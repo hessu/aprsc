@@ -19,5 +19,6 @@ extern char *status_json_string(int no_cache, int periodical);
 extern int status_dump_file(void);
 
 extern void status_init(void);
+extern void status_atend(void);
 
 #endif

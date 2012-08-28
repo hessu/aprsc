@@ -73,6 +73,16 @@ struct cdata_t *cdata_alloc(const char *name)
 	return cd;
 }
 
+extern void cdata_free(struct cdata_t *cd)
+{
+	if (cd->next)
+		cd->next->prevp = cd->prevp;
+	*cd->prevp = cd->next;
+	
+	hfree(cd->name);
+	hfree(cd);
+}
+
 struct cdata_t *cdata_find_and_lock(const char *name)
 {
 	struct cdata_t *cd = NULL;

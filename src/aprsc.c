@@ -714,6 +714,7 @@ int main(int argc, char **argv)
 	historydb_atend();
 	filter_wx_atend();
 	filter_entrycall_atend();
+	status_atend();
 	
 	hlog(LOG_NOTICE, "Shut down.");
 	close_log(0);

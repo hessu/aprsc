@@ -78,6 +78,8 @@ extern int historydb_insert(struct pbuf_t*);
 extern int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t **result);
 
 /* cellmalloc status */
+#ifndef _FOR_VALGRIND_
 extern void historydb_cell_stats(struct cellstatus_t *cellst);
+#endif
 
 #endif

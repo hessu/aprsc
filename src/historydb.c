@@ -414,10 +414,13 @@ void historydb_cleanup(void)
  *	cellmalloc status
  */
 
+#ifndef _FOR_VALGRIND_
 void historydb_cell_stats(struct cellstatus_t *cellst)
 {
 	rwl_rdlock(&historydb_rwlock);
 	cellstatus(historydb_cells, cellst);
 	rwl_rdunlock(&historydb_rwlock);
 }
+#endif
+
 

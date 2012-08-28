@@ -2520,6 +2520,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
  *	cellmalloc status
  */
 
+#ifndef _FOR_VALGRIND_
 void filter_cell_stats(struct cellstatus_t *filter_cellst,
 	struct cellstatus_t *filter_entrycall_cellst,
 	struct cellstatus_t *filter_wx_cellst)
@@ -2528,4 +2529,4 @@ void filter_cell_stats(struct cellstatus_t *filter_cellst,
 	cellstatus(filter_entrycall_cells, filter_entrycall_cellst);
 	cellstatus(filter_wx_cells, filter_wx_cellst);
 }
-
+#endif

@@ -39,6 +39,8 @@ extern void dupecheck_stop(void);
 extern void dupecheck_atend(void);
 
 /* cellmalloc status */
+#ifndef _FOR_VALGRIND_
 extern void dupecheck_cell_stats(struct cellstatus_t *cellst);
+#endif
 
 #endif

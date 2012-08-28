@@ -681,9 +681,12 @@ void dupecheck_atend(void)
 /*
  *	cellmalloc status
  */
+#ifndef _FOR_VALGRIND_
 void dupecheck_cell_stats(struct cellstatus_t *cellst)
 {
 	// TODO: this is not quite thread safe, but may be OK
 	cellstatus(dupecheck_cells, cellst);
 }
+#endif
+
 

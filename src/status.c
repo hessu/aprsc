@@ -102,6 +102,7 @@ char *status_json_string(int no_cache, int periodical)
 	
 	// TODO: add free counts of each cell pool
 	cJSON *memory = cJSON_CreateObject();
+#ifndef _FOR_VALGRIND_
 	struct cellstatus_t cellst;
 	historydb_cell_stats(&cellst), 
 	cJSON_AddNumberToObject(memory, "historydb_cells_used", historydb_cellgauge);
@@ -199,6 +200,7 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(memory, "pbuf_large_cell_size", cellst_pbuf_large.cellsize);
 	cJSON_AddNumberToObject(memory, "pbuf_large_cell_size_aligned", cellst_pbuf_large.cellsize_aligned);
 	cJSON_AddNumberToObject(memory, "pbuf_large_cell_align", cellst_pbuf_large.alignment);
+#endif
 	
 	cJSON_AddItemToObject(root, "memory", memory);
 	

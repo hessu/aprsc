@@ -717,6 +717,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	return 0;
 }
 
+#ifndef _FOR_VALGRIND_
 void incoming_cell_stats(struct cellstatus_t *cellst_pbuf_small,
 	struct cellstatus_t *cellst_pbuf_medium,
 	struct cellstatus_t *cellst_pbuf_large)
@@ -725,3 +726,4 @@ void incoming_cell_stats(struct cellstatus_t *cellst_pbuf_small,
 	cellstatus(pbuf_cells_medium, cellst_pbuf_medium);
 	cellstatus(pbuf_cells_large, cellst_pbuf_large);
 }
+#endif

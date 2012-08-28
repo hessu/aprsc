@@ -59,6 +59,7 @@ extern int disallow_unverified;		/* don't allow unverified clients to transmit p
 extern int verbose;
 
 extern char *serverid;
+extern char *passcode;
 extern char *myemail;
 extern char *myadmin;
 

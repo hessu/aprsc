@@ -37,7 +37,6 @@
 #include "incoming.h"
 #include "outgoing.h"
 #include "filter.h"
-#include "passcode.h"
 
 #define MAX_UPLINKS 32
 
@@ -231,7 +230,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
 {
 	char buf[1000];
-	int passcode, rc;
+	int rc;
 	int argc;
 	char *argv[256];
 
@@ -243,8 +242,6 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 		strcpy(c->username, "simulator");
 #endif
 
-	passcode = aprs_passcode(c->username);
-	
 	hlog(LOG_INFO, "%s: Uplink server software: \"%.*s\"", c->addr_rem, len, s);
 	
 	/* parse to arguments */
@@ -270,7 +267,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	}
 
 	// TODO: The uplink login command here could maybe be improved to send a filter command.
-	len = sprintf(buf, "user %s pass %d vers %s\r\n", c->username, passcode, verstr_aprsis);
+	len = sprintf(buf, "user %s pass %s vers %s\r\n", c->username, passcode, verstr_aprsis);
 
 	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_rem, len-2, buf, len);
 

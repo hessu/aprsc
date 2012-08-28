@@ -6,6 +6,7 @@
 # Configuration for aprsc, an APRS-IS server for core servers
 
 ServerId   TESTING
+PassCode   31421
 MyEmail    email@example.com
 MyAdmin    "Admin, N0CALL"
 

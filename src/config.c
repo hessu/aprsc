@@ -47,9 +47,11 @@ char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */
 
 char *serverid;
+char *passcode;
 char *myemail;
 char *myadmin;
 char *new_serverid;
+char *new_passcode;
 char *new_myemail;
 char *new_myadmin;
 
@@ -134,6 +136,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "logdir",		_CFUNC_ do_string,	&new_logdir		},
 	{ "logrotate",		_CFUNC_ do_logrotate,	&log_rotate_size	},
 	{ "serverid",		_CFUNC_ do_string,	&new_serverid		},
+	{ "passcode",		_CFUNC_ do_string,	&new_passcode		},
 	{ "myemail",		_CFUNC_ do_string,	&new_myemail		},
 	{ "myadmin",		_CFUNC_ do_string,	&new_myadmin		},
 	{ "workerthreads",	_CFUNC_ do_int,		&workers_configured	},
@@ -1087,6 +1090,16 @@ int read_config(void)
 			serverid = new_serverid;
 			new_serverid = NULL;
 		}
+	}
+	
+	if (new_passcode) {
+		if (passcode)
+			hfree(passcode);
+		passcode = new_passcode;
+		new_passcode = NULL;
+	} else {
+		hlog(LOG_WARNING, "Config: passcode is not defined.");
+		failed = 1;
 	}
 	
 	if (new_myadmin) {

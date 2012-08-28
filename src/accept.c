@@ -863,6 +863,10 @@ void accept_thread(void *asdf)
 	dupecheck_stop();
 	workers_stop(1);
 	hfree(acceptpfd);
+	
+	/* free up the pseudo-client */
+	client_free(udp_pseudoclient);
+	udp_pseudoclient = NULL;
 }
 
 int accept_listener_status(cJSON *listeners, cJSON *totals)

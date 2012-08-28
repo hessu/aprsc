@@ -591,6 +591,29 @@ static void http_srvr_defaults(struct evhttp *srvr)
 	// TODO: How to limit the amount of concurrent HTTP connections?
 }
 
+static void http_server_free(void)
+{
+	if (ev_timer) {
+		event_del(ev_timer);
+		ev_timer = NULL;
+	}
+	
+	if (srvr_status) {
+		evhttp_free(srvr_status);
+		srvr_status = NULL;
+	}
+	
+	if (srvr_upload) {
+		evhttp_free(srvr_upload);
+		srvr_upload = NULL;
+	}
+	
+	if (libbase) {
+		event_base_free(libbase);
+		libbase = NULL;
+	}
+}
+
 /*
  *	HTTP server thread
  */
@@ -639,21 +662,7 @@ void http_thread(void *asdf)
 			http_reconfiguring = 0;
 			
 			// shut down existing instance
-			if (ev_timer) {
-				event_del(ev_timer);
-			}
-			if (srvr_status) {
-				evhttp_free(srvr_status);
-				srvr_status = NULL;
-			}
-			if (srvr_upload) {
-				evhttp_free(srvr_upload);
-				srvr_upload = NULL;
-			}
-			if (libbase) {
-				event_base_free(libbase);
-				libbase = NULL;
-			}
+			http_server_free();
 			
 			// do init
 #if 1
@@ -702,8 +711,7 @@ void http_thread(void *asdf)
 		event_base_dispatch(libbase);
 	}
 	
-	event_base_free(libbase);
-	libbase = NULL;
+	http_server_free();
 	
 	/* free up the pseudo-client */
 	client_free(http_pseudoclient);

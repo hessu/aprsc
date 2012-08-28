@@ -16,6 +16,8 @@
 extern int accept_reconfiguring;
 extern int accept_shutting_down;
 
+extern struct worker_t *udp_worker;
+
 extern void accept_thread(void *asdf);
 
 extern int accept_listener_status(cJSON *listeners, cJSON *totals);

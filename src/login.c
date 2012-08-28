@@ -23,6 +23,64 @@
 #include "parse_qc.h"
 
 /*
+ *	Parse the login string in a HTTP POST or UDP submit packet
+ *	Argh, why are these not in standard POST parameters in HTTP?
+ */
+
+int http_udp_upload_login(const char *addr_rem, char *s, char **username)
+{
+	int argc;
+	char *argv[256];
+	int i;
+	
+	/* parse to arguments */
+	if ((argc = parse_args_noshell(argv, s)) == 0)
+		return -1;
+	
+	if (argc < 2) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, too few arguments: '%s'", addr_rem, s);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[0], "user") != 0) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, no 'user': '%s'", addr_rem, s);
+		return -1;
+	}
+	
+	*username = argv[1];
+	if (strlen(*username) > 9) /* limit length */
+		*username[9] = 0;
+	
+	int given_passcode = -1;
+	int validated = 0;
+	
+	for (i = 2; i < argc; i++) {
+		if (strcasecmp(argv[i], "pass") == 0) {
+			if (++i >= argc) {
+				hlog(LOG_WARNING, "%s (%s): HTTP POST: No passcode after pass command", addr_rem, username);
+				break;
+			}
+			
+			given_passcode = atoi(argv[i]);
+			if (given_passcode >= 0)
+				if (given_passcode == aprs_passcode(*username))
+					validated = 1;
+		} else if (strcasecmp(argv[i], "vers") == 0) {
+			if (i+2 >= argc) {
+				hlog(LOG_DEBUG, "%s (%s): HTTP POST: No application name and version after vers command", addr_rem, username);
+				break;
+			}
+			
+			// skip app name and version
+			i += 2;
+		}
+	}
+	
+	return validated;
+}
+
+
+/*
  *	login.c: works in the context of the worker thread
  */
 

@@ -42,6 +42,7 @@
 #include "status.h"
 #include "passcode.h"
 #include "incoming.h"
+#include "login.h"
 #include "counterdata.h"
 
 int http_shutting_down;
@@ -96,7 +97,7 @@ static struct http_static_t http_content_types[] = {
  *	Find a content-type for a file name
  */
 
-char *http_content_type(char *fn)
+static char *http_content_type(const char *fn)
 {
 	struct http_static_t *cmdp;
 	static char default_ctype[] = "text/html";
@@ -120,7 +121,7 @@ char *http_content_type(char *fn)
  *	HTTP date formatting
  */
 
-int http_date(char *buf, int len, time_t t)
+static int http_date(char *buf, int len, time_t t)
 {
 	struct tm tb;
 	char *wkday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", NULL };
@@ -134,7 +135,7 @@ int http_date(char *buf, int len, time_t t)
 		tb.tm_hour, tb.tm_min, tb.tm_sec);
 }
 
-void http_header_base(struct evkeyvalq *headers, int last_modified)
+static void http_header_base(struct evkeyvalq *headers, int last_modified)
 {
 	char dbuf[80];
 	
@@ -147,64 +148,6 @@ void http_header_base(struct evkeyvalq *headers, int last_modified)
 		http_date(dbuf, sizeof(dbuf), last_modified);
 		evhttp_add_header(headers, "Last-Modified", dbuf);
 	}
-}
-
-
-/*
- *	Parse the login string in a POST
- *	Argh, why are these not in standard POST parameters?
- */
-
-int http_upload_login(char *addr_rem, char *s, char **username)
-{
-	int argc;
-	char *argv[256];
-	int i;
-	
-	/* parse to arguments */
-	if ((argc = parse_args_noshell(argv, s)) == 0)
-		return -1;
-	
-	if (argc < 2) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, too few arguments: '%s'", addr_rem, s);
-		return -1;
-	}
-	
-	if (strcasecmp(argv[0], "user") != 0) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, no 'user': '%s'", addr_rem, s);
-		return -1;
-	}
-	
-	*username = argv[1];
-	if (strlen(*username) > 9) /* limit length */
-		*username[9] = 0;
-	
-	int given_passcode = -1;
-	int validated = 0;
-	
-	for (i = 2; i < argc; i++) {
-		if (strcasecmp(argv[i], "pass") == 0) {
-			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): HTTP POST: No passcode after pass command", addr_rem, username);
-				break;
-			}
-			
-			given_passcode = atoi(argv[i]);
-			if (given_passcode >= 0)
-				if (given_passcode == aprs_passcode(*username))
-					validated = 1;
-		} else if (strcasecmp(argv[i], "vers") == 0) {
-			if (i+2 >= argc) {
-				hlog(LOG_DEBUG, "%s (%s): HTTP POST: No application name and version after vers command", addr_rem, username);
-				break;
-			}
-			
-			// skip app name and version
-			i += 2;
-		}
-	}
-	
-	return validated;
 }
 
 /*
@@ -254,6 +197,48 @@ int loginpost_split(char *post, int len, char **login_string, char **packet)
 	return packet_len;
 }
 
+/*
+ *	Process an incoming HTTP or UDP packet by parsing it and pushing
+ *	it to the dupecheck thread through the pseudoworker
+ */
+
+int pseudoclient_push_packet(struct worker_t *worker, struct client_t *pseudoclient, const char *username, char *packet, int packet_len)
+{
+	int e;
+	
+	/* fill the user's information in the pseudoclient's structure
+	 * for the q construct handler's viewing pleasure
+	 */
+#ifdef FIXED_IOBUFS
+	strncpy(pseudoclient->username, username, sizeof(pseudoclient->username));
+	pseudoclient->username[sizeof(pseudoclient->username)-1] = 0;
+#else
+	pseudoclient->username = username;
+#endif	
+	pseudoclient->username_len = strlen(pseudoclient->username);
+	
+	/* ok, try to digest the packet */
+	e = incoming_parse(worker, pseudoclient, packet, packet_len);
+
+#ifdef FIXED_IOBUFS
+	pseudoclient->username[0] = 0;
+#else
+	pseudoclient->username = NULL;
+#endif
+	pseudoclient->username_len = 0;
+	
+	if (e < 0)
+		return e;
+	
+	/* if the packet parser managed to digest the packet and put it to
+	 * the thread-local incoming queue, flush it for dupecheck to
+	 * grab
+	 */
+	if (worker->pbuf_incoming_local)
+		incoming_flush(worker);
+	
+	return e;
+}
 
 /*
  *	Accept a POST containing a position
@@ -261,7 +246,7 @@ int loginpost_split(char *post, int len, char **login_string, char **packet)
 
 #define MAX_HTTP_POST_DATA 2048
 
-void http_upload_position(struct evhttp_request *r, char *remote_host)
+static void http_upload_position(struct evhttp_request *r, const char *remote_host)
 {
 	struct evbuffer *bufin, *bufout;
 	struct evkeyvalq *req_headers;
@@ -271,6 +256,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	ev_ssize_t l;
 	char *login_string = NULL;
 	char *packet = NULL;
+	char *username = NULL;
 	char validated;
 	int e;
 	int packet_len;
@@ -331,8 +317,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	hlog(LOG_DEBUG, "packet: %s", packet);
 	
 	/* process the login string */
-	char *username;
-	validated = http_upload_login(remote_host, login_string, &username);
+	validated = http_udp_upload_login(remote_host, login_string, &username);
 	if (validated < 0) {
 		evhttp_send_error(r, HTTP_BADREQUEST, "Invalid login string");
 		return;
@@ -354,38 +339,13 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 		return;
 	}
 	
-	/* fill the user's information in the pseudoclient's structure
-	 * for the q construct handler's viewing pleasure
-	 */
-#ifdef FIXED_IOBUFS
-	strncpy(http_pseudoclient->username, username, sizeof(http_pseudoclient->username));
-	http_pseudoclient->username[sizeof(http_pseudoclient->username)-1] = 0;
-#else
-	http_pseudoclient->username = username;
-#endif	
-	http_pseudoclient->username_len = strlen(http_pseudoclient->username);
-	
-	/* ok, try to digest the packet */
-	e = incoming_parse(http_worker, http_pseudoclient, packet, packet_len);
+	e = pseudoclient_push_packet(http_worker, http_pseudoclient, username, packet, packet_len);
 
-#ifdef FIXED_IOBUFS
-	http_pseudoclient->username[0] = 0;
-#else
-	http_pseudoclient->username = NULL;
-#endif
-	
 	if (e < 0) {
 		hlog(LOG_DEBUG, "http incoming packet parse failure code %d: %s", e, packet);
 		evhttp_send_error(r, HTTP_BADREQUEST, "Packet parsing failure");
 		return;
 	}
-	
-	/* if the packet parser managed to digest the packet and put it to
-	 * the thread-local incoming queue, flush it for dupecheck to
-	 * grab
-	 */
-	if (http_worker->pbuf_incoming_local)
-		incoming_flush(http_worker);
 	
 	bufout = evbuffer_new();
 	evbuffer_add(bufout, "ok\n", 3);
@@ -402,7 +362,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
  *	Generate a status JSON response
  */
 
-void http_status(struct evhttp_request *r)
+static void http_status(struct evhttp_request *r)
 {
 	char *json;
 	struct evbuffer *buffer = evbuffer_new();
@@ -424,7 +384,7 @@ void http_status(struct evhttp_request *r)
  *	Return counterdata in JSON
  */
 
-void http_counterdata(struct evhttp_request *r, const char *uri)
+static void http_counterdata(struct evhttp_request *r, const char *uri)
 {
 	char *json;
 	const char *query;
@@ -548,7 +508,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
  *	HTTP request router
  */
 
-void http_router(struct evhttp_request *r, void *which_server)
+static void http_router(struct evhttp_request *r, void *which_server)
 {
 	char *remote_host;
 	ev_uint16_t remote_port;
@@ -603,7 +563,7 @@ struct event_base *libbase = NULL;
  *	HTTP timer event, mainly to catch the shutdown signal
  */
 
-void http_timer(evutil_socket_t fd, short events, void *arg)
+static void http_timer(evutil_socket_t fd, short events, void *arg)
 {
 	struct timeval http_timer_tv;
 	http_timer_tv.tv_sec = 0;
@@ -620,7 +580,7 @@ void http_timer(evutil_socket_t fd, short events, void *arg)
 	event_add(ev_timer, &http_timer_tv);
 }
 
-void http_srvr_defaults(struct evhttp *srvr)
+static void http_srvr_defaults(struct evhttp *srvr)
 {
 	// limit what the clients can do a bit
 	evhttp_set_allowed_methods(srvr, EVHTTP_REQ_GET);
@@ -629,24 +589,6 @@ void http_srvr_defaults(struct evhttp *srvr)
 	evhttp_set_max_headers_size(srvr, 10*1024);
 	
 	// TODO: How to limit the amount of concurrent HTTP connections?
-}
-
-struct client_t *http_pseudoclient_setup(void)
-{
-	struct client_t *c;
-	
-	c = http_pseudoclient = client_alloc();
-	c->fd    = -1;
-	c->portnum = 80;
-	c->state = CSTATE_CONNECTED;
-	c->flags = CLFLAGS_INPORT|CLFLAGS_CLIENTONLY;
-	c->validated = 1; // we will validate on every packet
-	//c->portaccount = l->portaccount;
-	c->keepalive = tick;
-	c->connect_time = tick;
-	c->last_read = tick;
-	
-	return c;
 }
 
 /*
@@ -689,7 +631,7 @@ void http_thread(void *asdf)
 	/* we also need a client structure to be used with incoming
 	 * HTTP position uploads
 	 */
-	http_pseudoclient_setup();
+	http_pseudoclient = pseudoclient_setup(80);
 	
 	http_reconfiguring = 1;
 	while (!http_shutting_down) {

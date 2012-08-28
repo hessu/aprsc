@@ -13,6 +13,7 @@
 
 #include "worker.h"
 
+extern int http_udp_upload_login(const char *addr_rem, char *s, char **username);
 extern int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 
 #endif

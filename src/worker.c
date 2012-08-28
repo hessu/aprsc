@@ -350,6 +350,27 @@ void client_free(struct client_t *c)
 #endif
 }
 
+/*
+ *	Set up a pseudoclient for UDP and HTTP submitted packets
+ */
+
+struct client_t *pseudoclient_setup(int portnum)
+{
+	struct client_t *c;
+	
+	c = client_alloc();
+	c->fd    = -1;
+	c->portnum = portnum;
+	c->state = CSTATE_CONNECTED;
+	c->flags = CLFLAGS_INPORT|CLFLAGS_CLIENTONLY;
+	c->validated = 1; // we will validate on every packet
+	//c->portaccount = l->portaccount;
+	c->keepalive = tick;
+	c->connect_time = tick;
+	c->last_read = tick;
+	
+	return c;
+}
 
 char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 {

@@ -36,6 +36,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "login.h"
+#include "http.h"
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 
@@ -64,6 +65,10 @@ static struct listen_t *listen_list;
 
 int accept_shutting_down;
 int accept_reconfiguring;
+
+/* pseudoworker + pseudoclient for incoming UDP packets */
+struct worker_t *udp_worker = NULL;
+struct client_t *udp_pseudoclient = NULL;
 
 
 /* structure allocator/free */
@@ -128,7 +133,7 @@ static int accept_sighandler(int signum)
  *	Pass a new client to a worker thread
  */
 
-int accept_pass_client_to_worker(struct worker_t *wc, struct client_t *c)
+static int accept_pass_client_to_worker(struct worker_t *wc, struct client_t *c)
 {
 	int pe;
 	
@@ -337,7 +342,7 @@ static void close_listeners(void)
  *	Generate UDP peer "clients"
  */
 
-void peerip_clients_config(void)
+static void peerip_clients_config(void)
 {
 	struct client_t *c;
 	struct peerip_config_t *pe;
@@ -417,45 +422,113 @@ void peerip_clients_config(void)
 }
 
 /*
+ *	Process an incoming UDP packet submission
+ */
+
+static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, char *remote_host)
+{
+	int packet_len;
+	char *login_string = NULL;
+	char *packet = NULL;
+	char *username = NULL;
+	char validated;
+	int e;
+	
+	//hlog(LOG_DEBUG, "got udp submit: %.*s", len, buf);
+	
+	packet_len = loginpost_split(buf, len, &login_string, &packet);
+	if (packet_len == -1) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: No newline (LF) found in data", remote_host);
+		return;
+	}
+	
+	if (!login_string) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: No login string in data", remote_host);
+		return;
+	}
+	
+	if (!packet) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: No packet data found in data", remote_host);
+		return;
+	}
+	
+	hlog(LOG_DEBUG, "UDP submit [%s]: login string: %s", remote_host, login_string);
+	hlog(LOG_DEBUG, "UDP submit [%s]: packet: %s", remote_host, packet);
+	
+	/* process the login string */
+	validated = http_udp_upload_login(remote_host, login_string, &username);
+	if (validated < 0) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: Invalid login string", remote_host);
+		return;
+	}
+	
+	if (validated != 1) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: Invalid passcode for user %s", remote_host, username);
+		return;
+	}
+	
+	/* packet size limits */
+	if (packet_len < PACKETLEN_MIN) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: Packet too short: %d bytes", remote_host, packet_len);
+		return;
+	}
+	
+	if (packet_len > PACKETLEN_MAX-2) {
+		hlog(LOG_DEBUG, "UDP submit [%s]: Packet too long: %d bytes", remote_host, packet_len);
+		return;
+	}
+	
+	e = pseudoclient_push_packet(udp_worker, udp_pseudoclient, username, packet, packet_len);
+
+	if (e < 0)
+		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parse failure code %d: %s", remote_host, e, packet);
+	else
+		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parsed, code %d: %s", remote_host, e, packet);
+}
+
+/*
+ *	Receive UDP packets from an UDP listener
+ */
+
+static void accept_udp_recv(struct listen_t *l)
+{
+	union sockaddr_u addr;
+	socklen_t addrlen;
+	char buf[2000];
+	int i;
+	char *addrs;
+	
+	/* Receive as much as there is -- that is, LOOP...  */
+	addrlen = sizeof(addr);
+	
+	while ((i = recvfrom( l->udp->fd, buf, sizeof(buf)-1, MSG_DONTWAIT|MSG_TRUNC, (struct sockaddr *)&addr, &addrlen )) >= 0) {
+		if (!(l->clientflags & CLFLAGS_UDPSUBMIT)) {
+			hlog(LOG_DEBUG, "accept thread discarded an UDP packet on a listening socket");
+			continue;
+		}
+		
+		addrs = strsockaddr(&addr.sa, addrlen);
+		accept_process_udpsubmit(l, buf, i, addrs);
+		hfree(addrs);
+	}
+}
+
+/*
  *	Accept a single connection
  */
 
-static struct client_t *do_accept(struct listen_t *l)
+static void do_accept(struct listen_t *l)
 {
 	int fd, i;
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len = sizeof(sa);
-	char buf[2000];
 	static int next_receiving_worker;
 	struct worker_t *w;
 	struct worker_t *wc;
 	static time_t last_EMFILE_report;
 	char *s;
 
-	while (l->udp) {
-		/* This should not really happen any more, since accept_thread
-		 * does not poll() UDP sockets, that's left to worker 0.
-		 */
-		 
-		/* Received data will be discarded, so receiving it  */
-		/* TRUNCATED is just fine.  Sender isn't interesting either.  */
-		/* Receive as much as there is -- that is, LOOP...  */
-		
-		i = recv( l->udp->fd, buf, sizeof(buf), MSG_DONTWAIT|MSG_TRUNC );
-		
-		if (i < 0)
-			return 0;  /* no more data */
-			
-		if (!(l->clientflags & CLFLAGS_UDPSUBMIT)) {
-			hlog(LOG_DEBUG, "accept thread discarded an UDP packet on a listening socket");
-			continue;
-		}
-		
-		hlog(LOG_DEBUG, "accept thread got an UDP packet on an udpsubmit socket");
-		
-	}
-	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {
 		int e = errno;
 		switch (e) {
@@ -486,11 +559,11 @@ static struct client_t *do_accept(struct listen_t *l)
 					last_EMFILE_report = tick;
 					hlog(LOG_ERR, "accept() failed: %s (continuing)", strerror(e));
 				}
-				return NULL;
+				return;
 			/* Errors reporting system internal/external glitches */
 			default:
 				hlog(LOG_ERR, "accept() failed: %s (continuing)", strerror(e));
-				return NULL;
+				return;
 		}
 	}
 	
@@ -507,7 +580,7 @@ static struct client_t *do_accept(struct listen_t *l)
 		close(fd);
 		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
-		return NULL;
+		return;
 	}
 	
 	/* match against acl... could probably have an error message to the client */
@@ -517,7 +590,7 @@ static struct client_t *do_accept(struct listen_t *l)
 			close(fd);
 			hfree(s);
 			inbound_connects_account(-1, l->portaccount); /* account rejected connection */
-			return NULL;
+			return;
 		}
 	}
 	
@@ -645,13 +718,13 @@ static struct client_t *do_accept(struct listen_t *l)
 	if (accept_pass_client_to_worker(wc, c))
 		goto err;
 	
-	return c;
+	return;
 	
 err:
 
 	inbound_connects_account(0, c->portaccount); /* something failed, remove this from accounts.. */
 	client_free(c);
-	return 0;
+	return;
 }
 
 /*
@@ -682,6 +755,18 @@ void accept_thread(void *asdf)
 	
 	/* start the accept thread, which will start server threads */
 	hlog(LOG_INFO, "Accept_thread starting...");
+	
+	/* we allocate a worker structure to be used within the accept thread
+	 * for parsing incoming UDP packets and passing them on to the dupecheck
+	 * thread.
+	 */
+	udp_worker = worker_alloc();
+	udp_worker->id = 81;
+	
+	/* we also need a client structure to be used with incoming
+	 * HTTP position uploads
+	 */
+	udp_pseudoclient = pseudoclient_setup(81);
 	
 	accept_reconfiguring = 1;
 	while (!accept_shutting_down) {
@@ -761,8 +846,12 @@ void accept_thread(void *asdf)
 				hlog(LOG_CRIT, "accept_thread: polling list and listener list do mot match!");
 				exit(1);
 			}
-			if (acceptpfd[n].revents)
-				do_accept(l); /* accept a single connection */
+			if (acceptpfd[n].revents) {
+				if (l->udp)
+					accept_udp_recv(l); /* receive UDP packets */
+				else
+					do_accept(l); /* accept a single connection */
+			}
 			l = l->next;
 		}
 	}

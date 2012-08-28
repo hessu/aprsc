@@ -338,6 +338,7 @@ struct client_t {
 
 extern struct client_t *client_alloc(void);
 extern void client_free(struct client_t *c);
+extern struct client_t *pseudoclient_setup(int portnum);
 
 
 /* worker thread structure */

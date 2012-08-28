@@ -161,13 +161,17 @@ union sockaddr_u {
 };
 
 /* list of message recipient callsigns heard on a client port */
+#define CLIENT_HEARD_BUCKETS 16 /* up to ~300 calls in heard list per client */
 struct client_heard_t {
-	char    callsign[CALLSIGNLEN_MAX+1];
+	struct client_heard_t *next;
+	struct client_heard_t **prevp;
+	
+	uint32_t hash;
+	
 	int	call_len;
 	time_t  last_heard;
 	
-	struct client_heard_t *next;
-	struct client_heard_t **prevp;
+	char    callsign[CALLSIGNLEN_MAX+1];
 };
 
 #define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
@@ -308,8 +312,8 @@ struct client_t {
 	 * client_courtesy lists the srccalls which have originated messages
 	 * on this filtered ports, and should have a courtesy position sent.
 	 */
-	struct client_heard_t *client_heard;
-	struct client_heard_t *client_courtesy;
+	struct client_heard_t* client_heard[CLIENT_HEARD_BUCKETS];
+	struct client_heard_t* client_courtesy[CLIENT_HEARD_BUCKETS];
 	int client_heard_count;			/* number of 'heard' list entries for clients */
 	int client_courtesy_count;		/* number of 'courtesy' list entries for clients */
 

@@ -9,7 +9,7 @@
  */
 
  /*
-  *	The client's heard list contains a list of stations heard by
+  *	The clients heard list contains a list of stations heard by
   *	a given station. It's used for message routing by the
   *	message destination callsign.
   *
@@ -18,9 +18,12 @@
   *	positions to the client.
   *	
   *	The heard list is only touched by the worker thread operating
-  *	on that client socket, so it shouldn't need any locking at all.
+  *	on that client socket, so it doesn't need any locking at all.
   *
-  *	TODO: The client heard list is now a linked list. Should probably have a hash.
+  *	Igates typically have up to ~300 "heard" stations at any given
+  *	moment, so we use a hash table with 16 buckets, about 18 calls
+  *	in each bucket. Store and check the hash value before doing
+  *	string comparisons.
   */
 
 #include <strings.h>
@@ -30,8 +33,9 @@
 #include "hlog.h"
 #include "config.h"
 #include "hmalloc.h"
+#include "keyhash.h"
 
-//#define HEARD_DEBUG
+#define HEARD_DEBUG
 
 #ifdef HEARD_DEBUG
 #define DLOG(level, fmt, ...) \
@@ -49,13 +53,20 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 {
 	struct client_heard_t *h;
 	int call_len;
+	uint32_t hash, idx;
+	int i;
 	
 	call_len = pb->srccall_end - pb->data;
-
-	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s", c->fd, which, call_len, pb->data);
+	hash = keyhashuc(pb->data, call_len, 0);
+	idx = hash;
+	idx ^= (idx >> 13); /* fold the hash bits.. */
+	idx ^= (idx >> 26); /* fold the hash bits.. */
+	i = idx % CLIENT_HEARD_BUCKETS;
 	
-	for (h = *list; (h); h = h->next) {
-		if (call_len == h->call_len
+	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s (hash %u i %d)", c->fd, which, call_len, pb->data, hash, i);
+	
+	for (h = list[i]; (h); h = h->next) {
+		if (h->hash == hash && call_len == h->call_len
 		    && strncasecmp(pb->data, h->callsign, h->call_len) == 0) {
 			// OK, found it from the list
 
@@ -67,17 +78,17 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 			 * let's move it in the beginning of the list to find it quicker.
 			 */
 			 
-			 if (c->client_heard != h) {
-				//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
+			 if (list[i] != h) {
+				DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
 				*h->prevp = h->next;
 				if (h->next)
 					h->next->prevp = h->prevp;
 				
-				h->next = *list;
-				h->prevp = list;
+				h->next = list[i];
+				h->prevp = &list[i];
 				if (h->next)
 					h->next->prevp = &h->next;
-				*list = h;
+				list[i] = h;
 			}
 			
 			return;
@@ -87,45 +98,54 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	/* Not found, insert. */
 	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, pb->data);
 	h = hmalloc(sizeof(*h));
+	h->hash = hash;
 	strncpy(h->callsign, pb->data, call_len);
 	h->callsign[sizeof(h->callsign)-1] = 0;
 	h->call_len = call_len;
 	h->last_heard = pb->t;
 	
 	/* insert in beginning of linked list */
-	h->next = *list;
-	h->prevp = list;
+	h->next = list[i];
+	h->prevp = &list[i];
 	if (h->next)
 		h->next->prevp = &h->next;
-	*list = h;
+	list[i] = h;
 	*entrycount = *entrycount + 1;
 }
 
 void client_heard_update(struct client_t *c, struct pbuf_t *pb)
 {
-	heard_list_update(c, pb, &c->client_heard, &c->client_heard_count, "heard");
+	heard_list_update(c, pb, c->client_heard, &c->client_heard_count, "heard");
 }
 
 void client_courtesy_update(struct client_t *c, struct pbuf_t *pb)
 {
-	heard_list_update(c, pb, &c->client_courtesy, &c->client_courtesy_count, "courtesy");
+	heard_list_update(c, pb, c->client_courtesy, &c->client_courtesy_count, "courtesy");
 }
 
 static int heard_find(struct client_t *c, struct client_heard_t **list, int *entrycount, const char *callsign, int call_len, int storetime, int drop_if_found, char *which)
 {
 	struct client_heard_t *h, *next;
+	uint32_t hash, idx;
+	int i;
 	
-	DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s", c->fd, which, call_len, callsign);
+	hash = keyhashuc(callsign, call_len, 0);
+	idx = hash;
+	idx ^= (idx >> 13); /* fold the hash bits.. */
+	idx ^= (idx >> 26); /* fold the hash bits.. */
+	i = idx % CLIENT_HEARD_BUCKETS;
+	
+	DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s (hash %u i %d)", c->fd, which, call_len, callsign, hash, i);
 	
 	int expire_below = tick - storetime;
 	next = NULL;
 	
-	for (h = *list; (h); h = next) {
+	for (h = list[i]; (h); h = next) {
 		next = h->next; // we might free this one
 		
 		// expire old entries
 		if (h->last_heard < expire_below || h->last_heard > tick) {
-			DLOG(LOG_DEBUG, "heard_find fd %d %s: expiring %.*s (%ul below %ul)", c->fd, which, h->callsign_len, h->callsign, h->last_heard, expire_below);
+			DLOG(LOG_DEBUG, "heard_find fd %d %s: expiring %.*s (%ul below %ul)", c->fd, which, h->call_len, h->callsign, h->last_heard, expire_below);
 			
 			*h->prevp = h->next;
 			if (h->next)
@@ -136,7 +156,7 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 			continue;
 		}
 		
-		if (call_len == h->call_len
+		if (h->hash == hash && call_len == h->call_len
 		    && strncasecmp(callsign, h->callsign, h->call_len) == 0) {
 			/* OK, found it from the list. */
 			DLOG(LOG_DEBUG, "heard_find fd %d %s: found %.*s%s", c->fd, which, call_len, callsign, (drop_if_found) ? " (dropping)" : "");
@@ -159,14 +179,14 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 
 int client_heard_check(struct client_t *c, const char *callsign, int call_len)
 {
-	return heard_find(c, &c->client_heard, &c->client_heard_count,
+	return heard_find(c, c->client_heard, &c->client_heard_count,
 		callsign, call_len,
 		heard_list_storetime, 0, "heard");
 }
 
 int client_courtesy_needed(struct client_t *c, const char *callsign, int call_len)
 {
-	return heard_find(c, &c->client_courtesy, &c->client_courtesy_count,
+	return heard_find(c, c->client_courtesy, &c->client_courtesy_count,
 		callsign, call_len,
 		courtesy_list_storetime, 1, "courtesy");
 }
@@ -175,21 +195,29 @@ int client_courtesy_needed(struct client_t *c, const char *callsign, int call_le
  *	Free the whole client heard list
  */
 
+static void heard_free_single(struct client_heard_t **list)
+{
+	int i;
+	struct client_heard_t *n, *h;
+	
+	for (i = 0; i < CLIENT_HEARD_BUCKETS; i++) {
+		h = list[i];
+		while (h) {
+			n = h->next;
+			hfree(h);
+			h = n;
+		}
+		list[i] = NULL;
+	}
+	
+}
+
 void client_heard_free(struct client_t *c)
 {
-	struct client_heard_t *h;
+	heard_free_single(c->client_heard);
+	heard_free_single(c->client_courtesy);
 	
-	while (c->client_heard) {
-		h = c->client_heard->next;
-		hfree(c->client_heard);
-		c->client_heard = h;
-		c->client_heard_count--;
-	}
-	
-	while (c->client_courtesy) {
-		h = c->client_courtesy->next;
-		hfree(c->client_courtesy);
-		c->client_courtesy = h;
-		c->client_courtesy_count--;
-	}
+	c->client_heard_count = 0;
+	c->client_courtesy_count = 0;
 }
+

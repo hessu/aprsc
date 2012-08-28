@@ -1252,5 +1252,6 @@ void free_config(void)
 	free_listen_config(&listen_config);
 	free_uplink_config(&uplink_config);
 	free_peerip_config(&peerip_config);
+	free_http_config(&http_config);
 }
 

@@ -867,6 +867,11 @@ void accept_thread(void *asdf)
 	/* free up the pseudo-client */
 	client_free(udp_pseudoclient);
 	udp_pseudoclient = NULL;
+	
+	/* free up the pseudo-worker structure, after dupecheck is long dead */
+	worker_free_buffers(udp_worker);
+	hfree(udp_worker);
+	udp_worker = NULL;
 }
 
 int accept_listener_status(cJSON *listeners, cJSON *totals)

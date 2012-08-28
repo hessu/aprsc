@@ -595,6 +595,7 @@ static void http_server_free(void)
 {
 	if (ev_timer) {
 		event_del(ev_timer);
+		hfree(ev_timer);
 		ev_timer = NULL;
 	}
 	

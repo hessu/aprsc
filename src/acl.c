@@ -266,7 +266,7 @@ struct acl_t *acl_load(char *s)
  *	Match an IPv4 address agaist the ACL list
  */
  
-int acl_check_4(struct acl_t *acl, uint32_t addr)
+static int acl_check_4(struct acl_t *acl, uint32_t addr)
 {
 	struct acl_e4_t *a = acl->entries4;
 	
@@ -283,7 +283,7 @@ int acl_check_4(struct acl_t *acl, uint32_t addr)
  *	Match an IPv6 address agaist the ACL list
  */
 
-int acl_check_6(struct acl_t *acl, uint32_t addr[4])
+static int acl_check_6(struct acl_t *acl, uint32_t addr[4])
 {
 	struct acl_e6_t *a = acl->entries6;
 	int i;

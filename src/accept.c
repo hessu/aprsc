@@ -767,6 +767,7 @@ void accept_thread(void *asdf)
 	 * HTTP position uploads
 	 */
 	udp_pseudoclient = pseudoclient_setup(81);
+	udp_pseudoclient->flags |= CLFLAGS_UDPSUBMIT;
 	
 	accept_reconfiguring = 1;
 	while (!accept_shutting_down) {

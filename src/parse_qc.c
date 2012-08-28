@@ -339,7 +339,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	/* If the packet's srccall == login,
 	 * put in a TCPIP* path element and append Q construct 
 	 */
-	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT && q_type != 'I') {
+	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT && q_type != 'I' && !(c->flags & CLFLAGS_UDPSUBMIT)) {
 		// where to replace from
 		*q_replace = via_start;
 		//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
@@ -375,11 +375,13 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				 * Replace the q construct with ,qAU,SERVERLOGIN
 				 */
 				*path_end = q_start;
-				return snprintf(new_q, new_q_size, ",qAU,%s", serverid);
-			} else {
-				/* Append ,qAU,SERVERLOGIN */
-				return snprintf(new_q, new_q_size, ",qAU,%s", serverid);
 			}
+			/* Append ,qAU,SERVERLOGIN */
+			/* Add TCPIP* in the end of the path only if it's not there already */
+			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
+				return snprintf(new_q, new_q_size, ",qAU,%s", serverid);
+			else
+				return snprintf(new_q, new_q_size, ",TCPIP*,qAU,%s", serverid);
 		}
 		
 		/*

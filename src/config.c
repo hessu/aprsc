@@ -227,16 +227,12 @@ void free_listen_config(struct listen_config_t **lc)
 void free_peerip_config(struct peerip_config_t **lc)
 {
 	struct peerip_config_t *this;
-	int i;
 
 	while (*lc) {
 		this = *lc;
 		*lc = this->next;
 		hfree((void*)this->name);
 		hfree((void*)this->host);
-		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
-			if (this->filters[i])
-				hfree((void*)this->filters[i]);
 		freeaddrinfo(this->ai);
 		hfree(this);
 	}
@@ -553,6 +549,9 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 			}
 		}
 		
+		hfree(fullhost);
+		fullhost = NULL;
+		
 		/* Ok, enough checks. Go for it! */
 		pe = hmalloc(sizeof(*pe));
 		memset(pe, 0, sizeof(*pe));
@@ -563,10 +562,6 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		pe->remote_port = port;
 		pe->client_flags = 0; // ???
 		pe->ai = ai;
-		
-		/* there are no filters between peers */
-		for (d = 0; d < (sizeof(pe->filters)/sizeof(pe->filters[0])); ++d)
-			pe->filters[d] = NULL;
 		
 		/* put in the list */
 		pe->next = *lq;
@@ -1256,5 +1251,6 @@ void free_config(void)
 	logname = NULL;
 	free_listen_config(&listen_config);
 	free_uplink_config(&uplink_config);
+	free_peerip_config(&peerip_config);
 }
 

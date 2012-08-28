@@ -105,8 +105,6 @@ struct peerip_config_t {
 
 	struct addrinfo *ai;
 
-	const char *filters[LISTEN_MAX_FILTERS];		/* up to 10 filters, NULL when not defined */
-
 	int client_flags;
 };
 

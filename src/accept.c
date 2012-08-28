@@ -453,6 +453,7 @@ static struct client_t *do_accept(struct listen_t *l)
 		}
 		
 		hlog(LOG_DEBUG, "accept thread got an UDP packet on an udpsubmit socket");
+		
 	}
 	
 	if ((fd = accept(l->fd, (struct sockaddr*)&sa, &addr_len)) < 0) {

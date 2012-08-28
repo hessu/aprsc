@@ -208,6 +208,54 @@ int http_upload_login(char *addr_rem, char *s, char **username)
 }
 
 /*
+ *	Split a login + packet string. Terminates login string with 0,
+ *	returns length of packet.
+ */
+
+int loginpost_split(char *post, int len, char **login_string, char **packet)
+{
+	char *cr, *lf;
+	char *pack;
+	int packet_len;
+	
+	// find line feed, terminate string
+	lf = memchr(post, '\n', len);
+	if (!lf)
+		return -1;
+	
+	*lf = 0;
+	
+	// find optional carriage return, terminate string
+	cr = memchr(post, '\r', lf-post);
+	if (cr)
+		*cr = 0;
+	
+	// ok, we have a login string.
+	*login_string = post;
+	
+	// now the first line contains a login string. Go for the packet body, find optional lf:
+	pack = lf + 1;
+	packet_len = len - (pack - post);
+	lf = memchr(pack, '\n', packet_len);
+	if (lf) {
+		*lf = 0;
+		packet_len = lf - pack;
+	}
+	
+	// find optional carriage return, terminate string
+	cr = memchr(pack, '\r', packet_len);
+	if (cr) {
+		*cr = 0;
+		packet_len = cr - pack;
+	}
+	
+	*packet = pack;
+	
+	return packet_len;
+}
+
+
+/*
  *	Accept a POST containing a position
  */
 
@@ -221,10 +269,11 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	int clength_i;
 	char post[MAX_HTTP_POST_DATA+1];
 	ev_ssize_t l;
-	char *cr, *lf, *end;
-	char *packet;
+	char *login_string = NULL;
+	char *packet = NULL;
 	char validated;
 	int e;
+	int packet_len;
 	
 	req_headers = evhttp_request_get_input_headers(r);
 	ctype = evhttp_find_header(req_headers, "Content-Type");
@@ -262,41 +311,28 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	
 	hlog(LOG_DEBUG, "got post data: %s", post);
 	
-	// find line feed, terminate string
-	end = post + l;
-	lf = memchr(post, '\n', l);
-	if (!lf) {
+	packet_len = loginpost_split(post, l, &login_string, &packet);
+	if (packet_len == -1) {
 		evhttp_send_error(r, HTTP_BADREQUEST, "No newline (LF) found in data");
 		return;
 	}
-	*lf = 0;
 	
-	// find optional carriage return, terminate string
-	cr = memchr(post, '\r', lf-post);
-	if (cr)
-		*cr = 0;
-	
-	// now the first line contains a login string. Go for the packet body:
-	packet = lf + 1;
-	lf = memchr(packet, '\n', end-packet);
-	if (lf) {
-		*lf = 0;
-		end = lf;
+	if (!login_string) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "No login string in data");
+		return;
 	}
 	
-	// find optional carriage return, terminate string
-	cr = memchr(packet, '\r', end-packet);
-	if (cr) {
-		*cr = 0;
-		end = cr;
+	if (!packet) {
+		evhttp_send_error(r, HTTP_BADREQUEST, "No packet data found in data");
+		return;
 	}
 	
-	hlog(LOG_DEBUG, "login string: %s", post);
+	hlog(LOG_DEBUG, "login string: %s", login_string);
 	hlog(LOG_DEBUG, "packet: %s", packet);
 	
 	/* process the login string */
 	char *username;
-	validated = http_upload_login(remote_host, post, &username);
+	validated = http_upload_login(remote_host, login_string, &username);
 	if (validated < 0) {
 		evhttp_send_error(r, HTTP_BADREQUEST, "Invalid login string");
 		return;
@@ -308,12 +344,12 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	}
 	
 	/* packet size limits */
-	if (end - packet < PACKETLEN_MIN) {
+	if (packet_len < PACKETLEN_MIN) {
 		evhttp_send_error(r, HTTP_BADREQUEST, "Packet too short");
 		return;
 	}
 	
-	if (end - packet > PACKETLEN_MAX-2) {
+	if (packet_len > PACKETLEN_MAX-2) {
 		evhttp_send_error(r, HTTP_BADREQUEST, "Packet too long");
 		return;
 	}
@@ -330,7 +366,7 @@ void http_upload_position(struct evhttp_request *r, char *remote_host)
 	http_pseudoclient->username_len = strlen(http_pseudoclient->username);
 	
 	/* ok, try to digest the packet */
-	e = incoming_parse(http_worker, http_pseudoclient, packet, end-packet);
+	e = incoming_parse(http_worker, http_pseudoclient, packet, packet_len);
 
 #ifdef FIXED_IOBUFS
 	http_pseudoclient->username[0] = 0;

@@ -401,11 +401,27 @@ void status_init(void)
 void status_atend(void)
 {
 	struct cdata_list_t *cl, *cl_next;
+	int pe;
 	
 	for (cl = cdata_list; (cl); cl = cl_next) {
 		cl_next = cl->next;
 		cdata_free(cl->cd);
 		hfree(cl);
+	}
+	
+	if ((pe = pthread_mutex_lock(&status_json_mt))) {
+		hlog(LOG_ERR, "status_atend(): could not lock status_json_mt: %s", strerror(pe));
+		return;
+	}
+	
+	if (status_json_cached) {
+		hfree(status_json_cached);
+		status_json_cached = NULL;
+	}
+	
+	if ((pe = pthread_mutex_unlock(&status_json_mt))) {
+		hlog(LOG_ERR, "status_atend(): could not unlock status_json_mt: %s", strerror(pe));
+		return;
 	}
 }
 

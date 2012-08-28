@@ -328,7 +328,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 		 * TCPIP* and insert Q construct
 		 */
 		//hlog(LOG_DEBUG, "no q found");
-		if (originated_by_client) {
+		if (originated_by_client && !(c->flags & CLFLAGS_UDPSUBMIT)) {
 			// where to replace from
 			*q_replace = via_start;
 			//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
@@ -339,7 +339,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	/* If the packet's srccall == login,
 	 * put in a TCPIP* path element and append Q construct 
 	 */
-	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT) {
+	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT && q_type != 'I') {
 		// where to replace from
 		*q_replace = via_start;
 		//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
@@ -368,7 +368,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 		 *    Quit q processing
 		 * }
 		 */
-		if (c->udp_port) {
+		if (c->flags & CLFLAGS_UDPSUBMIT) {
 			//fprintf(stderr, "\tUDP packet\n");
 			if (q_proto) {
 				/* a q construct with a exists in the packet,

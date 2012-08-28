@@ -51,7 +51,7 @@ Listen "Igate port"                               igate       tcp 0.0.0.0  55580
 Listen "Igate port, UDP"                          igate       udp 0.0.0.0  55580
 Listen "Client-only port"                         clientonly  tcp 0.0.0.0  55581
 Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
-#Listen "UDP submit port"                         udpsubmit   udp ::0      55080
+Listen "UDP submit port"                          udpsubmit   udp ::0      55080
 
 ### Uplink configuration ########
 # Uplink <name> <type> tcp <address> <port>

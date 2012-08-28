@@ -809,6 +809,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	} else if (strcasecmp(argv[2], "udpsubmit") == 0) {
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_UDPSUBMIT;
+	  clients_max = 1;
 	} else {
 	  hlog(LOG_ERR, "Listen: unknown port type: %s", argv[2]);
 	}

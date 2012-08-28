@@ -213,11 +213,12 @@ void client_udp_free(struct client_udp_t *u)
 
 	-- u->refcount;
 
-	// if (u)
-	//  hlog(LOG_DEBUG, "udpclient free port# %d refcount: %d", u->portnum, u->refcount);
+	//if (u)
+	//	hlog(LOG_DEBUG, "client_udp_free %p port %d refcount now: %d", u, u->portnum, u->refcount);
 
 	if ( // u->configured == 0 &&
 	     u->refcount   == 0 ) {
+		//hlog(LOG_DEBUG, "client_udp_free %p port %d FREEING", u, u->portnum);
 		/* Unchain, and destroy.. */
 		if (u->next)
 			u->next->prevp = u->prevp;
@@ -245,8 +246,8 @@ struct client_udp_t *client_udp_find(struct client_udp_t *root, const int af, co
 		}
 	}
 
-	// if (u)
-	//   hlog(LOG_DEBUG, "udpclient find port# %d refcount: %d", u->portnum, u->refcount);
+	//if (u)
+	//	hlog(LOG_DEBUG, "client_udp_find %u port %d refcount now: %d", u, u->portnum, u->refcount);
 
 	i = pthread_mutex_unlock(& udpclient_mutex );
 
@@ -270,9 +271,13 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
 	c->portnum    = portnum;
 
 	/* Add this to special list of UDP sockets */
-	c->next  =   *root;
+	c->next  = *root;
 	c->prevp = root;
+	if (c->next)
+		c->next->prevp = &c->next;
 	*root = c;
+	
+	//hlog(LOG_DEBUG, "client_udp_alloc %u port %d refcount now: %d", c, c->portnum, c->refcount);
 
 	i = pthread_mutex_unlock(& udpclient_mutex );
 
@@ -320,6 +325,8 @@ struct client_t *client_alloc(void)
 
 void client_free(struct client_t *c)
 {
+	//hlog(LOG_DEBUG, "client_free %p: fd %d name %s addr_loc %s udpclient %p", c, c->fd, c->username, c->addr_loc, c->udpclient);
+	
 	if (c->fd >= 0)	 close(c->fd);
 #ifndef FIXED_IOBUFS
 	if (c->ibuf)     hfree(c->ibuf);
@@ -368,6 +375,8 @@ struct client_t *pseudoclient_setup(int portnum)
 	c->keepalive = tick;
 	c->connect_time = tick;
 	c->last_read = tick;
+	
+	//hlog(LOG_DEBUG, "pseudoclient setup %p: fd %d name %s addr_loc %s udpclient %p", c, c->fd, c->username, c->addr_loc, c->udpclient);
 	
 	return c;
 }
@@ -619,7 +628,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	/* If this happens to be the uplink, tell the uplink connection
 	 * setup module that the connection has gone away.
 	 */
-	if (c->flags & CLFLAGS_UPLINKPORT)
+	if (c->flags & CLFLAGS_UPLINKPORT && c->state != CSTATE_COREPEER)
 		uplink_close(c, errnum);
 	else {
 		/* Else if it is an inbound connection, handle their

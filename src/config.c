@@ -1249,9 +1249,10 @@ void free_config(void)
 	if (webdir != def_webdir)
 		hfree(webdir);
 	hfree(serverid);
+	hfree(passcode);
 	hfree(myemail);
 	hfree(myadmin);
-	serverid = myemail = myadmin = NULL;
+	serverid = passcode = myemail = myadmin = NULL;
 	logname = NULL;
 	free_listen_config(&listen_config);
 	free_uplink_config(&uplink_config);

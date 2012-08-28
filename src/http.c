@@ -702,6 +702,9 @@ void http_thread(void *asdf)
 		event_base_dispatch(libbase);
 	}
 	
+	event_base_free(libbase);
+	libbase = NULL;
+	
 	/* free up the pseudo-client */
 	client_free(http_pseudoclient);
 	http_pseudoclient = NULL;

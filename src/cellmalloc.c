@@ -169,7 +169,7 @@ cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alig
 	ca->createsize = createkb * 1024;
 
 	n = ca->createsize / ca->increment;
-	hlog( LOG_DEBUG, "cellinit: %-12s block size %4d kB, cells/block: %d", arenaname, createkb, n );
+	hlog( LOG_DEBUG, "cellinit: %-12s block size %4d kB, cells/block: %d, %s", arenaname, createkb, n, ca->use_mutex ? "mutex" : "no mutex" );
 
 	pthread_mutex_init(&ca->mutex, NULL);
 

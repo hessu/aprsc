@@ -105,6 +105,10 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, pb->data);
 #ifndef _FOR_VALGRIND_
 	h = cellmalloc(client_heard_cells);
+	if (!h) {
+	        hlog(LOG_ERR, "heard_list_update: cellmalloc failed");
+	        return;
+	}
 #else	
 	h = hmalloc(sizeof(*h));
 #endif
@@ -154,6 +158,7 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 		next = h->next; // we might free this one
 		
 		// expire old entries
+		// TODO: move expiration to heard_list_update, too, it's run much more often.
 		if (h->last_heard < expire_below || h->last_heard > tick) {
 			DLOG(LOG_DEBUG, "heard_find fd %d %s: expiring %.*s (%ul below %ul)", c->fd, which, h->call_len, h->callsign, h->last_heard, expire_below);
 			

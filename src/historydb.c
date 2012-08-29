@@ -286,6 +286,11 @@ int historydb_insert(struct pbuf_t *pb)
 	if (!cp1 && !isdead) {
 		// Not found on this chain, append it!
 		cp = historydb_alloc(pb->packet_len);
+		if (!cp) {
+			hlog(LOG_ERR, "historydb: cellmalloc failed");
+			rwl_wrunlock(&historydb_rwlock);
+			return 1;
+		}
 		cp->next = NULL;
 		memcpy(cp->key, keybuf, keylen);
 		cp->key[keylen] = 0; /* zero terminate */

@@ -211,8 +211,10 @@ static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 		dupecheck_free = dp->next;
 	} else
 		dp = cellmalloc(dupecheck_cells);
-	if (!dp)
+	if (!dp) {
+	        hlog(LOG_ERR, "dupecheck: cellmalloc failed");
 		return NULL;
+        }
 #else
 	dp = hmalloc(pktlen + sizeof(*dp));
 #endif

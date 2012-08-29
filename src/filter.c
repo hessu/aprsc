@@ -387,6 +387,8 @@ int filter_entrycall_insert(struct pbuf_t *pb)
 			*fp = f2 = f;
 
 			++ filter_entrycall_cellgauge;
+		} else {
+			hlog(LOG_ERR, "filter_entrycall_insert: cellmalloc failed");
 		}
 	}
 
@@ -607,6 +609,8 @@ int filter_wx_insert(struct pbuf_t *pb)
 			memset(f->callsign+keylen, 0, sizeof(f->callsign)-keylen);
 
 			*fp = f2 = f;
+		} else {
+			hlog(LOG_ERR, "filter_wx_insert: cellmalloc failed");
 		}
 	}
 
@@ -1473,7 +1477,10 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	/* OK, pre-parsing produced accepted result */
 #ifndef _FOR_VALGRIND_
 	f = cellmalloc(filter_cells);
-	if (!f) return -1;
+	if (!f) {
+		hlog(LOG_ERR, "filter_parse: cellmalloc failed");
+		return -1;
+	}
 	*f = f0; /* store pre-parsed values */
 	if (strlen(filt0) < FILT_TEXTBUFSIZE) {
 		strcpy(f->textbuf, filt0);

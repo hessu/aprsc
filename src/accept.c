@@ -361,6 +361,10 @@ static void peerip_clients_config(void)
 		}
 
 		c = client_alloc();
+		if (!c) {
+			hlog(LOG_ERR, "peerip_clients_config: client_alloc returned NULL");
+			abort();
+		}
 		c->fd = -1; // Right, this client will never have a socket of it's own.
 		c->portnum = pe->local_port; // local port
 		c->state = CSTATE_COREPEER;
@@ -595,6 +599,14 @@ static void do_accept(struct listen_t *l)
 	}
 	
 	c = client_alloc();
+	
+	if (!c) {
+		hlog(LOG_ERR, "%s - client_alloc returned NULL, too many clients. Denied client on fd %d from %s (ACL)", l->addr_s, fd, s);
+		close(fd);
+		hfree(s);
+		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
+	}
+	
 	c->fd    = fd;
 	c->addr  = sa;
 	c->portnum = l->portnum;

@@ -80,6 +80,10 @@ struct xpoll_fd_t *xpoll_add(struct xpoll_t *xp, int fd, void *p)
 
 #ifndef _FOR_VALGRIND_
 	xfd = (struct xpoll_fd_t*) cellmalloc( xpoll_fd_pool );
+	if (!xfd) {
+		hlog(LOG_ERR, "xpoll: cellmalloc failed, too many FDs");
+		return NULL;
+	}
 #else
 	xfd = (struct xpoll_fd_t*) hmalloc(sizeof(struct xpoll_fd_t));
 #endif

@@ -368,6 +368,11 @@ int make_uplink(struct uplink_config_t *l)
 	i = 0;
 
 	/* Then lets try making socket and connection in address order */
+	/* TODO: BUG: If the TCP connection succeeds, but the server rejects our
+	 * login due to a bad source address (like, IPv4 would be allowed but our
+	 * IPv6 address is not in the server's ACL), this currently does not switch
+	 * to the next destination address.
+	 */
 	fd = -1;
 	while (( a = ap[i++] )) {
 		addr_s = strsockaddr(a->ai_addr, a->ai_addrlen);
@@ -484,6 +489,13 @@ int make_uplink(struct uplink_config_t *l)
 	}
 
 	struct client_t *c = client_alloc();
+	if (!c) {
+		hlog(LOG_ERR, "Uplink %s: client_alloc() failed, too many clients", l->name);
+		close(fd);
+		l->state = UPLINK_ST_NOT_LINKED;
+		return -3; /* No successfull connection at any address.. */
+	}
+	
 	l->client_ptr = (void *)c;
 	c->uplink_index = uplink_index;
 	c->fd    = fd;

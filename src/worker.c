@@ -301,10 +301,13 @@ struct client_t *client_alloc(void)
 {
 #ifndef _FOR_VALGRIND_
 	struct client_t *c = cellmalloc(client_cells);
+	if (!c) {
+		hlog(LOG_ERR, "client_alloc: cellmalloc failed");
+		return NULL;
+	}
 #else
 	struct client_t *c = hmalloc(sizeof(*c));
 #endif
-
 	memset((void *)c, 0, sizeof(*c));
 	c->fd = -1;
 	c->state = CSTATE_INIT;
@@ -366,6 +369,10 @@ struct client_t *pseudoclient_setup(int portnum)
 	struct client_t *c;
 	
 	c = client_alloc();
+	if (!c) {
+		hlog(LOG_ERR, "pseudoclient_setup: client_alloc returned NULL");
+		abort();
+	}
 	c->fd    = -1;
 	c->portnum = portnum;
 	c->state = CSTATE_CONNECTED;
@@ -591,7 +598,8 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 		close(c->fd);
 	
 		/* remove from polling list */
-		xpoll_remove(&self->xp, c->xfd);
+		if (c->xfd)
+			xpoll_remove(&self->xp, c->xfd);
 	}
 
 	c->fd = -1;
@@ -1148,9 +1156,9 @@ void collect_new_clients(struct worker_t *self)
 			worker_corepeer_client_count++;
 			
 			if (!c->udpclient->polled) {
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d", self->id, c->udpclient->fd);
 				c->udpclient->polled = 1;
 				c->xfd = xpoll_add(&self->xp, c->udpclient->fd, (void *)c);
-				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d", self->id, c->udpclient->fd);
 			}
 			
 			continue;
@@ -1158,7 +1166,11 @@ void collect_new_clients(struct worker_t *self)
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
-		
+		if (!c->xfd) {
+			/* ouch, out of xfd space */
+			shutdown(c->fd, SHUT_RDWR);
+			continue;
+		}
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.
 		 */

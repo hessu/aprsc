@@ -861,6 +861,7 @@ void accept_thread(void *asdf)
 	uplink_stop();
 	close_listeners();
 	dupecheck_stop();
+	http_shutting_down = 1;
 	workers_stop(1);
 	hfree(acceptpfd);
 	

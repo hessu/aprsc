@@ -712,6 +712,8 @@ void http_thread(void *asdf)
 		event_base_dispatch(libbase);
 	}
 	
+	hlog(LOG_DEBUG, "HTTP thread shutting down...");
+	
 	http_server_free();
 	
 	/* free up the pseudo-client */
@@ -719,12 +721,8 @@ void http_thread(void *asdf)
 	http_pseudoclient = NULL;
 	
 	/* free up the pseudo-worker structure */
-	/* Well, don't free it here. Dupecheck may SEGV before it shuts down.
 	worker_free_buffers(http_worker);
 	hfree(http_worker);
 	http_worker = NULL;
-	*/
-	
-	hlog(LOG_DEBUG, "HTTP thread shutting down...");
 }
 

@@ -690,7 +690,6 @@ int main(int argc, char **argv)
 	
 	hlog(LOG_INFO, "Signalling threads to shut down...");
 	accept_shutting_down = 1;
-	http_shutting_down = 1;
 	
 	if ((e = pthread_join(http_th, NULL)))
 		hlog(LOG_ERR, "Could not pthread_join http_th: %s", strerror(e));

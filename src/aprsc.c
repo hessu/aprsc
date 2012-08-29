@@ -45,6 +45,7 @@
 #include "dupecheck.h"
 #include "filter.h"
 #include "historydb.h"
+#include "client_heard.h"
 #include "keyhash.h"
 
 struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
@@ -623,6 +624,7 @@ int main(int argc, char **argv)
 	pbuf_init();
 	dupecheck_init();
 	historydb_init();
+	client_heard_init();
 	client_init();
 	xpoll_init();
 	status_init();

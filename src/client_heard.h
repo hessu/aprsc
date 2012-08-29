@@ -12,6 +12,7 @@
 #define CLIENT_HEARD_H
 
 #include "worker.h"
+#include "cellmalloc.h"
 
 extern void client_heard_update(struct client_t *c, struct pbuf_t *pb);
 extern void client_courtesy_update(struct client_t *c, struct pbuf_t *pb);
@@ -19,6 +20,11 @@ extern int client_heard_check(struct client_t *c, const char *callsign, int call
 extern int client_courtesy_needed(struct client_t *c, const char *callsign, int call_len);
 
 extern void client_heard_free(struct client_t *c);
+extern void client_heard_init(void);
+
+#ifndef _FOR_VALGRIND_
+extern void client_heard_cell_stats(struct cellstatus_t *cellst);
+#endif
 
 #endif
 

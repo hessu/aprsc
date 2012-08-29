@@ -33,6 +33,7 @@
 #include "hlog.h"
 #include "config.h"
 #include "hmalloc.h"
+#include "cellmalloc.h"
 #include "keyhash.h"
 
 #define HEARD_DEBUG
@@ -43,6 +44,11 @@
 #else
 #define DLOG(fmt, ...)
 #endif
+
+#ifndef _FOR_VALGRIND_
+cellarena_t *client_heard_cells;
+#endif
+
 
 /*
  *	Update the heard list, either update timestamp of a heard
@@ -63,14 +69,14 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	idx ^= (idx >> 26); /* fold the hash bits.. */
 	i = idx % CLIENT_HEARD_BUCKETS;
 	
-	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s (hash %u i %d)", c->fd, which, call_len, pb->data, hash, i);
+	//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s (hash %u i %d)", c->fd, which, call_len, pb->data, hash, i);
 	
 	for (h = list[i]; (h); h = h->next) {
 		if (h->hash == hash && call_len == h->call_len
 		    && strncasecmp(pb->data, h->callsign, h->call_len) == 0) {
 			// OK, found it from the list
 
-			DLOG(LOG_DEBUG, "heard_list_update fd %d %s: found, updating %.*s", c->fd, which, call_len, pb->data);
+			//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: found, updating %.*s", c->fd, which, call_len, pb->data);
 			h->last_heard = pb->t;
 			
 			/* Because of digipeating we'll see the same station
@@ -79,7 +85,7 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 			 */
 			 
 			 if (list[i] != h) {
-				DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
+				//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
 				*h->prevp = h->next;
 				if (h->next)
 					h->next->prevp = h->prevp;
@@ -97,7 +103,11 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	
 	/* Not found, insert. */
 	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, pb->data);
+#ifndef _FOR_VALGRIND_
+	h = cellmalloc(client_heard_cells);
+#else	
 	h = hmalloc(sizeof(*h));
+#endif
 	h->hash = hash;
 	strncpy(h->callsign, pb->data, call_len);
 	h->callsign[sizeof(h->callsign)-1] = 0;
@@ -135,7 +145,7 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 	idx ^= (idx >> 26); /* fold the hash bits.. */
 	i = idx % CLIENT_HEARD_BUCKETS;
 	
-	DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s (hash %u i %d)", c->fd, which, call_len, callsign, hash, i);
+	//DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s (hash %u i %d)", c->fd, which, call_len, callsign, hash, i);
 	
 	int expire_below = tick - storetime;
 	next = NULL;
@@ -150,8 +160,11 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 			*h->prevp = h->next;
 			if (h->next)
 				h->next->prevp = h->prevp;
-			
+#ifndef _FOR_VALGRIND_
+			cellfree(client_heard_cells, h);
+#else
 			hfree(h);
+#endif
 			*entrycount = *entrycount -1;
 			continue;
 		}
@@ -159,14 +172,19 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 		if (h->hash == hash && call_len == h->call_len
 		    && strncasecmp(callsign, h->callsign, h->call_len) == 0) {
 			/* OK, found it from the list. */
-			DLOG(LOG_DEBUG, "heard_find fd %d %s: found %.*s%s", c->fd, which, call_len, callsign, (drop_if_found) ? " (dropping)" : "");
+			//DLOG(LOG_DEBUG, "heard_find fd %d %s: found %.*s%s", c->fd, which, call_len, callsign, (drop_if_found) ? " (dropping)" : "");
 			
 			if (drop_if_found) {
+				DLOG(LOG_DEBUG, "heard_find fd %d %s: dropping %.*s%s", c->fd, which, call_len, callsign, (drop_if_found) ? " (dropping)" : "");
 				*h->prevp = h->next;
 				if (h->next)
 					h->next->prevp = h->prevp;
 				
+#ifndef _FOR_VALGRIND_
+				cellfree(client_heard_cells, h);
+#else
 				hfree(h);
+#endif
 				*entrycount = *entrycount -1;
 			}
 			
@@ -204,7 +222,11 @@ static void heard_free_single(struct client_heard_t **list)
 		h = list[i];
 		while (h) {
 			n = h->next;
+#ifndef _FOR_VALGRIND_
+			cellfree(client_heard_cells, h);
+#else
 			hfree(h);
+#endif
 			h = n;
 		}
 		list[i] = NULL;
@@ -220,4 +242,27 @@ void client_heard_free(struct client_t *c)
 	c->client_heard_count = 0;
 	c->client_courtesy_count = 0;
 }
+
+void client_heard_init(void)
+{
+#ifndef _FOR_VALGRIND_
+	client_heard_cells  = cellinit( "client_heard",
+				  sizeof(struct client_heard_t),
+				  __alignof__(struct client_heard_t), CELLMALLOC_POLICY_FIFO,
+				  512 /* 512 KB at the time */, 0 /* minfree */ );
+	/* 512 KB arena size -> about 18k entries per single arena */
+#endif
+}
+
+/*
+ *	cellmalloc status
+ */
+#ifndef _FOR_VALGRIND_
+void client_heard_cell_stats(struct cellstatus_t *cellst)
+{
+	// TODO: this is not quite thread safe, but may be OK
+	cellstatus(client_heard_cells, cellst);
+}
+#endif
+
 

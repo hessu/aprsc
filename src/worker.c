@@ -331,8 +331,8 @@ void client_free(struct client_t *c)
 #ifndef FIXED_IOBUFS
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
-	if (c->addr_rem)   hfree(c->addr_rem);
-	if (c->addr_loc)  hfree(c->addr_loc);
+	if (c->addr_rem) hfree(c->addr_rem);
+	if (c->addr_loc) hfree(c->addr_loc);
 	if (c->username) hfree(c->username);
 	if (c->app_name) hfree(c->app_name);
 	if (c->app_version) hfree(c->app_version);
@@ -1667,15 +1667,6 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	cJSON_AddNumberToObject(totals, "tcp_pkts_tx", client_connects_tcp.txpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_rx", client_connects_udp.rxpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
-	
-	cJSON_AddNumberToObject(memory, "client_heard_cells_used", client_heard_count);
-	cJSON_AddNumberToObject(memory, "client_heard_cell_size", sizeof(struct client_heard_t));
-	cJSON_AddNumberToObject(memory, "client_heard_used_bytes", sizeof(struct client_heard_t) * client_heard_count);
-	cJSON_AddNumberToObject(memory, "client_heard_allocated_bytes", sizeof(struct client_heard_t) * client_heard_count);
-	cJSON_AddNumberToObject(memory, "client_courtesy_cells_used", client_courtesy_count);
-	cJSON_AddNumberToObject(memory, "client_courtesy_cell_size", sizeof(struct client_heard_t));
-	cJSON_AddNumberToObject(memory, "client_courtesy_used_bytes", sizeof(struct client_heard_t) * client_courtesy_count);
-	cJSON_AddNumberToObject(memory, "client_courtesy_allocated_bytes", sizeof(struct client_heard_t) * client_courtesy_count);
 	
 	return 0;
 }

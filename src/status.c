@@ -28,6 +28,7 @@
 #include "accept.h"
 #include "cJSON.h"
 #include "counterdata.h"
+#include "client_heard.h"
 
 time_t startup_tick;
 
@@ -200,6 +201,20 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(memory, "pbuf_large_cell_size", cellst_pbuf_large.cellsize);
 	cJSON_AddNumberToObject(memory, "pbuf_large_cell_size_aligned", cellst_pbuf_large.cellsize_aligned);
 	cJSON_AddNumberToObject(memory, "pbuf_large_cell_align", cellst_pbuf_large.alignment);
+	
+	struct cellstatus_t cellst_client_heard;
+	client_heard_cell_stats(&cellst_client_heard);
+	cJSON_AddNumberToObject(memory, "client_heard_cells_used", cellst_client_heard.cellcount - cellst_client_heard.freecount);
+	cJSON_AddNumberToObject(memory, "client_heard_cells_free", cellst_client_heard.freecount);
+	cJSON_AddNumberToObject(memory, "client_heard_cells_alloc", cellst_client_heard.cellcount);
+	cJSON_AddNumberToObject(memory, "client_heard_used_bytes", (cellst_client_heard.cellcount - cellst_client_heard.freecount)*cellst_client_heard.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "client_heard_allocated_bytes", (long)cellst_client_heard.blocks * (long)cellst_client_heard.block_size);
+	cJSON_AddNumberToObject(memory, "client_heard_block_size", (long)cellst_client_heard.block_size);
+	cJSON_AddNumberToObject(memory, "client_heard_blocks", (long)cellst_client_heard.blocks);
+	cJSON_AddNumberToObject(memory, "client_heard_blocks_max", (long)cellst_client_heard.blocks_max);
+	cJSON_AddNumberToObject(memory, "client_heard_cell_size", cellst_client_heard.cellsize);
+	cJSON_AddNumberToObject(memory, "client_heard_cell_size_aligned", cellst_client_heard.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "client_heard_cell_align", cellst_client_heard.alignment);
 #endif
 	
 	cJSON_AddItemToObject(root, "memory", memory);

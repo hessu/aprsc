@@ -1,12 +1,7 @@
-aprsc (@VERSION@) unstable; urgency=low
+aprsc (@VERSION@) stable; urgency=low
 
   * See main ChangeLog.
 
- -- aprsc maintainer <arpx@ham>  @RFCDATE@
+ -- aprsc maintainer <aprsc@ham>  @RFCDATE@
 
-aprsc (0.0.0-1) unstable; urgency=low
-
-  * Initial debianization.
-
- -- Kimmo Jukarainen <oh3gnu@ham>  Thu,  3 Jan 2008 20:35:29 +0200
 

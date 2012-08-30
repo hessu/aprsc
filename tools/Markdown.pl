@@ -87,7 +87,7 @@ sub story {
 
 
 #### Movable Type plug-in interface #####################################
-eval {require MT};  # Test to see if we're running in MT.
+eval {require MTXX};  # Test to see if we're running in MT.
 unless ($@) {
     require MT;
     import  MT;

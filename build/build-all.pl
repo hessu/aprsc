@@ -120,9 +120,9 @@ sub vm_build($$$)
 	$dist =~ s/-[^\-]+$//;
 	
 	foreach my $f (@products) {
-		my $of = $f;
-		$of =~ s/\.(deb|changes)/_$dist.$1/;
-		rename("$dir_build_down/$f", "$dir_build_out/$of") || die "Failed to rename $f to $of: $!\n";;
+		my $of = "$dir_build_out/$dist/$f";
+		mkdir("$dir_build_out/$dist");
+		rename("$dir_build_down/$f", $of) || die "Failed to rename $f to $of: $!\n";;
 	}
 	
 	

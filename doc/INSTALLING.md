@@ -35,9 +35,9 @@ Other releases are currently not supported.
 
 Next, add the following line to your /etc/apt/sources.list file:
 
-    deb http://aprsc-dist.he.fi/aprsc/apt <DISTRIBUTION> main
+    deb http://aprsc-dist.he.fi/aprsc/apt DISTRIBUTION main
 
-Naturally, <DISTRIBUTION> needs to be replaced with your distributions
+Naturally, DISTRIBUTION needs to be replaced with your distributions
 codename (squeeze, or whatever).  You should see the codename appearing on
 other "deb" lines in sources.list.
 

@@ -20,6 +20,7 @@ SVNVERSION:=$(shell if test -x $(SVNVERSION_CMD) -a \( -d ../.svn -o -d ../../.s
 DATE:=$(shell TZ=UTC date +"%Y %B %d")
 RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
 BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")
+LINUXCODENAME:=$(shell if test -f /etc/lsb-release ; then . /etc/lsb-release && echo "$$DISTRIB_CODENAME"; fi)
 LINUXDIST:=$(shell if test -f /etc/lsb-release ; then . /etc/lsb-release && echo "$$DISTRIB_ID-$$DISTRIB_RELEASE-$$DISTRIB_CODENAME"; fi)
 BUILD_USER:=$(shell whoami)
 
@@ -211,14 +212,6 @@ dist:
 		--exclude=build-out --exclude=build-down \
 		.. | (cd $(DISTTARGET) ; tar xf -)
 	#echo "$(DISTVERSION)" > $(DISTTARGET)/src/VERSION
-	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
-		  \$$ver =~ tr/0-9.//cd;	\
-		  \$$ver .= '-1';		\
-		  s{\@VERSION\@}{\$$ver}g;	\
-		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
-		  print;"			\
-		  < $(DISTTARGET)/src/debian/changelog.release	\
-		  > $(DISTTARGET)/src/debian/changelog
 #	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
 #		  s{\@DATE0\@}{$(DATE0)}g;		\
 #		  print;"				\
@@ -237,7 +230,7 @@ make-deb:
 	if [ -f debian/changelog.release ] ; then \
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
-		  \$$ver .= '-1';		\
+		  \$$ver .= '+$(LINUXCODENAME)1';		\
 		  s{\@VERSION\@}{\$$ver}g;	\
 		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
 		  print;"			\

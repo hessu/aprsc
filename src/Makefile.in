@@ -210,7 +210,7 @@ dist:
 		--exclude="javaprssrvr" --exclude="javaprssrvr4" \
 		--exclude=build-out --exclude=build-down \
 		.. | (cd $(DISTTARGET) ; tar xf -)
-	echo "$(DISTVERSION)" > $(DISTTARGET)/src/VERSION
+	#echo "$(DISTVERSION)" > $(DISTTARGET)/src/VERSION
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
 		  \$$ver .= '-1';		\

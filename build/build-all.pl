@@ -211,11 +211,11 @@ if ($mode eq 'build') {
 if ($mode eq 'upload') {
 	system("ssh $upload_host 'rm -rf $dir_upload_tmp && mkdir -p $dir_upload_tmp'") == 0 or die "upload host upload_tmp cleanup failed: $?\n";
 	system("scp -r $dir_build_out/* $upload_host:$dir_upload_tmp/") == 0 or die "upload to upload_host failed: $?\n";
-	system("ssh -t $upload_host 'cd $dir_upload_repo && for i in $dir_upload_tmp/*.changes;"
+	system("ssh -t $upload_host 'cd $dir_upload_repo && eval `gpg-agent --daemon`; for i in $dir_upload_tmp/*.changes;"
 		. " do DIST=`echo \$i | perl -pe \"s/.*\\+([[:alpha:]]+).*/\\\\\$1/\"`;"
 		. " echo dist \$DIST: \$i;"
 		. " reprepro --ask-passphrase -Vb . include \$DIST \$i;"
-		. " done'") == 0
+		. " done; killall gpg-agent'") == 0
 			or die "repository update failed: $?\n";
 }
 

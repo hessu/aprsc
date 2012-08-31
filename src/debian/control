@@ -2,7 +2,7 @@ Source: aprsc
 Section: hamradio
 Priority: extra
 Maintainer: Heikki Hannikainen <hessu@hes.iki.fi>
-Build-Depends: debhelper (>= 4), fakeroot (>= 1)
+Build-Depends: debhelper (>= 4), fakeroot (>= 1), lsb-release (>= 3), lsb-base (>= 3)
 Standards-Version: 3.7.2
 
 Package: aprsc

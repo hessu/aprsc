@@ -33,15 +33,17 @@ if [ "$STARTAPRSC" != "yes" ];then
 fi
 
 # copy files required for chrooted operation
-prepare_chroot() {
-	cp /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
+prepare_chroot () {
+	log_daemon_msg "Preparing chroot for $DESC" "aprsc chroot"
+	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
+	log_end_msg 0
 }
 
 case "$1" in
   start)
-  	log_daemon_msg "Starting $DESC" "aprsc"
-	prepare_chroot()
 	set -e
+	prepare_chroot
+  	log_daemon_msg "Starting $DESC" "aprsc"
 	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0
 	else
@@ -94,8 +96,8 @@ case "$1" in
 		log_end_msg 1
 	fi
 	
+	prepare_chroot
   	log_daemon_msg "Starting $DESC" "aprsc"
-	prepare_chroot()
 	set -e
 	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0

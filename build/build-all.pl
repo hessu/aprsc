@@ -44,13 +44,15 @@ sub tcp_wait($$)
 			close($sock);
 			warn " ... $hostport: ok\n";
 			$ok++;
-			return 1 if ($ok >= 2);
+			return 1 if ($ok >= 3);
 		} else {
 			warn " ... $hostport: $!\n";
 		}
 		
 		sleep(0.3);
 	}
+	
+	return if ($ok);
 	
 	return 0;
 }
@@ -93,7 +95,7 @@ sub vm_build($$$)
 	
 	sleep(2);
 	
-	tcp_wait("$vm:22", 15) || die "vm $vm ssh is not accepting connections\n";
+	tcp_wait("$vm:22", 30) || die "vm $vm ssh is not accepting connections\n";
 	
 	my $d_tgz = $tgz;
 	$d_tgz =~ s/.*\///;

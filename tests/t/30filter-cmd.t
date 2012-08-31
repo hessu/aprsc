@@ -17,7 +17,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 1 + 2 + 2 + 2 + 2 + 3 };
+BEGIN { plan tests => 6 + 1 + 2 + 2 + 2 + 4 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -81,6 +81,11 @@ $tx = "OH2SRC>APRS,qAR,$login:>should drop4";
 $helper = "N2SRC>APRS,qAR,$login:>should pass4";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
+# send an awfully long invalid filter, just to see
+# it doesn't cause a crash due to buffer overflow
+#$i_rx->sendline("# filter p/" . ("OG/OF/OH" x 1024));
+#sleep(0.2);
+
 # change filter, with some rubbish in front
 $i_rx->sendline("#blaablaaanxauyg3iuyq2gfilter p/OG/OF/OH");
 sleep(0.2);
@@ -94,10 +99,17 @@ $tx = "N2SRC>APRS,qAR,$login:>should drop6";
 $helper = "OH2SRC>APRS,qAR,$login:>should pass6";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
-# change filter, with some rubbish in front
+# change filter using an APRS message
 $tx = sprintf("$rx_login>APRS::%-9.9s:%s{ax", "SERVER", "filter p/OZ/ZZ");
 $i_rx->sendline($tx);
-sleep(0.2);
+my $ack = $i_rx->getline_noncomment(2);
+warn "received ack: $ack\n";
+# SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :ackax
+ok($ack, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :ackax$/);
+my $reply = $i_rx->getline_noncomment(2);
+warn "received reply: $reply\n";
+# SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :filter b/OZ*/ZZ* active{839
+ok($reply, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :filter.*active{.*$/);
 
 # check that the new filter is applied
 $tx = "OH2SRC>APRS,qAR,$login:>should drop7";

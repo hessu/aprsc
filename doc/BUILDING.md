@@ -8,8 +8,8 @@ EITHER.
 
 If you're familiar with compiling software from the source code, and
 pre-built binary packages are not available for your platform, this is where
-you need to start.  Binary packages will be provided shortly for Debian and
-Ubuntu systems.
+you need to start.  Binary packages are provided for Debian and Ubuntu
+systems.
 
 aprsc has been built and tested on:
 
@@ -29,8 +29,8 @@ mostly on your own.
 Prerequirements and dependencies
 -----------------------------------
 
-aprsc requires a recent gcc version (4.1) to compile due to the need for
-built-in functions for atomic memory access.
+aprsc requires a recent gcc version (4.1 or later) to compile due to the
+need for built-in functions for atomic memory access.
 
 aprsc also requires libevent2 (libevent version 2.0), since libevent's HTTP
 server is used to implement the status page and HTTP position upload
@@ -46,24 +46,27 @@ libevent2 is also available in MacPorts for OS X and FreeBSD ports.
 Downloading aprsc
 --------------------
 
-Head to http://he.fi/aprsc/down/
-
+Head to http://he.fi/aprsc/ !
     
 
 Compiling aprsc
 ------------------
 
-    Delete old version if necessary:
+Delete old version if necessary:
+
     $ rm aprsc-latest.tar.gz
     
-    Download the latest source tree:
+Download the latest source tree:
+
     $ wget http://he.fi/aprsc/down/aprsc-latest.tar.gz
     
-    Extract it:
-    $ tar xvfz aprsc-latest.tar.gz
+Extract it:
 
-    Go to the newly-created directory and configure the build:
-    $ cd aprsc-1.0.0
+    $ tar xvfz aprsc-latest.tar.gz
+    
+Go to the newly-created directory and configure the build:
+
+    $ cd aprsc-1.0.0 (or whatever)
     $ ./configure
 
 At this point the configuration either succeeds or fails. If it fails, it is
@@ -85,12 +88,15 @@ should probably work.
 
 With build configuration done:
 
-    Compile it:
-    $ make
+Compile it:
 
-    Install it:
-    $ make install
+    $ make
     
-    Install example configuration:
-    $ make installconf
+Install it:
+
+    $ sudo make install
+    
+Install example configuration:
+
+    $ sudo make installconf
 

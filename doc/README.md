@@ -19,7 +19,7 @@ cycles are currently very quick - be ready to upgrade on a short notice when
 new versions are announced.  Like any new software, aprsc is likely to
 contain new bugs, and some upgrades might have a high priority.
 
-If you're not prepared to upgrade often, please wait for a few months – it
+If you're not prepared to upgrade often, please wait for a few months, it
 should be more peaceful then.  Documentation is not there yet, either, but
 if you're an experienced APRS-IS server operator, there should be no big
 surprises around.
@@ -59,7 +59,7 @@ If you need a nice, compact igate software for Linux, please take a look at
 either aprsg, aprx, or aprs4r.  If you need to run an APRS-IS server on
 Windows or some other platform not supported by aprsc, or if you need the
 features existing in javAPRSSrvr which are missing from aprsc, javAPRSSrvr
-is the right choice for you – it's got a lot of good features that many of
+is the right choice for you - it's got a lot of good features that many of
 you need, and it works on virtually all operating systems.  If you need an
 igate for Windows, APRSIS32 should be good.
 
@@ -74,8 +74,8 @@ libevent2 library, no other extra libraries are needed.
 
 Linux and OS X are the main development environments and will receive
 premium support, but FreeBSD and Solaris 11 are known to work too.  Packaged
-binaries for Debian and Ubuntu will be available shortly for super-easy
-installations and automatic upgrades.
+binaries for Debian and Ubuntu are available for super-easy installations
+and automatic upgrades using APT.
 
 
 Design 
@@ -143,7 +143,7 @@ An HTTP thread runs an event-driven HTTP server (libevent2 based) to support
 the status page and HTTP position uploads.  Since implementing nice web user
 interfaces in plain C is not very convenient or effective, the status page
 is produced using modern Web 2.0 methods.  The HTTP server can only generate
-a dynamic JSON-encoded status file and spit out static files.  An empty
+a dynamic JSON-encoded status file and serve static files.  An empty
 index.html file loads a static JavaScript file, which then periodically
 loads the JSON status data and formats the contents of the status page
 within the client's browser.  This approach allowed clean separation of
@@ -152,10 +152,6 @@ server code (C) and web presentation (HTML5/JavaScript/jQuery/flot).
 Both developers are experienced professional Unix C programmers, so the
 programming language was easy to select.  We also had plenty of existing
 code that could be re-used in this project.
-
-In hindsight, aprsc is slightly over-engineered and over-optimized for the
-current real-word requirements.  Performance, however, appears to match
-the initial goals.
 
 
 Performance

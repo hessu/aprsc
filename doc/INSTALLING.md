@@ -70,11 +70,11 @@ upgrade when upgrades are available.
     sudo apt-get upgrade
 
 Before starting aprsc edit the configuration file, which can be found in
-/opt/aprsc/etc/aprsc.conf.  Please see the CONFIGURING file for
+/opt/aprsc/etc/aprsc.conf.  Please see the CONFIGURATION file for
 instructions.
 
 To enable startup, edit /etc/default/aprsc and change STARTAPRSC="no" to
-"yes".
+"yes". There should not be any need to touch the other options at this time.
 
 Start it up:
 

@@ -9,12 +9,15 @@
 # "#filter <filterstring>"
 # "#alfhilawuehflwieuhffilter <filterstring>"
 #
+# or with an APRS message with a recipient call of "SERVER", saying
+# "filter <filterstring>"
+#
 # Yes, the command can be prefixed with anything, even in the "user"
 # command.
 #
 
 use Test;
-BEGIN { plan tests => 6 + 1 + 2 + 2 + 2 + 3 };
+BEGIN { plan tests => 6 + 1 + 2 + 2 + 2 + 2 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -33,7 +36,8 @@ ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 # First filter is for uncompressed packet, second for compressed,
 # third for mic-e, fourth for prefix filter test.
 # The first and last one also test upper-case letters as filter keys.
-my $i_rx = new Ham::APRS::IS("localhost:55580", "N5CAL-2",
+my $rx_login = "N5CAL-2";
+my $i_rx = new Ham::APRS::IS("localhost:55580", $rx_login,
 	'filter' => 'p/OH');
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
@@ -88,6 +92,20 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 $tx = "N2SRC>APRS,qAR,$login:>should drop6";
 $helper = "OH2SRC>APRS,qAR,$login:>should pass6";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+# change filter, with some rubbish in front
+$tx = sprintf("$rx_login>APRS::%-9.9s:%s{ax", "SERVER", "filter p/OZ/ZZ");
+$i_rx->sendline($tx);
+sleep(0.2);
+
+# check that the new filter is applied
+$tx = "OH2SRC>APRS,qAR,$login:>should drop7";
+$helper = "OZ2SRC>APRS,qAR,$login:>should pass7";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+$tx = "OH2SRC>APRS,qAR,$login:>should drop8";
+$helper = "ZZ2SRC>APRS,qAR,$login:>should pass8";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # disconnect

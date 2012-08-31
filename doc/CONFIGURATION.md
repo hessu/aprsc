@@ -19,9 +19,11 @@ script starting up the software.
  *  -r logs: log file directory, log files are placed in /opt/aprsc/logs
  *  -c etc/aprsc.onf: configuration file location
 
-Since the daemon chroots to /opt/aprsc, all paths are relative to
-that directory and the daemon cannot access any files outside
-the chroot.
+Since the daemon chroots to /opt/aprsc, all paths are relative to that
+directory and the daemon cannot access any files outside the chroot. The
+supplied startup script copies a couple of essential files from /etc top
+/opt/aprsc/etc so that DNS lookups work (hosts, resolv.conf, gai.conf,
+/nsswitch.conf).
 
 aprsc can log to syslog too, but that'd require bringing the
 syslog socket within the chroot.
@@ -88,10 +90,10 @@ And here are the contestants:
 The *Listen* directive tells aprsc to listen for connections from the network.
 The basic syntax is:
 
-    Listen socketname porttype tcp address to bind port options...
+    Listen socketname porttype protocol address port options...
 
-
- *  socketname: any name you wish to show up in logs and statistics
+ *  socketname: any name you wish to show up in logs and statistics. Quote
+    it if it contains spaces ("Full feed").
 
  *  porttype: one of:
  
@@ -99,6 +101,16 @@ The basic syntax is:
     - igate - igate / client port with user-specified filters
     - udpsubmit - UDP packet submission port (8080)
     - dupefeed - duplicate packets dropped by the server
+ 
+ *  protocol: either tcp or udp
+ 
+ *  address: the local address to listen on. "::" for IPv6 `IN6ADDR_ANY`
+    (all local IPv6 addresses), "0.0.0.0" for IPv4 `INADDR_ANY` (all local
+    IPv4 addresses). On Linux and Solaris, just put "::" here and it will
+    handle both IPv6 and IPv4 connections with a single configuration
+    line! On FreeBSD, separate IPv4 and IPv6 listeners are needed.
+    
+ *  port: the local TCP or UDP port to listen on.
 
  *  options: one more of:
  
@@ -109,30 +121,55 @@ The basic syntax is:
     - acl etc/client.acl - match client addresses against ACL
     - hidden - don't show the port in the status page
 
-#
-#              If you wish to provide UDP service for clients, set up a
-#              second listener on the same address, port and protocol.
-#
-#              The  "::"  is IPv6 "IN6ADDR_ANY", whereas "0.0.0.0" is same
-#              with IPv4.
-#
-#              On FreeBSD you need to have separate listeners for IPv4 and
-#              IPv6. On Linux, just use :: alone - the IPv6 listener will
-#              catch the IPv4 connections just as well.
-#
-# Example of normal server ports for Linux, supporting both TCP and UDP,
-# IPv4 and IPv6:
-# 
-Listen "Full feed"                                fullfeed tcp ::  10152 hidden
-Listen ""                                         fullfeed udp ::  10152 hidden
+If you wish to provide UDP service for clients, set up a second listener on
+the same address, port and address family (IPv4/IPv6).
 
-Listen "Client-Defined Filters"                   igate tcp ::  14580
-Listen ""                                         igate udp ::  14580
+Example of normal server ports for Linux, supporting both TCP and UDP,
+IPv4 and IPv6:
 
-#Listen "350 km from my position"                 fullfeed tcp ::  20350 filter "m/350"
-#Listen ""                                        fullfeed udp ::  20350 filter "m/350"
+    Listen "Full feed"                fullfeed  tcp ::  10152 hidden
+    Listen ""                         fullfeed  udp ::  10152 hidden
 
-Listen "UDP submit"                               udpsubmit udp :: 8080
+    Listen "Client-Defined Filters"   igate     tcp ::  14580
+    Listen ""                         igate     udp ::  14580
+
+    Listen "350 km from my position"  fullfeed  tcp ::  20350 filter "m/350"
+    Listen ""                         fullfeed  udp ::  20350 filter "m/350"
+
+    Listen "UDP submit"               udpsubmit udp ::  8080
 
 
+### Uplink configuration ###
+
+Uplink name type tcp address port
+
+ *  name: a name of the server or service you're connecting to
+ *  type: one of:
+    - full - send a full feed to upstream
+    - ro   - read-only, do not transmit anything upstream
+
+If you wish to specify multiple alternative servers, use multiple Uplink
+lines, one for each server. aprsc will automatically maintain a connection
+to one of them.
+
+Normally a single line for the 'rotate' address is fine - it will connect
+to one of the servers in a random fashion and go for another one should
+the first one become unavailable.
+
+Here's a good configuration for connecting to the APRS-IS core:
+
+    Uplink "Core rotate" full  tcp  rotate.aprs.net 10152
+
+
+### Binding source address when connecting upstream (optional) ###
+
+If your server has multiple IP addresses and you need to use a specific
+source address when connecting to the upstream servers, the UplinkBind
+directive will make your day. If not, just leave it commented out.
+
+If you're using both IPv4 and IPv6 to connect out, enter two UplinkBind
+directives, one with an IPv4 address and another with the IPv6 one.
+
+    UplinkBind 127.0.0.1
+    UplinkBind dead:beef::15:f00d
 

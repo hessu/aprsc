@@ -20,7 +20,7 @@ SVNVERSION:=$(shell if test -x $(SVNVERSION_CMD) -a \( -d ../.svn -o -d ../../.s
 DATE:=$(shell TZ=UTC date +"%Y %B %d")
 RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
 BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")
-LINUXCODENAME:=$(shell lsb_release -c 2>/dev/null || true)
+LINUXCODENAME:=$(shell lsb_release -sc 2>/dev/null || true)
 BUILD_USER:=$(shell whoami)
 
 # -------------------------------------------------------------------- #

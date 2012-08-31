@@ -15,20 +15,21 @@ my @platforms = (
 	'debian-60-amd64',
 );
 
-my($tgz, $buildonly) = @ARGV;
-
-if (defined $buildonly) {
-	@platforms = grep /$buildonly/, @platforms;
-}
-
-my $virsh = "virsh -c qemu:///system";
-
 # temporary download directory
 my $dir_build_down = "./build-down";
 # final downloaded builds
 my $dir_build_out = "./build-out";
+# where to upload builds
+my $upload_host = 'aprsc-dist';
+# directory on upload host
+my $dir_upload_tmp = '/data/www/aprsc-dist/tmp-upload';
+# repository root directory
+my $dir_upload_repo = '/data/www/aprsc-dist/html/aprsc/apt';
 
-system "mkdir -p $dir_build_out";
+my $debug = 0;
+my $virsh = "virsh -c qemu:///system";
+
+
 
 sub tcp_wait($$)
 {
@@ -120,8 +121,8 @@ sub vm_build($$$)
 	$dist =~ s/-[^\-]+$//;
 	
 	foreach my $f (@products) {
-		my $of = "$dir_build_out/$dist/$f";
-		mkdir("$dir_build_out/$dist");
+		my $of = "$dir_build_out/$f";
+#		mkdir("$dir_build_out/$dist");
 		rename("$dir_build_down/$f", $of) || die "Failed to rename $f to $of: $!\n";;
 	}
 	
@@ -161,7 +162,58 @@ sub build($$)
 
 # main
 
-foreach my $plat (@platforms) {
-	build($plat, $tgz);
+my $help = "build-all.pl [-d] [-h] [-o <buildonly>] [-m <build|upload>] <source.tar.gz>\n";
+my @args = @ARGV;
+my $mode = 'build';
+my $buildonly;
+my @args_left;
+while (my $par = shift @args) {
+	if ($par eq "-d") { $debug = 1; print "Debugging...\n"; }
+	elsif ($par eq "-h") { print $help; exit(0); }
+	elsif ($par eq "-m") { $mode = shift @args; }
+	elsif ($par eq "-o") { $buildonly = shift @args; }
+	elsif ($par eq "-?") { print $help; exit(0); }
+	else {
+		if ($par =~ /^-/) {
+			print "Unknown parameter \"$par\"\n$help"; exit(1);
+		}
+		push @args_left, $par;
+	}
+}
+
+if ($mode eq 'build') {
+	if ($#args_left != 0) {
+		print $help;
+		exit(1);
+	}
+	
+	my($tgz) = @args_left;
+	
+	if (! -f $tgz) {
+		warn "No such source package: $tgz\n";
+		print $help;
+		exit(1);
+	}
+	
+	if (defined $buildonly) {
+		@platforms = grep /$buildonly/, @platforms;
+	}
+	
+	system "mkdir -p $dir_build_out";
+	
+	foreach my $plat (@platforms) {
+		build($plat, $tgz);
+	}
+}
+
+if ($mode eq 'upload') {
+	system("ssh $upload_host 'rm -rf $dir_upload_tmp && mkdir -p $dir_upload_tmp'") == 0 or die "upload host upload_tmp cleanup failed: $?\n";
+	system("scp -r $dir_build_out/* $upload_host:$dir_upload_tmp/") == 0 or die "upload to upload_host failed: $?\n";
+	system("ssh -t $upload_host 'cd $dir_upload_repo && for i in $dir_upload_tmp/*.changes;"
+		. " do DIST=`echo \$i | perl -pe \"s/.*\\+([[:alpha:]]+).*/\\\\\$1/\"`;"
+		. " echo dist \$DIST: \$i;"
+		. " reprepro --ask-passphrase -Vb . include \$DIST \$i;"
+		. " done'") == 0
+			or die "repository update failed: $?\n";
 }
 

@@ -314,25 +314,45 @@ static void generate_instance_id(void)
 	int fd, l;
 	char c;
 	unsigned seed;
+	struct timeval tv;
 	
 	if ((fd = open("/dev/urandom", O_RDONLY)) == -1) {
 		hlog(LOG_ERR, "open(/dev/urandom) failed: %s", strerror(errno));
-		return;
+		fd = -1;
 	}
 	
 	/* seed the prng */
-	l = read(fd, &seed, sizeof(seed));
-	if (l != sizeof(seed)) {
-		hlog(LOG_ERR, "read(/dev/urandom, %d) for seed failed: %s", sizeof(seed), strerror(errno));
-		close(fd);
+	if (fd >= 0) {
+		l = read(fd, &seed, sizeof(seed));
+		if (l != sizeof(seed)) {
+			hlog(LOG_ERR, "read(/dev/urandom, %d) for seed failed: %s", sizeof(seed), strerror(errno));
+			close(fd);
+			fd = -1;
+		}
 	}
+	
+	if (fd < 0) {
+		/* not very strong, but we're not doing cryptography here */
+		gettimeofday(&tv, NULL);
+		seed = tv.tv_sec + tv.tv_usec + getpid();
+	}
+	
 	srand(seed);
 	
-	/* generate instance id */
-	l = read(fd, s, INSTANCE_ID_LEN);
-	if (l != INSTANCE_ID_LEN) {
-		hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", INSTANCE_ID_LEN, strerror(errno));
-		close(fd);
+	if (fd >= 0) {
+		/* generate instance id */
+		l = read(fd, s, INSTANCE_ID_LEN);
+		if (l != INSTANCE_ID_LEN) {
+			hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", INSTANCE_ID_LEN, strerror(errno));
+			close(fd);
+			fd = -1;
+		}
+	}
+	
+	if (fd < 0) {
+		/* urandom failed for us, use something inferior */
+		for (l = 0; l < INSTANCE_ID_LEN; l++)
+			s[l] = rand() % 256;
 	}
 	
 	for (l = 0; l < INSTANCE_ID_LEN; l++) {
@@ -348,7 +368,8 @@ static void generate_instance_id(void)
 	}
 	instance_id[INSTANCE_ID_LEN] = 0;
 	
-	close(fd);
+	if (fd >= 0)
+		close(fd);
 }
 
 /*

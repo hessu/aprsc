@@ -14,6 +14,16 @@
 #include "worker.h"
 #include "parse_aprs.h"
 
-extern int parse_aprs(struct worker_t *self, struct pbuf_t *pb);
+struct aprs_message_t {
+	const char *body;          /* message body */
+	const char *msgid;
+	
+	int body_len;
+	int msgid_len;
+	int is_ack;
+};
+
+extern int parse_aprs(struct pbuf_t *pb);
+extern int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am);
 
 #endif

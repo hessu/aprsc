@@ -32,7 +32,7 @@
 #include "filter.h"
 #include "clientlist.h"
 #include "client_heard.h"
-
+#include "version.h"
 #include "cellmalloc.h"
 
 long incoming_count;
@@ -399,7 +399,7 @@ char *memstr(char *needle, char *haystack, char *haystack_end)
  *	packet should be dropped.
  */
 
-int digi_path_drop(char *via_start, char *path_end)
+static int digi_path_drop(char *via_start, char *path_end)
 {
 	if (memstr(",NOGATE", via_start, path_end))
 		return 1;
@@ -407,6 +407,50 @@ int digi_path_drop(char *via_start, char *path_end)
 	if (memstr(",RFONLY", via_start, path_end))
 		return 1;
 		
+	return 0;
+}
+
+/*
+ *	Ack an incoming message
+ */
+static int messaging_ack(struct worker_t *self, struct client_t *c, struct pbuf_t *pb, struct aprs_message_t *am)
+{
+	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9.*s:ack%.*s\r\n",
+		serverid, pb->srcname_len, pb->srcname, am->msgid_len, am->msgid);
+}
+
+/*
+ *	Handle incoming messages to SERVER
+ */
+
+static int incoming_server_message(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	struct aprs_message_t am;
+	
+	int e;
+	if ((e = parse_aprs_message(pb, &am))) {
+		hlog(LOG_DEBUG, "message to SERVER from %.*s failed message parsing: %d", pb->srcname_len, pb->srcname, e);
+		return 0;
+	}
+	
+	if (am.is_ack) {
+		hlog(LOG_DEBUG, "message ack to SERVER from %.*s for msgid '%.*s'", pb->srcname_len, pb->srcname, am.msgid_len, am.msgid);
+		return 0;
+	}
+	
+	hlog(LOG_DEBUG, "message to SERVER from %.*s: '%.*s'", pb->srcname_len, pb->srcname, am.body_len, am.body);
+	
+	/* send ack */
+	if (am.msgid) {
+		if ((e = messaging_ack(self, c, pb, &am)) < 0) {
+			hlog(LOG_DEBUG, "failed to ack message to SERVER from %.*s: '%.*s': %d",
+				pb->srcname_len, pb->srcname, am.body_len, am.body, e);
+			return e;
+		}
+	}
+	
+	//msg = pb->dstname + 
+	
 	return 0;
 }
 
@@ -635,7 +679,20 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	//hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
 	
 	/* just try APRS parsing */
-	rc = parse_aprs(self, pb);
+	rc = parse_aprs(pb);
+	
+	if (rc == 0 && (pb->packettype & T_MESSAGE) && pb->dstname_len == 6
+		&& strncasecmp(pb->dstname, "SERVER", 6) == 0) {
+		/* This is a message from a client destined to the local server.
+		 * Process it!
+		 */
+		if (!originated_by_client) {
+			hlog(LOG_DEBUG, "message to SERVER from non-local client %.*s, dropping", pb->srcname_len, pb->srcname);
+			return rc;
+		}
+		
+		return incoming_server_message(self, c, pb);
+	}
 	
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);

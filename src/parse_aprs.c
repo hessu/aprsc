@@ -1010,7 +1010,7 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
  *
  */
 
-int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
+int parse_aprs(struct pbuf_t *pb)
 {
 	char packettype, poschar;
 	int paclen;
@@ -1123,7 +1123,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			pb->packettype |= T_NWS;
 		if (memcmp(body,"SKY",3) == 0)  // as seen on specification
 			pb->packettype |= T_NWS;
-
+                
 		// Is it perhaps TELEMETRY related "message" ?
 		if ( body[9] == ':' &&
 		     ( memcmp( body+9, ":PARM.", 6 ) == 0 ||
@@ -1134,6 +1134,7 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 			pb->packettype |=  T_TELEMETRY;
 			// Fall through to recipient location lookup
 		}
+		
 
 		// Or perhaps a DIRECTED QUERY ?
 		/* It might not be a bright idea to mark all messages starting with ?
@@ -1257,6 +1258,53 @@ int parse_aprs(struct worker_t *self, struct pbuf_t *pb)
 				return parse_aprs_uncompressed(pb, pos_start, body_end);
 			return 0;
 		}
+	}
+	
+	return 0;
+}
+
+/*
+ *	Parse an aprs text message (optional, only done to messages addressed to
+ *	SERVER
+ */
+
+extern int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
+{
+	const char *p;
+	
+	memset(am, 0, sizeof(*am));
+	
+	if (!pb->packettype & T_MESSAGE)
+		return -1;
+		
+	if (pb->info_start[10] != ':')
+		return -2;
+	
+	am->body = pb->info_start + 11;
+	/* -2 for the CRLF already in place */
+	am->body_len = pb->packet_len - 2 - (pb->info_start - pb->data);
+	
+	/* search for { looking backwards from the end of the packet,
+	 * it separates the msgid
+	 */
+	p = am->body + am->body_len - 1;
+	while (p > am->body && *p != '{')
+		p--;
+	
+	if (*p == '{') {
+		am->msgid = p+1;
+		am->msgid_len = pb->packet_len - 2 - (am->msgid - pb->data);
+		am->body_len = p - am->body;
+	}
+	
+	/* check if this is an ACK */
+	if ((!am->msgid_len) && am->body_len > 3
+	    && am->body[0] == 'a' && am->body[1] == 'c' && am->body[2] == 'k') {
+		am->is_ack = 1;
+		am->msgid = am->body + 3;
+		am->msgid_len = am->body_len - 3;
+		am->body_len = 0;
+		return 0;
 	}
 	
 	return 0;

@@ -67,7 +67,6 @@ extern char *cfgfile;
 extern char *pidfile;
 extern char *rundir;
 extern char *webdir;
-extern char *logdir;
 extern char *logname;
 extern char *chrootdir;
 extern char *setuid_s;

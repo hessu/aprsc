@@ -36,7 +36,6 @@ char *cfgfile = def_cfgfile;
 char *pidfile;
 char *new_rundir;
 char *rundir;
-char *logdir;	/* access logs go here */
 //char *new_webdir;
 char *webdir = def_webdir;
 char *chrootdir = NULL;
@@ -1055,7 +1054,7 @@ int read_config(void)
 			failed = 1;
 		}
 	}
-	if (!logdir) {
+	if (!log_dir) {
 		hlog(LOG_CRIT, "Config: logdir not defined.");
 		failed = 1;
 	}
@@ -1205,8 +1204,8 @@ int read_config(void)
 		return -1;
 	
 	if (!pidfile) {
-		s = hmalloc(strlen(logdir) + 10 + 3);
-		sprintf(s, "%s/%s.pid", logdir, logname);
+		s = hmalloc(strlen(log_dir) + 10 + 3);
+		sprintf(s, "%s/%s.pid", log_dir, logname);
 		
 		pidfile = s;
 	}
@@ -1220,9 +1219,9 @@ int read_config(void)
 
 void free_config(void)
 {
-	if (logdir)
-		hfree(logdir);
-	logdir = NULL;
+	if (log_dir)
+		hfree(log_dir);
+	log_dir = NULL;
 	if (rundir)
 		hfree(rundir);
 	rundir = NULL;

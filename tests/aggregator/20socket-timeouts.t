@@ -32,14 +32,9 @@ ok($p->start(), 1, "Failed to start product");
 
 my $is1 = $iss1->accept();
 ok(defined $is1, (1), "Failed to accept connection 1 from server");
-
-$iss1->send_login_prompt($is1);
-$iss1->send_login_ok($is1);
+ok($iss1->process_login($is1), 'ok', "Failed to accept login 1 from server");
 
 my $t_start = time();
-
-my $read1 = $is1->getline_noncomment(1);
-ok($read1, qr/^user TESTING pass 31421 /, "Did not receive 'user' login command on connection 1");
 
 $read1 = $is1->getline_noncomment(30);
 ok($read1, undef, "Ouch, got data from server when none should have been available");

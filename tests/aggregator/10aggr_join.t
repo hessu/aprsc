@@ -55,15 +55,8 @@ ok(defined $is1, (1), "Failed to accept connection 1 from server");
 my $is2 = $iss2->accept();
 ok(defined $is2, (1), "Failed to accept connection 2 from server");
 
-$iss1->send_login_prompt($is1);
-$iss1->send_login_ok($is1);
-$iss2->send_login_prompt($is2);
-$iss2->send_login_ok($is2);
-
-my $read1 = $is1->getline_noncomment(1);
-my $read2 = $is2->getline_noncomment(2);
-ok($read1, qr/^user TESTING pass 31421 /, "Did not receive 'user' login command on connection 1");
-ok($read2, qr/^user TESTING pass 31421 /, "Did not receive 'user' login command on connection 2");
+ok($iss1->process_login($is1), 'ok', "Failed to accept login 1 from server");
+ok($iss2->process_login($is2), 'ok', "Failed to accept login 2 from server");
 
 # create client connection
 my $cl = new Ham::APRS::IS("localhost:55152", 'CL1ENT');

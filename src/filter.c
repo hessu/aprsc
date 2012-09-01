@@ -2445,7 +2445,7 @@ static int filter_command_reply(struct worker_t *self, struct client_t *c, int i
 	if (!in_message)
 		return client_printf(self, c, "# %s\r\n", s);
 	
-	messaging_generate_msgid(msgid, 5);
+	messaging_generate_msgid(msgid, sizeof(msgid));
 	
 	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9s:%s{%s\r\n",
 		serverid, c->username, s, msgid);

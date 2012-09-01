@@ -17,7 +17,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 1 + 2 + 2 + 2 + 4 + 3 };
+BEGIN { plan tests => 6 + 1 + 2 + 2 + 2 + 4 + 2 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -119,6 +119,19 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 $tx = "OH2SRC>APRS,qAR,$login:>should drop8";
 $helper = "ZZ2SRC>APRS,qAR,$login:>should pass8";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+# query filter using an APRS message
+$tx = sprintf("$rx_login>APRS::%-9.9s:%s{bx", "SERVER", "filter p/OZ/ZZ");
+$i_rx->sendline($tx);
+$ack = $i_rx->getline_noncomment(2);
+warn "received ack: $ack\n";
+# SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :ackax
+ok($ack, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :ackbx$/);
+$reply = $i_rx->getline_noncomment(2);
+warn "received reply: $reply\n";
+# SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :filter b/OZ*/ZZ* active{839
+ok($reply, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :filter.*active{.*$/);
+
 
 # disconnect
 

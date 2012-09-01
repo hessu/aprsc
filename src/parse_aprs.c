@@ -1274,7 +1274,7 @@ extern int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 	
 	memset(am, 0, sizeof(*am));
 	
-	if (!pb->packettype & T_MESSAGE)
+	if (!(pb->packettype & T_MESSAGE))
 		return -1;
 		
 	if (pb->info_start[10] != ':')

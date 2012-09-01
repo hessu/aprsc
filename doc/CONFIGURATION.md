@@ -237,3 +237,47 @@ this document.
 
 Think of this as the "brown M&M's test" by Van Halen, adapted for the APRS-IS.
 
+Access list (ACL) file format
+--------------------------------
+
+Some directives in the main configuration can refer to ACL files. ACLs are
+used to allow and deny connections based on the client's IP address.
+
+If an ACL is not configured for a port listener, all connections will be
+allowed. If an ACL is configured, the default is to not allow any
+connections unless an "allow" rule permits it.
+
+Rules in an ACL are processed sequentially, starting from the beginning. The
+first `allow` or `deny` rule matching the address of the connecting client
+is applied.
+
+The following two IPv6 lines deny the `dead:beef:f00d::/48` subnet first,
+and then allow the rest of the `dead:beef::/32` network around it. All other
+IPv6 connections are denied.
+
+    deny  dead:beef:f00d::/48
+    allow dead:beef::/32
+
+The first two rules allow connections from 192.168.* except for 192.168.1.*,
+and also allow connections from the host at 10.52.42.3. All other IPv4
+connections are denied.
+    
+    deny 192.168.1.0/24
+    allow 192.168.0.0/16
+    allow 10.52.42.3
+
+If prefix length is not specified, a host rule is created (32 bits for IPv4,
+128 bits prefix length for IPv6). To configure a rule that matches all
+addresses, please specify a prefix length of 0 (::/0 for IPv6, 0.0.0.0/0 for
+IPv4).
+
+ACL files are read and parsed when aprsc starts or reconfigures itself.
+However, reconfiguration is currently not working, so you'll need to
+do a full restart after changing ACLs.
+
+The same ACL file can be referenced from multiple main configuration
+directives to reduce the amount of configuration files. For example, you
+could have a single "allow.acl" file which would contain allow lines for
+both IPv4 and IPv6 addresses, and the ACL can then be referred to from both
+the IPv4 and IPv6 listeners.
+

@@ -313,12 +313,22 @@ static void generate_instance_id(void)
 	unsigned char s[INSTANCE_ID_LEN];
 	int fd, l;
 	char c;
+	unsigned seed;
 	
 	if ((fd = open("/dev/urandom", O_RDONLY)) == -1) {
 		hlog(LOG_ERR, "open(/dev/urandom) failed: %s", strerror(errno));
 		return;
 	}
 	
+	/* seed the prng */
+	l = read(fd, &seed, sizeof(seed));
+	if (l != sizeof(seed)) {
+		hlog(LOG_ERR, "read(/dev/urandom, %d) for seed failed: %s", sizeof(seed), strerror(errno));
+		close(fd);
+	}
+	srand(seed);
+	
+	/* generate instance id */
 	l = read(fd, s, INSTANCE_ID_LEN);
 	if (l != INSTANCE_ID_LEN) {
 		hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", INSTANCE_ID_LEN, strerror(errno));
@@ -583,6 +593,10 @@ int main(int argc, char **argv)
 		}
 		if (chroot(chrootdir)) {
 			fprintf(stderr, "aprsc: chroot(%s) failed: %s\n", chrootdir, strerror(errno));
+			exit(1);
+		}
+		if (chdir("/") != 0) { /* maybe redundant after the first chdir() */
+			fprintf(stderr, "aprsc: chdir(/) failed after chroot: %s\n", strerror(errno));
 			exit(1);
 		}
 	}

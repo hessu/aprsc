@@ -2488,7 +2488,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, int in_message, c
 		return client_write(self, c, b, (int)(p-b));
 	}
 	if (*s != ' ') {
-		return filter_command_reply(self, c, in_message, "Bad input");
+		return filter_command_reply(self, c, in_message, "Filter: Bad input, no space character after filter command");
 	}
 	++s;
 	--len;

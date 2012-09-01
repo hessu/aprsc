@@ -441,11 +441,11 @@ static int incoming_server_message(struct worker_t *self, struct client_t *c, st
 		}
 	}
 	
-	if (strncasecmp(am.body, "filter ", 7) == 0) {
-		return filter_commands(self, c, 1, am.body, am.body_len);
-	} else if (strncasecmp(am.body, "filter?", 7) == 0) {
+	if (strncasecmp(am.body, "filter?", 7) == 0)
 		return messaging_message_client(self, c, "filter %s active", c->filter_s);
-	}
+	
+	if (strncasecmp(am.body, "filter", 6) == 0)
+		return filter_commands(self, c, 1, am.body, am.body_len);
 	
 	/* unknown command */
 	return messaging_message_client(self, c, "Unknown command");

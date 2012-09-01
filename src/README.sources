@@ -71,6 +71,10 @@ parse_qc.c
 	Parses and possibly generates a new Q construct, or modifies
 	an existing one. Called by incoming.c.
 
+messaging.c
+	Contains utility functions for processing received APRS text
+	messages and generating new messages.
+
 clientlist.c
 	Clientlist contains a list of connected clients, along with their
 	verification status. It is updated when clients connect or disconnect,

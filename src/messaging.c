@@ -1,4 +1,18 @@
 
+/*
+ *     aprsc
+ *
+ *     (c) Heikki Hannikainen, OH7LZB
+ *
+ *     This program is licensed under the BSD license, which can be found
+ *     in the file LICENSE.
+ *
+ *
+ *     The messaging module implements utility functions for processing and
+ *     generating APRS messages.
+ */
+
+
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>

@@ -29,6 +29,8 @@
 #include "config.h"
 #include "keyhash.h"
 #include "client_heard.h"
+#include "version.h"
+#include "messaging.h"
 
 //#define FILTER_CLIENT_DEBUGGING
 
@@ -2430,13 +2432,32 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	return 0;
 }
 
+static int filter_command_reply(struct worker_t *self, struct client_t *c, int in_message, const char *fmt, ...)
+{
+	va_list args;
+	char s[PACKETLEN_MAX];
+	char msgid[5];
+	
+	va_start(args, fmt);
+	vsnprintf(s, PACKETLEN_MAX, fmt, args);
+	va_end(args);
+	
+	if (!in_message)
+		return client_printf(self, c, "# %s\r\n", s);
+	
+	messaging_generate_msgid(msgid, 5);
+	
+	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9s:%s{%s\r\n",
+		serverid, c->username, s, msgid);
+}
+
 /*
  *	filter_commands() implements treatment for incoming client filter requests.
  *
  *	Return value propagates negative returns from things like  client_write()
  *	indicating the struct client_t * object being destroyed.
  */
-int filter_commands(struct worker_t *self, struct client_t *c, const char *s, int len)
+int filter_commands(struct worker_t *self, struct client_t *c, int in_message, const char *s, int len)
 {
 	char *argv[256];	
 	struct filter_t *f;
@@ -2471,7 +2492,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 		return client_write(self, c, b, (int)(p-b));
 	}
 	if (*s != ' ') {
-		return client_printf(self, c, "# Bad input\r\n");
+		return filter_command_reply(self, c, in_message, "Bad input");
 	}
 	++s;
 	--len;
@@ -2488,7 +2509,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 		c->posuserfilters = NULL;
 		// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
 		// FIXME: there is a danger of SEGV-blowing filter processing...
-		return client_printf(self, c, "# User filters reset to default\r\n");
+		return filter_command_reply(self, c, in_message, "User filters reset to default");
 	}
 
 	/* new filter definitions to supersede previous ones */
@@ -2520,7 +2541,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, const char *s, in
 	}
 	hfree(b);
 	
-	return client_printf(self, c, "# Parsed %d filter specifications\r\n", i);
+	return filter_command_reply(self, c, in_message, "filter %s active", c->filter_s);
 }
 
 /*

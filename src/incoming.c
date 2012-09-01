@@ -34,6 +34,7 @@
 #include "client_heard.h"
 #include "version.h"
 #include "cellmalloc.h"
+#include "messaging.h"
 
 long incoming_count;
 
@@ -411,15 +412,6 @@ static int digi_path_drop(char *via_start, char *path_end)
 }
 
 /*
- *	Ack an incoming message
- */
-static int messaging_ack(struct worker_t *self, struct client_t *c, struct pbuf_t *pb, struct aprs_message_t *am)
-{
-	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9.*s:ack%.*s\r\n",
-		serverid, pb->srcname_len, pb->srcname, am->msgid_len, am->msgid);
-}
-
-/*
  *	Handle incoming messages to SERVER
  */
 
@@ -450,7 +442,7 @@ static int incoming_server_message(struct worker_t *self, struct client_t *c, st
 	}
 	
 	if (strncasecmp(am.body, "filter ", 7) == 0) {
-		return filter_commands(self, c, am.body, am.body_len);
+		return filter_commands(self, c, 1, am.body, am.body_len);
 	}
 	
 	/* unknown command */
@@ -747,7 +739,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 			/* filter adjunct commands ? */
 			char *filtercmd = memstr("filter", s, s + len);
 			if (filtercmd)
-				return filter_commands(self, c, filtercmd, len - (filtercmd - s));
+				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
 			
 		}
 		

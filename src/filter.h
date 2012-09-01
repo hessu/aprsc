@@ -18,7 +18,7 @@ extern void filter_init(void);
 extern int  filter_parse(struct client_t *c, const char *filt, int is_user_filter);
 extern void filter_free(struct filter_t *c);
 extern int  filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
-extern int  filter_commands(struct worker_t *self, struct client_t *c, const char *s, const int len);
+extern int  filter_commands(struct worker_t *self, struct client_t *c, int in_message, const char *s, const int len);
 
 extern void filter_preprocess_dupefilter(struct pbuf_t *pb);
 extern void filter_postprocess_dupefilter(struct pbuf_t *pb);

@@ -14,7 +14,7 @@ STARTAPRSC="no"
 # -e info: log at level info
 # -o file: log to file
 # -r logs: log files are placed in /opt/aprsc/logs
-# -c etc/aprscc.onf: configuration file location
+# -c etc/aprsc.conf: configuration file location
 #
 # Since the daemon chroots to /opt/aprsc, all paths are relative to
 # that directory and the daemon cannot access any files outside

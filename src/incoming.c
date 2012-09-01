@@ -449,9 +449,13 @@ static int incoming_server_message(struct worker_t *self, struct client_t *c, st
 		}
 	}
 	
-	//msg = pb->dstname + 
+	if (strncasecmp(am.body, "filter ", 7) == 0) {
+		return filter_commands(self, c, am.body, am.body_len);
+	}
 	
-	return 0;
+	/* unknown command */
+	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9.*s:Unknown command{%.*s\r\n",
+		serverid, pb->srcname_len, pb->srcname, am.msgid_len, am.msgid);
 }
 
 /*

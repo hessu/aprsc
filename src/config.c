@@ -36,7 +36,6 @@ char *cfgfile = def_cfgfile;
 char *pidfile;
 char *new_rundir;
 char *rundir;
-char *new_logdir;
 char *logdir;	/* access logs go here */
 //char *new_webdir;
 char *webdir = def_webdir;
@@ -133,7 +132,6 @@ int do_logrotate(int *dest, int argc, char **argv);
 
 static struct cfgcmd cfg_cmds[] = {
 	{ "rundir",		_CFUNC_ do_string,	&new_rundir		},
-	{ "logdir",		_CFUNC_ do_string,	&new_logdir		},
 	{ "logrotate",		_CFUNC_ do_logrotate,	&log_rotate_size	},
 	{ "serverid",		_CFUNC_ do_string,	&new_serverid		},
 	{ "passcode",		_CFUNC_ do_string,	&new_passcode		},
@@ -1058,13 +1056,8 @@ int read_config(void)
 		}
 	}
 	if (!logdir) {
-		if (new_logdir) {
-			logdir = new_logdir;
-			new_logdir = NULL;
-		} else {
-			hlog(LOG_CRIT, "Config: logdir not defined.");
-			failed = 1;
-		}
+		hlog(LOG_CRIT, "Config: logdir not defined.");
+		failed = 1;
 	}
 	
 	/* serverid is only applied when running for the first time. */

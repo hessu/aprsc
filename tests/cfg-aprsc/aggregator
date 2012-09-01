@@ -14,9 +14,6 @@ MyAdmin    "Admin, N0CALL"
 # Data directory (for database files)
 RunDir data
 
-# Log directory
-LogDir logs
-
 ### Intervals #########
 # Interval specification format examples:
 # 600 (600 seconds), 5m, 2h, 1h30m, 1d3h15m24s, etc...

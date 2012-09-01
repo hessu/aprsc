@@ -100,7 +100,7 @@ WEBFILES = \
 	src/web/*.png
 
 testinstall:
-	$(DATAINSTALL) $(WEBFILES) ../tests/web/
+	cp -p $(WEBFILES) ../tests/web/
 
 # -------------------------------------------------------------------- #
 

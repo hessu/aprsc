@@ -2436,7 +2436,6 @@ static int filter_command_reply(struct worker_t *self, struct client_t *c, int i
 {
 	va_list args;
 	char s[PACKETLEN_MAX];
-	char msgid[5];
 	
 	va_start(args, fmt);
 	vsnprintf(s, PACKETLEN_MAX, fmt, args);
@@ -2445,10 +2444,7 @@ static int filter_command_reply(struct worker_t *self, struct client_t *c, int i
 	if (!in_message)
 		return client_printf(self, c, "# %s\r\n", s);
 	
-	messaging_generate_msgid(msgid, sizeof(msgid));
-	
-	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9s:%s{%s\r\n",
-		serverid, c->username, s, msgid);
+	return messaging_message_client(self, c, "%s", s);
 }
 
 /*

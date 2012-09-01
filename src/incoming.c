@@ -418,7 +418,6 @@ static int digi_path_drop(char *via_start, char *path_end)
 static int incoming_server_message(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	struct aprs_message_t am;
-	char msgid[5];
 	
 	int e;
 	if ((e = parse_aprs_message(pb, &am))) {
@@ -445,15 +444,11 @@ static int incoming_server_message(struct worker_t *self, struct client_t *c, st
 	if (strncasecmp(am.body, "filter ", 7) == 0) {
 		return filter_commands(self, c, 1, am.body, am.body_len);
 	} else if (strncasecmp(am.body, "filter?", 7) == 0) {
-		messaging_generate_msgid(msgid, sizeof(msgid));
-		return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9s:filter %s active{%s\r\n",
-			serverid, c->username, c->filter_s, msgid);
+		return messaging_message_client(self, c, "filter %s active", c->filter_s);
 	}
 	
 	/* unknown command */
-	messaging_generate_msgid(msgid, sizeof(msgid));
-	return client_printf(self, c, "SERVER>" APRSC_TOCALL ",TCPIP*,qAZ,%s::%-9.*s:Unknown command{%s\r\n",
-		serverid, pb->srcname_len, pb->srcname, msgid);
+	return messaging_message_client(self, c, "Unknown command");
 }
 
 /*

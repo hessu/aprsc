@@ -348,14 +348,13 @@ int make_uplink(struct uplink_config_t *l)
 		return -2;
 	}
 
-	// TODO: should probably just use the first one. Resolver rotates and
-	// gai.conf might sort according to user's preferences.
+	/* Count the amount of addresses in response */
 	i = 0;
 	for (a = ai; a && i < 20 ; a = a->ai_next, ++i) {
 		ap[i] = a; /* Up to 20 first addresses */
 	}
 	ap[i] = NULL;
-#if 1
+	
 	/* If more than one, pick one at random, and place it as list leader */
 	if (i > 0)
 		i = random() % i;
@@ -365,7 +364,7 @@ int make_uplink(struct uplink_config_t *l)
 		ap[i] = ap[0];
 		ap[0] = a;
 	}
-#endif
+	
 	i = 0;
 
 	/* Then lets try making socket and connection in address order */

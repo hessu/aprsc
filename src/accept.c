@@ -143,12 +143,20 @@ static int accept_pass_client_to_worker(struct worker_t *wc, struct client_t *c)
 		hlog(LOG_ERR, "do_accept(): could not lock new_clients_mutex: %s", strerror(pe));
 		return -1;
 	}
+	
 	/* push the client in the worker's queue */
-	c->next = wc->new_clients;
-	c->prevp = &wc->new_clients;
-	if (c->next)
-		c->next->prevp = &c->next;
-	wc->new_clients = c;
+	c->next = NULL;
+	
+	if (wc->new_clients_last) {
+		wc->new_clients_last->next = c;
+		c->prevp = &wc->new_clients_last->next;
+	} else {
+		wc->new_clients = c;
+		c->prevp = &wc->new_clients;
+	}
+	
+	wc->new_clients_last = c;
+	
 	/* unlock the queue */
 	if ((pe = pthread_mutex_unlock(&wc->new_clients_mutex))) {
 		hlog(LOG_ERR, "do_accept(): could not unlock new_clients_mutex: %s", strerror(pe));
@@ -423,6 +431,26 @@ static void peerip_clients_config(void)
 		/* pass the client to the first worker thread */
 		accept_pass_client_to_worker(worker_threads, c);
 	}
+}
+
+/*
+ *	Close and free UDP peer "clients"
+ */
+
+static void peerip_clients_close(void)
+{
+	struct client_t *c;
+	
+	c = client_alloc();
+	if (!c) {
+		hlog(LOG_ERR, "peerip_clients_close: client_alloc returned NULL");
+		abort();
+	}
+	
+	c->fd = -2; // Magic FD to close them all
+	c->state = CSTATE_COREPEER;
+	sprintf(c->filter_s, "peerip_clients_close"); // debugging
+	accept_pass_client_to_worker(worker_threads, c);
 }
 
 /*
@@ -837,6 +865,7 @@ void accept_thread(void *asdf)
 			/*
 			 * generate UDP peer clients
 			 */
+			peerip_clients_close();
 			if (peerip_config)
 				peerip_clients_config();
 		}

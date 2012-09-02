@@ -2,6 +2,7 @@
  *	aprsc
  *
  *	(c) Matti Aarnio, OH2MQK, <oh2mqk@sral.fi>
+ *	(c) Heikki Hannikainen, OH7LZB
  *
  *     This program is licensed under the BSD license, which can be found
  *     in the file LICENSE.

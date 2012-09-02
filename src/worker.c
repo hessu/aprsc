@@ -213,12 +213,12 @@ void client_udp_free(struct client_udp_t *u)
 
 	-- u->refcount;
 
-	//if (u)
-	//	hlog(LOG_DEBUG, "client_udp_free %p port %d refcount now: %d", u, u->portnum, u->refcount);
+	if (u)
+		hlog(LOG_DEBUG, "client_udp_free %p port %d refcount now: %d", u, u->portnum, u->refcount);
 
 	if ( // u->configured == 0 &&
 	     u->refcount   == 0 ) {
-		//hlog(LOG_DEBUG, "client_udp_free %p port %d FREEING", u, u->portnum);
+		hlog(LOG_DEBUG, "client_udp_free %p port %d FREEING", u, u->portnum);
 		/* Unchain, and destroy.. */
 		if (u->next)
 			u->next->prevp = u->prevp;
@@ -284,6 +284,28 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
 	return c;
 }
 
+/*
+ *	Close and free all UDP core peers
+ */
+
+void corepeer_close_all(struct worker_t *self)
+{
+	int i;
+	struct client_t *c;
+	
+	for (i = 0; i < worker_corepeer_client_count; i++) {
+		c = worker_corepeer_clients[i];
+		client_close(self, c, 0);
+		worker_corepeer_clients[i] = NULL;
+	}
+	
+	worker_corepeer_client_count = 0;
+}
+
+
+/*
+ *	set up cellmalloc for clients
+ */
 
 void client_init(void)
 {
@@ -591,15 +613,17 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	
 	hlog( LOG_DEBUG, "Worker %d disconnecting %s %s fd %d err %d",
 	      self->id, ( (c->flags & CLFLAGS_UPLINKPORT)
-			  ? "uplink":"client" ), c->addr_rem, c->fd, errnum);
+			  ? ((c->state == CSTATE_COREPEER) ? "peer" : "uplink") : "client" ), c->addr_rem, c->fd, errnum);
 
+	/* remove from polling list */
+	if (c->xfd) {
+		hlog(LOG_DEBUG, "client_close: xpoll_remove %p fd %d", c->xfd, c->xfd->fd);
+		xpoll_remove(&self->xp, c->xfd);
+	}
+	
 	/* close */
 	if (c->fd >= 0) {
 		close(c->fd);
-	
-		/* remove from polling list */
-		if (c->xfd)
-			xpoll_remove(&self->xp, c->xfd);
 	}
 
 	c->fd = -1;
@@ -868,7 +892,7 @@ int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const ch
  *	Receive UDP packets from a core peer
  */
 
-int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
+static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 {
 	struct client_t *rc = NULL; // real client
 	union sockaddr_u addr;
@@ -946,7 +970,7 @@ int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
  *	handle an event on an fd
  */
 
-int handle_client_readable(struct worker_t *self, struct client_t *c)
+static int handle_client_readable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 	char *s;
@@ -1034,7 +1058,7 @@ int handle_client_readable(struct worker_t *self, struct client_t *c)
 	return 0;
 }
 
-int handle_client_writeable(struct worker_t *self, struct client_t *c)
+static int handle_client_writeable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 	
@@ -1069,7 +1093,7 @@ int handle_client_writeable(struct worker_t *self, struct client_t *c)
 	return 0;
 }
 
-int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
+static int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 {
 	struct worker_t *self = (struct worker_t *)xp->tp;
 	struct client_t *c    = (struct client_t *)xfd->p;
@@ -1095,7 +1119,7 @@ int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
  *	move new clients from the new clients queue to the worker thread
  */
 
-void collect_new_clients(struct worker_t *self)
+static void collect_new_clients(struct worker_t *self)
 {
 	int pe, n, i;
 	struct client_t *new_clients, *c;
@@ -1109,6 +1133,7 @@ void collect_new_clients(struct worker_t *self)
 	/* quickly grab the new clients to a local variable */
 	new_clients = self->new_clients;
 	self->new_clients = NULL;
+	self->new_clients_last = NULL;
 	
 	/* unlock */
 	if ((pe = pthread_mutex_unlock(&self->new_clients_mutex))) {
@@ -1130,21 +1155,30 @@ void collect_new_clients(struct worker_t *self)
 		c = new_clients;
 		new_clients = c->next;
 		
-		self->client_count++;
-		// hlog(LOG_DEBUG, "collect_new_clients(worker %d): got client fd %d", self->id, c->fd);
-		c->next = self->clients;
-		if (c->next)
-			c->next->prevp = &c->next;
-		self->clients = c;
-		c->prevp = &self->clients;
+		if (c->fd != -2) {
+			self->client_count++;
+			// hlog(LOG_DEBUG, "collect_new_clients(worker %d): got client fd %d", self->id, c->fd);
+			c->next = self->clients;
+			if (c->next)
+				c->next->prevp = &c->next;
+			self->clients = c;
+			c->prevp = &self->clients;
+		}
 		
 		/* If the new client is an UDP core peer, we will add it's FD to the
 		 * polling list, but only once. There is only a single listener socket
 		 * for a single peer group.
 		 */
 		if (c->state == CSTATE_COREPEER) {
+			if (c->fd == -2) {
+				/* corepeer reconfig flag */
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): closing all existing peergroup peers", self->id);
+				corepeer_close_all(self);
+				continue;
+			}
+			
 			/* add to corepeer client list and polling list */
-			hlog(LOG_DEBUG, "collect_new_clients(worker %d): got core peergroup client, UDP fd %d", self->id, c->udpclient->fd);
+			hlog(LOG_DEBUG, "collect_new_clients(worker %d): got core peergroup peer, UDP fd %d", self->id, c->udpclient->fd);
 			
 			if (worker_corepeer_client_count == MAX_COREPEERS) {
 				hlog(LOG_ERR, "worker: Too many core peergroup peers (max %d)", MAX_COREPEERS);
@@ -1156,9 +1190,9 @@ void collect_new_clients(struct worker_t *self)
 			worker_corepeer_client_count++;
 			
 			if (!c->udpclient->polled) {
-				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d", self->id, c->udpclient->fd);
 				c->udpclient->polled = 1;
 				c->xfd = xpoll_add(&self->xp, c->udpclient->fd, (void *)c);
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d xfd %p", self->id, c->udpclient->fd, c->xfd);
 			}
 			
 			continue;
@@ -1166,6 +1200,7 @@ void collect_new_clients(struct worker_t *self)
 		
 		/* add to polling list */
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
+		hlog(LOG_DEBUG, "collect_new_clients(worker %d): added fd %d to polling list, xfd %p", self->id, c->fd, c->xfd);
 		if (!c->xfd) {
 			/* ouch, out of xfd space */
 			shutdown(c->fd, SHUT_RDWR);

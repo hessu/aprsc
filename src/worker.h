@@ -359,6 +359,7 @@ struct worker_t {
 	pthread_mutex_t clients_mutex;		/* mutex to protect access to the client list by the status dumps */
 	
 	struct client_t *new_clients;		/* new clients which passed in by accept */
+	struct client_t *new_clients_last;	/* last client in the list, to support FIFO queuing */
 	pthread_mutex_t new_clients_mutex;	/* mutex to protect *new_clients */
 	int client_count;			/* modified by worker thread only! */
 	

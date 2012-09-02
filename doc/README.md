@@ -48,6 +48,7 @@ servers:
 * Configurable access lists on client ports
 * Logging to either syslog, file or stderr
 * Built-in log rotation when logging to a file
+* Runs in a chroot
 
 It does not, and will not, have any additional functions such as igating,
 digipeating, interfacing to radios, D-PRS or other gateway functions, or

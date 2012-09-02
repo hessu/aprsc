@@ -43,11 +43,25 @@ with it, so you need to download it and compile it from source
 
 libevent2 is also available in MacPorts for OS X and FreeBSD ports.
 
+
 Downloading aprsc
 --------------------
 
 Head to http://he.fi/aprsc/ !
-    
+
+
+Preparing the environment
+----------------------------
+
+Create user account and group for aprsc. aprsc should be started as root,
+but a non-privileged user account must be provided, so that it can switch to
+that after starting up.
+
+Linux (single command, all parameters are for adduser):
+
+    adduser --system --no-create-home --home /var/run/aprsc
+        --shell /usr/sbin/nologin --group aprsc
+
 
 Compiling aprsc
 ------------------
@@ -99,4 +113,24 @@ Install it:
 Install example configuration:
 
     $ sudo make installconf
+
+You should now have a nice installed set of software in /opt/aprsc.
+
+
+A note on the chroot
+-----------------------
+
+aprsc is usually run in a  chroot, which prevents it from accessing any
+files outside of the chroot directory after it has started up.  If the
+default path of internal logging to file and internal log rotation is used,
+the logs need to be below the chroot directory.  Since configuration reloads
+need to be supported, the configuration needs to be there too.  This is why
+aprsc is installed within a single /opt/aprsc directory tree with configs in
+/opt/aprsc/etc and logs in /opt/aprsc/logs.
+
+It is possible to enable logging to syslog by reconfiguring syslogd to
+provide an additional UNIX domain socket within the chroot.  However, due to
+the various different syslogds in wide use, the default aprsc installations
+do not make any attempt at this.
+
 

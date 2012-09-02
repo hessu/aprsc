@@ -108,7 +108,7 @@ struct portaccount_t *port_accounter_alloc(void)
 	return p;
 }
 
-void port_accounter_reject(struct portaccount_t *p)
+static void port_accounter_reject(struct portaccount_t *p)
 {
 	int i;
 	if (!p) return;
@@ -120,7 +120,7 @@ void port_accounter_reject(struct portaccount_t *p)
 	i = pthread_mutex_unlock( & p->mutex );
 }
 
-void port_accounter_add(struct portaccount_t *p)
+static void port_accounter_add(struct portaccount_t *p)
 {
 	int i, r;
 	if (!p) return;
@@ -288,7 +288,7 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
  *	Close and free all UDP core peers
  */
 
-void corepeer_close_all(struct worker_t *self)
+static void corepeer_close_all(struct worker_t *self)
 {
 	int i;
 	struct client_t *c;
@@ -590,7 +590,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
  *	signal handler
  */
  
-int worker_sighandler(int signum)
+static int worker_sighandler(int signum)
 {
 	switch (signum) {
 		
@@ -1233,7 +1233,7 @@ static void collect_new_clients(struct worker_t *self)
  *	the number of writes on socket in previous run interval to
  *	auto-adjust socket buffering mode.
  */
-void send_keepalives(struct worker_t *self)
+static void send_keepalives(struct worker_t *self)
 {
 	struct client_t *c, *cnext;
 	struct tm t;

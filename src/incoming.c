@@ -221,7 +221,7 @@ void pbuf_dupe_dump(FILE *fp)
 }
 
 
-struct pbuf_t *pbuf_get(struct worker_t *self, int len)
+static struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 {
 	struct pbuf_t *pb;
 	int i;

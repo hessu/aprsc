@@ -109,7 +109,7 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
  *	Parse symbol from destination callsign
  */
 
-int get_symbol_from_dstcall_twochar(const char c1, const char c2, char *sym_table, char *sym_code)
+static int get_symbol_from_dstcall_twochar(const char c1, const char c2, char *sym_table, char *sym_code)
 {
 	//hlog(LOG_DEBUG, "\ttwochar %c %c", c1, c2);
 	if (c1 == 'B') {
@@ -233,7 +233,7 @@ int get_symbol_from_dstcall_twochar(const char c1, const char c2, char *sym_tabl
 	return 0;
 }
 
-int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym_code)
+static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym_code)
 {
 	const char *d_start;
 	char type;
@@ -1268,7 +1268,7 @@ int parse_aprs(struct pbuf_t *pb)
  *	SERVER
  */
 
-extern int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
+int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 {
 	const char *p;
 	

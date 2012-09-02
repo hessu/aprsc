@@ -280,7 +280,7 @@ static void dupecheck_cleanup(void)
  *	signal handler
  */
  
-int dupecheck_sighandler(int signum)
+static int dupecheck_sighandler(int signum)
 {
 	switch (signum) {
 		

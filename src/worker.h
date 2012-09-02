@@ -424,7 +424,6 @@ extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int af, i
 extern void inbound_connects_account(const int add, struct portaccount_t *p);
 
 extern struct portaccount_t *port_accounter_alloc(void);
-extern void port_accounter_add(struct portaccount_t *p);
 extern void port_accounter_drop(struct portaccount_t *p);
 
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);

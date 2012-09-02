@@ -318,7 +318,7 @@ static void filter_entrycall_free(struct filter_entrycall_t *f)
  *	with gcc builtin optimizers.
  */
 
-int filter_entrycall_insert(struct pbuf_t *pb)
+static int filter_entrycall_insert(struct pbuf_t *pb)
 {
 	struct filter_entrycall_t *f, **fp, *f2;
 	/* OK, pre-parsing produced accepted result */
@@ -545,7 +545,7 @@ static void filter_wx_free(struct filter_wx_t *f)
  *	Positionless T_WX packets want also position packets on output filters.
  */
 
-int filter_wx_insert(struct pbuf_t *pb)
+static int filter_wx_insert(struct pbuf_t *pb)
 {
 	struct filter_wx_t *f, **fp, *f2;
 	/* OK, pre-parsing produced accepted result */
@@ -780,7 +780,7 @@ const char *aprsc_strnstr(const char *s1, const char *s2, size_t len)
  *	is analyzed on input.
  */
 
-void filter_check_tcpip(struct pbuf_t *pbuf)
+static void filter_check_tcpip(struct pbuf_t *pbuf)
 {
 	if (aprsc_strnstr(pbuf->dstcall_end, ",TCPIP*,", pbuf->qconst_start - pbuf->dstcall_end))
 		pbuf->flags |= F_HAS_TCPIP;
@@ -992,7 +992,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	return extend;
 }
 
-int filter_parse_one_s(struct client_t *c, const char *filt0, struct filter_t *f0, struct filter_t *ff, struct filter_t **ffp)
+static int filter_parse_one_s(struct client_t *c, const char *filt0, struct filter_t *f0, struct filter_t *ff, struct filter_t **ffp)
 {
 	/* s/pri/alt/over  	Symbol filter
 
@@ -2431,6 +2431,11 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 	
 	return 0;
 }
+
+/*
+ *	Send a reply to a filter command, either using a message or through a comment
+ *	line on the IS stream
+ */
 
 static int filter_command_reply(struct worker_t *self, struct client_t *c, int in_message, const char *fmt, ...)
 {

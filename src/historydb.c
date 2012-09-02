@@ -71,7 +71,7 @@ void historydb_init(void)
 }
 
 /* Called only under WR-LOCK */
-void historydb_free(struct history_cell_t *p)
+static void historydb_free(struct history_cell_t *p)
 {
 	if (p->packet != p->packetbuf)
 		hfree(p->packet);
@@ -85,7 +85,7 @@ void historydb_free(struct history_cell_t *p)
 }
 
 /* Called only under WR-LOCK */
-struct history_cell_t *historydb_alloc(int packet_len)
+static struct history_cell_t *historydb_alloc(int packet_len)
 {
 	++historydb_cellgauge;
 #ifndef _FOR_VALGRIND_
@@ -113,7 +113,7 @@ void historydb_atend(void)
 	}
 }
 
-void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
+static void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
 	fprintf(fp, "%ld\t", (long)hp->arrivaltime);
 	fwrite(hp->key, hp->keylen, 1, fp);

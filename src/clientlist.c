@@ -48,7 +48,7 @@ rwlock_t clientlist_lock = RWL_INITIALIZER;
  *	before calling!
  */
 
-struct clientlist_t *clientlist_find_id(void *id)
+static struct clientlist_t *clientlist_find_id(void *id)
 {
 	struct clientlist_t *cl;
 	

@@ -289,7 +289,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 
 int make_uplink(struct uplink_config_t *l)
 {
-	int fd, i, arg;
+	int fd, i, addrc, arg;
 	int uplink_index;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len;
@@ -349,24 +349,15 @@ int make_uplink(struct uplink_config_t *l)
 	}
 
 	/* Count the amount of addresses in response */
-	i = 0;
-	for (a = ai; a && i < 20 ; a = a->ai_next, ++i) {
-		ap[i] = a; /* Up to 20 first addresses */
+	addrc = 0;
+	for (a = ai; a && addrc < 20 ; a = a->ai_next, ++addrc) {
+		ap[addrc] = a; /* Up to 20 first addresses */
 	}
-	ap[i] = NULL;
+	ap[addrc] = NULL;
 	
-	/* If more than one, pick one at random, and place it as list leader */
-	if (i > 0)
-		i = random() % i;
-
-	if (i > 0) {
-		a = ap[i];
-		ap[i] = ap[0];
-		ap[0] = a;
-	}
+	/* Pick random address to start from */
+	i = random() % addrc;
 	
-	i = 0;
-
 	/* Then lets try making socket and connection in address order */
 	/* TODO: BUG: If the TCP connection succeeds, but the server rejects our
 	 * login due to a bad source address (like, IPv4 would be allowed but our
@@ -374,10 +365,14 @@ int make_uplink(struct uplink_config_t *l)
 	 * to the next destination address.
 	 */
 	fd = -1;
-	while (( a = ap[i++] )) {
+	while ((a = ap[i])) {
+		ap[i] = NULL;
 		addr_s = strsockaddr(a->ai_addr, a->ai_addrlen);
 
-		hlog(LOG_INFO, "Uplink %s: Connecting to %s [link %d]", l->name, addr_s, uplink_index);
+		hlog(LOG_INFO, "Uplink %s: Connecting to %s [link %d, addr %d/%d]", l->name, addr_s, uplink_index, i+1, addrc);
+		i++;
+		if (i == addrc)
+			i = 0;
 		
 		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
 			hlog(LOG_CRIT, "Uplink %s: socket(): %s\n", l->name, strerror(errno));

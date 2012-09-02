@@ -546,7 +546,7 @@ int make_uplink(struct uplink_config_t *l)
 	hfree(s);
 #endif
 
-	hlog(LOG_INFO, "%s: %s: Uplink connection established fd %d using source address %s", l->name, c->addr_rem, c->fd, c->addr_loc);
+	hlog(LOG_INFO, "Uplink %s: %s: Connection established on fd %d using source address %s", l->name, c->addr_rem, c->fd, c->addr_loc);
 
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;
@@ -556,7 +556,7 @@ int make_uplink(struct uplink_config_t *l)
 
 	wc = worker_threads;
 	
-	hlog(LOG_DEBUG, "%s: ... passing to worker thread %d with %d users", l->name, wc->id, wc->client_count);
+	hlog(LOG_DEBUG, "Uplink %s: ... passing to worker thread %d with %d users", l->name, wc->id, wc->client_count);
 	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
 		hlog(LOG_ERR, "make_uplink(): could not lock new_clients_mutex: %s", strerror(pe));
 		goto err;

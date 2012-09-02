@@ -337,7 +337,7 @@ static void generate_instance_id(void)
 		seed = tv.tv_sec + tv.tv_usec + getpid();
 	}
 	
-	srand(seed);
+	srandom(seed);
 	
 	if (fd >= 0) {
 		/* generate instance id */
@@ -352,7 +352,7 @@ static void generate_instance_id(void)
 	if (fd < 0) {
 		/* urandom failed for us, use something inferior */
 		for (l = 0; l < INSTANCE_ID_LEN; l++)
-			s[l] = rand() % 256;
+			s[l] = random() % 256;
 	}
 	
 	for (l = 0; l < INSTANCE_ID_LEN; l++) {
@@ -506,11 +506,10 @@ int main(int argc, char **argv)
 	time_t version_tick;
 	
 	time(&tick);
-	srand(tick);
 	now = tick;
 	cleanup_tick = tick;
 	stats_tick = tick;
-	version_tick = tick + rand() % 60; /* some load distribution */
+	version_tick = tick + random() % 60; /* some load distribution */
 	startup_tick = tick;
 	setlinebuf(stderr);
 	

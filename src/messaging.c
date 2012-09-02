@@ -30,7 +30,7 @@ void messaging_generate_msgid(char *buf, int buflen)
 	int i, c;
 	
 	for (i = 0; i < buflen-1; i++) {
-		c = rand() % (2*26 + 10); /* letters and numbers */
+		c = random() % (2*26 + 10); /* letters and numbers */
 		
 		if (c < 10)
 			buf[i] = c + 48; /* number */

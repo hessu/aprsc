@@ -65,8 +65,10 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	call_len = pb->srccall_end - pb->data;
 	hash = keyhashuc(pb->data, call_len, 0);
 	idx = hash;
-	idx ^= (idx >> 13); /* fold the hash bits.. */
-	idx ^= (idx >> 26); /* fold the hash bits.. */
+        // The "CLIENT_HEARD_BUCKETS" is 16..
+        idx ^= (idx >> 16);
+        idx ^= (idx >>  8);
+        idx ^= (idx >>  4);
 	i = idx % CLIENT_HEARD_BUCKETS;
 	
 	//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s (hash %u i %d)", c->fd, which, call_len, pb->data, hash, i);
@@ -145,8 +147,10 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 	
 	hash = keyhashuc(callsign, call_len, 0);
 	idx = hash;
-	idx ^= (idx >> 13); /* fold the hash bits.. */
-	idx ^= (idx >> 26); /* fold the hash bits.. */
+        // The "CLIENT_HEARD_BUCKETS" is 16..
+        idx ^= (idx >> 16);
+        idx ^= (idx >>  8);
+        idx ^= (idx >>  4);
 	i = idx % CLIENT_HEARD_BUCKETS;
 	
 	//DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s (hash %u i %d)", c->fd, which, call_len, callsign, hash, i);

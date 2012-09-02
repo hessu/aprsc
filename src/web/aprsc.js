@@ -230,6 +230,17 @@ var uplink_cols = {
 	'obuf_q': 'OutQ'
 };
 
+var peer_cols = {
+	'addr_rem': 'Address',
+	'since_last_read': 'Last in',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx bytes/s',
+	'obuf_q': 'OutQ'
+};
+
 var client_cols = {
 	'addr_loc': 'Port',
 	'username': 'Callsign',
@@ -269,8 +280,12 @@ function render_clients(element, d, cols)
 		s = '<tr>';
 		var c = d[ci];
 		
-		if (c['udp_downstream'])
-			c['addr_rem'] += ' +UDP';
+		if (c['udp_downstream']) { 
+			if (c['mode'] == 'peer')
+				c['addr_rem'] += ' UDP';
+			else
+				c['addr_rem'] += ' +UDP';
+		}
 		
 		if (linkable[c['app_name']])
 			c['addr_rem'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem']) + '</a>';
@@ -464,8 +479,19 @@ function render(d)
 	if (d['listeners'])
 		render_clients('#listeners', d['listeners'], listener_cols);
 		
-	if (d['uplinks'])
+	if (d['uplinks'] && d['uplinks'].length > 0) {
 		render_clients('#uplinks', d['uplinks'], uplink_cols);
+		$('#uplinks_d').show();
+	} else {
+		$('#uplinks_d').hide();
+	}
+	
+	if (d['peers'] && d['peers'].length > 0) {
+		render_clients('#peers', d['peers'], peer_cols);
+		$('#peers_d').show();
+	} else {
+		$('#peers_d').hide();
+	}
 		
 	if (d['clients'])
 		render_clients('#clients', d['clients'], client_cols);

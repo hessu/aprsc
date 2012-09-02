@@ -147,10 +147,10 @@ static int heard_find(struct client_t *c, struct client_heard_t **list, int *ent
 	
 	hash = keyhashuc(callsign, call_len, 0);
 	idx = hash;
-        // The "CLIENT_HEARD_BUCKETS" is 16..
-        idx ^= (idx >> 16);
-        idx ^= (idx >>  8);
-        idx ^= (idx >>  4);
+	// "CLIENT_HEARD_BUCKETS" is 16..
+	idx ^= (idx >> 16);
+	idx ^= (idx >>  8);
+	idx ^= (idx >>  4);
 	i = idx % CLIENT_HEARD_BUCKETS;
 	
 	//DLOG(LOG_DEBUG, "heard_find fd %d %s: checking for %.*s (hash %u i %d)", c->fd, which, call_len, callsign, hash, i);

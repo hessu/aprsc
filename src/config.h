@@ -132,6 +132,8 @@ struct uplink_config_t {
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
 extern struct uplink_config_t *uplink_config;
+extern struct uplink_config_t *uplink_config_install;
+extern int uplink_config_updated;
 
 extern struct sockaddr_in uplink_bind_v4;		/* address to bind when connecting out */
 extern socklen_t uplink_bind_v4_len;
@@ -163,6 +165,8 @@ extern int http_port_upload;
 
 extern int parse_args_noshell(char *argv[],char *cmd);
 extern void sanitize_ascii_string(char *s);
+
+extern void free_uplink_config(struct uplink_config_t **lc);
 
 extern int read_config(void);
 extern void free_config(void);

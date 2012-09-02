@@ -110,15 +110,15 @@ void uplink_close(struct client_t *c, int errnum)
 	int rc;
 
 	if (errnum == 0)
-		hlog(LOG_INFO, "%s: Uplink has been closed.", c->addr_rem);
+		hlog(LOG_INFO, "%s: Uplink [%d] has been closed.", c->addr_rem, c->uplink_index);
 	else if (errnum == -1)
-		hlog(LOG_INFO, "%s: Uplink has been closed by remote host (EOF).", c->addr_rem);
+		hlog(LOG_INFO, "%s: Uplink [%d] has been closed by remote host (EOF).", c->addr_rem, c->uplink_index);
 	else if (errnum == -2)
-		hlog(LOG_INFO, "%s: Uplink has been closed due to a timeout.", c->addr_rem);
+		hlog(LOG_INFO, "%s: Uplink [%d] has been closed due to a timeout.", c->addr_rem, c->uplink_index);
 	else if (errnum == -3)
-		hlog(LOG_INFO, "%s: Uplink has been closed due to a protocol error.", c->addr_rem);
+		hlog(LOG_INFO, "%s: Uplink [%d] has been closed due to a protocol error.", c->addr_rem, c->uplink_index);
 	else
-		hlog(LOG_INFO, "%s: Uplink has been closed due to an error: %s", c->addr_rem, strerror(errnum));
+		hlog(LOG_INFO, "%s: Uplink [%d] has been closed due to an error: %s", c->addr_rem, c->uplink_index, strerror(errnum));
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -306,7 +306,7 @@ int make_uplink(struct uplink_config_t *l)
 	req.ai_family   = 0;
 	req.ai_socktype = SOCK_STREAM;
 	req.ai_protocol = IPPROTO_TCP;
-	req.ai_flags    = 0;
+	req.ai_flags    = AI_ADDRCONFIG;
 	ai = NULL;
 	
 	/* find a free uplink slot */
@@ -355,7 +355,7 @@ int make_uplink(struct uplink_config_t *l)
 		ap[i] = a; /* Up to 20 first addresses */
 	}
 	ap[i] = NULL;
-#if 0
+#if 1
 	/* If more than one, pick one at random, and place it as list leader */
 	if (i > 0)
 		i = random() % i;
@@ -378,7 +378,7 @@ int make_uplink(struct uplink_config_t *l)
 	while (( a = ap[i++] )) {
 		addr_s = strsockaddr(a->ai_addr, a->ai_addrlen);
 
-		hlog(LOG_INFO, "Uplink %s: Connecting to %s", l->name, addr_s);
+		hlog(LOG_INFO, "Uplink %s: Connecting to %s [link %d]", l->name, addr_s, uplink_index);
 		
 		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
 			hlog(LOG_CRIT, "Uplink %s: socket(): %s\n", l->name, strerror(errno));
@@ -472,7 +472,7 @@ int make_uplink(struct uplink_config_t *l)
 		getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&arg, &optlen);
 		if (arg == 0) {
 			/* Successful connect! */
-			hlog(LOG_DEBUG, "Uplink %s: successfull connect", l->name);
+			hlog(LOG_DEBUG, "Uplink %s: successful connect", l->name);
 			break;
 		}
 		
@@ -619,15 +619,23 @@ void uplink_thread(void *asdf)
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
-	hlog(LOG_INFO, "Uplink thread starting...");
+	//hlog(LOG_INFO, "Uplink thread starting...");
 	
 	uplink_reconfiguring = 1;
 	while (!uplink_shutting_down) {
-		if (uplink_reconfiguring) {
+		if (uplink_reconfiguring || uplink_config_updated) {
+			hlog(LOG_INFO, "Uplink thread applying new configuration...");
 			uplink_reconfiguring = 0;
 			close_uplinkers();
-
-			hlog(LOG_INFO, "Uplink thread ready.");
+			
+			free_uplink_config(&uplink_config);
+			uplink_config = uplink_config_install;
+			if (uplink_config)
+				uplink_config->prevp = &uplink_config;
+			
+			uplink_config_updated = 0;
+			
+			hlog(LOG_INFO, "Uplink thread configured.");
 		}
 		
 		/* sleep for 1 second */
@@ -636,8 +644,13 @@ void uplink_thread(void *asdf)
 		}
 		
 		/* speed up shutdown */
-		if (uplink_shutting_down)
+		if (uplink_shutting_down || uplink_reconfiguring)
 			continue;
+		
+		if (uplink_config_updated) {
+			uplink_reconfiguring = 1;
+			continue;
+		}
 		
 		if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 			hlog(LOG_ERR, "uplink_thread(): could not lock uplink_client_mutex: %s", strerror(rc));
@@ -673,7 +686,7 @@ void uplink_thread(void *asdf)
 			next_uplink++;
 			if (next_uplink >= avail_uplink)
 				next_uplink = 0;
-			hlog(LOG_DEBUG, "Uplink: picked uplink index %d as the new candidate", next_uplink);
+			//hlog(LOG_DEBUG, "Uplink: picked uplink %d as the new candidate", next_uplink);
 			l = uplink_config;
 			int i = 0;
 			while ((l) && i < next_uplink) {

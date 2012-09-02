@@ -58,8 +58,11 @@ socklen_t uplink_bind_v4_len = 0;
 struct sockaddr_in6 uplink_bind_v6;
 socklen_t uplink_bind_v6_len = 0;
 
-struct uplink_config_t *uplink_config;
-struct uplink_config_t *new_uplink_config;
+struct uplink_config_t *uplink_config; /* currently running uplink config */
+struct uplink_config_t *uplink_config_install; /* uplink config waiting to be installed by uplink thread */
+int uplink_config_updated = 0;
+struct uplink_config_t *new_uplink_config; /* uplink config being generated from config file */
+
 struct peerip_config_t *peerip_config;
 struct peerip_config_t *new_peerip_config;
 
@@ -112,7 +115,8 @@ int disallow_unverified = 1;		/* don't allow unverified clients to transmit pack
 int verbose;
 
 /* address:port pairs being listened */
-struct listen_config_t *listen_config = NULL, *listen_config_new = NULL;
+struct listen_config_t *listen_config = NULL;
+struct listen_config_t *listen_config_new = NULL;
 
 int do_httpstatus(char *new, int argc, char **argv);
 int do_httpupload(char *new, int argc, char **argv);
@@ -1180,11 +1184,9 @@ int read_config(void)
 	listen_config_new = NULL;
 
 	/* put in the new aprsis-uplink  config */
-	free_uplink_config(&uplink_config);
-	uplink_config = new_uplink_config;
-	if (uplink_config)
-		uplink_config->prevp = &uplink_config;
+	uplink_config_install = new_uplink_config;
 	new_uplink_config = NULL;
+	uplink_config_updated = 1;
 
 	/* put in the new aprsis-peerip  config */
 	free_peerip_config(&peerip_config);

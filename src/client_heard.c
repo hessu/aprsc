@@ -36,7 +36,7 @@
 #include "cellmalloc.h"
 #include "keyhash.h"
 
-#define HEARD_DEBUG
+//#define HEARD_DEBUG
 
 #ifdef HEARD_DEBUG
 #define DLOG(level, fmt, ...) \

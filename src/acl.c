@@ -132,7 +132,7 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 		sup = (union sockaddr_u *)ai->ai_addr;
 		
 		if (ai->ai_family == AF_INET6) {
-			hlog(LOG_DEBUG, "ACL: Adding IPv6: %s/%d: %s/%d", netspec, prefixlen, addr_s, prefixlen);
+			//hlog(LOG_DEBUG, "ACL: Adding IPv6: %s/%d: %s/%d", netspec, prefixlen, addr_s, prefixlen);
 			
 			e6 = hmalloc(sizeof(*e6));
 			e6->next = acl->entries6;
@@ -162,7 +162,7 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 			if (prefixlen > 32)
 				prefixlen = 32;
 			
-			hlog(LOG_DEBUG, "ACL: Adding IPv4: %s/%d", netspec, prefixlen);
+			//hlog(LOG_DEBUG, "ACL: Adding IPv4: %s/%d", netspec, prefixlen);
 			
 			e4 = hmalloc(sizeof(*e4));
 			e4->next = acl->entries4;
@@ -198,6 +198,8 @@ struct acl_t *acl_load(char *s)
 	int argc;
 	int failed = 0;
 	int line = 0;
+	
+	hlog(LOG_DEBUG, "ACL: Loading ACL file \"%s\"", s);
 	
 	fp = fopen(s, "r");
 	if (!fp) {

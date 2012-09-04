@@ -5,3 +5,4 @@ opt/aprsc/sbin
 opt/aprsc/data
 opt/aprsc/web
 opt/aprsc/logs
+etc/apparmor.d

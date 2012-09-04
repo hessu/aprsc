@@ -60,15 +60,8 @@ case "$1" in
 	fi
 	;;
   reload)
-	#
-	#	If the daemon can reload its config files on the fly
-	#	for example by sending it SIGHUP, do it here.
-	#
-	#	If the daemon responds to changes in its config file
-	#	directly anyway, make this a do-nothing entry.
-	#
   	log_daemon_msg "Reloading $DESC configuration files" "aprsc"
-	if start-stop-daemon --stop --signal 1 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
+	if start-stop-daemon --stop --signal USR1 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -107,8 +100,7 @@ case "$1" in
 	;;
   *)
 	N=/etc/init.d/$NAME
-	# echo "Usage: $N {start|stop|restart|reload|force-reload}" >&2
-	echo "Usage: $N {start|stop|restart|force-reload}" >&2
+	echo "Usage: $N {start|stop|restart|reload|force-reload}" >&2
 	exit 1
 	;;
 esac

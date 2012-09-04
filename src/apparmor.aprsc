@@ -1,0 +1,17 @@
+#include <tunables/global>
+
+/opt/aprsc/sbin/aprsc {
+  #include <abstractions/base>
+  #include <abstractions/nameservice>
+
+
+  capability setgid,
+  capability setuid,
+  capability sys_chroot,
+
+
+  /opt/aprsc/etc/* r,
+  /opt/aprsc/web/* r,
+  owner /opt/aprsc/logs/aprsc.* rwk,
+  owner /opt/aprsc/data/* rwk,
+}

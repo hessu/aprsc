@@ -53,6 +53,7 @@ install: build
 
 	# Add here commands to install the package into debian/apsc.
 	$(MAKE) DESTDIR=$(CURDIR)/debian/aprsc install
+	install -m 644 apparmor.aprsc $(CURDIR)/debian/aprsc/etc/apparmor.d/opt.aprsc.sbin.aprsc
 
 # Build architecture-independent files here.
 binary-indep: build install

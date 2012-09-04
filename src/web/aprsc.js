@@ -267,17 +267,14 @@ var linkable = {
 
 function render_clients(element, d, cols)
 {
-	$(element).empty();
-	
 	var s = '<tr>';
 	for (var k in cols) {
 		s += '<th>' + htmlent(cols[k]) + '</th>';
 	}
 	s += '</tr>';
-	$(element).append(s);
 	
 	for (var ci in d) {
-		s = '<tr>';
+		s += '<tr>';
 		var c = d[ci];
 		
 		if (c['udp_downstream']) { 
@@ -307,15 +304,17 @@ function render_clients(element, d, cols)
 		}
 		
 		s += '</tr>';
-		$(element).append(s);
 	}
+	
+	$(element).html(s);
+	return;
 }
 
 var graph_selected = '';
 
 function render_block(graph_tree, element, d)
 {
-	$(element).empty();
+	var s = '';
 	
 	for (var k in d) {
 		if (!key_translate[k])
@@ -338,11 +337,13 @@ function render_block(graph_tree, element, d)
 		if (graph_tree) {
 			var id = graph_tree + '.' + k;
 			var cl = (graph_selected == id) ? 'grtd grtd_sel' : 'grtd';
-			$(element).append('<tr><td class="' + cl + '" id="' + id.replace('.', '_') + '" onclick="gr_switch(\'' + id + '\')">' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
+			s += '<tr><td class="' + cl + '" id="' + id.replace('.', '_') + '" onclick="gr_switch(\'' + id + '\')">' + htmlent(key_translate[k]) + '</td>' + o + '</tr>';
 		} else {
-			$(element).append('<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>');
+			s += '<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>';
 		}
 	}
+	
+	$(element).html(s);
 }
 
 var mem_rows = {
@@ -370,8 +371,6 @@ var mem_cols = {
 
 function render_memory(element, d)
 {
-	$(element).empty();
-	
 	var s = '<tr>';
 	for (var k in mem_cols) {
 		s += '<th>' + htmlent(mem_cols[k]) + '</th>';
@@ -395,7 +394,8 @@ function render_memory(element, d)
 		}
 		s += '</tr>';
 	}
-	$(element).append(s);
+	
+	$(element).html(s);
 }
 
 var t_now;

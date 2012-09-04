@@ -290,7 +290,10 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
 	int i;
 	
 	/* TODO: hm, could maybe lock a bit later, just before adding to the udpclient list? */
-	i = pthread_mutex_lock(& udpclient_mutex );
+	if ((i = pthread_mutex_lock(& udpclient_mutex ))) {
+		hlog(LOG_ERR, "client_udp_alloc: could not lock udpclient_mutex: %s", strerror(i));
+		return NULL;
+	}
 
 	c = hmalloc(sizeof(*c));
 	c->configured = 1;
@@ -308,7 +311,8 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
 	
 	//hlog(LOG_DEBUG, "client_udp_alloc %u port %d refcount now: %d", c, c->portnum, c->refcount);
 
-	i = pthread_mutex_unlock(& udpclient_mutex );
+	if ((i = pthread_mutex_unlock(& udpclient_mutex )))
+		hlog(LOG_ERR, "client_udp_alloc: could not lock udpclient_mutex: %s", strerror(i));
 
 	return c;
 }

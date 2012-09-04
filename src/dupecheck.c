@@ -277,23 +277,6 @@ static void dupecheck_cleanup(void)
 }
 
 /*
- *	signal handler
- */
- 
-static int dupecheck_sighandler(int signum)
-{
-	switch (signum) {
-		
-	default:
-		hlog(LOG_WARNING, "* SIG %d ignored", signum);
-		break;
-	}
-	
-	signal(signum, (void *)dupecheck_sighandler);	/* restore handler */
-	return 0;
-}
-
-/*
  *	check a single packet for duplicates
  */
 

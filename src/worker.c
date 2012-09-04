@@ -587,23 +587,6 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 }
 
 /*
- *	signal handler
- */
- 
-static int worker_sighandler(int signum)
-{
-	switch (signum) {
-		
-	default:
-		hlog(LOG_WARNING, "* SIG %d ignored", signum);
-		break;
-	}
-	
-	signal(signum, (void *)worker_sighandler);	/* restore handler */
-	return 0;
-}
-
-/*
  *	close and forget a client connection
  */
 

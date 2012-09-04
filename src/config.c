@@ -21,6 +21,7 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <sys/resource.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "hmalloc.h"
@@ -1164,7 +1165,7 @@ int read_config(void)
 		e = getrlimit(RLIMIT_NOFILE, &rlim);
 		fileno_limit = rlim.rlim_cur;
 		if (fileno_limit < new_fileno_limit)
-			hlog(LOG_WARNING, "Configuration could not raise FileLimit (possibly not running as root), it is now %d", fileno_limit);
+			hlog(LOG_WARNING, "Configuration could not raise FileLimit%s, it is now %d", (getuid() != 0) ? " (not running as root)" : "", fileno_limit);
 		else
 			hlog(LOG_INFO, "After configuration FileLimit is %d", fileno_limit);
 	}

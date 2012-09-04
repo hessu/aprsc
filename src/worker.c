@@ -113,11 +113,17 @@ static void port_accounter_reject(struct portaccount_t *p)
 	int i;
 	if (!p) return;
 
-	i = pthread_mutex_lock( & p->mutex );
+	if ((i = pthread_mutex_lock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_reject: could not lock portaccount: %s", strerror(i));
+		return;
+	}
 
 	++ p->counter;
 	
-	i = pthread_mutex_unlock( & p->mutex );
+	if ((i = pthread_mutex_unlock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_reject: could not unlock portaccount: %s", strerror(i));
+		return;
+	}
 }
 
 static void port_accounter_add(struct portaccount_t *p)
@@ -125,7 +131,10 @@ static void port_accounter_add(struct portaccount_t *p)
 	int i, r;
 	if (!p) return;
 
-	i = pthread_mutex_lock( & p->mutex );
+	if ((i = pthread_mutex_lock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_add: could not lock portaccount: %s", strerror(i));
+		return;
+	}
 
 	++ p->refcount;
 	++ p->counter;
@@ -136,8 +145,10 @@ static void port_accounter_add(struct portaccount_t *p)
 	
 	r = p->refcount;
 	
-	i = pthread_mutex_unlock( & p->mutex );
-
+	if ((i = pthread_mutex_unlock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_add: could not unlock portaccount: %s", strerror(i));
+		return;
+	}
 }
 
 void port_accounter_drop(struct portaccount_t *p)
@@ -145,14 +156,20 @@ void port_accounter_drop(struct portaccount_t *p)
 	int i, r;
 	if (!p) return;
 
-	i = pthread_mutex_lock( & p->mutex );
+	if ((i = pthread_mutex_lock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_drop: could not lock portaccount: %s", strerror(i));
+		return;
+	}
 
 	-- p->refcount;
 	-- p->gauge;
 
 	r = p->refcount;
 
-	i = pthread_mutex_unlock( & p->mutex );
+	if ((i = pthread_mutex_unlock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_drop: could not unlock portaccount: %s", strerror(i));
+		return;
+	}
 
 	// hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
 
@@ -170,8 +187,11 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 {	/* add == 2/3  --> UDP "client" socket drop/add, -1 --> rejected connect */
 	int i;
 	if (add < 2) {
-		i = pthread_mutex_lock(& inbound_connects.mutex );
-
+		if ((i = pthread_mutex_lock(& inbound_connects.mutex ))) {
+			hlog(LOG_ERR, "inbound_connects_account: could not lock inbound_connects: %s", strerror(i));
+			return;
+		}
+		
 		if (add == -1) {
 			/* just increment connects, it was discarded */
 			++ inbound_connects.counter;
@@ -184,7 +204,8 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 			-- inbound_connects.gauge;
 		}
 
-		i = pthread_mutex_unlock(& inbound_connects.mutex );
+		if ((i = pthread_mutex_unlock(& inbound_connects.mutex )))
+			hlog(LOG_ERR, "inbound_connects_account: could not unlock inbound_connects: %s", strerror(i));
 	}
 	
 	if ( p ) {
@@ -209,8 +230,11 @@ void client_udp_free(struct client_udp_t *u)
 
 	if (!u) return;
 
-	i = pthread_mutex_lock(& udpclient_mutex );
-
+	if ((i = pthread_mutex_lock(& udpclient_mutex ))) {
+		hlog(LOG_ERR, "client_udp_free: could not lock udpclient_mutex: %s", strerror(i));
+		return;
+	}
+	
 	-- u->refcount;
 
 	if (u)
@@ -229,7 +253,8 @@ void client_udp_free(struct client_udp_t *u)
 		hfree(u);
 	}
 
-	i = pthread_mutex_unlock(& udpclient_mutex );
+	if ((i = pthread_mutex_unlock(& udpclient_mutex )))
+		hlog(LOG_ERR, "client_udp_free: could not unlock udpclient_mutex: %s", strerror(i));
 }
 
 struct client_udp_t *client_udp_find(struct client_udp_t *root, const int af, const int portnum)
@@ -237,7 +262,10 @@ struct client_udp_t *client_udp_find(struct client_udp_t *root, const int af, co
 	struct client_udp_t *u;
 	int i;
 
-	i = pthread_mutex_lock(& udpclient_mutex );
+	if ((i = pthread_mutex_lock(& udpclient_mutex ))) {
+		hlog(LOG_ERR, "client_udp_find: could not lock udpclient_mutex: %s", strerror(i));
+		return NULL;
+	}
 
 	for (u = root ; u ; u = u->next ) {
 		if (u->portnum == portnum && u->af == af) {
@@ -249,7 +277,8 @@ struct client_udp_t *client_udp_find(struct client_udp_t *root, const int af, co
 	//if (u)
 	//	hlog(LOG_DEBUG, "client_udp_find %u port %d refcount now: %d", u, u->portnum, u->refcount);
 
-	i = pthread_mutex_unlock(& udpclient_mutex );
+	if ((i = pthread_mutex_unlock(& udpclient_mutex )))
+		hlog(LOG_ERR, "client_udp_find: could not unlock udpclient_mutex: %s", strerror(i));
 
 	return u;
 }

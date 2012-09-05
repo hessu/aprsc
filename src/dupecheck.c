@@ -417,7 +417,7 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	//     c, w->id, dupecheck_seqnum);
 	
 	for (pb = pb_list; (pb); pb = pbnext) {
-		if (pb->t > tick) {
+		if (pb->t > tick + 1) {
 			hlog(LOG_ERR, "dupecheck: drain got packet from future %d with t %d > tick %d, worker %d!\n%*s",
 				pb->seqnum, pb->t, tick, w->id, pb->packet_len-2, pb->data);
 		} else if (tick - pb->t > 10) {

@@ -136,6 +136,8 @@ function conv_none(s)
 	return s;
 }
 
+var listeners_table, uplinks_table, peers_table, clients_table, memory_table, dupecheck_table, totals_table;
+
 var key_translate = {
 	// server block
 	'server_id': 'Server ID',
@@ -267,7 +269,7 @@ var linkable = {
 
 function render_clients(element, d, cols)
 {
-	var s = '<tr>';
+	var s = '<table><tr>';
 	for (var k in cols) {
 		s += '<th>' + htmlent(cols[k]) + '</th>';
 	}
@@ -305,8 +307,9 @@ function render_clients(element, d, cols)
 		
 		s += '</tr>';
 	}
+	s += '</table>';
 	
-	$(element).html(s);
+	element.html(s);
 	return;
 }
 
@@ -314,7 +317,7 @@ var graph_selected = '';
 
 function render_block(graph_tree, element, d)
 {
-	var s = '';
+	var s = '<table>';
 	
 	for (var k in d) {
 		if (!key_translate[k])
@@ -342,8 +345,10 @@ function render_block(graph_tree, element, d)
 			s += '<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>';
 		}
 	}
+	s += '</table>';
 	
-	$(element).html(s);
+	element.html(s);
+	return;
 }
 
 var mem_rows = {
@@ -434,6 +439,12 @@ function calc_rate(key, value, no_s)
 	return [ value, rate ];
 }
 
+var totals_keys = [
+	'clients', 'connects',
+	'tcp_bytes_tx', 'tcp_bytes_rx', 'tcp_pkts_tx', 'tcp_pkts_rx',
+	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx'
+];
+
 function render(d)
 {
 	if (d['server'] && d['server']['t_now']) {
@@ -450,7 +461,7 @@ function render(d)
 		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
 			s['software'] = s['software'] + ' ' + s['software_version'];
 			
-		render_block(0, '#server', s);
+		render_block(0, server_table, s);
 	} else {
 		return;
 	}
@@ -461,47 +472,71 @@ function render(d)
 		var u = d['dupecheck'];
 		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
 		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
-		render_block('dupecheck', '#dupecheck', u);
+		render_block('dupecheck', dupecheck_table, u);
 	}
 	
 	if (d['totals']) {
 		var u = d['totals'];
-		var ks = ['clients', 'connects',
-			'tcp_bytes_tx', 'tcp_bytes_rx', 'tcp_pkts_tx', 'tcp_pkts_rx',
-			'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx'
-			];
-		for (var i in ks) {
-			u[ks[i]] = calc_rate('totals.' + ks[i], u[ks[i]]);
+		for (var i in totals_keys) {
+			u[totals_keys[i]] = calc_rate('totals.' + totals_keys[i], u[totals_keys[i]]);
 		}
-		render_block('totals', '#totals', u);
+		render_block('totals', totals_table, u);
 	}
 	
 	if (d['listeners'])
-		render_clients('#listeners', d['listeners'], listener_cols);
+		render_clients(listeners_table, d['listeners'], listener_cols);
 		
 	if (d['uplinks'] && d['uplinks'].length > 0) {
-		render_clients('#uplinks', d['uplinks'], uplink_cols);
+		render_clients(uplinks_table, d['uplinks'], uplink_cols);
 		$('#uplinks_d').show();
 	} else {
 		$('#uplinks_d').hide();
 	}
 	
 	if (d['peers'] && d['peers'].length > 0) {
-		render_clients('#peers', d['peers'], peer_cols);
+		render_clients(peers_table, d['peers'], peer_cols);
 		$('#peers_d').show();
 	} else {
 		$('#peers_d').hide();
 	}
 		
 	if (d['clients'])
-		render_clients('#clients', d['clients'], client_cols);
+		render_clients(clients_table, d['clients'], client_cols);
 		
 	if (d['memory'])
-		render_memory('#memory', d['memory']);
+		render_memory(memory_table, d['memory']);
+}
+
+
+var next_req_timer;
+
+function schedule_update()
+{
+	if (next_req_timer)
+		clearTimeout(next_req_timer);
+		
+	next_req_timer = setTimeout(update_status, 10000);
+}
+
+function update_success(data)
+{
+	if (next_req_timer) {
+		clearTimeout(next_req_timer);
+		next_req_timer = 0;
+	}
+	
+	top_status();
+	render(data);
+	schedule_update();
 }
 
 function update_status()
 {
+	if (next_req_timer) {
+		clearTimeout(next_req_timer);
+		next_req_timer = 0;
+	}
+	
 	$.ajax({
 		url: '/status.json',
 		dataType: 'json',
@@ -521,25 +556,22 @@ function update_status()
 				
 			top_status('msg_e', msg);
 			
-			setTimeout(function() { update_status(); }, 10000);
+			schedule_update();
 		},
-		success: function(data) {
-			top_status();
-			render(data);
-			setTimeout(function() { update_status(); }, 10000);
-		}
+		success: update_success
 	});
 }
 
 function graph_fill(cdata, opts)
 {
 	var vals = cdata['values'];
+	var vl = vals.length;
 	if (opts['div']) {
 		var div = opts['div'];
-		for (var i = 0; i < vals.length; i++)
+		for (var i = 0; i < vl; i++)
 			vals[i][1] = vals[i][1] / div;
 	}
-	for (var i = 0; i < vals.length; i++)
+	for (var i = 0; i < vl; i++)
 		vals[i][0] = vals[i][0] * 1000;
 		
 	var _d = [ { label: opts['label'], data: vals } ];
@@ -580,17 +612,35 @@ var graphs = {
 
 var graph_timer;
 
-function load_graph(k)
+function load_graph_success(data)
 {
-	var d = graphs[k];
+	top_status();
+	var d = graphs[this.k];
+	graph_fill(data, d);
+	graph_timer = setTimeout(load_graph, 60000);
+}
+
+function load_graph_error(jqXHR, stat, errorThrown)
+{
+	var msg = 'Graph data download failed (' + stat + '). Server or network down?';
+	
+	if (errorThrown)
+		msg += '<br />HTTP error: ' + htmlent(errorThrown);
+	
+	top_status('msg_e', msg);
+	
+	graph_timer = setTimeout(load_graph, 60000);
+}
+
+function load_graph()
+{
+	var k = graph_selected;
 	
 	if (graph_timer) { 
 		clearTimeout(graph_timer);
 		graph_timer = 0;
 	}
-		
 	
-	graph_selected = k;
 	$('.grtd').removeClass('grtd_sel');
 	$('#' + k.replace('.', '_')).addClass('grtd_sel');
 	
@@ -598,31 +648,31 @@ function load_graph(k)
 		url: '/counterdata?' + k,
 		dataType: 'json',
 		timeout: 5000,
-		success: function(data) {
-			top_status();
-			graph_fill(data, d);
-			graph_timer = setTimeout(function() { load_graph(graph_selected); }, 60000);
-		},
-		error: function(jqXHR, stat, errorThrown) {
-			msg = 'Graph data download failed (' + stat + '). Server or network down?';
-			
-			if (errorThrown)
-				msg += '<br />HTTP error: ' + htmlent(errorThrown);
-				
-			top_status('msg_e', msg);
-			graph_timer = setTimeout(function() { load_graph(graph_selected); }, 60000);
-		}
+		context: { 'k': k },
+		success: load_graph_success,
+		error: load_graph_error
 	});
 }
 
 function gr_switch(id)
 {
-	load_graph(id);
+	graph_selected = id;
+	load_graph();
 }
 
-function init_graph()
+function init()
 {
-	load_graph('totals.tcp_bytes_rx');
+	listeners_table = $('#listeners');
+	uplinks_table = $('#uplinks');
+	peers_table = $('#peers');
+	clients_table = $('#clients');
+	memory_table = $('#memory');
+	dupecheck_table = $('#dupecheck');
+	totals_table = $('#totals');
+	server_table = $('#server');
+	
+	update_status();
+	gr_switch('totals.tcp_bytes_rx');
 }
 
 //-->

@@ -16,43 +16,40 @@
 <div id='status'></div>
 
 <h3>Server</h3>
-<table id='server'></table>
+<div id='server'></div>
 
 <h3>Totals</h3>
 <div style='float: right; clear: right; height: 230px; width: 600px;' id='graph'></div> 
-<table id='totals'></table>
+<div id='totals'></div>
 
 <h3>Duplicate filter</h3>
-<table id='dupecheck'></table>
+<div id='dupecheck'></div>
 
 <h3>Port listeners</h3>
-<table id='listeners'></table>
+<div id='listeners'></div>
 
 <div id='uplinks_d'>
 <h3>Uplinks</h3>
-<table id='uplinks'></table>
+<div id='uplinks'></div>
 </div>
 
 <div id='peers_d'>
 <h3>Peers</h3>
-<table id='peers'></table>
+<div id='peers'></div>
 </div>
 
 <h3>Clients</h3>
-<table id='clients'></table>
+<div id='clients'></div>
 
 <h3>Memory</h3>
-<table id='memory'></table>
+<div id='memory'></div>
 
 <!-- script type="text/JavaScript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js"></script -->
 <script type="text/JavaScript" src="http://code.jquery.com/jquery-1.8.1.min.js"></script>
 <!--[if lte IE 8]><script type="text/JavaScript" src="excanvas.min.js"></script><![endif]-->
 <script type="text/JavaScript" src="jquery.flot.min.js"></script>
 <script type="text/JavaScript" src="aprsc.js"></script>
-<script type="text/JavaScript">
-update_status();
-init_graph();
-</script>
+<script type="text/JavaScript">$(document).ready(function(){init();});;</script>
 
 </body>
 </html>

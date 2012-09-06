@@ -630,7 +630,7 @@ int main(int argc, char **argv)
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);
-	hlog(LOG_NOTICE, "Starting up, instance id %s ...", instance_id);
+	hlog(LOG_NOTICE, "Starting up version %s, instance id %s ...", version_build, instance_id);
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);

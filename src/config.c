@@ -586,7 +586,6 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 {
 	struct uplink_config_t *l;
 	int i, port;
-	struct addrinfo req, *ai;
 	int clflags = CLFLAGS_UPLINKPORT;
 
 	if (argc < 5)
@@ -605,22 +604,11 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 		return -2;
 	}
 
-	memset(&req, 0, sizeof(req));
-	req.ai_family   = 0;
-	req.ai_socktype = SOCK_STREAM;
-	req.ai_protocol = IPPROTO_TCP;
-	req.ai_flags    = 0;
-	ai = NULL;
-
 	if (strcasecmp(argv[3], "tcp") == 0) {
 		// well, do nothing for now.
 	} else if (strcasecmp(argv[3], "udp") == 0) {
-		req.ai_socktype = SOCK_DGRAM;
-		req.ai_protocol = IPPROTO_UDP;
 #if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
 	} else if (strcasecmp(argv[3], "sctp") == 0) {
-		req.ai_socktype = SOCK_SEQPACKET;
-		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
 		hlog(LOG_ERR, "Uplink: Unsupported protocol '%s'", argv[3]);
@@ -633,20 +621,12 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 		return -2;
 	}
 
-#if 0
-	/* For uplinks, we don't really wish to do the lookup at this point
+	/* For uplinks, we don't really wish to do a DNS lookup at this point
 	 * - we do it when connecting, the address might have changed at that
 	 * point. Also, the lookup might slow up the startup considerably if
-	 * servers time out.
+	 * servers time out. And if the network comes up later than aprsc
+	 * after a power failure, we must not ignore the uplink configs now.
 	 */
-	i = getaddrinfo(argv[4], argv[5], &req, &ai);
-	if (i != 0) {
-		hlog(LOG_INFO,"Uplink: address resolving failure of '%s' '%s'",argv[4],argv[5]);
-		/* But do continue, this is perhaps a temporary glitch ? */
-	}
-	if (ai)
-		freeaddrinfo(ai);
-#endif
 
 	l = hmalloc(sizeof(*l));
 	memset(l, 0, sizeof(*l));
@@ -701,7 +681,7 @@ int do_uplinkbind(void *new, int argc, char **argv)
 		
 		ai = NULL;
 		d = getaddrinfo(argv[i], "0", &req, &ai);
-		if (d != 0) {
+		if (d != 0 || !(ai)) {
 			hlog(LOG_ERR, "UplinkBind: address parsing or hostname lookup failure for %s: %s", argv[i], gai_strerror(d));
 			return -2;
 		}

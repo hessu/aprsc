@@ -22,6 +22,7 @@
 #include <ctype.h>
 #include <sys/resource.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "config.h"
 #include "hmalloc.h"
@@ -1137,12 +1138,13 @@ int read_config(void)
 
 	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
 		/* Adjust process global fileno limit */
-		int e;
 		struct rlimit rlim;
-		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		if (getrlimit(RLIMIT_NOFILE, &rlim) < 0)
+			hlog(LOG_WARNING, "Configuration: getrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
 		rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
-		e = setrlimit(RLIMIT_NOFILE, &rlim);
-		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		if (setrlimit(RLIMIT_NOFILE, &rlim) < 0)
+			hlog(LOG_WARNING, "Configuration: setrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
+		getrlimit(RLIMIT_NOFILE, &rlim);
 		fileno_limit = rlim.rlim_cur;
 		if (fileno_limit < new_fileno_limit)
 			hlog(LOG_WARNING, "Configuration could not raise FileLimit%s, it is now %d", (getuid() != 0) ? " (not running as root)" : "", fileno_limit);

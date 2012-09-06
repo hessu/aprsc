@@ -1907,13 +1907,10 @@ static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct fi
 	struct filter_refcallsign_t ref;
 	int i;
 
-	const char *s;
-
 	if ( (pb->packettype & (T_OBJECT|T_ITEM)) == 0 ) /* not an Object NOR Item */
 		return 0;
 
 	/* parse_aprs() has picked item/object name pointer and length.. */
-	s = pb->srcname;
 	i = pb->srcname_len;
 	if (i < 1) return 0; /* Bad object/item name */
 

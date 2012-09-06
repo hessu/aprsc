@@ -297,8 +297,6 @@ int make_uplink(struct uplink_config_t *l)
 	struct addrinfo req;
 	char *addr_s = NULL;
 	int port;
-	int pe;
-	struct worker_t *wc;
 	struct sockaddr *srcaddr;
 	socklen_t srcaddr_len;
 
@@ -553,26 +551,10 @@ int make_uplink(struct uplink_config_t *l)
 	
 	/* Push it on the first worker, which ever it is..
 	 */
+	
+	if (pass_client_to_worker(worker_threads, c))
+		goto err;
 
-	wc = worker_threads;
-	
-	hlog(LOG_DEBUG, "Uplink %s: ... passing to worker thread %d with %d users", l->name, wc->id, wc->client_count);
-	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "make_uplink(): could not lock new_clients_mutex: %s", strerror(pe));
-		goto err;
-	}
-	/* push the client in the worker's queue */
-	c->next = wc->new_clients;
-	c->prevp = &wc->new_clients;
-	if (c->next)
-		c->next->prevp = &c->next;
-	wc->new_clients = c;
-	/* unlock the queue */
-	if ((pe = pthread_mutex_unlock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "make_uplink(): could not unlock new_clients_mutex: %s", strerror(pe));
-		goto err;
-	}
-	
 	++ uplink_connects.gauge;
 	++ uplink_connects.counter;
 	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */

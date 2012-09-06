@@ -443,6 +443,44 @@ struct client_t *pseudoclient_setup(int portnum)
 	return c;
 }
 
+/*
+ *	Pass a new client to a worker thread
+ */
+
+int pass_client_to_worker(struct worker_t *wc, struct client_t *c)
+{
+	int pe;
+	
+	hlog(LOG_DEBUG, "pass_client_to_worker: client on fd %d to thread %d with %d users", c->fd, wc->id, wc->client_count);
+
+	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
+		hlog(LOG_ERR, "pass_client_to_worker(): could not lock new_clients_mutex: %s", strerror(pe));
+		return -1;
+	}
+	
+	/* push the client in the worker's queue */
+	c->next = NULL;
+	
+	if (wc->new_clients_last) {
+		wc->new_clients_last->next = c;
+		c->prevp = &wc->new_clients_last->next;
+	} else {
+		wc->new_clients = c;
+		c->prevp = &wc->new_clients;
+	}
+	
+	wc->new_clients_last = c;
+	
+	/* unlock the queue */
+	if ((pe = pthread_mutex_unlock(&wc->new_clients_mutex))) {
+		hlog(LOG_ERR, "pass_client_to_worker(): could not unlock new_clients_mutex: %s", strerror(pe));
+		return -1;
+	}
+	
+	return 0;
+}
+
+
 char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 {
 	char eb[200], *s;

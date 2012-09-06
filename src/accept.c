@@ -130,43 +130,6 @@ static int accept_sighandler(int signum)
 #endif
 
 /*
- *	Pass a new client to a worker thread
- */
-
-static int accept_pass_client_to_worker(struct worker_t *wc, struct client_t *c)
-{
-	int pe;
-	
-	hlog(LOG_DEBUG, "... passing client to thread %d with %d users", wc->id, wc->client_count);
-
-	if ((pe = pthread_mutex_lock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "do_accept(): could not lock new_clients_mutex: %s", strerror(pe));
-		return -1;
-	}
-	
-	/* push the client in the worker's queue */
-	c->next = NULL;
-	
-	if (wc->new_clients_last) {
-		wc->new_clients_last->next = c;
-		c->prevp = &wc->new_clients_last->next;
-	} else {
-		wc->new_clients = c;
-		c->prevp = &wc->new_clients;
-	}
-	
-	wc->new_clients_last = c;
-	
-	/* unlock the queue */
-	if ((pe = pthread_mutex_unlock(&wc->new_clients_mutex))) {
-		hlog(LOG_ERR, "do_accept(): could not unlock new_clients_mutex: %s", strerror(pe));
-		return -1;
-	}
-	
-	return 0;
-}
-
-/*
  *	Open the TCP/SCTP listening socket
  */
 
@@ -429,7 +392,10 @@ static void peerip_clients_config(void)
 #endif
 
 		/* pass the client to the first worker thread */
-		accept_pass_client_to_worker(worker_threads, c);
+		if (pass_client_to_worker(worker_threads, c)) {
+			hlog(LOG_ERR, "Failed to pass UDP peer %s (%s) to worker", pe->name, pe->host);
+			client_free(c);
+		}
 	}
 }
 
@@ -450,7 +416,7 @@ static void peerip_clients_close(void)
 	c->fd = -2; // Magic FD to close them all
 	c->state = CSTATE_COREPEER;
 	sprintf(c->filter_s, "peerip_clients_close"); // debugging
-	accept_pass_client_to_worker(worker_threads, c);
+	pass_client_to_worker(worker_threads, c);
 }
 
 /*
@@ -755,7 +721,7 @@ static void do_accept(struct listen_t *l)
 #endif
 
 	/* ok, found it... lock the new client queue and pass the client */
-	if (accept_pass_client_to_worker(wc, c))
+	if (pass_client_to_worker(wc, c))
 		goto err;
 	
 	return;

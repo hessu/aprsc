@@ -703,6 +703,7 @@ int main(int argc, char **argv)
 			} else {
 				hlog(LOG_INFO, "New configuration read successfully. Applying....");
 				accept_reconfiguring = 1;
+				http_reconfiguring = 1;
 			}
 		}
 		

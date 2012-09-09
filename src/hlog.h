@@ -13,11 +13,11 @@
 
 #define LOG_LEN	2048
 
-#define L_STDERR        1	/* Log to stderror */
-#define L_SYSLOG        2	/* Log to syslog */
-#define L_FILE		3	/* Log to a file */
+#define L_STDERR        1		/* Log to stderror */
+#define L_SYSLOG        (1 << 1)	/* Log to syslog */
+#define L_FILE		(1 << 2)	/* Log to a file */
 
-#define L_DEFDEST	(L_STDERR)
+#define L_DEFDEST	L_STDERR
 
 #define LOG_LEVELS "emerg alert crit err warning notice info debug"
 #define LOG_DESTS "syslog stderr file"

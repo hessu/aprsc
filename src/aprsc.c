@@ -117,7 +117,7 @@ void parse_cmdline(int argc, char *argv[])
 		case 'o':
 			i = pick_loglevel(optarg, log_destnames);
 			if (i > -1)
-				log_dest = i;
+				log_dest = 1 << (i-1);
 			else {
 				fprintf(stderr, "Log destination unknown: \"%s\"\n", optarg);
 				failed = 1;
@@ -577,8 +577,6 @@ int main(int argc, char **argv)
 		int i;
 		close(0);
 		close(1);
-		if (log_dest != L_STDERR)
-			close(2);
 		for (i = 3; i < 100; i++)
 			close(i);
 	}
@@ -588,10 +586,6 @@ int main(int argc, char **argv)
 		hlog(LOG_ERR, "open(/dev/null) failed for stdin: %s", strerror(errno));
 	if (dup(0) == -1) /* stdout */
 		hlog(LOG_ERR, "dup(0) failed for stdout: %s", strerror(errno));
-	if (log_dest != L_STDERR) {
-		if (dup(0) == -1) /* stderr */
-			hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
-	}
 	
 	/* prepare for a possible chroot, force loading of
 	 * resolver libraries at this point, so that we don't
@@ -603,8 +597,8 @@ int main(int argc, char **argv)
 	/* do a chroot if required */
 	if (chrootdir) {
 		if ((!setuid_s) || pwbuf.pw_uid == 0) {
-			fprintf(stderr, "aprsc: chroot requested but no setuid to non-root user - insecure\n"
-				"configuration detected. Using -u <username> required.\n");
+			fprintf(stderr, "aprsc: chroot requested but not setuid to non-root user - insecure\n"
+				"configuration detected. Using -u <username> and start as root required.\n");
 			exit(1);
 		}
 		if (chdir(chrootdir) != 0) {
@@ -631,22 +625,35 @@ int main(int argc, char **argv)
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);
 	hlog(LOG_NOTICE, "Starting up version %s, instance id %s ...", version_build, instance_id);
+	
+	int orig_log_dest = log_dest;
+	log_dest |= L_STDERR;
+	
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);
+	}
+	
+	/* if we're not logging on stderr, we close the stderr FD after we have read configuration
+	 * and opened the log file or syslog - initial config errors should go to stderr.
+	 */
+	if (!(log_dest & L_STDERR)) {
+		close(2);
+		if (dup(0) == -1) /* stderr */
+			hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
 	}
 	
 	/* write pid file, now that we have our final pid... might fail, which is critical */
 	if (!writepid(pidfile))
 		exit(1);
 	
+	log_dest = orig_log_dest;
+	
 	/* catch signals */
 	signal(SIGINT, (void *)sighandler);
 	signal(SIGTERM, (void *)sighandler);
 	signal(SIGQUIT, (void *)sighandler);
 	signal(SIGHUP, (void *)sighandler);
-	/* ignore HUP for now, it's handling is buggy. */
-	//signal(SIGHUP, SIG_IGN);
 	signal(SIGUSR1, (void *)sighandler);
 	signal(SIGUSR2, (void *)sighandler);
 	signal(SIGPIPE, SIG_IGN);

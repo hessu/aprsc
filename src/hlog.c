@@ -279,22 +279,18 @@ int hlog(int priority, const char *fmt, ...)
 	vsnprintf(s, LOG_LEN, fmt, args);
 	va_end(args);
 
-#if 1
 	gettimeofday(&tv, NULL);
-#else
-	time(&tv.tv_sec);  //  tv.tv_sec = now   SHOULD BE ENOUGH
-	tv.tv_usec = 0;
-#endif
 	gmtime_r(&tv.tv_sec, &lt);
 	
-	if (log_dest == L_STDERR) {
+	if (log_dest & L_STDERR) {
 		rwl_rdlock(&log_file_lock);
 		fprintf(stderr, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			(log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
 		rwl_rdunlock(&log_file_lock);
 		
-	} else if ((log_dest == L_FILE) && (log_file >= 0)) {
+	}
+	if ((log_dest & L_FILE) && (log_file >= 0)) {
 		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			       (log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
@@ -311,7 +307,8 @@ int hlog(int priority, const char *fmt, ...)
 			}
 		}
 		
-	} else if (log_dest == L_SYSLOG) {
+	}
+	if (log_dest & L_SYSLOG) {
 		rwl_rdlock(&log_file_lock);
 		syslog(priority, "%s: %s", log_levelnames[priority], s);
 		rwl_rdunlock(&log_file_lock);

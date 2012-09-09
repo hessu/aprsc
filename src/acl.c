@@ -199,7 +199,7 @@ struct acl_t *acl_load(char *s)
 	int failed = 0;
 	int line = 0;
 	
-	hlog(LOG_DEBUG, "ACL: Loading ACL file \"%s\"", s);
+	//hlog(LOG_DEBUG, "ACL: Loading ACL file \"%s\"", s);
 	
 	fp = fopen(s, "r");
 	if (!fp) {

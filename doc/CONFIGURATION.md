@@ -193,16 +193,21 @@ for IPv6, 0.0.0.0 means "all addresses" for IPv4. On Linux, Solaris and OS X
 the :: IPv6 listener will also accept IPv4 connections happily, so you don't
 usually need a separate IPv4 listener.
 
+If you don't have a global IPv6 address (/sbin/ifconfig -a will not show an
+IPv6 address with Scope:Global), using :: will not work, and you'll have to
+use 0.0.0.0. The libevent2 http server which does HTTP address configuration
+works like this.
+
 The status page HTTP service is configured using HTTPStatus. Here's a
 configuration example for the APRS-IS standard status port 14501:
 
-    HTTPStatus :: 14501
+    HTTPStatus 0.0.0.0 14501
 
 The HTTP position upload service is configured using the HTTPUpload
 directive. Here's an example for the APRS-IS standard position submission
 port 8080:
 
-    HTTPUpload :: 8080
+    HTTPUpload 0.0.0.0 8080
 
 Multiple HTTPStatus and HTTPUpload directives can be entered to listen on
 multiple addresses or ports:

@@ -247,6 +247,7 @@ static void dbdump_all(void)
 struct passwd pwbuf;
 char *pw_buf_s;
 
+/* Look up the target UID/GID from passwd/group */
 static void find_uid(const char *uid_s)
 {
 	struct passwd *pwbufp;
@@ -275,7 +276,31 @@ static void find_uid(const char *uid_s)
 	}
 }
 
-static void set_uid(const char *uid_s)
+/* set effective UID, for startup time */
+static void set_euid(void)
+{
+	if (setegid(pwbuf.pw_gid)) {
+		fprintf(stderr, "aprsc: Failed to set effective GID %d: %s\n", pwbuf.pw_gid, strerror(errno));
+		exit(1);
+	}
+	
+	if (seteuid(pwbuf.pw_uid)) {
+		fprintf(stderr, "aprsc: Failed to set effective UID %d: %s\n", pwbuf.pw_uid, strerror(errno));
+		exit(1);
+	}
+}
+
+/* switch back to uid 0 for post-config setup as root */
+static void set_euid_0(void)
+{
+	if (seteuid(0)) {
+		fprintf(stderr, "aprsc: Failed to set effective UID back to 0: %s\n", strerror(errno));
+		exit(1);
+	}
+}
+
+/* set real UID to non-root, cannot be reversed */
+static void set_uid(void)
 {
 	if (setgid(pwbuf.pw_gid)) {
 		fprintf(stderr, "aprsc: Failed to set GID %d: %s\n", pwbuf.pw_gid, strerror(errno));
@@ -533,12 +558,18 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	/* Adjust process global fileno limit */
+	/* Adjust process global fileno limit to match the maximum available
+	 * at this time
+	 */
 	e = getrlimit(RLIMIT_NOFILE, &rlim);
-	rlim.rlim_cur = rlim.rlim_max;
-	e = setrlimit(RLIMIT_NOFILE, &rlim);
-	e = getrlimit(RLIMIT_NOFILE, &rlim);
-	fileno_limit = rlim.rlim_cur;
+	if (e < 0) {
+		hlog(LOG_ERR, "Failed to get initial file number resource limit: %s", strerror(errno));
+	} else {
+		rlim.rlim_cur = rlim.rlim_max;
+		e = setrlimit(RLIMIT_NOFILE, &rlim);
+		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		fileno_limit = rlim.rlim_cur;
+	}
 
 	getitimer(ITIMER_PROF, &itv);
 	
@@ -615,12 +646,9 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	/* if setuid is needed, do so */
+	/* set effective UID to non-root before opening files */
 	if (setuid_s)
-		set_uid(setuid_s);
-	
-	/* check that we're not root - it would be insecure and really not required */
-	check_uid();
+		set_euid();
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);
@@ -633,6 +661,35 @@ int main(int argc, char **argv)
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);
 	}
+	
+	/* adjust file limits as requested, not after every reconfigure
+	 * but only at startup - we won't have root privileges available
+	 * later.
+	 */
+	if (setuid_s)
+		set_euid_0();
+		
+	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
+		/* Adjust process global fileno limit */
+		int e;
+		struct rlimit rlim;
+		if (getrlimit(RLIMIT_NOFILE, &rlim) < 0)
+			hlog(LOG_WARNING, "Configuration: getrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
+		rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
+		if (setrlimit(RLIMIT_NOFILE, &rlim) < 0)
+			hlog(LOG_WARNING, "Configuration: setrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
+		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		fileno_limit = rlim.rlim_cur;
+		if (fileno_limit < new_fileno_limit)
+			hlog(LOG_WARNING, "Configuration could not raise FileLimit%s, it is now %d", (getuid() != 0) ? " (not running as root)" : "", fileno_limit);
+	}
+	
+	/* if setuid is needed, do so */
+	if (setuid_s)
+		set_uid();
+	
+	/* check that we're not root - it would be insecure and really not required */
+	check_uid();
 	
 	/* if we're not logging on stderr, we close the stderr FD after we have read configuration
 	 * and opened the log file or syslog - initial config errors should go to stderr.
@@ -648,6 +705,8 @@ int main(int argc, char **argv)
 		exit(1);
 	
 	log_dest = orig_log_dest;
+	
+	hlog(LOG_INFO, "After configuration FileLimit is %d", fileno_limit);
 	
 	/* catch signals */
 	signal(SIGINT, (void *)sighandler);

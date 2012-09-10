@@ -46,6 +46,8 @@ extern int pbuf_global_dupe_expiration;
 extern int obuf_size;
 extern int ibuf_size;
 
+extern int new_fileno_limit;
+
 extern int lastposition_storetime;
 extern int dupefilter_storetime;
 extern int heard_list_storetime;

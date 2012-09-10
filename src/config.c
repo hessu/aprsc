@@ -466,7 +466,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	
 	af = my_ai->ai_family;
 	
-	hlog(LOG_DEBUG, "PeerGroup: configuring with local address %s (local port %d)", fullhost, localport);
+	//hlog(LOG_DEBUG, "PeerGroup: configuring with local address %s (local port %d)", fullhost, localport);
 	
 	/* Configure a listener */
 	li = hmalloc(sizeof(*li));
@@ -494,7 +494,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	
 	// TODO: when returning, should free the whole li tree
 	for (i = 4; i < argc; i++) {
-		hlog(LOG_DEBUG, "PeerGroup: configuring peer %s", argv[i]);
+		//hlog(LOG_DEBUG, "PeerGroup: configuring peer %s", argv[i]);
 		
 		/* Parse address */
 		fullhost = hstrdup(argv[i]);
@@ -1135,22 +1135,6 @@ int read_config(void)
 	}
 	if (uplink_config_failed)
 		free_uplink_config(&new_uplink_config);
-
-	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
-		/* Adjust process global fileno limit */
-		struct rlimit rlim;
-		if (getrlimit(RLIMIT_NOFILE, &rlim) < 0)
-			hlog(LOG_WARNING, "Configuration: getrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
-		rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
-		if (setrlimit(RLIMIT_NOFILE, &rlim) < 0)
-			hlog(LOG_WARNING, "Configuration: setrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
-		getrlimit(RLIMIT_NOFILE, &rlim);
-		fileno_limit = rlim.rlim_cur;
-		if (fileno_limit < new_fileno_limit)
-			hlog(LOG_WARNING, "Configuration could not raise FileLimit%s, it is now %d", (getuid() != 0) ? " (not running as root)" : "", fileno_limit);
-		else
-			hlog(LOG_INFO, "After configuration FileLimit is %d", fileno_limit);
-	}
 	
 	if (workers_configured < 1) {
 		hlog(LOG_WARNING, "Configured less than 1 worker threads. Using 1.");

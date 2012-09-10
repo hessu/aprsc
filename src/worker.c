@@ -128,7 +128,7 @@ static void port_accounter_reject(struct portaccount_t *p)
 
 static void port_accounter_add(struct portaccount_t *p)
 {
-	int i, r;
+	int i;
 	if (!p) return;
 
 	if ((i = pthread_mutex_lock(&p->mutex))) {
@@ -142,8 +142,6 @@ static void port_accounter_add(struct portaccount_t *p)
 	
 	if (p->gauge > p->gauge_max)
 		p->gauge_max = p->gauge;
-	
-	r = p->refcount;
 	
 	if ((i = pthread_mutex_unlock(&p->mutex))) {
 		hlog(LOG_ERR, "port_accounter_add: could not unlock portaccount: %s", strerror(i));

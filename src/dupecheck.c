@@ -402,14 +402,13 @@ static int dupecheck_drain_worker(struct worker_t *w,
         struct pbuf_t *pb_list;
 	struct pbuf_t *pb, *pbnext;
         int n = 0;
-        int c;
         
         /* grab worker's list of packets */
 	pthread_mutex_lock(&w->pbuf_incoming_mutex);
 	pb_list = w->pbuf_incoming;
 	w->pbuf_incoming = NULL;
 	w->pbuf_incoming_last = &w->pbuf_incoming;
-	c = w->pbuf_incoming_count;
+	//int c = w->pbuf_incoming_count;
 	w->pbuf_incoming_count = 0;
 	pthread_mutex_unlock(&w->pbuf_incoming_mutex);
 	

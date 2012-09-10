@@ -15,16 +15,16 @@ default when installing aprsc from a binary package.
  *  `-f` - fork to a daemon
  *  `-e info` - log at level info (can be changed to "debug" for more verbose
     logging)
- *  `-o file` - log to file (can be changed to "stderr" for supervisord and debugging, or "syslog"
-   for syslogd)
+ *  `-o file` - log to file (can be changed to "stderr" for supervisord
+    and debugging, or "syslog" for syslogd)
  *  `-r logs` - log file directory, log files are placed in /opt/aprsc/logs
  *  `-c etc/aprsc.conf` - configuration file location
 
-Since the daemon chroots to /opt/aprsc, all paths are relative to that
-directory and the daemon cannot access any files outside the chroot. The
-supplied startup script copies a couple of essential files from /etc top
-/opt/aprsc/etc so that DNS lookups work (hosts, resolv.conf, gai.conf,
-/nsswitch.conf).
+Since the daemon does a [chroot][chroot] to /opt/aprsc, all paths are
+relative to that directory and the daemon cannot access any files outside
+the chroot. The supplied startup script copies a couple of essential files
+from /etc to /opt/aprsc/etc so that DNS lookups work (hosts, resolv.conf,
+gai.conf, /nsswitch.conf).
 
 aprsc refuses to run as root, but it should be started to root so that it
 can do the chroot() dance and adjust resource limits as needed. When started
@@ -32,11 +32,29 @@ as root, it requires that the -u parameter is set to an unprivileged user.
 Right after the chroot() it switches to the specified user to reduce the
 damage potential. For security reasons it's a good idea to have a separate
 unprivileged user account for aprsc. The official binary aprsc packages
-automatically creates the aprsc user account and uses that in the
+automatically creates an "aprsc" user account and uses that in the
 configuration.
 
-aprsc can log to syslog too, but that'd require bringing the
+aprsc can log to syslog too, but that will require bringing the
 syslog socket within the chroot.
+
+[chroot]: http://en.wikipedia.org/wiki/Chroot
+
+
+Configuration file format
+----------------------------
+
+Comment lines starting with the hash/number sign "#" are ignored.
+
+String parameters containing spaces need to be enclosed in double quotes
+("). Actually, any parameters may be enclosed in double quotes, but they are
+unnecessary unless there are spaces in the parameter.
+
+C-style backslash escapes are supported. If a literal backslash (\\)
+character needs to be entered within a parameter, it must be escaped with
+another backslash (\\\\). The source MarkDown file of this document contains
+double backslashes so that the correct amount of backslashes will be shown
+when the file is rendered as HTML.
 
 
 Configuration file options in aprsc.conf
@@ -94,6 +112,7 @@ And here are the contestants:
 
     When no data is received from a downstream client in N seconds,
     disconnect.
+
 
 ### Port listeners ###
 
@@ -183,6 +202,7 @@ directives, one with an IPv4 address and another with the IPv6 one.
     UplinkBind 127.0.0.1
     UplinkBind dead:beef::15:f00d
 
+
 ### HTTP server ###
 
 aprsc can listen for HTTP requests on one or multiple TCP ports. Each HTTP
@@ -217,6 +237,7 @@ multiple addresses or ports:
     HTTPUpload ::1 8080
     HTTPUpload f00d::beef:bac0:ca1f 8080
 
+
 ### Environment ###
 
 When the server starts up as the super-user (root), it can increase some
@@ -231,6 +252,11 @@ limit.
 
     FileLimit 10000
 
+The FileLimit parameter cannot be adjusted by doing a reconfiguration after
+startup, changing it requires a full restart. aprsc drops root privileges
+after startup and cannot regain them later to adjust resource limits.
+
+
 ### Operator attention span qualification run ###
 
 The example configuration file contains an invalid configuration directive
@@ -241,6 +267,7 @@ some added thought, and cross-reference the configuration directives with
 this document.
 
 Think of this as the "brown M&M's test" by Van Halen, adapted for the APRS-IS.
+
 
 Access list (ACL) file format
 --------------------------------
@@ -273,8 +300,8 @@ connections are denied.
 
 If prefix length is not specified, a host rule is created (32 bits for IPv4,
 128 bits prefix length for IPv6). To configure a rule that matches all
-addresses, please specify a prefix length of 0 (::/0 for IPv6, 0.0.0.0/0 for
-IPv4).
+addresses you should specify a prefix length of 0 (::/0 for IPv6, 0.0.0.0/0
+for IPv4).
 
 ACL files are read and parsed when aprsc starts or reconfigures itself.
 However, reconfiguration is currently not working, so you'll need to

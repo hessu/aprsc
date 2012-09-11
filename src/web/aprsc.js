@@ -357,11 +357,12 @@ var mem_rows = {
 	'pbuf_large': 'Large pbufs',
 	'historydb': 'Position history',
 	'dupecheck': 'Dupecheck DB',
+	'client': 'Clients',
+	'client_heard': 'Client MsgRcpts',
+	'client_courtesy': 'Client CourtesySrcs',
 	'filter': 'Filter entries',
 	'filter_wx': 'Filter WX stations',
-	'filter_entrycall': 'Filter entrycalls',
-	'client_heard': 'Client MsgRcpts',
-	'client_courtesy': 'Client CourtesySrcs'
+	'filter_entrycall': 'Filter entrycalls'
 };
 
 var mem_cols = {

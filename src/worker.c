@@ -1766,6 +1766,22 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	cJSON_AddNumberToObject(totals, "tcp_pkts_tx", client_connects_tcp.txpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_rx", client_connects_udp.rxpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
+
+#ifndef _FOR_VALGRIND_
+	struct cellstatus_t cellst;
+	cellstatus(client_cells, &cellst);
+	int used = cellst.cellcount - cellst.freecount;
+	cJSON_AddNumberToObject(memory, "client_cells_used", used);
+	cJSON_AddNumberToObject(memory, "client_cells_free", cellst.freecount);
+	cJSON_AddNumberToObject(memory, "client_used_bytes", used*cellst.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "client_allocated_bytes", (long)cellst.blocks * (long)cellst.block_size);
+	cJSON_AddNumberToObject(memory, "client_block_size", (long)cellst.block_size);
+	cJSON_AddNumberToObject(memory, "client_blocks", (long)cellst.blocks);
+	cJSON_AddNumberToObject(memory, "client_blocks_max", (long)cellst.blocks_max);
+	cJSON_AddNumberToObject(memory, "client_cell_size", cellst.cellsize);
+	cJSON_AddNumberToObject(memory, "client_cell_size_aligned", cellst.cellsize_aligned);
+	cJSON_AddNumberToObject(memory, "client_cell_align", cellst.alignment);
+#endif
 	
 	return 0;
 }

@@ -230,7 +230,9 @@ make-deb:
 	if [ -f debian/changelog.release ] ; then \
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
 		  \$$ver =~ tr/0-9.//cd;	\
-		  \$$ver .= '+$(LINUXCODENAME)1';		\
+		  \$$cname = '$(LINUXCODENAME)';	\
+		  \$$cname =~ s/\///g;		\
+		  \$$ver .= \"+\$$cname\" . '1';	\
 		  s{\@VERSION\@}{\$$ver}g;	\
 		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
 		  print;"			\

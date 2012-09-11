@@ -8,10 +8,10 @@
   capability setgid,
   capability setuid,
   capability sys_chroot,
-
+  capability sys_resource,
 
   /opt/aprsc/etc/* r,
   /opt/aprsc/web/* r,
-  owner /opt/aprsc/logs/aprsc.* rwk,
+  /opt/aprsc/logs/aprsc.* rwk,
   owner /opt/aprsc/data/* rwk,
 }

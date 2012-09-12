@@ -1,0 +1,463 @@
+#!/usr/bin/perl
+#
+# Markers for munin's automagical configuration:
+#%# family=auto
+#%# capabilities=autoconf
+#
+=head1 NAME
+
+aprsc_munin - Munin plugin which monitors an aprsc server instance
+
+=head CONFIGURATION
+
+This plugin needs to be able to request http://localhost:14501/status.json.
+The URL can be changed in the configuration to point to another server URL.
+
+This configuration example shows the default settings for the plugin:
+
+  [aprsc_munin]
+     env.url   http://127.0.0.1:14501/status.json
+
+=head1 LICENSE
+
+BSD
+
+=cut
+
+use strict;
+use warnings;
+use File::Basename;
+use Data::Dumper;
+
+my $in_autoconf = (defined $ARGV[0] && $ARGV[0] eq "autoconf");
+my $in_config = (defined $ARGV[0] && $ARGV[0] eq "config");
+my $title_add;
+
+$title_add = $ENV{'title'} if (defined $ENV{'title'});
+
+# present fail message in the right format depending on mode
+sub fail($)
+{
+	my($s) = @_;
+	if ($in_autoconf) {
+		print "no ($s)\n";
+		exit(1);
+	}
+	
+	warn "aprsc_munin failed: $s\n";
+	exit(1);
+}
+
+# print a config set for a single graph
+sub print_config($$)
+{
+	my($graph, $gr) = @_;
+	
+	my $attrs = $gr->{'config_attrs'};
+	my $srcs = $gr->{'sources'};
+	my @order;
+	if (defined $gr->{'order'}) {
+		@order = @{ $gr->{'order'} };
+	} else {
+		@order = sort keys %{ $srcs };
+	}
+	
+	if (defined $title_add) {
+		$attrs->{'title'} = $title_add . " - " . $attrs->{'title'};
+	}
+	
+	foreach my $k (keys %{ $attrs }) {
+		printf("graph_%s %s\n", $k, $attrs->{$k});
+	}
+	
+	foreach my $src (@order) {
+		foreach my $k (keys %{ $srcs->{$src}->{'attrs'} }) {
+			printf("%s.%s %s\n", $src, $k, $srcs->{$src}->{'attrs'}->{$k});
+		}
+	}
+}
+
+# find a value by key from the JSON object
+sub find_val($$)
+{
+	my($needle, $j) = @_;
+	
+	my $r = $j;
+	foreach my $p (split('\.', $needle)) {
+		return 'U' if (ref($r) ne 'HASH' || !defined $r->{$p});
+		$r = $r->{$p};
+	}
+	
+	return 'U' if (ref($r) eq 'HASH');
+	return $r;
+}
+
+# print data values
+sub print_data($$$)
+{
+	my($graph, $gr, $j) = @_;
+	
+	my $srcs = $gr->{'sources'};
+	
+	foreach my $k (keys %{ $srcs }) {
+		my $val = find_val($srcs->{$k}->{'k'}, $j);
+		print "$k.value $val\n";
+	}
+}
+
+#
+##### main
+#
+
+# require some unusual modules
+if (!eval "require LWP::UserAgent;")
+{
+	fail("LWP::UserAgent not found");
+}
+
+if (!eval "require JSON::XS;")
+{
+	fail("JSON::XS not found");
+}
+
+# configuration
+my $status_url = defined $ENV{'url'} ? $ENV{'url'} : "http://127.0.0.1:14501/status.json";
+
+# definitions for graphs
+my $category = 'aprsc';
+my %graphs = (
+	'clients' => {
+		'config_attrs' => {
+			'title' => 'Clients allocated',
+			'vlabel' => 'clients + pseudoclients allocated',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'sources' => {
+			'clients_total' => {
+				'k' => 'totals.clients',
+				'attrs' => {
+					'label' => 'Total',
+					'min' => 0,
+					'type' => 'GAUGE',
+					'colour' => 'dd00ff'
+				}
+			}
+		}
+	},
+	'connects' => {
+		'config_attrs' => {
+			'title' => 'Connections',
+			'vlabel' => 'connections/s',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'sources' => {
+			'conns' => {
+				'k' => 'totals.connects',
+				'attrs' => {
+					'label' => 'Incoming connections',
+					'min' => 0,
+					'max' => 100000,
+					'type' => 'DERIVE',
+					'colour' => '25a7fd'
+				}
+			}
+		}
+	},
+	'dupecheck' => {
+		'config_attrs' => {
+			'title' => 'Dupechecked packets',
+			'vlabel' => 'packets/s',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'sources' => {
+			'uniq' => {
+				'k' => 'dupecheck.uniques_out',
+				'attrs' => {
+					'label' => 'Unique packets',
+					'min' => 0,
+					'type' => 'DERIVE'
+				}
+			},
+			'dup' => {
+				'k' => 'dupecheck.dupes_dropped',
+				'attrs' => {
+					'label' => 'Duplicates dropped',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'colour' => 'e47bfd'
+				}
+			}
+		}
+	},
+	'dpktstcp' => {
+		'config_attrs' => {
+			'title' => 'APRS packets over TCP',
+			'vlabel' => 'packets/s in (-) / out (+)',
+			'args' => '--base 1000',
+			'order' => 'rx tx',
+			'category' => $category,
+		},
+		'sources' => {
+			'rx' => {
+				'k' => 'totals.tcp_pkts_rx',
+				'attrs' => {
+					'label' => 'Packets RX',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'graph' => 'no',
+					'draw' => 'AREA',
+					'colour' => '16b5ff'
+				}
+			},
+			'tx' => {
+				'k' => 'totals.tcp_pkts_tx',
+				'attrs' => {
+					'label' => 'Packets',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'negative' => 'rx',
+					'draw' => 'AREA',
+					'colour' => 'fd745c'
+				}
+			},
+		}
+	},
+	'dpktsudp' => {
+		'config_attrs' => {
+			'title' => 'APRS packets over UDP',
+			'vlabel' => 'packets/s in (-) / out (+)',
+			'args' => '--base 1000',
+			'order' => 'rx tx',
+			'category' => $category,
+		},
+		'sources' => {
+			'rx' => {
+				'k' => 'totals.udp_pkts_rx',
+				'attrs' => {
+					'label' => 'Packets RX',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'graph' => 'no',
+					'draw' => 'AREA',
+					'colour' => '16b5ff'
+				}
+			},
+			'tx' => {
+				'k' => 'totals.udp_pkts_tx',
+				'attrs' => {
+					'label' => 'Packets',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'negative' => 'rx',
+					'draw' => 'AREA',
+					'colour' => 'fd745c'
+				}
+			},
+		}
+	},
+	'ddatatcp' => {
+		'config_attrs' => {
+			'title' => 'APRS data over TCP',
+			'vlabel' => 'bits/s in (-) / out (+)',
+			'args' => '--base 1000',
+			'order' => 'rx tx',
+			'category' => $category,
+		},
+		'sources' => {
+			'rx' => {
+				'k' => 'totals.tcp_bytes_rx',
+				'attrs' => {
+					'label' => 'Bits/s RX',
+					'min' => 0, 
+					'type' => 'DERIVE',
+					'graph' => 'no',
+					'cdef' => 'rx,8,*',
+					'draw' => 'AREA',
+					'colour' => '16b5ff'
+				}
+			},
+			'tx' => {
+				'k' => 'totals.tcp_bytes_tx',
+				'attrs' => {
+					'label' => 'Bits/s',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'negative' => 'rx',
+					'cdef' => 'tx,8,*',
+					'draw' => 'AREA',
+					'colour' => 'fd745c'
+				}
+			},
+		}
+	},
+	'ddataudp' => {
+		'config_attrs' => {
+			'title' => 'APRS data over UDP',
+			'vlabel' => 'bits/s in (-) / out (+)',
+			'args' => '--base 1000',
+			'order' => 'rx tx',
+			'category' => $category,
+		},
+		'sources' => {
+			'rx' => {
+				'k' => 'totals.udp_bytes_rx',
+				'attrs' => {
+					'label' => 'Bits/s RX',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'graph' => 'no',
+					'cdef' => 'rx,8,*',
+					'draw' => 'AREA',
+					'colour' => '16b5ff'
+				}
+			},
+			'tx' => {
+				'k' => 'totals.udp_bytes_tx',
+				'attrs' => {
+					'label' => 'Bits/s',
+					'min' => 0,
+					'type' => 'DERIVE',
+					'negative' => 'rx',
+					'cdef' => 'tx,8,*',
+					'draw' => 'AREA',
+					'colour' => 'fd745c'
+				}
+			},
+		}
+	},
+	'memcellu' => {
+		'config_attrs' => {
+			'title' => 'Memory cells used',
+			'vlabel' => 'cells',
+			'args' => '--base 1024',
+			'category' => $category,
+		},
+		'keytail' => 'cells_used',
+		'sources' => {
+		}
+	},
+	'memcellub' => {
+		'config_attrs' => {
+			'title' => 'Memory bytes used',
+			'vlabel' => 'bytes',
+			'args' => '--base 1024',
+			'category' => $category,
+		},
+		'keytail' => 'used_bytes',
+		'sources' => {
+		}
+	},
+	'memcelluba' => {
+		'config_attrs' => {
+			'title' => 'Memory bytes allocated',
+			'vlabel' => 'bytes',
+			'args' => '--base 1024',
+			'category' => $category,
+		},
+		'keytail' => 'allocated_bytes',
+		'sources' => {
+		}
+	},
+	'clientlist' => {
+		'config_attrs' => {
+			'title' => 'Clients per listener',
+			'vlabel' => 'clients connected',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'sources' => {
+		}
+	},
+);
+
+# initialize our hammers and fetch JSON from server
+my $json = new JSON::XS;
+my $ua = LWP::UserAgent->new(timeout => 5);
+my $res = $ua->request(HTTP::Request->new('GET', $status_url));
+
+if (!$res->is_success) {
+	# todo: print result error messages
+	fail("HTTP request to aprsc failed");
+}
+
+#print $res->content;
+
+# decode and validate
+my $j = $json->decode($res->content);
+
+if (!defined $j) {
+	fail("JSON parsing of status object failed");
+}
+
+# if we're just checking if this doable, say so
+if ($in_autoconf) {
+	print "yes\n";
+	exit(0);
+}
+
+my $graph = basename($0);
+$graph =~ s/.*_//;
+
+if (!defined $graphs{$graph}) {
+	fail("No such graph available: $graph");
+}
+my $gr = $graphs{$graph};
+
+# for memcell graphs, get a dynamic list of sources
+if ($graph =~ /^memcell/) {
+	my @ord;
+	foreach my $k (sort grep(/cells_used$/, keys %{ $j->{'memory'} })) {
+		$k =~ s/_cells_used$//;
+		push @ord, $k;
+		$gr->{'sources'}->{$k} = {
+			'k' => 'memory.' . $k . '_' . $gr->{'keytail'},
+			'attrs' => {
+				'label' => $k,
+				'min' => 0,
+				'type' => 'GAUGE',
+			}
+		};
+	}
+	$gr->{'order'} = \@ord;
+	
+} elsif ($graph =~ /^clientlist/) {
+	my @ord;
+	# convert array to hash
+	my $h = {};
+	foreach my $l (@{ $j->{'listeners'} }) {
+		my $k = sprintf("%s_%s", $l->{'proto'}, $l->{'addr'});
+		$k =~ s/[^\w]/_/g;
+		$h->{$k} = $l;
+	}
+	$j->{'listeners'} = $h;
+	my $draw = 'AREA';
+	foreach my $k (sort { $j->{'listeners'}->{$a}->{'clients'} <=> $j->{'listeners'}->{$b}->{'clients'} } keys %{ $j->{'listeners'} }) {
+		next if ($j->{'listeners'}->{$k}->{'proto'} eq 'udp');
+		push @ord, $k;
+		$gr->{'sources'}->{$k} = {
+			'k' => 'listeners.' . $k . '.clients',
+			'attrs' => {
+				'label' => $j->{'listeners'}->{$k}->{'proto'} . '/' . $j->{'listeners'}->{$k}->{'addr'},
+				'min' => 0,
+				'type' => 'GAUGE',
+				'draw' => $draw
+			}
+		};
+		$draw = 'STACK';
+	}
+	$gr->{'order'} = \@ord;
+}
+
+if ($in_config) {
+	# default title from the server's ServerId
+	$title_add = $j->{'server'}->{'server_id'} if (!defined $title_add && defined $j->{'server'});
+	print_config($graph, $gr);
+	exit(0);
+}
+
+print_data($graph, $gr, $j);
+
+exit(0);

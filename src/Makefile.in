@@ -182,6 +182,7 @@ install: all
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/data
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/web
 	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
+	$(INSTALL_PROGRAM) aprsc_munin $(DESTDIR)$(SBINDIR)/aprsc_munin
 	$(INSTALL_DATA) aprsc.8 $(DESTDIR)$(MANDIR)/man8/aprsc.8
 	$(INSTALL_DATA) web/*.css web/*.js web/index.html \
 		web/aprsc-logo2.png web/favicon.ico \

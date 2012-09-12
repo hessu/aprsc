@@ -13,7 +13,7 @@ Setting up the munin plugin
 
 Install dependencies:
 
-    apt-get install libcache-cache-perl libjson-xs-perl
+    apt-get install libwww-perl libjson-xs-perl
 
 
 Setting up nagios alarms

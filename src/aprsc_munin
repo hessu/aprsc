@@ -369,6 +369,33 @@ my %graphs = (
 			'args' => '--base 1000',
 			'category' => $category,
 		},
+		'keytail' => 'clients',
+		'type' => 'GAUGE',
+		'sources' => {
+		}
+	},
+	'clientx0pin' => {
+		'config_attrs' => {
+			'title' => 'Packets in per listener',
+			'vlabel' => 'packets/s',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'keytail' => 'pkts_rx',
+		'type' => 'DERIVE',
+		'sources' => {
+		}
+	},
+	'clientx0dout' => {
+		'config_attrs' => {
+			'title' => 'Data out per listener',
+			'vlabel' => 'bits/s',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'keytail' => 'bytes_tx',
+		'type' => 'DERIVE',
+		'cdef' => ',8,*',
 		'sources' => {
 		}
 	},
@@ -433,7 +460,7 @@ if ($graph =~ /^memcell/) {
 	}
 	$gr->{'order'} = \@ord;
 	
-} elsif ($graph =~ /^clientlist/) {
+} elsif ($graph =~ /^client(list|x)/) {
 	my @ord;
 	# convert array to hash
 	my $h = {};
@@ -448,14 +475,17 @@ if ($graph =~ /^memcell/) {
 		next if ($j->{'listeners'}->{$k}->{'proto'} eq 'udp');
 		push @ord, $k;
 		$gr->{'sources'}->{$k} = {
-			'k' => 'listeners.' . $k . '.clients',
+			'k' => 'listeners.' . $k . '.' . $gr->{'keytail'},
 			'attrs' => {
 				'label' => $j->{'listeners'}->{$k}->{'proto'} . '/' . $j->{'listeners'}->{$k}->{'addr'},
 				'min' => 0,
-				'type' => 'GAUGE',
+				'type' => $gr->{'type'},
 				'draw' => $draw
 			}
 		};
+		if ($gr->{'cdef'}) {
+			$gr->{'sources'}->{$k}->{'attrs'}->{'cdef'} = $k . $gr->{'cdef'};
+		}
 		$draw = 'STACK';
 	}
 	$gr->{'order'} = \@ord;

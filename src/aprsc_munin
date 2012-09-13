@@ -65,6 +65,7 @@ sub print_config($$)
 	
 	if (defined $title_add) {
 		$attrs->{'title'} = $title_add . " - " . $attrs->{'title'};
+		$attrs->{'category'} .= ' ' . $title_add;
 	}
 	
 	foreach my $k (keys %{ $attrs }) {
@@ -127,7 +128,7 @@ my $status_url = defined $ENV{'url'} ? $ENV{'url'} : "http://127.0.0.1:14501/sta
 # definitions for graphs
 my $category = 'aprsc';
 my %graphs = (
-	'clients' => {
+	'0clients' => {
 		'config_attrs' => {
 			'title' => 'Clients allocated',
 			'vlabel' => 'clients + pseudoclients allocated',
@@ -146,7 +147,7 @@ my %graphs = (
 			}
 		}
 	},
-	'connects' => {
+	'1connects' => {
 		'config_attrs' => {
 			'title' => 'Connections',
 			'vlabel' => 'connections/s',
@@ -472,7 +473,7 @@ if ($graph =~ /^memcell/) {
 	$j->{'listeners'} = $h;
 	my $draw = 'AREA';
 	foreach my $k (sort { $j->{'listeners'}->{$a}->{'clients'} <=> $j->{'listeners'}->{$b}->{'clients'} } keys %{ $j->{'listeners'} }) {
-		next if ($j->{'listeners'}->{$k}->{'proto'} eq 'udp');
+		next if ($graph eq 'clientlist' && $j->{'listeners'}->{$k}->{'proto'} eq 'udp');
 		push @ord, $k;
 		$gr->{'sources'}->{$k} = {
 			'k' => 'listeners.' . $k . '.' . $gr->{'keytail'},

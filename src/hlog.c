@@ -25,6 +25,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 #include <errno.h>
 
@@ -412,27 +413,42 @@ int accesslog(const char *fmt, ...)
 }
 
 /*
- *	Write my PID to file
- *	FIXME: add flock(TRY) to prevent multiple copies from running
+ *	Write my PID to file, after locking the pid file.
+ *	Leaves the file descriptor open so that the lock will be held
+ *	as long as the process is running.
  */
 
 int writepid(char *name)
 {
-	FILE *f;
+	int f;
+	char s[32];
+	int l;
 	
-	if (!(f = fopen(name, "w"))) {
+	if (!(f = open(name, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH))) {
 		hlog(LOG_CRIT, "Could not open %s for writing: %s",
 			name, strerror(errno));
 		return 0;
 	}
-	if (fprintf(f, "%ld\n", (long)getpid()) < 0) {
-		hlog(LOG_CRIT, "Could not write to %s: %s",
+	
+	if (flock(f, LOCK_EX|LOCK_NB) < 0) {
+		if (errno == EWOULDBLOCK) {
+			hlog(LOG_CRIT, "Could not lock pid file file %s, another process has a lock on it. Another process running - bailing out.", name);
+		} else {
+			hlog(LOG_CRIT, "Failed to lock pid file %s: %s", name, strerror(errno));
+		}
+		return 0;
+	}
+	
+	l = snprintf(s, 32, "%ld\n", (long)getpid());
+	
+	if (ftruncate(f, 0) < 0) {
+		hlog(LOG_CRIT, "Could not truncate pid file %s: %s",
 			name, strerror(errno));
 		return 0;
 	}
 	
-	if (fclose(f)) {
-		hlog(LOG_CRIT, "Could not close %s: %s",
+	if (write(f, s, l) != l) {
+		hlog(LOG_CRIT, "Could not write pid to %s: %s",
 			name, strerror(errno));
 		return 0;
 	}

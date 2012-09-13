@@ -700,7 +700,11 @@ int main(int argc, char **argv)
 			hlog(LOG_ERR, "dup(0) failed for stderr: %s", strerror(errno));
 	}
 	
-	/* write pid file, now that we have our final pid... might fail, which is critical */
+	/* Write pid file, now that we have our final pid... might fail, which is critical.
+	 * writepid locks the pid file and leaves the file descriptor open, so that
+	 * reopening and re-locking the file will fail, protecting us from multiple
+	 * processes running accidentally.
+	 */
 	if (!writepid(pidfile))
 		exit(1);
 	

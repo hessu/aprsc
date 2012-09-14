@@ -1766,6 +1766,10 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	cJSON_AddNumberToObject(totals, "tcp_pkts_tx", client_connects_tcp.txpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_rx", client_connects_udp.rxpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
+	cJSON_AddNumberToObject(totals, "tcp_pkts_ign_parse_fail", client_connects_tcp.rxparsefails);
+	cJSON_AddNumberToObject(totals, "tcp_pkts_ign_q_drop", client_connects_tcp.rxqdrops);
+	cJSON_AddNumberToObject(totals, "udp_pkts_ign_parse_fail", client_connects_udp.rxparsefails);
+	cJSON_AddNumberToObject(totals, "udp_pkts_ign_q_drop", client_connects_udp.rxqdrops);
 
 #ifndef _FOR_VALGRIND_
 	struct cellstatus_t cellst;

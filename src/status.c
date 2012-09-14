@@ -55,6 +55,7 @@ void status_uname(cJSON *root)
 		return;
 	}
 	
+	/* no version info, security by obscurity */
 	snprintf(s, UNAME_LEN, "%s %s", ut.sysname, ut.machine);
 	
 	cJSON_AddStringToObject(root, "os", s);

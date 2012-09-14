@@ -663,9 +663,18 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_DEBUG, "Worker %d disconnecting %s %s fd %d err %d",
-	      self->id, ( (c->flags & CLFLAGS_UPLINKPORT)
-			  ? ((c->state == CSTATE_COREPEER) ? "peer" : "uplink") : "client" ), c->addr_rem, c->fd, errnum);
+	hlog( LOG_INFO, "Closing %s %s after %d seconds, tx/rx %lld/%lld bytes %lld/%lld pkts, ign %lld parsefail %lld qdrop, fd %d, reason %d, worker %d",
+	      ( (c->flags & CLFLAGS_UPLINKPORT)
+			  ? ((c->state == CSTATE_COREPEER) ? "peer" : "uplink") : "client" ),
+			  	c->addr_rem,
+			  	tick - c->connect_time,
+			  	c->localaccount.txbytes,
+			  	c->localaccount.rxbytes,
+			  	c->localaccount.txpackets,
+			  	c->localaccount.rxpackets,
+			  	c->localaccount.rxparsefails,
+			  	c->localaccount.rxqdrops,
+			  	c->fd, errnum, self->id);
 
 	/* remove from polling list */
 	if (c->xfd) {

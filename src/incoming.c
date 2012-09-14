@@ -496,7 +496,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 
 	path_end = memchr(s, ':', len);
 	if (!path_end)
-		return -1; // No ":" in the packet
+		return INERR_NO_COLON; // No ":" in the packet
 	pathlen = path_end - s;
 
 	data = path_end;            // Begins with ":"
@@ -507,23 +507,23 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* look for the '>' */
 	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
 	if (!src_end)
-		return -2;	// No ">" in packet start..
+		return INERR_NO_DST;	// No ">" in packet start..
 	
 	path_start = src_end+1;
-	if (path_start >= packet_end)
-		return -3;
+	if (path_start >= packet_end)	// We're already at the path end
+		return INERR_NO_PATH;
 	
 	if (src_end - s > CALLSIGNLEN_MAX || src_end - s < CALLSIGNLEN_MIN)
-		return -4; /* too long source callsign */
+		return INERR_LONG_SRCCALL; /* too long source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
 	if (info_start >= packet_end)
-		return -5;
+		return INERR_NO_BODY;
 	
 	/* see that there is at least some data in the packet */
 	info_end = packet_end;
 	if (info_end <= info_start)
-		return -6;
+		return INERR_NO_BODY;
 	
 	/* look up end of dstcall (excluding SSID - this is the way dupecheck and
 	 * mic-e parser wants it)
@@ -537,7 +537,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		dstcall_end++;
 	
 	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
-		return -7; /* too long for destination callsign */
+		return INERR_LONG_DSTCALL; /* too long for destination callsign */
 	
 	/* where does the digipeater path start? */
 	via_start = dstcall_end;
@@ -552,17 +552,17 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 * to send packets where srccall != login
 	 */
 	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))
-		return -8;
+		return INERR_DISALLOW_UNVERIFIED;
 	
 	/* check if the path contains NOGATE or other signs which tell the
 	 * packet should be dropped
 	 */
 	if (digi_path_drop(via_start, path_end))
-		return -9;
+		return INERR_NOGATE;
 	
 	/* check for 3rd party packets */
 	if (*(data + 1) == '}')
-		return -10;
+		return INERR_3RD_PARTY;
 	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later
@@ -574,7 +574,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_append_len < 0) {
 		/* the q construct algorithm decided to drop the packet */
 		hlog(LOG_DEBUG, "%s/%s: q construct drop: %d", c->addr_rem, c->username, path_append_len);
-		return -20;
+		return INERR_Q_DROP;
 	}
 	
 	/* get a packet buffer */
@@ -586,8 +586,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb = pbuf_get(self, new_len);
 	if (!pb) {
 		// This should never happen...
-		hlog(LOG_ERR, "pbuf_get failed to get a block");
-		return -11; // No room :-(
+		hlog(LOG_ERR, "pbuf_get failed to get packet buffer - aprsc ran out of memory");
+		return INERR_OUT_OF_PBUFS; // No room :-(
 	}
 	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?
 	pb->flags = 0;
@@ -608,7 +608,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->flags |= F_FROM_DOWNSTR;
 	} else {
 		hlog(LOG_ERR, "%s/%s (fd %d): incoming_parse failed to classify packet", c->addr_rem, c->username, c->fd);
-		return -12;
+		return INERR_CLASS_FAIL;
 	}
 	
 	/* if the packet is sourced by a local login, but the packet is not
@@ -643,7 +643,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
 		hlog(LOG_INFO, "%s/%s: q construct bug: did not find a good construct or produce a new one for:\n%s\n", c->addr_rem, c->username, s);
-		return -13;
+		return INERR_Q_BUG;
 	}
 	
 	/* Copy the modified or appended part of the packet header -- qcons */
@@ -765,7 +765,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	/* Account the one incoming packet.
 	 * Incoming bytes were already accounted earlier.
 	 */
-	int q_drop = (e == -20 || e == -21) ? 1 : 0;
+	int q_drop = (e == INERR_Q_DROP) ? 1 : 0;
 	clientaccount_add(c, l4proto, 0, 1, 0, 0, q_drop, (e >= 0 || q_drop) ? 0 : 1);
 	
 	return 0;

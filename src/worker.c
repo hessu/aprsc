@@ -697,6 +697,23 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 			  	c->localaccount.rxpackets,
 			  	c->localaccount.rxdrops,
 			  	c->fd, errnum, self->id);
+			  	
+	if (c->localaccount.rxdrops) {
+		char s[256] = "";
+		int p = 0;
+		int i;
+		
+		for (i = 0; i < INERR_BUCKETS; i++) {
+			if (c->localaccount.rxerrs[i]) {
+				p += snprintf(s+p, 256-p-2, "%s%s %lld",
+					(p == 0) ? "" : ", ",
+					inerr_labels[i], c->localaccount.rxerrs[i]);
+			}
+		}
+		
+		hlog(LOG_INFO, "%s (%s) rx drops: %s",
+			c->addr_rem, c->username, s);
+	}
 
 	/* remove from polling list */
 	if (c->xfd) {

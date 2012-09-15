@@ -584,7 +584,7 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr)
 {
 	struct portaccount_t *pa = NULL;
-	int rxdrops;
+	int rxdrops = 0;
 	
 	if (rxerr < 0) {
 		rxdrops = 1;

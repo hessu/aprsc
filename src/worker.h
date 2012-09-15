@@ -176,6 +176,27 @@ struct client_heard_t {
 
 #define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
 
+/* error codes for incoming packet drop reasons */
+#define INERR_UNKNOWN			0
+#define INERR_NO_COLON			-1	/* no : in packet */
+#define INERR_NO_DST			-2	/* no > in packet to mark end of dstcall */
+#define INERR_NO_PATH			-3	/* no path found between srccall and : */
+#define INERR_LONG_SRCCALL		-4	/* too long srccall */
+#define INERR_NO_BODY			-5	/* no packet body/data after : */
+#define INERR_LONG_DSTCALL		-6	/* too long dstcall */
+#define INERR_DISALLOW_UNVERIFIED	-7	/* disallow_unverified = 1, unverified client */
+#define INERR_NOGATE			-8	/* packet path has NOGATE/RFONLY */
+#define INERR_3RD_PARTY			-9	/* 3rd-party packet dropped */
+#define INERR_OUT_OF_PBUFS		-10	/* aprsc ran out of packet buffers */
+#define INERR_CLASS_FAIL		-11	/* aprsc failed to classify packet */
+#define INERR_Q_BUG			-12	/* aprsc q construct code bugging */
+#define INERR_Q_DROP			-13	/* q construct drop */
+#define INERR_SHORT_PACKET		-14	/* too short packet */
+#define INERR_LONG_PACKET		-15	/* too long packet */
+#define INERR_MIN			-15	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+/* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
+#define INERR_BUCKETS			(INERR_MIN*-1 + 1)
+
 struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 				   Reporting looks up these via listener list. */
 	pthread_mutex_t mutex;	/* mutex to protect counters, refcount especially */
@@ -186,7 +207,8 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 
 	long long  rxbytes,   txbytes;
 	long long  rxpackets, txpackets;
-	long long  rxparsefails, rxqdrops;
+	long long  rxdrops;
+	long long  rxerrs[INERR_BUCKETS];
 
 	/* record usage references */
 	int	refcount;	/* listener = 1, clients ++ */
@@ -429,8 +451,9 @@ extern void port_accounter_drop(struct portaccount_t *p);
 
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
-extern void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails);
+extern void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr);
 
+extern void json_add_rxerrs(cJSON *root, const char *key, long long vals[]);
 extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory);
 
 #endif

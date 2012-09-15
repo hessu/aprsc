@@ -38,6 +38,27 @@
 
 long incoming_count;
 
+const char *inerr_labels[] = {
+	"unknown",
+	"no_colon",
+	"no_dst",
+	"no_path",
+	"long_srccall",
+	"no_body",
+	"long_dstcall",
+	"disallow_unverified",
+	"path_nogate",
+	"3rd_party",
+	"aprsc_oom_pbuf",
+	"aprsc_class_fail",
+	"aprsc_q_bug",
+	"q_drop",
+	"short_packet",
+	"long_packet"
+};
+
+#define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
+
 #ifdef _FOR_VALGRIND_
 typedef struct cellarena_t {
   int dummy;
@@ -50,7 +71,6 @@ cellarena_t *pbuf_cells_medium;
 cellarena_t *pbuf_cells_large;
 
 int pbuf_cells_kb = 2048; /* 2M bunches is faster for system than 16M ! */
-
 
 /*
  *	Get a buffer for a packet
@@ -489,6 +509,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	int originated_by_client = 0;
 	char *p;
 	
+	if (len < PACKETLEN_MIN-2)
+		return INERR_SHORT_PACKET;
+	
 	/* a packet looks like:
 	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
 	 * (we have normalized the \r\n by now)
@@ -729,8 +752,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	 * commands.
 	 */
 	if (len > PACKETLEN_MAX-2) {
-		hlog(LOG_WARNING, "%s/%s: Packet too long (%d): %.*s", c->addr_rem, c->username, len, len, s);
-		return 0;
+		e = INERR_LONG_PACKET;
+		goto in_drop;
 	}
 
 	/* starts with '#' => a comment packet, timestamp or something */
@@ -747,26 +770,20 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 		return 0;
 	}
 	
-	if (len < PACKETLEN_MIN-2) {
-		e = -42;
-		hlog(LOG_DEBUG, "%s/%s: Packet too short (%d bytes): %.*s",
-			c->addr_rem, c->username, len, len, s);
-	} else {
-		/* parse and process the packet */
-		e = incoming_parse(self, c, s, len);
-	
-		if (e < 0) {
-			/* failed parsing */
-			hlog(LOG_DEBUG, "%s/%s: Dropped packet (%d): %.*s",
-				c->addr_rem, c->username, e, len, s);
-		}
+	/* parse and process the packet */
+	e = incoming_parse(self, c, s, len);
+
+in_drop:	
+	if (e < 0) {
+		/* failed parsing */
+		hlog(LOG_DEBUG, "%s/%s: Dropped packet (%d: %s): %.*s",
+			c->addr_rem, c->username, e, incoming_strerror(e), len, s);
 	}
 	
 	/* Account the one incoming packet.
 	 * Incoming bytes were already accounted earlier.
 	 */
-	int q_drop = (e == INERR_Q_DROP) ? 1 : 0;
-	clientaccount_add(c, l4proto, 0, 1, 0, 0, q_drop, (e >= 0 || q_drop) ? 0 : 1);
+	clientaccount_add(c, l4proto, 0, 1, 0, 0, (e < 0) ? e : 0);
 	
 	return 0;
 }

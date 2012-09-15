@@ -920,8 +920,8 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		cJSON_AddNumberToObject(jl, "bytes_tx", l->portaccount->txbytes);
 		cJSON_AddNumberToObject(jl, "pkts_rx", l->portaccount->rxpackets);
 		cJSON_AddNumberToObject(jl, "pkts_tx", l->portaccount->txpackets);
-		cJSON_AddNumberToObject(jl, "pkts_ign_parse_fail", l->portaccount->rxparsefails);
-		cJSON_AddNumberToObject(jl, "pkts_ign_q_drop", l->portaccount->rxqdrops);
+		cJSON_AddNumberToObject(jl, "pkts_ign", l->portaccount->rxdrops);
+		json_add_rxerrs(jl, "in_errs", l->portaccount->rxerrs);
 		cJSON_AddItemToArray(listeners, jl);
 		
 		total_clients += l->portaccount->gauge;

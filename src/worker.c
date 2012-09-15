@@ -581,17 +581,27 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 	return hstrdup(eb);
 }
 
-void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxqdrops, int rxparsefails)
+void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr)
 {
 	struct portaccount_t *pa = NULL;
+	int rxdrops;
+	
+	if (rxerr < 0) {
+		rxdrops = 1;
+		if (rxerr < INERR_MIN)
+			rxerr = INERR_UNKNOWN; /* which is 0 */
+		rxerr *= -1;
+	}
 	
 	/* worker local accounters do not need locks */
 	c->localaccount.rxbytes   += rxbytes;
 	c->localaccount.txbytes   += txbytes;
 	c->localaccount.rxpackets += rxpackets;
 	c->localaccount.txpackets += txpackets;
-	c->localaccount.rxqdrops += rxqdrops;
-	c->localaccount.rxparsefails += rxparsefails;
+	if (rxdrops) {
+		c->localaccount.rxdrops += 1;
+		c->localaccount.rxerrs[rxerr] += 1;
+	}
 	
 	if (l4proto == IPPROTO_UDP && c->udpclient && c->udpclient->portaccount) {
 		pa = c->udpclient->portaccount;
@@ -605,16 +615,20 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 		__sync_fetch_and_add(&pa->txbytes, txbytes);
 		__sync_fetch_and_add(&pa->rxpackets, rxpackets);
 		__sync_fetch_and_add(&pa->txpackets, txpackets);
-		__sync_fetch_and_add(&pa->rxqdrops, rxqdrops);
-		__sync_fetch_and_add(&pa->rxparsefails, rxparsefails);
+		if (rxdrops) {
+			__sync_fetch_and_add(&pa->rxdrops, 1);
+			__sync_fetch_and_add(&pa->rxerrs[rxerr], 1);
+		}
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		pa->rxbytes   += rxbytes;
 		pa->txbytes   += txbytes;
 		pa->rxpackets += rxpackets;
 		pa->txpackets += txpackets;
-		pa->rxqdrops += rxqdrops;
-		pa->rxparsefails += rxparsefails;
+		if (rxdrops) {
+			pa->rxdrops += 1;
+			pa->rxerrs[rxerr] += 1;
+		}
 #endif
 	}
 
@@ -624,16 +638,20 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 		__sync_fetch_and_add(&client_connects_udp.txbytes, txbytes);
 		__sync_fetch_and_add(&client_connects_udp.rxpackets, rxpackets);
 		__sync_fetch_and_add(&client_connects_udp.txpackets, txpackets);
-		__sync_fetch_and_add(&client_connects_udp.rxqdrops, rxqdrops);
-		__sync_fetch_and_add(&client_connects_udp.rxparsefails, rxparsefails);
+		if (rxdrops) {
+			__sync_fetch_and_add(&client_connects_udp.rxdrops, 1);
+			__sync_fetch_and_add(&client_connects_udp.rxerrs[rxerr], 1);
+		}
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		client_connects_udp.rxbytes   += rxbytes;
 		client_connects_udp.txbytes   += txbytes;
 		client_connects_udp.rxpackets += rxpackets;
 		client_connects_udp.txpackets += txpackets;
-		client_connects_udp.rxqdrops += rxqdrops;
-		client_connects_udp.rxparsefails += rxparsefails;
+		if (rxdrops) {
+			client_connects_udp.rxdrops += 1;
+			client_connects_udp.rxerrs[rxerr] += 1;
+		}
 #endif
 	} else {
 #ifdef HAVE_SYNC_FETCH_AND_ADD
@@ -641,16 +659,20 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 		__sync_fetch_and_add(&client_connects_tcp.txbytes, txbytes);
 		__sync_fetch_and_add(&client_connects_tcp.rxpackets, rxpackets);
 		__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
-		__sync_fetch_and_add(&client_connects_tcp.rxqdrops, rxqdrops);
-		__sync_fetch_and_add(&client_connects_tcp.rxparsefails, rxparsefails);
+		if (rxdrops) {
+			__sync_fetch_and_add(&client_connects_tcp.rxdrops, 1);
+			__sync_fetch_and_add(&client_connects_tcp.rxerrs[rxerr], 1);
+		}
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		client_connects_tcp.rxbytes   += rxbytes;
 		client_connects_tcp.txbytes   += txbytes;
 		client_connects_tcp.rxpackets += rxpackets;
 		client_connects_tcp.txpackets += txpackets;
-		client_connects_tcp.rxqdrops += rxqdrops;
-		client_connects_tcp.rxparsefails += rxparsefails;
+		if (rxdrops) {
+			client_connects_tcp.rxdrops += 1;
+			client_connects_tcp.rxerrs[rxerr] += 1;
+		}
 #endif
 	}
 }
@@ -663,17 +685,17 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_INFO, "Closing %s %s after %d seconds, tx/rx %lld/%lld bytes %lld/%lld pkts, ign %lld parsefail %lld qdrop, fd %d, reason %d, worker %d",
+	hlog( LOG_INFO, "Closing %s %s (%s) after %d seconds, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, reason %d, worker %d",
 	      ( (c->flags & CLFLAGS_UPLINKPORT)
 			  ? ((c->state == CSTATE_COREPEER) ? "peer" : "uplink") : "client" ),
 			  	c->addr_rem,
+			  	c->username,
 			  	tick - c->connect_time,
 			  	c->localaccount.txbytes,
 			  	c->localaccount.rxbytes,
 			  	c->localaccount.txpackets,
 			  	c->localaccount.rxpackets,
-			  	c->localaccount.rxparsefails,
-			  	c->localaccount.rxqdrops,
+			  	c->localaccount.rxdrops,
 			  	c->fd, errnum, self->id);
 
 	/* remove from polling list */
@@ -783,7 +805,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
 
 		if (i > 0)
-			clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0, 0);
+			clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0);
 			
 		return i;
 	}
@@ -798,7 +820,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		 * will be incremented only when we actually transmit a packet
 		 * instead of a keepalive.
 		 */
-		clientaccount_add( c, IPPROTO_TCP, 0, 0, len, 0, 0, 0);
+		clientaccount_add( c, IPPROTO_TCP, 0, 0, len, 0, 0);
 	}
 	
 	if (c->obuf_end + len > c->obuf_size) {
@@ -1020,7 +1042,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	hlog(LOG_DEBUG, "worker thread passing UDP packet from %s to handler: %*s", addrs, r, c->ibuf);
 	hfree(addrs);
 	*/
-	clientaccount_add( c, IPPROTO_UDP, r, 0, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	clientaccount_add( c, IPPROTO_UDP, r, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
 	
 	c->handler(self, rc, IPPROTO_UDP, c->ibuf, r);
 	
@@ -1070,7 +1092,7 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 
-	clientaccount_add(c, IPPROTO_TCP, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
+	clientaccount_add(c, IPPROTO_TCP, r, 0, 0, 0, 0); /* Number of packets is now unknown,
 					     byte count is collected.
 					     The incoming_handler() will account
 					     packets. */
@@ -1673,6 +1695,24 @@ void workers_start(void)
 }
 
 /*
+ *	Add an array of long longs to a JSON tree.
+ */
+
+void json_add_rxerrs(cJSON *root, const char *key, long long vals[])
+{
+	double vald[INERR_BUCKETS];
+	int i;
+	
+	/* cJSON does not have a CreateLongLongArray, big ints are taken in
+	 * as floating point values. Strange, ain't it.
+	 */
+	for (i = 0; i < INERR_BUCKETS; i++)
+		vald[i] = vals[i];
+	
+	cJSON_AddItemToObject(root, key, cJSON_CreateDoubleArray(vald, INERR_BUCKETS));
+}
+
+/*
  *	Fill worker client list for status display
  *	(called from another thread - watch out and lock!)
  */
@@ -1729,10 +1769,11 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 			cJSON_AddNumberToObject(jc, "bytes_tx", c->localaccount.txbytes);
 			cJSON_AddNumberToObject(jc, "pkts_rx", c->localaccount.rxpackets);
 			cJSON_AddNumberToObject(jc, "pkts_tx", c->localaccount.txpackets);
-			cJSON_AddNumberToObject(jc, "pkts_ign_parse_fail", c->localaccount.rxparsefails);
-			cJSON_AddNumberToObject(jc, "pkts_ign_q_drop", c->localaccount.rxqdrops);
+			cJSON_AddNumberToObject(jc, "pkts_ign", c->localaccount.rxdrops);
 			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
+			
+			json_add_rxerrs(jc, "in_errs", c->localaccount.rxerrs);
 			
 			if (c->state == CSTATE_COREPEER) {
 				cJSON_AddStringToObject(jc, "mode", uplink_modes[3]);
@@ -1775,10 +1816,10 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	cJSON_AddNumberToObject(totals, "tcp_pkts_tx", client_connects_tcp.txpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_rx", client_connects_udp.rxpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
-	cJSON_AddNumberToObject(totals, "tcp_pkts_ign_parse_fail", client_connects_tcp.rxparsefails);
-	cJSON_AddNumberToObject(totals, "tcp_pkts_ign_q_drop", client_connects_tcp.rxqdrops);
-	cJSON_AddNumberToObject(totals, "udp_pkts_ign_parse_fail", client_connects_udp.rxparsefails);
-	cJSON_AddNumberToObject(totals, "udp_pkts_ign_q_drop", client_connects_udp.rxqdrops);
+	cJSON_AddNumberToObject(totals, "tcp_pkts_ign", client_connects_tcp.rxdrops);
+	cJSON_AddNumberToObject(totals, "udp_pkts_ign", client_connects_udp.rxdrops);
+	json_add_rxerrs(totals, "tcp_in_errs", client_connects_tcp.rxerrs);
+	json_add_rxerrs(totals, "udp_in_errs", client_connects_udp.rxerrs);
 
 #ifndef _FOR_VALGRIND_
 	struct cellstatus_t cellst;

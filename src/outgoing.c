@@ -97,9 +97,9 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		
 		/* account for the packet sent, and send it! */
 		if (c->udp_port && c->udpclient)
-			clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0, 0);
+			clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0);
 		else
-			clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0, 0);
+			clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0);
 		
 		client_write(self, c, pb->data, pb->packet_len);
 	}

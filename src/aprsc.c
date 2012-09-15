@@ -53,7 +53,7 @@ struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 int shutting_down;		// are we shutting down now?
 int reopen_logs;		// should we reopen log files now?
 int reconfiguring;		// should we reconfigure now?
-int fileno_limit;
+int fileno_limit = -1;
 int dbdump_at_exit;
 int want_dbdump;
 
@@ -527,13 +527,11 @@ int main(int argc, char **argv)
 	int e;
 	struct rlimit rlim;
 	time_t cleanup_tick;
-	time_t stats_tick;
 	time_t version_tick;
 	
 	time(&tick);
 	now = tick;
 	cleanup_tick = tick;
-	stats_tick = tick;
 	version_tick = tick + random() % 60; /* some load distribution */
 	startup_tick = tick;
 	setlinebuf(stderr);
@@ -671,17 +669,17 @@ int main(int argc, char **argv)
 		
 	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
 		/* Adjust process global fileno limit */
-		int e;
 		struct rlimit rlim;
 		if (getrlimit(RLIMIT_NOFILE, &rlim) < 0)
 			hlog(LOG_WARNING, "Configuration: getrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
 		rlim.rlim_cur = rlim.rlim_max = new_fileno_limit;
 		if (setrlimit(RLIMIT_NOFILE, &rlim) < 0)
 			hlog(LOG_WARNING, "Configuration: setrlimit(RLIMIT_NOFILE) failed: %s", strerror(errno));
-		e = getrlimit(RLIMIT_NOFILE, &rlim);
-		fileno_limit = rlim.rlim_cur;
-		if (fileno_limit < new_fileno_limit)
-			hlog(LOG_WARNING, "Configuration could not raise FileLimit%s, it is now %d", (getuid() != 0) ? " (not running as root)" : "", fileno_limit);
+		if (getrlimit(RLIMIT_NOFILE, &rlim) == 0) {
+			fileno_limit = rlim.rlim_cur;
+			if (fileno_limit < new_fileno_limit)
+				hlog(LOG_WARNING, "Configuration could not raise FileLimit%s, it is now %d", (getuid() != 0) ? " (not running as root)" : "", fileno_limit);
+		}
 	}
 	
 	/* if setuid is needed, do so */

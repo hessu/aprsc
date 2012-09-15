@@ -685,7 +685,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_INFO, "Closing %s %s (%s) after %d seconds, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, reason %d, worker %d %s%s%s%s",
+	hlog( LOG_INFO, "Closing %s %s (%s) after %d seconds, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, reason %d, worker %d%s%s%s%s",
 	      ( (c->flags & CLFLAGS_UPLINKPORT)
 			  ? ((c->state == CSTATE_COREPEER) ? "peer" : "uplink") : "client" ),
 			  	c->addr_rem,

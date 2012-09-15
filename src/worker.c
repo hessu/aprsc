@@ -1773,7 +1773,7 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 			
-			json_add_rxerrs(jc, "in_errs", c->localaccount.rxerrs);
+			json_add_rxerrs(jc, "rx_errs", c->localaccount.rxerrs);
 			
 			if (c->state == CSTATE_COREPEER) {
 				cJSON_AddStringToObject(jc, "mode", uplink_modes[3]);
@@ -1818,8 +1818,8 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
 	cJSON_AddNumberToObject(totals, "tcp_pkts_ign", client_connects_tcp.rxdrops);
 	cJSON_AddNumberToObject(totals, "udp_pkts_ign", client_connects_udp.rxdrops);
-	json_add_rxerrs(totals, "tcp_in_errs", client_connects_tcp.rxerrs);
-	json_add_rxerrs(totals, "udp_in_errs", client_connects_udp.rxerrs);
+	json_add_rxerrs(totals, "tcp_rx_errs", client_connects_tcp.rxerrs);
+	json_add_rxerrs(totals, "udp_rx_errs", client_connects_udp.rxerrs);
 
 #ifndef _FOR_VALGRIND_
 	struct cellstatus_t cellst;

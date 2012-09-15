@@ -65,12 +65,15 @@ function client_bytes_rates(c, k)
 
 function client_pkts_rx(c, k)
 {
-	var s = c['pkts_rx'];
-	
-	if (isUndefined(c['pkts_ign_parse_fail']))
+	if (isUndefined(c['pkts_ign']))
 		return c['pkts_rx'];
 	
-	return c['pkts_rx'] + '/' + c['pkts_ign_parse_fail'] + '/' + c['pkts_ign_q_drop'];
+	var s = c['pkts_rx'] + '/' + c['pkts_ign'];
+	
+	if (c['pkts_ign'] / c['pkts_rx'] > 0.1)
+		return '<span class="red">' + s + '</span>';
+
+	return s;
 }
 
 function htmlent(s)

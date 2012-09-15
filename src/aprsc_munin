@@ -403,8 +403,10 @@ my %graphs = (
 );
 
 if ($in_makelinks) {
+	my $instance = '';
+	$instance = '_' . $ARGV[1] if (defined $ARGV[1]);
 	foreach my $graph (sort keys %graphs) {
-		my $d = "aprsc_$graph";
+		my $d = "aprsc" . $instance . "_" . $graph;
 		next if (-e $d);
 		symlink($0, $d) || die "Failed to symlink $0 to $d: $!\n";
 	}

@@ -90,7 +90,6 @@ sub find_val($$)
 		$r = $r->{$p};
 	}
 	
-	return 'U' if (ref($r) eq 'HASH');
 	return $r;
 }
 
@@ -400,6 +399,32 @@ my %graphs = (
 		'sources' => {
 		}
 	},
+	'rxerrstcp' => {
+		'config_attrs' => {
+			'title' => 'Packets dropped from TCP clients',
+			'vlabel' => 'packets/min',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'key' => 'totals.tcp_rx_errs',
+		'type' => 'DERIVE',
+		'cdef' => ',60,*',
+		'sources' => {
+		}
+	},
+	'rxerrsudp' => {
+		'config_attrs' => {
+			'title' => 'Packets dropped from UDP clients',
+			'vlabel' => 'packets/min',
+			'args' => '--base 1000',
+			'category' => $category,
+		},
+		'key' => 'totals.udp_rx_errs',
+		'type' => 'DERIVE',
+		'cdef' => ',60,*',
+		'sources' => {
+		}
+	},
 );
 
 if ($in_makelinks) {
@@ -491,6 +516,33 @@ if ($graph =~ /^memcell/) {
 		}
 		$draw = 'STACK';
 	}
+	$gr->{'order'} = \@ord;
+} elsif ($graph =~ /^rxerrs(tcp|udp)/) {
+	my @ord;
+	my $keys = $j->{'rx_errs'};
+	# convert array to hash
+	my $h = {};
+	my $vals = find_val($gr->{'key'}, $j);
+	my $draw = 'AREA';
+	foreach my $k (@$keys) {
+		push @ord, $k;
+		#$k =~ s/[^\w]/_/g;
+		$h->{$k} = shift @$vals;
+		$gr->{'sources'}->{$k} = {
+			'k' => 'use.' . $k,
+			'attrs' => {
+				'label' => $k,
+				'min' => 0,
+				'type' => $gr->{'type'},
+				'draw' => $draw
+			}
+		};
+		if ($gr->{'cdef'}) {
+			$gr->{'sources'}->{$k}->{'attrs'}->{'cdef'} = $k . $gr->{'cdef'};
+		}
+		$draw = 'STACK';
+	}
+	$j->{'use'} = $h;
 	$gr->{'order'} = \@ord;
 }
 

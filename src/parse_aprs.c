@@ -28,11 +28,12 @@
 #include "filter.h"
 #include "historydb.h"
 
-//#define DEBUG_PARSE_APRS 1
+#define DEBUG_PARSE_APRS 0
 #ifdef DEBUG_PARSE_APRS
-#define DEBUG_LOG(a) { hlog(LOG_DEBUG, a); }
+#define DEBUG_LOG(...) \
+            do { hlog(LOG_DEBUG, __VA_ARGS__); } while (0)
 #else
-#define DEBUG_LOG(a) { }
+#define DEBUG_LOG(...) { }
 #endif
 
 /*
@@ -578,7 +579,7 @@ static int parse_aprs_mice(struct pbuf_t *pb, const unsigned char *body, const u
 	int posambiguity = 0;
 	int i;
 	
-	DEBUG_LOG("parse_aprs_mice");
+	DEBUG_LOG("parse_aprs_mice: %.*s", pb->packet_len-2, pb->data);
 	
 	/* check packet length */
 	if (body_end - body < 8)
@@ -666,30 +667,16 @@ static int parse_aprs_mice(struct pbuf_t *pb, const unsigned char *body, const u
 	if (d_start[3] <= 0x4c)
 		lat = 0 - lat;
 	
-	/* Decode the longitude, the first three bytes of the body
-	 * after the data type indicator. First longitude degrees,
-	 * remember the longitude offset.
+	/* Decode the longitude, the first three bytes of the body after the data
+	 * type indicator. First longitude degrees, remember the longitude offset.
 	 */
-	
-	/* F4FXL fixe starts here */
-
-	// sub 28 and offset
 	lng_deg = body[0] - 28;
-
-	// Degrees offset depending on encoded character
-	if ((118 <= body[0] && body[0] <= 127) ||
-	    (108 <= body[0] && body[0] <= 117) ||
-	    ( 38 <= body[0] && body[0] <= 107)) {
-
+	if (d_start[4] >= 0x50)
 		lng_deg += 100;
-	}
-
-	if (180 <= lng_deg && lng_deg <= 189) { // act like desscribed in the specs !
+	if (lng_deg >= 180 && lng_deg <= 189)
 		lng_deg -= 80;
-	} else if (190 <= lng_deg && lng_deg <= 199) {
+	else if (lng_deg >= 190 && lng_deg <= 199)
 		lng_deg -= 190;
-	}
-	/* F4FXL fixe ends here */
 	
 	/* Decode the longitude minutes */
 	lng_min = body[1] - 28;

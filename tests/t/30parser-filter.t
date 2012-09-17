@@ -11,7 +11,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 18 };
+BEGIN { plan tests => 20 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -31,7 +31,7 @@ ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 # third for mic-e, fourth for prefix filter test.
 # The first and last one also test upper-case letters as filter keys.
 my $i_rx = new Ham::APRS::IS("localhost:55581", "N5CAL-2",
-	'filter' => 'R/60.4752/25.0947/1 r/60.0520/24.5045/1 r/49.0/8.4/500 r/37.0887/-76.4585/100 P/OG/of3/N');
+	'filter' => 'R/60.4752/25.0947/1 r/60.0520/24.5045/1 r/49.0/8.4/500 r/37.0887/-76.4585/100 r/60.49966/-151.10416/5 r/35.0685/136.662833/2 P/OG/of3/N');
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;
@@ -74,6 +74,18 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 # latitude: 47.93283333333 °
 # longitude: 12.93733333333 °
 $tx = $rx = "OX8AAA>T7UU97,qAR,$login:`(T4l!u>/]\"83}=";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+#third mic-e
+# latitude: 60.49966666666667 °
+# longitude: -151.1041666666667 °
+$tx = $rx = "KL7AN-14>V0RYYX,WIDE1-1,WIDE2-1,qAR,KL7IGZ-1:`O^5l " . chr(0x1c) . "k/]\"4%}=";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+#fourth mic-e
+# latitude: 35.0685 °
+# longitude: 136.6628333333333 °
+$tx = $rx = "JN2ESN-14>SUPTQ1,WIDE1-1,qAR,JA2PIT-10:`\@CioI}u/`\"4T}LPG Tanker_\"";     
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # check that the P filter passes packets with the prefixes given

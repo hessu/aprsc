@@ -86,8 +86,8 @@ Other documentation
 ----------------------
 
 * [README](README.html) 
-* Paper on aprsc for TAPR DCC 2012
-* Presentation slides from TAPR DCC 2012
+* Paper on aprsc for TAPR DCC 2012 (will be here shortly)
+* Presentation slides from TAPR DCC 2012 (will be here shortly)
 
 
 Contributing to aprsc

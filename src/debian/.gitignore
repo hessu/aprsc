@@ -1,1 +1,7 @@
 files
+changelog
+aprsc.debhelper.log
+aprsc.postinst.debhelper
+aprsc.postrm.debhelper
+aprsc.prerm.debhelper
+aprsc.substvars

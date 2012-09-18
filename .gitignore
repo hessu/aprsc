@@ -15,3 +15,7 @@
 *.so.*
 *.dylib
 
+# build products for dpkg
+aprsc_*.changes
+aprsc_*.deb
+

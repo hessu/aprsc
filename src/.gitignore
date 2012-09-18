@@ -11,3 +11,7 @@ config.status
 SVNVERSION
 GITVERSION
 
+# build temp files
+build-stamp
+configure-stamp
+

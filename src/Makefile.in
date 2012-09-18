@@ -16,7 +16,11 @@ CFGFILE=	/opt/aprsc/etc/aprsc.conf
 # generate version strings
 VERSION:=$(shell cat VERSION)
 SVNVERSION_CMD:=$(shell which svnversion)
-SVNVERSION:=$(shell if test -x $(SVNVERSION_CMD) -a \( -d .svn -o -d ../.svn \)  ; then $(SVNVERSION_CMD) | sed -e 's/^.*://' | tee SVNVERSION ; else cat SVNVERSION; fi)
+SVNVERSION:=$(shell if test -x $(SVNVERSION_CMD) -a \( -d .svn -o -d ../.svn \) ; then $(SVNVERSION_CMD) | sed -e 's/^.*://' | tee SVNVERSION ; else (if test -f SVNVERSION; then cat SVNVERSION; fi); fi)
+GIT_CMD:=$(shell which git)
+GITVERSION:=$(shell if test -x $(GIT_CMD) -a \( -d .git -o -d ../.git \) ; then $(GIT_CMD) describe --long --dirty=M | sed -e 's/^.*-//' | tee GITVERSION; else (if test -f GITVERSION; then cat GITVERSION; fi); fi)
+#SRCVERSION:=$(shell if "$(GITVERSION)" -ne ""; then echo "$(GITVERSION)"; else echo "$(SVNVERSION)"; fi)
+SRCVERSION:=$(GITVERSION)$(SVNVERSION)
 DATE:=$(shell TZ=UTC date +"%Y %B %d")
 RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")
 BUILD_TIME:=$(shell TZ=UTC date +"%Y-%m-%d %H:%M:%S %z")
@@ -110,7 +114,7 @@ version_data.h:
 	@echo "/* generated automatically by Makefile - mark your branch in version_branch.h */" > version_data.h.new
 	@echo "#ifndef VERSIONDATA_H" >> version_data.h.new
 	@echo "#define VERSIONDATA_H" >> version_data.h.new
-	@echo "#define SVNVERSION \"$(SVNVERSION)\"" >> version_data.h.new
+	@echo "#define SRCVERSION \"$(SRCVERSION)\"" >> version_data.h.new
 	@echo "#define BUILD_TIME \"$(BUILD_TIME)\"" >> version_data.h.new
 	@echo "#define BUILD_USER \"$(BUILD_USER)\"" >> version_data.h.new
 	@echo "#endif" >> version_data.h.new
@@ -140,6 +144,7 @@ clean:
 
 distclean: clean
 	rm -f aprsc
+	rm -r aprsc.8
 	rm -f ac-hdrs.h Makefile config.log config.status
 	rm -rf autom4te.cache
 	rm -f build-stamp configure-stamp dpkg-arch.txt
@@ -158,7 +163,7 @@ aprsc: $(OBJS)
 version.o: version_data.h
 
 aprsc.8 : % : %.in VERSION Makefile
-	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SVNVERSION) - $(DATE)}g;	\
+	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\
 	          s{\@VARRUN\@}{$(VARRUN)}g;			\
 	          s{\@VARLOG\@}{$(VARLOG)}g;			\
 	          s{\@CFGFILE\@}{$(CFGFILE)}g;			\
@@ -193,7 +198,7 @@ install: all
 
 # -------------------------------------------------------------------- #
 
-DISTVERSION:=aprsc-$(VERSION).svn$(SVNVERSION)
+DISTVERSION:=aprsc-$(VERSION).$(SRCVERSION)
 DISTTARGET:=../../$(DISTVERSION)
 RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/apsc-//')
 .PHONY: dist
@@ -209,6 +214,7 @@ dist:
 	tar cf - --exclude=windows --exclude-vcs --exclude=.svn --exclude="*.log*" \
 		--exclude=tools --exclude="*.pid" \
 		--exclude="*~" \
+		--exclude="build" --exclude "HOME.md" \
 		--exclude="javaprssrvr" --exclude="javaprssrvr4" \
 		--exclude=build-out --exclude=build-down \
 		.. | (cd $(DISTTARGET) ; tar xf -)
@@ -230,7 +236,7 @@ dist:
 make-deb:
 	if [ -f debian/changelog.release ] ; then \
 	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
-		  \$$ver =~ tr/0-9.//cd;	\
+		  \$$ver =~ s/^.*?-//;	\
 		  \$$cname = '$(LINUXCODENAME)';	\
 		  \$$cname =~ s/\///g;		\
 		  \$$ver .= \"+\$$cname\" . '1';	\

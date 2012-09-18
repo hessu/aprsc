@@ -8,4 +8,6 @@ Makefile
 ac-hdrs.h
 config.log
 config.status
+SVNVERSION
+GITVERSION
 

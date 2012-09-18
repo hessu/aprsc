@@ -44,12 +44,6 @@ with it, so you need to download it and compile it from source
 libevent2 is also available in MacPorts for OS X and FreeBSD ports.
 
 
-Downloading aprsc
---------------------
-
-Head to http://he.fi/aprsc/ !
-
-
 Preparing the environment
 ----------------------------
 
@@ -133,4 +127,13 @@ provide an additional UNIX domain socket within the chroot.  However, due to
 the various different syslogds in wide use, the default aprsc installations
 do not make any attempt at this.
 
+
+Downloading older versions of aprsc
+--------------------------------------
+
+Head to [source code downloads](http://he.fi/aprsc/down/) !
+
+It's also possible to browse and download source code and inspect changes
+made in the software in [github](https://github.com/hessu/aprsc), which is
+used for version control and patch management in aprsc.
 

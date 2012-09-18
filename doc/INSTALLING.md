@@ -13,12 +13,27 @@ two other modern Linux distributions might become supported in the near
 future, too.
 
 If you're familiar with compiling software from the source code, and your
-preferred operating system is NOT listed above, take a look at BUILDING.md
-for documentation on building from source.
+preferred operating system is NOT listed above, take a look at
+[BUILDING](BUILDING.html) for documentation on building from source.
 
 If you wish to have decent support, please pick Debian or Ubuntu.  A number
 of other Unix-like platforms do work, but when it comes to building and
 installing, you're mostly on your own.
+
+
+Call-home functionality
+--------------------------
+
+When aprsc starts up, it makes a DNS lookup to SERVERID.VERSION.aprsc.he.fi
+for the purpose of preloading DNS resolver libraries before chroot, so that
+DNS works even after the chroot.  The lookup also serves as a call-home
+functionality, which provides the aprsc developers the possibility of collecting
+a database of different aprsc installations and software versions being used
+at those servers.
+
+Statistics graphs showing the aggregate number of aprsc servers running and
+the aprsc versions use will be shown on the aprsc home page once the data
+collector (custom DNS server) and graphing scripts have been written.
 
 
 Debian and Ubuntu: Installing using apt-get
@@ -70,8 +85,8 @@ upgrade when upgrades are available.
     sudo apt-get upgrade
 
 Before starting aprsc edit the configuration file, which can be found in
-/opt/aprsc/etc/aprsc.conf.  Please see the CONFIGURATION file for
-instructions.
+/opt/aprsc/etc/aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)
+document for instructions.
 
 To enable startup, edit /etc/default/aprsc and change STARTAPRSC="no" to
 "yes". There should not be any need to touch the other options at this time.

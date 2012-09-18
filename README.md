@@ -8,5 +8,9 @@ server.
 For more information, please refer to the following resources:
 
 * [Home page](http://he.fi/aprsc/)
-* [CONTRIBUTING](doc/CONTRIBUTING.md)
+* [Contributing to the aprsc project](http://he.fi/aprsc/CONTRIBUTING.md)
+
+Have fun!
+
+- Hessu, OH7LZB
 

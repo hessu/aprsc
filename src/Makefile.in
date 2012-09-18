@@ -147,7 +147,7 @@ distclean: clean
 	rm -r aprsc.8
 	rm -f ac-hdrs.h Makefile config.log config.status
 	rm -rf autom4te.cache
-	rm -f build-stamp configure-stamp dpkg-arch.txt
+	rm -f build-stamp configure-stamp
 	rm -rf ../build/build-out ../build/build-down
 	rm -rf debian/aprsc debian/*.debhelper debian/*.log \
 		debian/aprsc.substvars debian/changelog
@@ -228,6 +228,9 @@ dist:
 	make -C $(DISTTARGET)/src distclean
 	cd ../.. && 	\
 	tar czf $(DISTVERSION).tar.gz $(DISTVERSION)
+
+dist-upload: dist
+	scp ../../$(DISTVERSION).tar.gz aprsc-dist:/data/www/hes/html/aprsc/down/
 
 # -------------------------------------------------------------------- #
 

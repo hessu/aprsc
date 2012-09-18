@@ -1,6 +1,7 @@
 
 Some example packets for cut-n-paste testing:
 
+
 position without timestamp:
 JH6YLM>APRS,RELAY,TRACE5-5,qAo,JA6JMJ-3:!3210.70N/13132.15E#15 KAWA
 PY3KN-1>WIDE1-1,TCPIP*,qAC,T2BRAZIL:=3003.96SI05106.10W&iGate Viamao

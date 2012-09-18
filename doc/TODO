@@ -1,9 +1,5 @@
 TODO ITEMS LIST
 
-    - Logins used on APRS-IS must not consist of exactly 8 characters from 0
-      to 9 or A to F as this would indicate a server generated IP address
-      for the q construct.
-
     - UDP communication
 	- "Client" version exists -- unidirectional data flow from server to client,
 	  server discards all data sent to it
@@ -13,11 +9,6 @@ TODO ITEMS LIST
 
     - complete output filters
 	- s-filter is still missing
-
-
-- (re)configuring filter using an APRS message
-- "#filter" from the client should be parsed, too, after login
-
 
 To Consider:
 

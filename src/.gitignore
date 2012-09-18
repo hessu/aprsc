@@ -1,0 +1,11 @@
+# Build products
+aprsc
+aprsc.8
+version_data.h
+
+# configure products
+Makefile
+ac-hdrs.h
+config.log
+config.status
+

@@ -906,6 +906,10 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		i++;
 	}
 	
+	/* dupefeed port is always hidden */
+	if (clflags & CLFLAGS_DUPEFEED)
+		l->hidden = 1;
+	
 	/* put in the list */
 	l->next = *lq;
 	if (l->next)

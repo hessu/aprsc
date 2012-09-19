@@ -28,7 +28,7 @@
 #include "filter.h"
 #include "historydb.h"
 
-#define DEBUG_PARSE_APRS 0
+//#define DEBUG_PARSE_APRS 1
 #ifdef DEBUG_PARSE_APRS
 #define DEBUG_LOG(...) \
             do { hlog(LOG_DEBUG, __VA_ARGS__); } while (0)

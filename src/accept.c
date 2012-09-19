@@ -209,12 +209,16 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 
 	if (1) {
 		int len, arg;
-		/* Set bigger SNDBUF size for the UDP port..  */
+		/* Set bigger SNDBUF size for the UDP port..
+		 * The current settings are quite large just to accommodate
+		 * load testing at high packet rates without packet loss.
+		 */
 		len = sizeof(arg);
-		arg = 12*1024; /* 20 Kbytes is good for about 5 seconds of APRS-IS full feed */
+		arg = 64*1024; /* 20 Kbytes is good for about 5 seconds of APRS-IS full feed */
 		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &arg, len)) {
 			hlog(LOG_ERR, "UDP listener setup: setsockopt(SO_RCVBUF, %d) failed: %s", arg, strerror(errno));
 		}
+		arg = 128*1024; /* This one needs to fit packets going to *all* UDP clients */
 		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, len)) {
 			hlog(LOG_ERR, "UDP listener setup: setsockopt(SO_SNDBUF, %d) failed: %s", arg, strerror(errno));
 		}

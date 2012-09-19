@@ -2,11 +2,6 @@
 #
 # Test UDP core peers with a load chunk.
 #
-# The test runs a bit slow now, due to the small window size.
-# If window is increased, UDP socket buffers apparently fill
-# up and packets are dropped. Need to increase them in the
-# server code probably.
-#
 
 use Test;
 BEGIN { plan tests => 6 + 2*3 + 2 };
@@ -45,7 +40,7 @@ my $flush_interval = 500;
 #$flush_interval = 300;
 my $bytelimit = 1*1024*1024;
 #my $bytelimit = 4096;
-my $window = 4*1024;
+my $window = 24*1024;
 #my $max_speed = 500; # packets /s
 
 sub load_test($$$)

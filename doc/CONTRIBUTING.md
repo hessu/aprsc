@@ -18,6 +18,15 @@ to the main project.  If and when I have feedback to give about the patch,
 I'll use the github tools to provide the feedback.  It's quite likely that
 I'll ask you to make some small changes before pulling the changes in.
 
+Please do not increment the main version number - I'll do that when
+publishing a new version with your improvements (and maybe some others) in
+it.
+
+Please insert your callsign and local version number in version_branch.h so
+that the custom build's author is visible on the status page.  Again,
+there's no need to commit and push that change to the upstream, keep it as a
+local modification.
+
 [aprsc-group]: https://groups.google.com/forum/#!forum/aprsc
 
 
@@ -99,6 +108,8 @@ Ideas that need some working on
     will be happy to add support in the aprx igate I'm sure
 * Getting on-line reconfiguration fully functional
   * Hessu is already working on that, pretty close to completion
+
+The Issues listed in the github issue tracker are one place to start.
 
 
 Ideas that have been suggested, but will not be added

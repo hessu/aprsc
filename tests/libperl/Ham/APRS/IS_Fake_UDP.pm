@@ -63,7 +63,11 @@ sub bind_and_listen($)
 		return 0;
         }
         
-        #warn "bound udp port $localaddr $localport\n";
+        $self->{'usock'}->sockopt(SO_RCVBUF, 32768);
+        $self->{'usock'}->sockopt(SO_SNDBUF, 32768);
+        
+        warn "bound udp port $localaddr $localport, rcvbuf " .  $self->{'usock'}->sockopt(SO_RCVBUF)
+        	 . " sndbuf " . $self->{'usock'}->sockopt(SO_SNDBUF) . "\n";
         
         $self->{'state'} = 'connected';
         return 1;

@@ -258,7 +258,7 @@ sub getline($;$)
 	        # two buffers / read() calls, return the line based on the \r alone,
 	        # and then the next read will return an empty line before the \n.
 		if ($self->{'ibuf'} =~ s/^(.*?)\r\n//s) {
-			#warn "got: $1\n";
+			#warn "got: '$1'\n";
 			return $1;
 		}
 		

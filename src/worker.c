@@ -1064,7 +1064,18 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	hlog(LOG_DEBUG, "worker thread passing UDP packet from %s to handler: %*s", addrs, r, c->ibuf);
 	hfree(addrs);
 	*/
-	clientaccount_add( c, IPPROTO_UDP, r, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	clientaccount_add( rc, IPPROTO_UDP, r, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	
+	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
+	 * UDP frame.
+	 * TODO: consider processing multiple packets from an UDP frame, split up by CRLF.
+	 */
+	for (i = 0; i < r; i++) {
+		if (c->ibuf[i] == '\r' || c->ibuf[i] == '\n') {
+			r = i;
+			break;
+		}
+	}
 	
 	c->handler(self, rc, IPPROTO_UDP, c->ibuf, r);
 	

@@ -1065,6 +1065,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	hfree(addrs);
 	*/
 	clientaccount_add( rc, IPPROTO_UDP, r, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	rc->last_read = tick;
 	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
 	 * UDP frame.

@@ -101,8 +101,9 @@ DATAINSTALL = install --preserve-timestamps -m $(DATAMODE)
 WEBFILES = \
 	src/web/aprsc.css src/web/aprsc.js \
 	src/web/index.html \
-	src/web/*.png
-
+	src/web/aprsc-logo2.png \
+ 	src/web/excanvas.min.js src/web/jquery.flot.min.js
+ 	
 testinstall:
 	cp -p $(subst src/,,$(WEBFILES)) ../tests/web/
 

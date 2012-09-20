@@ -116,8 +116,15 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	}
 	
 	char *username = argv[1];
-	if (strlen(username) > 9) /* limit length */
-		username[9] = 0;
+	
+	/* limit username length */
+	if (strlen(username) > CALLSIGNLEN_MAX) {
+		hlog(LOG_WARNING, "%s: Invalid login string, too long 'user' username: '%s'", c->addr_rem, c->username);
+		username[CALLSIGNLEN_MAX] = 0;
+		rc = client_printf(self, c, "# Invalid username format\r\n");
+		goto failed_login;
+	}
+	
 #ifndef FIXED_IOBUFS
 	c->username = hstrdup(username);
 #else

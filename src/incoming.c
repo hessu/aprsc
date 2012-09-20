@@ -604,10 +604,17 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		new_len = len+path_append_len-(path_end-q_replace)+3; /* we remove the old path first */
 	else
 		new_len = len+path_append_len+3; /* we add path_append_len + CRLFNUL */
+	
+	/* check if the resulting packet is too long */	
+	if (new_len > PACKETLEN_MAX_LARGE) {
+		hlog(LOG_DEBUG, "packet too long after inserting new Q construct (%d bytes, max %d)", new_len, PACKETLEN_MAX_LARGE);
+		return INERR_LONG_PACKET;
+	}
+	
 	pb = pbuf_get(self, new_len);
 	if (!pb) {
 		// This should never happen...
-		hlog(LOG_ERR, "pbuf_get failed to get packet buffer - aprsc ran out of memory");
+		hlog(LOG_ERR, "pbuf_get failed to get packet buffer");
 		return INERR_OUT_OF_PBUFS; // No room :-(
 	}
 	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?

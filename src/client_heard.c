@@ -269,7 +269,10 @@ void client_heard_init(void)
 #ifndef _FOR_VALGRIND_
 void client_heard_cell_stats(struct cellstatus_t *cellst)
 {
-	// TODO: this is not quite thread safe, but may be OK
+	/* this is not quite thread safe, but is OK since the
+	 * results are only used for statistics (no-one will
+	 * notice if they don't quite add up always)
+	 */
 	cellstatus(client_heard_cells, cellst);
 }
 #endif

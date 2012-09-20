@@ -376,6 +376,10 @@ void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 
 void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status)
 {
+	/* TODO: try this for atomic cellstatus collection:
+	if (ca->use_mutex)
+		pthread_mutex_lock(&ca->mutex);
+	*/
 	status->cellsize = cellarena->cellsize;
 	status->cellsize_aligned = cellarena->increment;
 	status->alignment = cellarena->alignment;
@@ -384,6 +388,10 @@ void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status)
 	status->blocks = cellarena->cellblocks_count;
 	status->blocks_max = CELLBLOCKS_MAX;
 	status->block_size = cellarena->createsize;
+	/* and this:
+	if (ca->use_mutex)
+		pthread_mutex_unlock(&ca->mutex);
+	*/
 }
 
 #endif /* (NOT) _FOR_VALGRIND_ */

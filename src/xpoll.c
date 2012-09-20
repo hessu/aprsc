@@ -15,6 +15,8 @@
  *	Please try to keep this module usable as a self-contained library,
  *	having and API of it's own, so that it can be reused without
  *	aprsc easily. Thanks!
+ *
+ *	TODO: add epoll and kqueue support
  */
 
 #include <string.h>

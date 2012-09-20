@@ -19,6 +19,11 @@
 #include "hlog.h"
 #include "filter.h"
 
+/*
+ *	send a single packet to all clients (and peers and uplinks) which
+ *	should have a copy
+ */
+
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
@@ -35,7 +40,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	*/
 	
 	for (c = self->clients; (c); c = cnext) {
-		cnext = c->next; // the client_write() MAY destroy the client object!
+		cnext = c->next; // client_write() MAY destroy the client object!
 		
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
@@ -51,7 +56,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		
 		/* Do not send packet back to the source client.
 		   This may reject a packet that came from a socket that got
-		   closed a few milliseconds previously and its client_t got
+		   closed a few milliseconds ago and its client_t got
 		   recycled on a newly connected client, but if the new client
 		   is a long living one, all further packets will be accepted
 		   just fine.
@@ -107,7 +112,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 
 
 /*
- *	Process outgoing packets, write them to clients
+ *	Process outgoing packets from the global packet queue, write them to clients
  */
 
 void process_outgoing(struct worker_t *self)
@@ -122,17 +127,19 @@ void process_outgoing(struct worker_t *self)
 	
 	while ((pb = *self->pbuf_global_prevp)) {
 		//__sync_synchronize();
+		/* Some safety checks against bugs and overload conditions */
 		if (pb->is_free) {
 			hlog(LOG_ERR, "worker %d: process_outgoing got pbuf %d marked free, age %d (now %d t %d)\n%.*s",
 				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
-			abort();
+			abort(); /* this would be pretty bad, so we crash immediately */
 		} else if (pb->t > tick + 2) {
-			/* 1-second offset is normal in case of one thread updating tick earlier than another
+			/* 2-second offset is normal in case of one thread updating tick earlier than another
 			 * and a little thread scheduling luck
 			 */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d from future with t %d > tick %d!\n%.*s",
 				self->id, pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
 		} else if (tick - pb->t > 5) {
+			/* this is a bit too old, are we stuck? */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d aged %d sec (now %d t %d)\n%.*s",
 				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
 		} else {

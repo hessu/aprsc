@@ -205,6 +205,9 @@ void pbuf_free_many(struct pbuf_t **array, int numbufs)
 #endif
 }
 
+/*
+ *	pbuf_dump_*: tools to dump packet buffers to a file
+ */
 
 static void pbuf_dump_entry(FILE *fp, struct pbuf_t *pb)
 {
@@ -238,6 +241,11 @@ void pbuf_dupe_dump(FILE *fp)
 	}
 }
 
+/*
+ *	get a buffer for an incoming packet, from either a thread-local
+ *	freelist of preallocated buffers, or from the global cellmalloc
+ *	area.
+ */
 
 static struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 {
@@ -275,7 +283,7 @@ static struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	allocarray = alloca(bunchlen * sizeof(void*));
 
 	if (*pool) {
-		/* fine, just get the first buffer from the pool...
+		/* fine, just get the first buffer from the freelist pool...
 		 * the pool is not doubly linked (not necessary)
 		 */
 		pb = *pool;
@@ -744,7 +752,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 }
 
 /*
- *	Handler called by the socket reading function for normal APRS-IS traffic
+ *	Handler called once for each input APRS-IS line by the socket reading function
+ *	for normal APRS-IS traffic.
  */
 
 int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)

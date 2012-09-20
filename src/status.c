@@ -8,6 +8,10 @@
  *	
  */
 
+/*
+ *	Generate the status JSON string for the web status view
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -44,8 +48,12 @@ struct cdata_list_t {
 	int gauge;
 } *cdata_list = NULL;
 
+/*
+ *	status_uname: get operating system name and architecture
+ */
+
 #define UNAME_LEN 512
-void status_uname(cJSON *root)
+static void status_uname(cJSON *root)
 {
 	struct utsname ut;
 	char s[UNAME_LEN];
@@ -60,6 +68,10 @@ void status_uname(cJSON *root)
 	
 	cJSON_AddStringToObject(root, "os", s);
 }
+
+/*
+ *	Generate a JSON status string
+ */
 
 char *status_json_string(int no_cache, int periodical)
 {
@@ -86,6 +98,7 @@ char *status_json_string(int no_cache, int periodical)
 		}
 	}
 	
+	/* Ok, go and build the JSON tree */
 	cJSON *root = cJSON_CreateObject();
 	
 	cJSON *server = cJSON_CreateObject();
@@ -102,7 +115,6 @@ char *status_json_string(int no_cache, int periodical)
 	status_uname(server);
 	cJSON_AddItemToObject(root, "server", server);
 	
-	// TODO: add free counts of each cell pool
 	cJSON *memory = cJSON_CreateObject();
 #ifndef _FOR_VALGRIND_
 	struct cellstatus_t cellst;
@@ -278,9 +290,11 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON *json_rx_errs = cJSON_CreateStringArray(inerr_labels, INERR_BUCKETS);
 	cJSON_AddItemToObject(root, "rx_errs", json_rx_errs);
 	
+	/* the tree is built, print it out to a malloc'ed string */
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
 	
+	/* cache it */
 	if ((pe = pthread_mutex_lock(&status_json_mt))) {
 		hlog(LOG_ERR, "status_json_string(): could not lock status_json_mt: %s", strerror(pe));
                                 return NULL;
@@ -299,7 +313,7 @@ char *status_json_string(int no_cache, int periodical)
 	return out;
 }
 
-int status_dump_fp(FILE *fp)
+static int status_dump_fp(FILE *fp)
 {
 	char *out = status_json_string(1, 1);
 	fputs(out, fp);
@@ -309,6 +323,13 @@ int status_dump_fp(FILE *fp)
 }
 
 #define PATHLEN 500
+
+
+/*
+ *	Status dumping to file is currently disabled, since doing any
+ *	significant I/O seems to have the risk of blocking the whole process
+ *	when the server is running under VMWare.
+ */
 
 #ifdef ENABLE_STATUS_DUMP_FILE
 

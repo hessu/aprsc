@@ -40,6 +40,12 @@
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 
+/*
+ *	The listen_t structure holds data for a currently open
+ *	listener. It's allocated when a listener is created
+ *	based on the configuration (listen_config_t).
+ */
+
 struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
@@ -108,26 +114,6 @@ static void listener_free(struct listen_t *l)
 	
 	hfree(l);
 }
-
-
-#if 0
-/*
- *	signal handler
- */
- 
-static int accept_sighandler(int signum)
-{
-	switch (signum) {
-		
-	default:
-		hlog(LOG_WARNING, "* SIG %d ignored", signum);
-		break;
-	}
-	
-	signal(signum, (void *)accept_sighandler);	/* restore handler */
-	return 0;
-}
-#endif
 
 /*
  *	Open the TCP/SCTP listening socket
@@ -209,7 +195,7 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 
 	if (1) {
 		int len, arg;
-		/* Set bigger SNDBUF size for the UDP port..
+		/* Set bigger socket buffer sizes for the UDP port..
 		 * The current settings are quite large just to accommodate
 		 * load testing at high packet rates without packet loss.
 		 */
@@ -225,10 +211,12 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	}
 
 	/* set non-blocking mode */
-	fcntl(c->fd, F_SETFL, O_NONBLOCK);
-	/* it really can't fail.. and socket usage is  sendto(... MSG_DONTWAIT),
-	   so it doesn't really even matter if it fails. */
-
+	if (fcntl(c->fd, F_SETFL, O_NONBLOCK) == -1) {
+		/* it really shouldn't fail.. and socket usage is "sendto(... MSG_DONTWAIT)",
+		 * so it doesn't really even matter if it fails. */
+		hlog(LOG_ERR, "UDP listener setup: fcntl(F_SETFL, O_NONBLOCK) failed: %s", strerror(errno));
+	}
+	
 	l->udp = c;
 	/* l->fd = fd -- except that close on it will kill working client setups.. */
 	

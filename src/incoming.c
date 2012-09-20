@@ -638,8 +638,11 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 * originated by that station, drop it.
 	 */
 	if (!originated_by_client && clientlist_check_if_validated_client(s, src_end - s) != -1) {
-		/* TODO: should probably just mark as a dupe, since dropping it completely
-		 * will break rx stats for logged-in clients
+		/* We mark the packet as a dupe, since dropping it completely
+		 * would result in an error-type counter getting incremented.
+		 * This is slightly incorrect (perhaps the packet is not a
+		 * duplicate after all), probably there should be a separate
+		 * statistics counter for this. TODO: add a counter.
 		 */
 		//hlog(LOG_DEBUG, "%s/%s: dropping due to source call '%.*s' being logged in on another socket", c->addr_rem, c->username, src_end - s, s);
 		pb->flags |= F_DUPE;
@@ -665,6 +668,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	} else if (q_start > s && q_start < path_end) {
 		pb->qconst_start = pb->data + (q_start - s);
 	} else {
+		/* If this ever happened, it'd be bad: we didn't find an
+		 * existing Q construct and we didn't pick one to insert.
+		 */
 		hlog(LOG_INFO, "%s/%s: q construct bug: did not find a good construct or produce a new one for:\n%s\n", c->addr_rem, c->username, s);
 		return INERR_Q_BUG;
 	}

@@ -385,6 +385,7 @@ static void peerip_clients_config(void)
 			/* present my socket end address as a malloced string... */
 			s = strsockaddr( &sa.sa, addr_len );
 		} else {
+			hlog(LOG_ERR, "Peer config: getsockname on udpclient->fd failed: %s", strerror(errno));
 			s = hstrdup( "um" ); /* Server's bound IP address.. TODO: what? */
 		}
 #ifndef FIXED_IOBUFS

@@ -313,15 +313,6 @@ char *status_json_string(int no_cache, int periodical)
 	return out;
 }
 
-static int status_dump_fp(FILE *fp)
-{
-	char *out = status_json_string(1, 1);
-	fputs(out, fp);
-	hfree(out);
-	
-	return 0;
-}
-
 #define PATHLEN 500
 
 
@@ -332,6 +323,15 @@ static int status_dump_fp(FILE *fp)
  */
 
 #ifdef ENABLE_STATUS_DUMP_FILE
+
+static int status_dump_fp(FILE *fp)
+{
+	char *out = status_json_string(1, 1);
+	fputs(out, fp);
+	hfree(out);
+	
+	return 0;
+}
 
 int status_dump_file(void)
 {

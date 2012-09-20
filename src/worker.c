@@ -1588,7 +1588,6 @@ void workers_stop(int stop_all)
 	struct worker_t *w;
 	int e;
 	int stopped = 0;
-	extern long incoming_count;
 	
 	hlog(LOG_INFO, "Stopping %d worker threads...",
 		(stop_all) ? workers_running : workers_configured - workers_running);
@@ -1620,7 +1619,7 @@ void workers_stop(int stop_all)
 		
 		workers_running--;
 	}
-	hlog(LOG_INFO, "Stopped %d worker threads. (incoming_count=%ld)", stopped, incoming_count);
+	hlog(LOG_INFO, "Stopped %d worker threads.", stopped);
 	
 }
 

@@ -36,8 +36,6 @@
 #include "cellmalloc.h"
 #include "messaging.h"
 
-long incoming_count;
-
 const char *inerr_labels[] = {
 	"unknown",
 	"no_colon",
@@ -734,9 +732,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	*self->pbuf_incoming_local_last = pb;
 	self->pbuf_incoming_local_last = &pb->next;
 	self->pbuf_incoming_local_count++;
-	
-	// TODO: should be atomic
-	incoming_count++;
 	
 	return rc;
 }

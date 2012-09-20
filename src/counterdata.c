@@ -39,6 +39,10 @@ struct cdata_t {
 struct cdata_t *counterdata = NULL;
 pthread_mutex_t counterdata_mt = PTHREAD_MUTEX_INITIALIZER;
 
+/*
+ *	allocation and freeing of cdata structures
+ */
+
 struct cdata_t *cdata_alloc(const char *name)
 {
 	int e;
@@ -83,6 +87,10 @@ void cdata_free(struct cdata_t *cd)
 	hfree(cd);
 }
 
+/*
+ *	Find a cdata element by name and lock it for use
+ */
+
 static struct cdata_t *cdata_find_and_lock(const char *name)
 {
 	struct cdata_t *cd = NULL;
@@ -109,6 +117,10 @@ static struct cdata_t *cdata_find_and_lock(const char *name)
 	
 	return cd;
 }
+
+/*
+ *	Add a new data sample to a counter-watching cdata
+ */
 
 void cdata_counter_sample(struct cdata_t *cd, long long value)
 {
@@ -146,6 +158,10 @@ void cdata_counter_sample(struct cdata_t *cd, long long value)
 	}
 }
 
+/*
+ *	Add a new sample to a gauge-watching cdata
+ */
+
 void cdata_gauge_sample(struct cdata_t *cd, long long value)
 {
 	int e;
@@ -171,6 +187,10 @@ void cdata_gauge_sample(struct cdata_t *cd, long long value)
 	}
 }
 
+/*
+ *	Get the last calculated value of a cdata
+ */
+
 long cdata_get_last_value(const char *name)
 {
 	int e;
@@ -195,6 +215,13 @@ long cdata_get_last_value(const char *name)
 	
 	return v;
 }
+
+/*
+ *	Return a JSON string containing the contents of a cdata array.
+ *	Allocated on the heap, needs to be freed by the caller.
+ *	This is called by the http service to provide graph data for the
+ *	web UI.
+ */
 
 char *cdata_json_string(const char *name)
 {

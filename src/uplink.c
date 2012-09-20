@@ -10,7 +10,8 @@
  */
 
 /*
- *	uplink.c: processes uplink data within the worker thread
+ *	uplink thread: create uplink connections as necessary
+ *	(and tear them down)
  */
 
 #include <string.h>
@@ -57,24 +58,6 @@ struct portaccount_t uplink_connects = {
   .refcount = 99,	/* Global static blocks have extra-high initial refcount */
 };
 
-
-/*
- *	signal handler
- */
- 
-int uplink_sighandler(int signum)
-{
-	switch (signum) {
-		
-	default:
-		hlog(LOG_WARNING, "* SIG %d ignored", signum);
-		break;
-	}
-	
-	signal(signum, (void *)uplink_sighandler);	/* restore handler */
-	return 0;
-}
-
 /*
  *	Close uplinking sockets
  */
@@ -104,6 +87,10 @@ void close_uplinkers(void)
 	}
 	return;
 }
+
+/*
+ *	Log and handle the closing of an uplink.
+ */
 
 void uplink_close(struct client_t *c, int errnum)
 {

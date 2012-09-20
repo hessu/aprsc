@@ -197,8 +197,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 		return 0;
 	}
 	
-	// TODO: username length should be a define
-	if (strlen(argv[5]) > 9) {
+	if (strlen(argv[5]) > CALLSIGNLEN_MAX) {
 		hlog(LOG_ERR, "%s: Uplink's server name is too long: '%s'", c->addr_rem, argv[5]);
 		client_close(self, c, -3);
 		return 0;
@@ -361,6 +360,8 @@ int make_uplink(struct uplink_config_t *l)
 	 * login due to a bad source address (like, IPv4 would be allowed but our
 	 * IPv6 address is not in the server's ACL), this currently does not switch
 	 * to the next destination address.
+	 * Instead it'll wait for the retry timer and then try a random
+	 * destination address, and eventually succeed (unless very unlucky).
 	 */
 	fd = -1;
 	while ((a = ap[i])) {

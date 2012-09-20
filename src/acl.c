@@ -153,10 +153,10 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 					shift -= s;
 					
 					e6->mask[i] = 0UL - (1UL << (32UL - s));
+					/* mask the address wih the mask so that no host bits are set */
+					e6->addr[i] = e6->addr[i] & e6->mask[i];
 				}
 			}
-			
-			// TODO: should probably mask out the host bits of the IPv6 addrs when parsing
 			
 		} else if (ai->ai_family == AF_INET) {
 			if (prefixlen > 32)

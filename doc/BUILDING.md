@@ -2,10 +2,6 @@
 Compiling aprsc from source
 ===========================
 
-WARNING: THIS DOCUMENT CURRENTLY DOCUMENTS FUTURE FUNCTIONALITY - THE
-CONFIGURE SCRIPT IS NOT QUITE FINISHED YET AND YOU CAN'T MAKE INSTALL
-EITHER.
-
 If you're familiar with compiling software from the source code, and
 pre-built binary packages are not available for your platform, this is where
 you need to start.  Binary packages are provided for Debian and Ubuntu
@@ -104,11 +100,10 @@ Install it:
 
     $ sudo make install
     
-Install example configuration:
-
-    $ sudo make installconf
-
 You should now have a nice installed set of software in /opt/aprsc.
+An example configuration file has been installed as
+/opt/aprsc/etc/aprsc.conf. An existing configuration file will not be
+overwritten by a subsequent install.
 
 
 A note on the chroot

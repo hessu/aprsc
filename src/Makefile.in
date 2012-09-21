@@ -184,6 +184,7 @@ aprsc.8 : % : %.in VERSION Makefile
 
 .PHONY:	install install-deb
 install: all
+	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/etc
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/logs
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/data
 	$(INSTALL_DIR) $(DESTDIR)/opt/aprsc/web

@@ -492,6 +492,8 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		li->next->prevp = &li->next;
 	listen_config_new = li;
 	
+	fullhost = NULL;
+	
 	// TODO: when returning, should free the whole li tree
 	for (i = 4; i < argc; i++) {
 		//hlog(LOG_DEBUG, "PeerGroup: configuring peer %s", argv[i]);
@@ -500,23 +502,20 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		fullhost = hstrdup(argv[i]);
 		if (parse_hostport(argv[i], &host_s, &port_s)) {
 			hlog(LOG_ERR, "PeerGroup: Invalid remote host:port specification '%s'", fullhost);
-			hfree(fullhost);
-			return -2;
+			goto err;
 		}
 		
 		port = atoi(port_s);
 		if (port < 1 || port > 65535) {
 			hlog(LOG_ERR, "PeerGroup: Invalid port number '%s' for remote address '%s'", port_s, fullhost);
-			hfree(fullhost);
-			return -2;
+			goto err;
 		}
 		
 		ai = NULL;
 		d = getaddrinfo(host_s, port_s, &req, &ai);
 		if (d != 0) {
 			hlog(LOG_ERR, "PeerGroup: address parsing or hostname lookup failure for %s: %s", fullhost, gai_strerror(d));
-			hfree(fullhost);
-			return -2;
+			goto err;
 		}
 		
 		/* we can only take one address per peer at this point, SCTP multihoming ignored */
@@ -524,14 +523,12 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		for (a = ai; (a); a = a->ai_next, ++d);
 		if (d != 1) {
 			hlog(LOG_ERR, "PeerGroup: address parsing for remote %s returned %d addresses - can only have one", fullhost, d);
-			hfree(fullhost);
-			return -2;
+			goto err;
 		}
 		
 		if (ai->ai_family != af) {
 			hlog(LOG_ERR, "PeerGroup: remote address %s has different address family than the local address - mixing IPv4 and IPv6, are we?", fullhost);
-			hfree(fullhost);
-			return -2;
+			goto err;
 		}
 		
 		/* check that the address is not mine (loop!), and that we don't have
@@ -540,15 +537,13 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		
 		if (ai_comp(ai, my_ai)) {
 			hlog(LOG_ERR, "PeerGroup: remote address %s is the same as my local address, would cause a loop!", fullhost);
-			hfree(fullhost);
-			return -2;
+			goto err;
 		}
 		
 		for (pe = *lq; (pe); pe = pe->next) {
 			if (ai_comp(ai, pe->ai)) {
 				hlog(LOG_ERR, "PeerGroup: remote address %s is configured as a peer twice, would cause duplicate transmission!", fullhost);
-				hfree(fullhost);
-				return -2;
+				goto err;
 			}
 		}
 		
@@ -574,6 +569,11 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	}
 	
 	return 0;
+err:
+	if (fullhost)
+		hfree(fullhost);
+	
+	return -2;
 }
 
 /*

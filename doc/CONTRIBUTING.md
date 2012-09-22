@@ -75,8 +75,8 @@ start contributing.
 
 Broken code on the live APRS-IS server network can break the whole network.
 This has the potential of making a lot of people unhappy.  Before connecting
-modified to the real APRS-IS, *DO* *RUN* the test suite to make sure it's
-working to some degree.
+modified code to the real APRS-IS, *DO* *RUN* the test suite to make sure
+it's working to some degree.
 
 
 Checking out current development source code

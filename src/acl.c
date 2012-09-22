@@ -152,7 +152,7 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 					s = (shift > 32) ? 32 : shift;
 					shift -= s;
 					
-					e6->mask[i] = 0UL - (1UL << (32UL - s));
+					e6->mask[i] = htonl(0UL - (1UL << (32UL - s)));
 					/* mask the address wih the mask so that no host bits are set */
 					e6->addr[i] = e6->addr[i] & e6->mask[i];
 				}

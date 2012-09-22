@@ -650,10 +650,12 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 		}
 	}
 	
-	/* put in the list */
-	l->next = *lq;
-	if (l->next)
-		l->next->prevp = &l->next;
+	/* put in the end of the list */
+	while (*lq)
+		lq = &(*lq)->next;
+		
+	l->prevp = lq;
+	l->next = NULL;
 	*lq = l;
 	
 	return 0;

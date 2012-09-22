@@ -18,15 +18,6 @@ RunDir data
 # Interval specification format examples:
 # 600 (600 seconds), 5m, 2h, 1h30m, 1d3h15m24s, etc...
 
-# Statistics logging
-StatsInterval	1m
-
-# How often to scan the caches for old entries
-ExpiryInterval	30s
-
-# How long to cache last position of each station
-LastPositionCache	48h
-
 # When no data is received from an upstream server in N seconds, switch to
 # another server
 UpstreamTimeout		10s

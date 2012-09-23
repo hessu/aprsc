@@ -5,8 +5,8 @@ Debugging aprsc issues, tips and tricks
 Enabling debug logging
 -------------------------
 
-Change the log level to debug by changing the "-e info" to "-e debug" on the
-aprsc command line.  Insert the "-e debug" if you don't have an -e parameter.
+Change the log level to debug by changing "-e info" to "-e debug" on the
+aprsc command line.  Insert "-e debug" if you don't have an -e parameter.
 
 On Debian and Ubuntu the parameter goes in /etc/default/aprsc, on the
 DAEMON_OPTS line. On other systems it typically goes in the init script.

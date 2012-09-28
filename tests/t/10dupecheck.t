@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 17 };
+BEGIN { plan tests => 18 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -70,12 +70,17 @@ istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST,$login,I:$data", # should drop
 	"SRC>DST:dummy", 1); # will pass (helper packet)
 
-# 13: send the same packet with additional whitespace in the end, should pass umodified
+# 13: send the same packet with a different dstcall SSID and see that it is dropped
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST-2,$login,I:$data", # should drop
+	"SRC>DST:dummy2", 1); # will pass (helper packet)
+
+# 14: send the same packet with additional whitespace in the end, should pass umodified
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,$login,I:$data  ",
 	"SRC>DST,qAR,$login:$data  ");
 
-# 14: send the same packet with a different destination call, should pass
+# 15: send the same packet with a different destination call, should pass
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,DIGI1*,qAR,$login:$data",
 	"SRC>DST2,DIGI1*,qAR,$login:$data");

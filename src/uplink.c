@@ -149,37 +149,37 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	char *e = s + len;
 	*e = 0;
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
-		hlog(LOG_ERR, "%s: Uplink's logresp message is not recognized: no # in beginning", c->addr_rem);
+		hlog(LOG_ERR, "%s: Uplink's logresp message is not recognized: no # in beginning (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, -3);
 		return 0;
 	}
 	
 	if (argc < 6) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not have enough arguments", c->addr_rem);
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not have enough arguments (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, -3);
 		return 0;
 	}
 	
 	if (strcmp(argv[1], "logresp") != 0) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not say 'logresp'", c->addr_rem);
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not say 'logresp' (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, -3);
 		return 0;
 	}
 	
 	if (strcmp(argv[2], serverid) != 0) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it", c->addr_rem, serverid);
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it (protocol incompatibility)", c->addr_rem, serverid);
 		client_close(self, c, -3);
 		return 0;
 	}
 	
 	if (strcmp(argv[3], "verified,") != 0) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not say I'm verified", c->addr_rem);
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not say I'm verified (wrong passcode in my configuration?)", c->addr_rem);
 		client_close(self, c, -3);
 		return 0;
 	}
 	
 	if (strcmp(argv[4], "server") != 0) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not contain 'server'", c->addr_rem);
+		hlog(LOG_ERR, "%s: Uplink's logresp message does not contain 'server' (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, -3);
 		return 0;
 	}

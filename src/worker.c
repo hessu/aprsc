@@ -1762,6 +1762,8 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 		"peer"
 	};
 	char *mode;
+	char addr_s[80];
+	char *s;
 	
 	int client_heard_count = 0;
 	int client_courtesy_count = 0;
@@ -1785,11 +1787,27 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 				
 			cJSON *jc = cJSON_CreateObject();
 			cJSON_AddNumberToObject(jc, "fd", c->fd);
-			cJSON_AddStringToObject(jc, "addr_rem", c->addr_rem);
-			cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
+			
+			if (c->state == CSTATE_COREPEER) {
+				/* cut out ports in the name of security by obscurity */
+				strncpy(addr_s, c->addr_rem, sizeof(addr_s));
+				if ((s = strrchr(addr_s, ':')))
+					*s = 0;
+				cJSON_AddStringToObject(jc, "addr_rem", addr_s);
+				strncpy(addr_s, c->addr_loc, sizeof(addr_s));
+				if ((s = strrchr(addr_s, ':')))
+					*s = 0;
+				cJSON_AddStringToObject(jc, "addr_loc", addr_s);
+			} else {
+				cJSON_AddStringToObject(jc, "addr_rem", c->addr_rem);
+				cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
+			}
+			
 			cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
+			
 			if (c->udp_port && c->udpclient)
 				cJSON_AddNumberToObject(jc, "udp_downstream", 1);
+				
 			cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
 			cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);
 			cJSON_AddNumberToObject(jc, "since_last_read", tick - c->last_read);

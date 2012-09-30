@@ -10,6 +10,7 @@ config.log
 config.status
 SVNVERSION
 GITVERSION
+autom4te.cache
 
 # build temp files
 build-stamp

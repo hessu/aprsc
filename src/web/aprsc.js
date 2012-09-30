@@ -33,7 +33,10 @@ function cancel_events(e)
 function server_status_host(s)
 {
 	var h = s['addr_rem'];
-	return h.substr(0, h.lastIndexOf(':')) + ':14501';
+	var p = h.lastIndexOf(':');
+	if (h.lastIndexOf(']') > p || p == -1)
+		return h + ':14501';
+	return h.substr(0, p) + ':14501';
 }
 
 function addr_loc_port(s)
@@ -233,7 +236,7 @@ var val_convert = {
 	't_connect': timestr,
 	'since_connect': dur_str,
 	'since_last_read': dur_str,
-	'addr_rem': conv_none,
+	'addr_rem_shown': conv_none,
 	'username': username_link,
 	'addr_loc': addr_loc_port,
 	'verified': conv_verified
@@ -257,7 +260,7 @@ var listener_cols = {
 
 var uplink_cols = {
 	'username': 'Server ID',
-	'addr_rem': 'Address',
+	'addr_rem_shown': 'Address',
 	'mode': 'Mode',
 	't_connect': 'Connected',
 	'since_connect': 'Up',
@@ -272,7 +275,7 @@ var uplink_cols = {
 };
 
 var peer_cols = {
-	'addr_rem': 'Address',
+	'addr_rem_shown': 'Address',
 	'since_last_read': 'Last in',
 	'pkts_tx': 'Packets Tx',
 	'pkts_rx': 'Packets Rx',
@@ -285,7 +288,7 @@ var peer_cols = {
 var client_cols = {
 	'addr_loc': 'Port',
 	'username': 'Callsign',
-	'addr_rem': 'Address',
+	'addr_rem_shown': 'Address',
 	'verified': 'Verified',
 	'since_connect': 'Up',
 	'since_last_read': 'Last in',
@@ -424,16 +427,17 @@ function render_clients(element, d, cols)
 			c['fd'] = Math.random() * -1000000;
 		
 		fd_clients[c['fd']] = c;
+		c['addr_rem_shown'] = c['addr_rem'];
 		
 		if (c['udp_downstream']) { 
 			if (c['mode'] == 'peer')
-				c['addr_rem'] += ' UDP';
+				c['addr_rem_shown'] += ' UDP';
 			else
-				c['addr_rem'] += ' +UDP';
+				c['addr_rem_shown'] += ' +UDP';
 		}
 		
-		if (linkable[c['app_name']])
-			c['addr_rem'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem']) + '</a>';
+		if (linkable[c['app_name']] || c['mode'] == 'peer')
+			c['addr_rem_shown'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem_shown']) + '</a>';
 		
 		if (c['app_name'] && c['app_version'])
 			c['show_app_name'] = c['app_name'] + ' ' + c['app_version'];

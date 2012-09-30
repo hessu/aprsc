@@ -69,8 +69,8 @@ div.msg_e, div.msg_i, div.msg_s {
 
 div.ttip {
 	position: absolute;
-        left: 100px;
-        top: 100px;
+	left: 100px;
+	top: 100px;
 	background: #ffffff;
 	font-size: 11px;
 	width: 300px;

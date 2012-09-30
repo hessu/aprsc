@@ -36,6 +36,9 @@
 #include "cellmalloc.h"
 #include "messaging.h"
 
+/* When adding labels here, remember to add the description strings in
+ * web/aprsc.js rx_err_strings
+ */
 const char *inerr_labels[] = {
 	"unknown",
 	"no_colon",

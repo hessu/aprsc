@@ -65,3 +65,20 @@ div.msg_e, div.msg_i, div.msg_s {
 	width: 450px;
 }
 
+/* tooltip */
+
+div.ttip {
+	position: absolute;
+        left: 100px;
+        top: 100px;
+	background: #ffffff;
+	font-size: 11px;
+	width: 300px;
+	z-index: 80;
+	border: 1px solid #ff0000;
+	padding: 7px;
+	border-radius: 5px;
+	box-shadow: 8px 8px 3px rgba(0,0,0,0.5);
+	display: none;
+}
+

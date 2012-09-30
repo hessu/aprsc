@@ -179,7 +179,7 @@ struct client_heard_t {
 /* error codes for incoming packet drop reasons */
 #define INERR_UNKNOWN			0
 #define INERR_NO_COLON			-1	/* no : in packet */
-#define INERR_NO_DST			-2	/* no > in packet to mark end of dstcall */
+#define INERR_NO_DST			-2	/* no > in packet to mark beginning of dstcall */
 #define INERR_NO_PATH			-3	/* no path found between srccall and : */
 #define INERR_LONG_SRCCALL		-4	/* too long srccall */
 #define INERR_NO_BODY			-5	/* no packet body/data after : */

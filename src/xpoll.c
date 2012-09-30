@@ -48,11 +48,12 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
  	xp->handler = handler;
 	
 #ifdef XP_USE_EPOLL
-        xp->epollfd = epoll_create1(EPOLL_CLOEXEC);
+        xp->epollfd = epoll_create(0);
         if (xp->epollfd < 0) {
 		// FIXME: error message
 		return NULL;
 	}
+        fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC);
 #else
 #ifdef XP_USE_POLL
 	xp->pollfd_len = XP_INCREMENT;

@@ -168,6 +168,7 @@ var rx_err_strings = {
 	"disallow_unverified": 'Packet from unverified client',
 	"path_nogate": 'Packet with NOGATE/RFONLY in path',
 	"3rd_party": '3rd-party packet',
+	"general_query": 'General query',
 	"aprsc_oom_pbuf": 'aprsc out of packet buffers',
 	"aprsc_class_fail": 'aprsc failed to classify packet',
 	"aprsc_q_bug": 'aprsc Q construct processing failed',

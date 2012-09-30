@@ -43,7 +43,10 @@ my @pkts = (
 	"SRC>APRS,NOGATE,qAR,$login:>should drop, NOGATE",
 	"SRC>APRS,RFONLY,qAR,$login:>should drop, RFONLY",
 	"SRC>DST,DIGI,qAR,$login:}SRC2>DST,DIGI,TCPIP*:>should drop, 3rd party",
-	"SRC>DST,DIGI,qAR,$login:}blah, 3rd party ID only"
+	"SRC>DST,DIGI,qAR,$login:}blah, 3rd party ID only",
+	"SRC>DST,DIGI,qAR,$login:?APRS? general query",
+	"SRC>DST,DIGI,qAR,$login:?WX? general query",
+	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query"
 );
 
 # send the packets

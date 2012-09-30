@@ -1127,6 +1127,8 @@ int parse_aprs(struct pbuf_t *pb)
 		/* It might not be a bright idea to mark all messages starting with ?
 		 * queries instead of messages and making them NOT match the
 		 * filter message.
+		 * ALSO: General (non-directed) queries are DROPPED by aprsc.
+		 * Do not mark DIRECTED QUERIES as queries - we don't want to drop them.
 		if (body[9] == ':' && body[10] == '?') {
 			pb->packettype &= ~T_MESSAGE;
 			pb->packettype |=  T_QUERY;

@@ -11,12 +11,22 @@
 #ifndef XPOLL_H
 #define XPOLL_H
 
-#define XP_USE_POLL
-
-#ifdef XP_USE_POLL
-#define XP_INCREMENT 64 // The "struct pollfd" is _small_, avoid mem fragment
+// Lots of subsystems use poll(2) call for short timeouts
 #include <poll.h>
+
+#include "ac-hdrs.h"
+
+#ifdef HAVE_SYS_EPOLL_H
+// Have Linux <sys/epoll.h>
+#define XP_USE_EPOLL 1
+#include <sys/epoll.h>
+
+#else
+
+#define XP_USE_POLL 1
+#define XP_INCREMENT 64 // The "struct pollfd" is _small_, avoid mem fragment
 #endif
+
 
 #define XP_IN	1
 #define XP_OUT	2
@@ -28,8 +38,12 @@ struct xpoll_fd_t {
 	
 	int result;
 
+#ifdef XP_USE_EPOLL
+	struct epoll_event ev;  // event flags for this fd.
+#else
 #ifdef XP_USE_POLL
 	int pollfd_n;	/* index to xp->pollfd[] */
+#endif
 #endif
 
 	struct xpoll_fd_t *next;
@@ -42,12 +56,18 @@ struct xpoll_t {
 	
 	int	(*handler)	(struct xpoll_t *xp, struct xpoll_fd_t *xfd);
 
+#ifdef XP_USE_EPOLL
+	int epollfd;
+  // #define MAX_EPOLL_EVENTS 32
+  //	struct epoll_event events[MAX_EPOLL_EVENTS];
+
+#else
 #ifdef XP_USE_POLL
 	struct pollfd *pollfd;
 	int pollfd_len;
-	int pollfd_used;
 #endif
-
+#endif
+	int pollfd_used;
 };
 
 extern struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (struct xpoll_t *xp, struct xpoll_fd_t *xfd));

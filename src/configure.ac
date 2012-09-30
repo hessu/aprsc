@@ -64,7 +64,10 @@ AS_IF([test "x$static_libevent" != x],
 	[LIBEVENT="$static_libevent"])
 
 dnl Checks for system headers
-AC_CHECK_HEADERS([alloca.h], AC_DEFINE([HAVE_ALLOCA_H]))
+AC_CHECK_HEADERS([alloca.h],    AC_DEFINE([HAVE_ALLOCA_H]))
+AC_CHECK_HEADERS([poll.h],      AC_DEFINE([HAVE_POLL_H]))
+dnl AC_CHECK_FUNC(ppoll,,[Probably have ppoll of Linux])
+AC_CHECK_HEADERS([sys/epoll.h], AC_DEFINE([HAVE_SYS_EPOLL_H]))
 
 dnl Checks for libraries.
 

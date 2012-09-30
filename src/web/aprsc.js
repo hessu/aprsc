@@ -419,7 +419,7 @@ function render_clients(element, d, cols)
 		s += '<tr>';
 		var c = d[ci];
 		
-		if (isUndefined(c['fd']))
+		if (isUndefined(c['fd']) || c['fd'] < 0)
 			c['fd'] = Math.random() * -1000000;
 		
 		fd_clients[c['fd']] = c;

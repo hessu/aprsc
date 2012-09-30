@@ -36,6 +36,9 @@
 #include "cellmalloc.h"
 #include "messaging.h"
 
+/* When adding labels here, remember to add the description strings in
+ * web/aprsc.js rx_err_strings
+ */
 const char *inerr_labels[] = {
 	"unknown",
 	"no_colon",
@@ -47,6 +50,7 @@ const char *inerr_labels[] = {
 	"disallow_unverified",
 	"path_nogate",
 	"3rd_party",
+	"general_query",
 	"aprsc_oom_pbuf",
 	"aprsc_class_fail",
 	"aprsc_q_bug",
@@ -732,6 +736,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		
 		return incoming_server_message(self, c, pb);
 	}
+	
+	/* check for general queries - those cause reply floods and need
+	 * to be dropped
+	 */
+	if (pb->packettype & T_QUERY)
+		return INERR_GENERAL_QUERY;
 	
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);

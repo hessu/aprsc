@@ -22,6 +22,12 @@
 #include "clientlist.h"
 #include "parse_qc.h"
 
+/* a static list of usernames which are not allowed to log in */
+static const char *disallow_login_usernames[] = {
+	"pass", /* a sign of "user  pass -1" login with no configured username */
+	NULL
+};
+
 /*
  *	Parse the login string in a HTTP POST or UDP submit packet
  *	Argh, why are these not in standard POST parameters in HTTP?
@@ -32,6 +38,7 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 	int argc;
 	char *argv[256];
 	int i;
+	int username_len;
 	
 	/* parse to arguments */
 	if ((argc = parse_args_noshell(argv, s)) == 0)
@@ -48,8 +55,26 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 	}
 	
 	*username = argv[1];
-	if (strlen(*username) > 9) /* limit length */
-		*username[9] = 0;
+	username_len = strlen(*username);
+	/* limit username length */
+	if (username_len > CALLSIGNLEN_MAX) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, too long 'user' username: '%s'", addr_rem, *username);
+		return -1;
+	}
+	
+	/* check the username against a static list of disallowed usernames */
+	for (i = 0; (disallow_login_usernames[i]); i++) {
+		if (strcasecmp(*username, disallow_login_usernames[i]) == 0) {
+			hlog(LOG_WARNING, "%s: HTTP POST: Login by user '%s' not allowed", addr_rem, *username);
+			return -1;
+		}
+	}
+	
+	/* make sure the callsign is OK on the APRS-IS */
+	if (check_invalid_q_callsign(*username, username_len)) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, invalid 'user': '%s'", addr_rem, *username);
+		return -1;
+	}
 	
 	int given_passcode = -1;
 	int validated = 0;
@@ -132,6 +157,15 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	c->username[sizeof(c->username)-1] = 0;
 #endif
 	c->username_len = strlen(c->username);
+	
+	/* check the username against a static list of disallowed usernames */
+	for (i = 0; (disallow_login_usernames[i]); i++) {
+		if (strcasecmp(c->username, disallow_login_usernames[i]) == 0) {
+			hlog(LOG_WARNING, "%s: Login by user '%s' not allowed", c->addr_rem, c->username);
+			rc = client_printf(self, c, "# Login by user not allowed\r\n");
+			goto failed_login;
+		}
+	}
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {

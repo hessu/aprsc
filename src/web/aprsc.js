@@ -16,10 +16,27 @@ function isUndefined(v)
 	return v === undef;
 }
 
+function cancel_events(e)
+{
+	if (!e)
+		if (window.event) e = window.event;
+	else
+		return;
+	
+	if (e.cancelBubble != null) e.cancelBubble = true;
+	if (e.stopPropagation) e.stopPropagation();
+	if (e.preventDefault) e.preventDefault();
+	if (window.event) e.returnValue = false;
+	if (e.cancel != null) e.cancel = true;
+}
+
 function server_status_host(s)
 {
 	var h = s['addr_rem'];
-	return h.substr(0, h.lastIndexOf(':')) + ':14501';
+	var p = h.lastIndexOf(':');
+	if (h.lastIndexOf(']') > p || p == -1)
+		return h + ':14501';
+	return h.substr(0, p) + ':14501';
 }
 
 function addr_loc_port(s)
@@ -70,8 +87,10 @@ function client_pkts_rx(c, k)
 	
 	var s = c['pkts_rx'] + '/' + c['pkts_ign'];
 	
-	if (c['pkts_ign'] / c['pkts_rx'] > 0.1)
-		return '<span class="red">' + s + '</span>';
+	if (c['pkts_ign'] > 0)
+		return '<span class="'
+			+ ((c['pkts_ign'] / c['pkts_rx'] > 0.1) ? 'rxerr_red' : 'rxerr')
+			+ '" onclick="return rx_err_popup(event, ' + c['fd'] + ');">' + s + '</span>';
 
 	return s;
 }
@@ -141,6 +160,26 @@ function conv_none(s)
 
 var listeners_table, uplinks_table, peers_table, clients_table, memory_table, dupecheck_table, totals_table;
 
+var rx_err_strings = {
+	"unknown": 'Unknown error',
+	"no_colon": 'No colon (":") in packet',
+	"no_dst": 'No ">" in packet to mark beginning of destination callsign',
+	"no_path": 'No path found between source callsign and ":"',
+	"long_srccall": 'Source callsign too long',
+	"no_body": 'No packet body/data after ":"',
+	"long_dstcall": 'Destination callsign too long',
+	"disallow_unverified": 'Packet from unverified client',
+	"path_nogate": 'Packet with NOGATE/RFONLY in path',
+	"3rd_party": '3rd-party packet',
+	"general_query": 'General query',
+	"aprsc_oom_pbuf": 'aprsc out of packet buffers',
+	"aprsc_class_fail": 'aprsc failed to classify packet',
+	"aprsc_q_bug": 'aprsc Q construct processing failed',
+	"q_drop": 'Q construct algorithm dropped packet',
+	"short_packet": 'Packet too short',
+	"long_packet": 'Packet too long'
+};
+
 var key_translate = {
 	// server block
 	'server_id': 'Server ID',
@@ -197,7 +236,7 @@ var val_convert = {
 	't_connect': timestr,
 	'since_connect': dur_str,
 	'since_last_read': dur_str,
-	'addr_rem': conv_none,
+	'addr_rem_shown': conv_none,
 	'username': username_link,
 	'addr_loc': addr_loc_port,
 	'verified': conv_verified
@@ -221,7 +260,7 @@ var listener_cols = {
 
 var uplink_cols = {
 	'username': 'Server ID',
-	'addr_rem': 'Address',
+	'addr_rem_shown': 'Address',
 	'mode': 'Mode',
 	't_connect': 'Connected',
 	'since_connect': 'Up',
@@ -236,7 +275,7 @@ var uplink_cols = {
 };
 
 var peer_cols = {
-	'addr_rem': 'Address',
+	'addr_rem_shown': 'Address',
 	'since_last_read': 'Last in',
 	'pkts_tx': 'Packets Tx',
 	'pkts_rx': 'Packets Rx',
@@ -249,7 +288,7 @@ var peer_cols = {
 var client_cols = {
 	'addr_loc': 'Port',
 	'username': 'Callsign',
-	'addr_rem': 'Address',
+	'addr_rem_shown': 'Address',
 	'verified': 'Verified',
 	'since_connect': 'Up',
 	'since_last_read': 'Last in',
@@ -264,12 +303,114 @@ var client_cols = {
 	'filter': 'Filter'
 };
 
+/* applications which typically have a port 14501 status port - can be linked */
 var linkable = {
 	'aprsc': 1,
 	'aprsd': 1,
 	'javAPRSSrvr': 1
 };
 
+/* clients per fd, to support onclick actions within client/uplink/peer tables */
+var fd_clients = {};
+var rx_err_codes = []; /* an array of rx err field codes */
+
+/* tooltip action for rx errors counters */
+function event_click_coordinates(e)
+{
+	var posx = 0;
+	var posy = 0;
+	
+	if (e.pageX || e.pageY) {
+		posx = e.pageX;
+		posy = e.pageY;
+	} else if (e.clientX || e.clientY) {
+		posx = e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
+		posy = e.clientY + document.body.scrollTop + document.documentElement.scrollTop;
+	}/* else {
+		alert("event_click_coordinates failed!");
+	}*/
+	
+	return [ posx, posy ];
+}
+
+var ttip_inside_element;
+function ttip(e, elem, fd)
+{
+	var co = event_click_coordinates(e);
+	
+	// make note of element we're in
+	ttip_inside_element = elem;
+	
+	//jsjam-keep: event_attach
+	//$(elem).on('mouseout', ttip_hide);
+	setTimeout(function() { ttip_show_maybe(elem, function() { return "contents"; }, co); }, 300);
+	//deb("  added listener");
+}
+
+function rx_err_contents(fd)
+{
+	if (isUndefined(fd_clients[fd]))
+		return 'No client on fd ' + fd;
+		
+	var er = fd_clients[fd]['rx_errs'];
+	
+	if (isUndefined(er))
+		return 'No rx errors for client on fd ' + fd;
+	
+	var s = '<b>Received packets dropped: ' + fd_clients[fd]['pkts_ign'] + ' out of ' + fd_clients[fd]['pkts_rx'] + '</b><br />';
+	
+	for (var i = 0; i < rx_err_codes.length; i++) {
+		if (er[i] < 1)
+			continue;
+		s += ((rx_err_strings[rx_err_codes[i]]) ? rx_err_strings[rx_err_codes[i]] : rx_err_codes[i])
+			+ ': ' + er[i] + '<br />';
+	}
+	
+	return s;
+}
+
+function rx_err_popup(e, fd)
+{
+	cancel_events(e);
+	
+	if (isUndefined(fd_clients[fd]))
+		return;
+	
+	var co = event_click_coordinates(e);
+	
+	ttip_show(function() { return rx_err_contents(fd); }, co);
+	
+	return false;
+}
+
+function ttip_show_maybe(elem, cb, co)
+{
+	if (ttip_inside_element == elem)
+		ttip_show(cb, co);
+}
+
+function ttip_show(cb, co)
+{
+	var element = $('#ttip');
+	element.hide();
+	
+	var ttip_size = 300;
+	if (co[0] > ttip_size + 40)
+		co[0] -= ttip_size + 40; // position on left of event
+	else
+		co[0] += 40; // position on right of event
+	
+	element.html("<span>" + cb() + "</span>");
+	element.css({ 'left': co[0] + 'px', 'top': co[1] + 'px'}).show('fast');
+}
+
+function ttip_hide()
+{
+	$('#ttip').hide('fast');
+	ttip_inside_element = null;
+}
+
+/* render a clients array (also peers, uplinks, and listeners) */
 function render_clients(element, d, cols)
 {
 	var s = '<table><tr>';
@@ -282,15 +423,21 @@ function render_clients(element, d, cols)
 		s += '<tr>';
 		var c = d[ci];
 		
+		if (isUndefined(c['fd']) || c['fd'] < 0)
+			c['fd'] = Math.random() * -1000000;
+		
+		fd_clients[c['fd']] = c;
+		c['addr_rem_shown'] = c['addr_rem'];
+		
 		if (c['udp_downstream']) { 
 			if (c['mode'] == 'peer')
-				c['addr_rem'] += ' UDP';
+				c['addr_rem_shown'] += ' UDP';
 			else
-				c['addr_rem'] += ' +UDP';
+				c['addr_rem_shown'] += ' +UDP';
 		}
 		
-		if (linkable[c['app_name']])
-			c['addr_rem'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem']) + '</a>';
+		if (linkable[c['app_name']] || c['mode'] == 'peer')
+			c['addr_rem_shown'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem_shown']) + '</a>';
 		
 		if (c['app_name'] && c['app_version'])
 			c['show_app_name'] = c['app_name'] + ' ' + c['app_version'];
@@ -471,6 +618,7 @@ function render(d)
 	}
 	
 	t_now = d['server']['t_now'];
+	rx_err_codes = d['rx_errs'];
 	
 	if (d['dupecheck']) {
 		var u = d['dupecheck'];
@@ -487,9 +635,11 @@ function render(d)
 		render_block('totals', totals_table, u);
 	}
 	
+	fd_clients = {};
+	
 	if (d['listeners'])
 		render_clients(listeners_table, d['listeners'], listener_cols);
-		
+	
 	if (d['uplinks'] && d['uplinks'].length > 0) {
 		render_clients(uplinks_table, d['uplinks'], uplink_cols);
 		$('#uplinks_d').show();

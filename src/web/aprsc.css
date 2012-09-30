@@ -7,6 +7,8 @@ body {
 .grey { color: #666; }
 .bold { font-weight: bold; }
 .red { color: #ff5370; }
+.rxerr { color: #0000ff; cursor: pointer; }
+.rxerr_red { color: #ff5370; cursor: pointer; }
 
 div.page_title {
 	color: #000;
@@ -63,5 +65,22 @@ div.msg_e, div.msg_i, div.msg_s {
 	margin: 5px 25px 5px 0px;
 	border-radius: 5px;
 	width: 450px;
+}
+
+/* tooltip */
+
+div.ttip {
+	position: absolute;
+	left: 100px;
+	top: 100px;
+	background: #ffffff;
+	font-size: 11px;
+	width: 300px;
+	z-index: 80;
+	border: 1px solid #ff0000;
+	padding: 7px;
+	border-radius: 5px;
+	box-shadow: 8px 8px 3px rgba(0,0,0,0.5);
+	display: none;
 }
 

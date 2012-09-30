@@ -105,6 +105,7 @@ WEBFILES = \
  	src/web/excanvas.min.js src/web/jquery.flot.min.js
  	
 testinstall:
+	mkdir -p ../tests/web
 	cp -p $(subst src/,,$(WEBFILES)) ../tests/web/
 
 # -------------------------------------------------------------------- #

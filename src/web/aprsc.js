@@ -84,8 +84,10 @@ function client_pkts_rx(c, k)
 	
 	var s = c['pkts_rx'] + '/' + c['pkts_ign'];
 	
-	if (c['pkts_ign'] / c['pkts_rx'] > 0.1)
-		return '<span class="red" onclick="return rx_err_popup(event, ' + c['fd'] + ');">' + s + '</span>';
+	if (c['pkts_ign'] > 0)
+		return '<span class="'
+			+ ((c['pkts_ign'] / c['pkts_rx'] > 0.1) ? 'rxerr_red' : 'rxerr')
+			+ '" onclick="return rx_err_popup(event, ' + c['fd'] + ');">' + s + '</span>';
 
 	return s;
 }

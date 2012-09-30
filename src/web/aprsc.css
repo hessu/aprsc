@@ -7,6 +7,8 @@ body {
 .grey { color: #666; }
 .bold { font-weight: bold; }
 .red { color: #ff5370; }
+.rxerr { color: #0000ff; cursor: pointer; }
+.rxerr_red { color: #ff5370; cursor: pointer; }
 
 div.page_title {
 	color: #000;

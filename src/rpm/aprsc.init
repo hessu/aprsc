@@ -1,0 +1,151 @@
+#!/bin/sh
+#
+# aprsc		Start or stop the aprsc server
+#
+# chkconfig: 2345 55 25
+# description: Provide an APRS-IS server for the amateur radio APRS network
+#
+# processname: aprsc
+# config: /opt/aprsc/etc/aprsc.conf
+# pidfile: /opt/aprsc/logs/aprsc.pid
+
+### BEGIN INIT INFO
+# Provides:       aprsc
+# Required-Start: $syslog $network $local_fs
+# Required-Stop:  $syslog $local_fs
+# Default-Start:  2 3 4 5
+# Default-Stop:   0 1 6
+# Short-Description: start and stop aprsc
+# Description: aprsc provides an APRS-IS server for the amateur radio APRS network
+### END INIT INFO
+
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+# pull in sysconfig settings
+[ -f /etc/sysconfig/aprsc ] && . /etc/sysconfig/aprsc
+
+RETVAL=0
+NAME="aprsc"
+prog="aprsc"
+lockfile=/var/lock/subsys/$prog
+
+SSHD=/opt/aprsc/sbin/aprsc
+PID_FILE=/opt/aprsc/logs/aprsc.pid
+
+if [ "$STARTAPRSC" != "yes" ];then
+	echo "Starting of $NAME not enabled in /etc/sysconfig/$NAME."
+	exit 0
+fi
+
+# copy files required for chrooted operation
+prepare_chroot () {
+	log_daemon_msg "Preparing chroot for $DESC" "aprsc chroot"
+	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
+	log_end_msg 0
+}
+
+start()
+{
+	[ -x $APRSC ] || exit 5
+	[ -f /opt/aprsc/etc/aprsc.conf ] || exit 6
+	prepare_chroot
+
+	echo -n $"Starting $prog: "
+	$APRSC $DAEMON_OPTS && success || failure
+	RETVAL=$?
+	[ $RETVAL -eq 0 ] && touch $lockfile
+	echo
+	return $RETVAL
+}
+
+stop()
+{
+	echo -n $"Stopping $prog: "
+	if [ -n "`pidfileofproc $APRSC`" ] ; then
+	    killproc $APRSC
+	else
+	    failure $"Stopping $prog"
+	fi
+	RETVAL=$?
+	[ $RETVAL -eq 0 ] && rm -f $lockfile
+	echo
+}
+
+reload()
+{
+	echo -n $"Reloading $prog: "
+	if [ -n "`pidfileofproc $APRSC`" ] ; then
+	    killproc $APRSC -USR1
+	else
+	    failure $"Reloading $prog"
+	fi
+	RETVAL=$?
+	echo
+}
+
+restart() {
+	stop
+	start
+}
+
+force_reload() {
+	restart
+}
+
+rh_status() {
+	status -p $PID_FILE aprsc
+}
+
+rh_status_q() {
+	rh_status >/dev/null 2>&1
+}
+
+case "$1" in
+	start)
+		rh_status_q && exit 0
+		start
+		;;
+	stop)
+		if ! rh_status_q; then
+			rm -f $lockfile
+			exit 0
+		fi
+		stop
+		;;
+	restart)
+		restart
+		;;
+	reload)
+		rh_status_q || exit 7
+		reload
+		;;
+	force-reload)
+		force_reload
+		;;
+	condrestart|try-restart)
+		rh_status_q || exit 0
+		if [ -f $lockfile ] ; then
+			if [ $RETVAL -eq 0 ] ; then
+				stop
+				# avoid race
+				sleep 3
+				start
+			else
+				RETVAL=6
+			fi
+		fi
+		;;
+	status)
+		rh_status
+		RETVAL=$?
+		if [ $RETVAL -eq 3 -a -f $lockfile ] ; then
+			RETVAL=2
+		fi
+		;;
+	*)
+		echo $"Usage: $0 {start|stop|restart|reload|force-reload|condrestart|try-restart|status}"
+		RETVAL=2
+esac
+exit $RETVAL

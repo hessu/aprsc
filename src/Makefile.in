@@ -200,9 +200,9 @@ install: all
 
 DISTVERSION:=aprsc-$(VERSION).$(SRCVERSION)
 DISTTARGET:=../../$(DISTVERSION)
-RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/apsc-//')
+RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/aprsc-//')
 .PHONY: dist
-dist:
+dist: rpm/aprsc.spec
 	@# Special for the source maintainer only..
 	@if [ ! -z "$(shell echo -n $(SVNVERSION) | tr -d 0-9)" ]; then	    \
 	  echo "Mixed or modified tree ($(SVNVERSION)), ARE YOU SURE ??." ; \
@@ -218,19 +218,19 @@ dist:
 		--exclude="javaprssrvr" --exclude="javaprssrvr4" \
 		--exclude=build-out --exclude=build-down \
 		.. | (cd $(DISTTARGET) ; tar xf -)
-	#echo "$(DISTVERSION)" > $(DISTTARGET)/src/VERSION
-#	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
-#		  s{\@DATE0\@}{$(DATE0)}g;		\
-#		  print;"				\
-#		  < $(DISTTARGET)/rpm/aprsc.spec.in	\
-#		  > $(DISTTARGET)/rpm/aprsc.spec
-#	rm -f $(DISTTARGET)/rpm/aprsc.spec.in
 	make -C $(DISTTARGET)/src distclean
 	cd ../.. && 	\
 	tar czf $(DISTVERSION).tar.gz $(DISTVERSION)
 
 dist-upload: dist
 	scp ../../$(DISTVERSION).tar.gz aprsc-dist:/data/www/hes/html/aprsc/down/
+
+rpm/aprsc.spec: rpm/aprsc.spec.in
+	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
+		  s{\@DATE0\@}{$(DATE0)}g;		\
+		  print;"				\
+		  < rpm/aprsc.spec.in	\
+		  > rpm/aprsc.spec
 
 # -------------------------------------------------------------------- #
 
@@ -252,7 +252,7 @@ make-deb:
 	dpkg-buildpackage -b -us -uc -rfakeroot
 
 make-rpm: # actually just a reminder of how to do it..
-	rpmbuild --target i386 -ta ../$(DISTVERSION).tar.gz 
+	rpmbuild --target i686 -ta $(DISTVERSION).tar.gz 
 
 # -------------------------------------------------------------------- #
 

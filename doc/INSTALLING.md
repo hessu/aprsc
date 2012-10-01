@@ -6,6 +6,10 @@ aprsc is "officially" "supported" on the following platforms:
 
 * Debian stable (6.0, "squeeze"): i386 and x86_64
 * Ubuntu LTS (10.04, 12.04): i386 and x86_64
+* CentOS 6: i386 and x86_64
+
+The i386 builds actually require an i686 (Pentium 2 class) CPU or
+anything newer than that.
 
 These platforms are the easiest to install, and upgrades happen
 automatically using the mechanisms provided by the operating system.  One or
@@ -100,6 +104,61 @@ To shut it down:
     sudo service aprsc stop
 
 When STARTAPRSC is set to YES in the /etc/default/aprsc file it will
+automatically start up when the system boots.  You'll find it's log file in
+/opt/aprsc/logs/aprsc.log.  Log rotation is already configured in
+aprsc.conf.
+
+
+CentOS: Installing using yum
+-------------------------------
+
+This installation procedure has only been tested on CentOS 6.3. It should
+probably work from 6.0 to 6.3, on both i386 and x86_64 platforms.
+
+The following commands assume you're running them as a regular user, and the
+sudo tool is used to run individual commands as root.  sudo will ask you for
+your password.
+
+As the first step, please configure aprsc's package repository in yum by
+downloading the .repo configuration file and installing it.  The first
+command installs curl (if you don't have it already), and the second command
+uses curl to download the repository configuration to the right place.
+
+    sudo yum install curl
+    sudo curl -o /etc/yum.repos.d/aprsc.repo http://he.fi/aprsc/down/aprsc-centos.repo
+
+Then, install aprsc:
+
+    sudo yum install aprsc
+
+Whenever a new aprsc version is available, the upgrade can be performed
+automatically by running the upgrade command.  Your operating system can
+also be configured to upgrade packages automatically, or instruct you to
+upgrade when upgrades are available.
+
+    sudo yum upgrade
+
+If aprsc upgrades happen very often (many times per day), you might have to
+tell yum to expire it's cache before executing the upgrade command:
+
+    sudo yum clean expire-cache
+
+Before starting aprsc edit the configuration file, which can be found in
+/opt/aprsc/etc/aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)
+document for instructions.
+
+To enable startup, edit /etc/sysconfig/aprsc and change STARTAPRSC="no" to
+"yes". There should not be any need to touch the other options at this time.
+
+Start it up:
+
+    sudo /etc/init.d/aprsc start
+
+To shut it down:
+
+    sudo /etc/init.d/aprsc stop
+
+When STARTAPRSC is set to YES in the /etc/sysconfig/aprsc file it will
 automatically start up when the system boots.  You'll find it's log file in
 /opt/aprsc/logs/aprsc.log.  Log rotation is already configured in
 aprsc.conf.

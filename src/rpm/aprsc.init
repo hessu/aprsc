@@ -31,8 +31,9 @@ NAME="aprsc"
 prog="aprsc"
 lockfile=/var/lock/subsys/$prog
 
-SSHD=/opt/aprsc/sbin/aprsc
-PID_FILE=/opt/aprsc/logs/aprsc.pid
+BASEDIR=/opt/aprsc
+APRSC=$BASEDIR/sbin/aprsc
+PID_FILE=$BASEDIR/logs/aprsc.pid
 
 if [ "$STARTAPRSC" != "yes" ];then
 	echo "Starting of $NAME not enabled in /etc/sysconfig/$NAME."
@@ -41,9 +42,9 @@ fi
 
 # copy files required for chrooted operation
 prepare_chroot () {
-	log_daemon_msg "Preparing chroot for $DESC" "aprsc chroot"
+	echo -n "Preparing chroot for aprsc"
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
-	log_end_msg 0
+	echo
 }
 
 start()

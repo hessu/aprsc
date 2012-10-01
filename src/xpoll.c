@@ -20,6 +20,7 @@
  */
 
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
 #include "xpoll.h"
 #include "hmalloc.h"
@@ -50,7 +51,7 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
 #ifdef XP_USE_EPOLL
 	xp->epollfd = epoll_create(0);
 	if (xp->epollfd < 0) {
-		// FIXME: error message
+		hlog(LOG_CRIT, "xpoll: epoll_create failed: %s", strerror(errno));
 		return NULL;
 	}
 	fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC);
@@ -115,8 +116,8 @@ struct xpoll_fd_t *xpoll_add(struct xpoll_t *xp, int fd, void *p)
 	xfd->ev.events   = EPOLLIN; // | EPOLLET ?
 	// Each event has initialized callback pointer to struct xpoll_fd_t...
 	xfd->ev.data.ptr = xfd;
-	if (epoll_ctl(xp->epollfd, EPOLL_CTL_ADD, fd, &xfd->ev)) {
-		hlog(LOG_ERR, "xpoll: ");
+	if (epoll_ctl(xp->epollfd, EPOLL_CTL_ADD, fd, &xfd->ev) == -1) {
+		hlog(LOG_ERR, "xpoll: epoll_ctl EPOL_CTL_ADD %d failed: %s", fd, strerror(errno));
 		return NULL;
 	}
 #else
@@ -142,8 +143,8 @@ int xpoll_remove(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 #ifdef XP_USE_EPOLL
 	if (xfd->fd >= 0) {
 		// Remove it from kernel polled events
-		if (epoll_ctl(xp->epollfd, EPOLL_CTL_DEL, xfd->fd, NULL)) {
-			// FIXME: error report?
+		if (epoll_ctl(xp->epollfd, EPOLL_CTL_DEL, xfd->fd, NULL) == -1) {
+			hlog(LOG_ERR, "xpoll: epoll_ctl EPOL_CTL_DEL %d failed: %s", xfd->fd, strerror(errno));
 		}
 	}
 #else
@@ -195,8 +196,8 @@ void xpoll_outgoing(struct xpoll_t *xp, struct xpoll_fd_t *xfd, int have_outgoin
 	} else {
 		xfd->ev.events &= EPOLLIN|EPOLLPRI|EPOLLERR|EPOLLHUP;
 	}
-	if (epoll_ctl(xp->epollfd, EPOLL_CTL_MOD, xfd->fd, &xfd->ev)) {
-		// FIXME: error report? 
+	if (epoll_ctl(xp->epollfd, EPOLL_CTL_MOD, xfd->fd, &xfd->ev) == -1) {
+		hlog(LOG_ERR, "xpoll_outgoing: epoll_ctl EPOL_CTL_MOD %d failed: %s", xfd->fd, strerror(errno));
 	}
 #else
 #ifdef XP_USE_POLL

@@ -76,6 +76,52 @@ rm -rf $RPM_BUILD_ROOT
 /opt/aprsc/sbin/aprsc
 /opt/aprsc/sbin/aprsc_munin
 /opt/aprsc/web/*
+%dir /opt/aprsc/logs
+%dir /opt/aprsc/data
+
+%post
+
+# functions
+
+setup_aprsc_user() {
+        if ! getent group aprsc >/dev/null; then
+        	echo "Creating user group: 'aprsc'"
+                groupadd --system aprsc
+        fi
+        if ! getent passwd aprsc >/dev/null; then
+        	echo "Creating user account: 'aprsc'"
+                useradd --system --no-create-home --home /var/run/aprsc --shell /sbin/nologin -g aprsc aprsc
+        fi
+}
+
+fix_permissions() {
+	chown aprsc:aprsc /opt/aprsc/logs /opt/aprsc/data
+}
+
+apparmor_config() {
+	# Reload AppArmor profile
+	APP_PROFILE="/etc/apparmor.d/opt.aprsc.sbin.aprsc"
+	if [ -f "$APP_PROFILE" ] && aa-status --enabled 2>/dev/null; then
+		echo "Installing apparmor profile..."
+		apparmor_parser -r -T -W "$APP_PROFILE" || true
+	fi
+}
+
+munin_config() {
+	if [ -d "/etc/munin/plugins" ]; then
+		echo "Setting up munin plugin..."
+		( cd /etc/munin/plugins && /opt/aprsc/sbin/aprsc_munin makelinks )
+	fi
+}
+
+# main
+
+setup_aprsc_user
+fix_permissions
+#apparmor_config
+munin_config
+
+
 
 %changelog
 * Sat Jan 12 2008 Matti Aarnio - OH2MQK - KP20NG <oh2mqk@sral.fi> - 

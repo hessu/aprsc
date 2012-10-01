@@ -64,8 +64,8 @@ start()
 stop()
 {
 	echo -n $"Stopping $prog: "
-	if [ -n "`pidfileofproc $APRSC`" ] ; then
-	    killproc $APRSC
+	if [ -f $PID_FILE ] ; then
+	    killproc -p $PID_FILE $APRSC
 	else
 	    failure $"Stopping $prog"
 	fi
@@ -78,7 +78,7 @@ reload()
 {
 	echo -n $"Reloading $prog: "
 	if [ -n "`pidfileofproc $APRSC`" ] ; then
-	    killproc $APRSC -USR1
+	    killproc -p $PID_FILE $APRSC -USR1
 	else
 	    failure $"Reloading $prog"
 	fi

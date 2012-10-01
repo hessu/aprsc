@@ -6,7 +6,7 @@ Command line parameters and startup
 --------------------------------------
 
 aprsc understands a few command line parameters. On Ubuntu/Debian derived
-systems these go to /etc/default/aprsc, on Fedora they go to
+systems these go to /etc/default/aprsc, on CentOS/Fedora they go to
 /etc/sysconfig/aprsc, and on other systems they go in the init script
 starting up the software.  Shown here are the settings installed by default
 when installing aprsc from a binary package.

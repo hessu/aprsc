@@ -17,6 +17,15 @@ my @platforms = (
 	'centos-63-x86_64',
 );
 
+my %platconf = (
+	'centos-63-i686' => {
+		'dest' => 'centos/6/i386'
+	},
+	'centos-63-x86_64' => {
+		'dest' => 'centos/6/x86_64'
+	}
+);
+
 # temporary download directory
 my $dir_build_down = "./build-down";
 # final downloaded builds
@@ -25,8 +34,10 @@ my $dir_build_out = "./build-out";
 my $upload_host = 'aprsc-dist';
 # directory on upload host
 my $dir_upload_tmp = '/data/www/aprsc-dist/tmp-upload';
-# repository root directory
+# APT repository root directory
 my $dir_upload_repo = '/data/www/aprsc-dist/html/aprsc/apt';
+# RPM repository root directory
+my $dir_upload_repo_rpm = '/data/www/aprsc-dist/html/aprsc/rpm';
 
 my $debug = 0;
 my $virsh = "virsh -c qemu:///system";
@@ -164,7 +175,7 @@ sub vm_build_rpm($$$)
 	opendir(my $dh, $dir_build_down) || die "Could not opendir $dir_build_down: $!\n";
 	my @products = readdir($dh); # aprsc-1.0.4.g1447ccdM-1.x86_64.rpm
 	print "products: " . join(' ', @products) . "\n";
-	@products = grep { /^aprsc-.*\.rpm/ && -f "$dir_build_down/$_" } @products;
+	@products = grep { /^aprsc-\d.*\.rpm/ && -f "$dir_build_down/$_" } @products;
 	closedir($dh);
 	
 	print "products: " . join(' ', @products) . "\n";
@@ -172,11 +183,11 @@ sub vm_build_rpm($$$)
 	#$dist =~ s/-[^\-]+$//;
 	
 	foreach my $f (@products) {
-		my $of = "$dir_build_out/$f";
+		my $of = "$dir_build_out/" . $distr. "___" . $f;
 		rename("$dir_build_down/$f", $of) || die "Failed to rename $f to $of: $!\n";;
 	}
 	
-	
+	#system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
 }
 
 sub vm_shutdown($)
@@ -264,13 +275,45 @@ if ($mode eq 'build') {
 }
 
 if ($mode eq 'upload') {
+	opendir(my $dh, $dir_build_out) || die "Could not opendir $dir_build_out: $!\n";
+	my @products = readdir($dh);
+	print "products: " . join(' ', @products) . "\n";
+	closedir($dh);
+	
+	my @deb_changes = grep { /^.*\.changes/ && -f "$dir_build_out/$_" } @products;
+	my @rpms = grep { /^.*\.rpm/ && -f "$dir_build_out/$_" } @products;
+	
 	system("ssh $upload_host 'rm -rf $dir_upload_tmp && mkdir -p $dir_upload_tmp'") == 0 or die "upload host upload_tmp cleanup failed: $?\n";
 	system("scp -r $dir_build_out/* $upload_host:$dir_upload_tmp/") == 0 or die "upload to upload_host failed: $?\n";
-	system("ssh -t $upload_host 'cd $dir_upload_repo && eval `gpg-agent --daemon`; for i in $dir_upload_tmp/*.changes;"
-		. " do DIST=`echo \$i | perl -pe \"s/.*\\+([[:alpha:]]+).*/\\\\\$1/\"`;"
-		. " echo dist \$DIST: \$i;"
-		. " reprepro --ask-passphrase -Vb . include \$DIST \$i;"
-		. " done; killall gpg-agent'") == 0
-			or die "repository update failed: $?\n";
+	if (@deb_changes) {
+		system("ssh -t $upload_host 'cd $dir_upload_repo && eval `gpg-agent --daemon`; for i in $dir_upload_tmp/*.changes;"
+			. " do DIST=`echo \$i | perl -pe \"s/.*\\+([[:alpha:]]+).*/\\\\\$1/\"`;"
+			. " echo dist \$DIST: \$i;"
+			. " reprepro --ask-passphrase -Vb . include \$DIST \$i;"
+			. " done; killall gpg-agent'") == 0
+				or die "APT repository update failed: $?\n";
+	}
+	
+	if (@rpms) {
+		my %rpmdirs;
+		foreach my $rpm (@rpms) {
+			my($dist, $rpmname) = split('___', $rpm);
+			if (!defined $platconf{$dist}) {
+				die "RPM upload: No such distribution upload configured: $dist\n";
+			}
+			my $dest = $platconf{$dist}{'dest'};
+			warn "$dist: moving to $dest/$rpmname\n";
+			system("ssh -t $upload_host 'cd $dir_upload_repo_rpm && mkdir -p $dest && mv $dir_upload_tmp/$rpm $dest/$rpmname'") == 0
+				or die "RPM move failed: $?\n";
+			$rpmdirs{"$dir_upload_repo_rpm/$dest"} = 1;
+		}
+		if (%rpmdirs) {
+			system("ssh -t $upload_host 'for i in " . join(' ', sort keys %rpmdirs)
+				. "; do createrepo \$i; done'") == 0
+				or die "YUM repository creation failed: $?\n";
+		}
+	#system("ssh -t $upload_host") == 0
+	#		or die "RPM repository update failed: $?\n";
+	}
 }
 

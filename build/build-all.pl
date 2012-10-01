@@ -160,12 +160,16 @@ sub vm_build_rpm($$$)
 	mkdir($dir_build_down) || die "Could not mkdir $dir_build_down: $!\n";
 	system("scp $vm:rpmbuild/RPMS/*/aprsc-*.rpm $dir_build_down/") == 0 or die "vm build product download failed: $?\n";
 	
+	print "... renaming products from $dir_build_down ...\n";
 	opendir(my $dh, $dir_build_down) || die "Could not opendir $dir_build_down: $!\n";
-	my @products = grep { /^aprsc-*\.(rpm)/ && -f "$dir_build_down/$_" } readdir($dh);
+	my @products = readdir($dh); # aprsc-1.0.4.g1447ccdM-1.x86_64.rpm
+	print "products: " . join(' ', @products) . "\n";
+	@products = grep { /^aprsc-.*\.rpm/ && -f "$dir_build_down/$_" } @products;
 	closedir($dh);
 	
-	my $dist = $distr;
-	$dist =~ s/-[^\-]+$//;
+	print "products: " . join(' ', @products) . "\n";
+	#my $dist = $distr;
+	#$dist =~ s/-[^\-]+$//;
 	
 	foreach my $f (@products) {
 		my $of = "$dir_build_out/$f";

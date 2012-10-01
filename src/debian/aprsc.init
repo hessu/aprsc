@@ -4,12 +4,12 @@
 
 ### BEGIN INIT INFO
 # Provides:       aprsc
-# Required-Start: $syslog $local_fs
+# Required-Start: $syslog $network $local_fs
 # Required-Stop:  $syslog $local_fs
 # Default-Start:  2 3 4 5
 # Default-Stop:   0 1 6
 # Short-Description: start and stop aprsc
-# Description: Monitor and gateway radio amateur APRS radio network datagrams
+# Description: Provide an APRS-IS server for the amateur radio APRS network
 ### END INIT INFO
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin

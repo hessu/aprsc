@@ -201,7 +201,7 @@ install: all
 DISTVERSION:=aprsc-$(VERSION).$(SRCVERSION)
 DISTTARGET:=../../$(DISTVERSION)
 RPMVERSION:=$(shell echo "${DISTVERSION}" | sed -e 's/aprsc-//')
-.PHONY: dist
+.PHONY: dist rpm/aprsc.spec
 dist: rpm/aprsc.spec
 	@# Special for the source maintainer only..
 	@if [ ! -z "$(shell echo -n $(SVNVERSION) | tr -d 0-9)" ]; then	    \

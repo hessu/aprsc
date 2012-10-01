@@ -13,6 +13,8 @@ my @platforms = (
 	'ubuntu-1004-amd64',
 	'debian-60-i386',
 	'debian-60-amd64',
+	'centos-63-i686',
+	'centos-63-x86_64',
 );
 
 # temporary download directory
@@ -131,6 +133,48 @@ sub vm_build($$$)
 	
 }
 
+sub vm_build_rpm($$$)
+{
+	my($vm, $distr, $tgz) = @_;
+	
+	sleep(2);
+	
+	tcp_wait("$vm:22", 30) || die "vm $vm ssh is not accepting connections\n";
+	
+	my $d_tgz = $tgz;
+	$d_tgz =~ s/.*\///;
+	my $dir = $d_tgz;
+	$dir =~ s/\.tar.*//;
+	
+	my $arch = $distr;
+	$arch =~ s/.*-//;
+	
+	print "... cleanup ...\n";
+	system("ssh $vm 'rm -rf buildtmp && mkdir -p buildtmp && rm -rf rpmbuild/*'") == 0 or die "vm buildtmp cleanup failed: $?\n";
+	print "... upload sources ...\n";
+	system("scp $tgz $vm:buildtmp/") == 0 or die "vm source upload failed: $?\n";
+	print "... build RPM ...\n";
+	system("ssh $vm 'cd buildtmp && rpmbuild --target $arch -ta $d_tgz'") == 0 or die "vm build phase failed: $?\n";
+	print "... download packages ...\n";
+	system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
+	mkdir($dir_build_down) || die "Could not mkdir $dir_build_down: $!\n";
+	system("scp $vm:rpmbuild/RPMS/*/aprsc-*.rpm $dir_build_down/") == 0 or die "vm build product download failed: $?\n";
+	
+	opendir(my $dh, $dir_build_down) || die "Could not opendir $dir_build_down: $!\n";
+	my @products = grep { /^aprsc-*\.(rpm)/ && -f "$dir_build_down/$_" } readdir($dh);
+	closedir($dh);
+	
+	my $dist = $distr;
+	$dist =~ s/-[^\-]+$//;
+	
+	foreach my $f (@products) {
+		my $of = "$dir_build_out/$f";
+		rename("$dir_build_down/$f", $of) || die "Failed to rename $f to $of: $!\n";;
+	}
+	
+	
+}
+
 sub vm_shutdown($)
 {
 	my($vm) = @_;
@@ -153,12 +197,19 @@ sub build($$)
 {
 	my($plat, $tgz) = @_;
 	
-	print "Building $plat:\n";
-	
 	my $vm = "build-$plat";
 	
+	$vm =~ s/i686/i386/;
+	$vm =~ s/x86_64/amd64/;
+	
+	print "Building $plat on $vm:\n";
+	
 	vm_up($vm);
-	vm_build($vm, $plat, $tgz);
+	if ($plat =~ /centos/) {
+		vm_build_rpm($vm, $plat, $tgz);
+	} else {
+		vm_build($vm, $plat, $tgz);
+	}
 	vm_shutdown($vm);
 }
 

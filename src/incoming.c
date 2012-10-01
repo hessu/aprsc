@@ -643,12 +643,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		pb->flags |= F_FROM_UPSTR;
 	} else if (c->flags & CLFLAGS_DUPEFEED) {
 		/* we ignore packets from duplicate feeds */
-		return 0;
+		rc = 0;
+		goto free_pb_ret;
 	} else if (c->flags & CLFLAGS_INPORT) {
 		pb->flags |= F_FROM_DOWNSTR;
 	} else {
 		hlog(LOG_ERR, "%s/%s (fd %d): incoming_parse failed to classify packet", c->addr_rem, c->username, c->fd);
-		return INERR_CLASS_FAIL;
+		rc = INERR_CLASS_FAIL;
+		goto free_pb_ret;
 	}
 	
 	/* if the packet is sourced by a local login, but the packet is not
@@ -689,7 +691,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		 * existing Q construct and we didn't pick one to insert.
 		 */
 		hlog(LOG_INFO, "%s/%s: q construct bug: did not find a good construct or produce a new one for:\n%s\n", c->addr_rem, c->username, s);
-		return INERR_Q_BUG;
+		rc = INERR_Q_BUG;
+		goto free_pb_ret;
 	}
 	
 	/* Copy the modified or appended part of the packet header -- qcons */
@@ -731,17 +734,20 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		 */
 		if (!originated_by_client) {
 			hlog(LOG_DEBUG, "message to SERVER from non-local client %.*s, dropping", pb->srcname_len, pb->srcname);
-			return rc;
+			goto free_pb_ret;
 		}
 		
-		return incoming_server_message(self, c, pb);
+		rc = incoming_server_message(self, c, pb);
+		goto free_pb_ret;
 	}
 	
 	/* check for general queries - those cause reply floods and need
 	 * to be dropped
 	 */
-	if (pb->packettype & T_QUERY)
-		return INERR_GENERAL_QUERY;
+	if (pb->packettype & T_QUERY) {
+		rc = INERR_GENERAL_QUERY;
+		goto free_pb_ret;
+	}
 	
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
@@ -758,6 +764,11 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	self->pbuf_incoming_local_last = &pb->next;
 	self->pbuf_incoming_local_count++;
 	
+	return rc;
+	
+	/* in case the packet does not go to the incoming queue, free it up */
+free_pb_ret:
+	pbuf_free(self, pb);
 	return rc;
 }
 

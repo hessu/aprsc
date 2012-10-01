@@ -114,13 +114,17 @@ munin_config() {
 	fi
 }
 
+init_chkconf() {
+	chkconfig aprsc on
+}
+
 # main
 
 setup_aprsc_user
 fix_permissions
 #apparmor_config
 munin_config
-
+init_chkconf
 
 
 %changelog

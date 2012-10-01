@@ -45,15 +45,15 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
 {
 	xp->fds = NULL;
 	xp->tp = tp;
- 	xp->handler = handler;
+	xp->handler = handler;
 	
 #ifdef XP_USE_EPOLL
-        xp->epollfd = epoll_create(0);
-        if (xp->epollfd < 0) {
+	xp->epollfd = epoll_create(0);
+	if (xp->epollfd < 0) {
 		// FIXME: error message
 		return NULL;
 	}
-        fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC);
+	fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC);
 #else
 #ifdef XP_USE_POLL
 	xp->pollfd_len = XP_INCREMENT;
@@ -113,12 +113,12 @@ struct xpoll_fd_t *xpoll_add(struct xpoll_t *xp, int fd, void *p)
 
 #ifdef XP_USE_EPOLL
 	xfd->ev.events   = EPOLLIN; // | EPOLLET ?
-        // Each event has initialized callback pointer to struct xpoll_fd_t...
+	// Each event has initialized callback pointer to struct xpoll_fd_t...
 	xfd->ev.data.ptr = xfd;
-        if (epoll_ctl(xp->epollfd, EPOLL_CTL_ADD, fd, &xfd->ev)) {
-        	hlog(LOG_ERR, "xpoll: ");
-                return NULL;
-        }
+	if (epoll_ctl(xp->epollfd, EPOLL_CTL_ADD, fd, &xfd->ev)) {
+		hlog(LOG_ERR, "xpoll: ");
+		return NULL;
+	}
 #else
 #ifdef XP_USE_POLL
 	if (xp->pollfd_used >= xp->pollfd_len) {
@@ -141,23 +141,23 @@ int xpoll_remove(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 {
 #ifdef XP_USE_EPOLL
 	if (xfd->fd >= 0) {
-        	// Remove it from kernel polled events
-        	if (epoll_ctl(xp->epollfd, EPOLL_CTL_DEL, xfd->fd, NULL)) {
-                  // FIXME: error report? 
-                }
-        }
+		// Remove it from kernel polled events
+		if (epoll_ctl(xp->epollfd, EPOLL_CTL_DEL, xfd->fd, NULL)) {
+			// FIXME: error report?
+		}
+	}
 #else
 #ifdef XP_USE_POLL
 	/* remove the fd from the pollfd struct by moving the tail of the struct
 	 * to the left
 	 */
 	if (xp->pollfd != NULL) {
-            void *to = (char *)xp->pollfd + (xfd->pollfd_n * sizeof(struct pollfd));
-            void *from = (char*)to + sizeof(struct pollfd);
-            int len = (xp->pollfd_used - xfd->pollfd_n - 1) * sizeof(struct pollfd);
-            //hlog(LOG_DEBUG, "xpoll_remove fd %d pollfd_n %d sizeof %d: 0x%x -> 0x%x len %d", xfd->fd, xfd->pollfd_n, sizeof(struct pollfd), (unsigned long)from, (unsigned long)to, len);
-            memmove(to, from, len);
-        }
+		void *to = (char *)xp->pollfd + (xfd->pollfd_n * sizeof(struct pollfd));
+		void *from = (char*)to + sizeof(struct pollfd);
+		int len = (xp->pollfd_used - xfd->pollfd_n - 1) * sizeof(struct pollfd);
+		//hlog(LOG_DEBUG, "xpoll_remove fd %d pollfd_n %d sizeof %d: 0x%x -> 0x%x len %d", xfd->fd, xfd->pollfd_n, sizeof(struct pollfd), (unsigned long)from, (unsigned long)to, len);
+		memmove(to, from, len);
+	}
 	/* reduce pollfd_n for fds which where moved */
 	struct xpoll_fd_t *xf;
 	for (xf = xp->fds; (xf); xf = xf->next) {
@@ -165,16 +165,16 @@ int xpoll_remove(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 			xf->pollfd_n--;
 			//hlog(LOG_DEBUG, "  ... fd %d is now pollfd_n %d", xf->fd, xf->pollfd_n);
 		}
-        }
+	}
 #endif
 #endif
 	xp->pollfd_used--;
-        
+	
 	*xfd->prevp = xfd->next;
 	if (xfd->next) {
 		xfd->next->prevp = xfd->prevp;
-        }
-		
+	}
+	
 #ifndef _FOR_VALGRIND_
 	cellfree( xpoll_fd_pool, xfd );
 #else
@@ -195,10 +195,9 @@ void xpoll_outgoing(struct xpoll_t *xp, struct xpoll_fd_t *xfd, int have_outgoin
 	} else {
 		xfd->ev.events &= EPOLLIN|EPOLLPRI|EPOLLERR|EPOLLHUP;
 	}
-        if (epoll_ctl(xp->epollfd, EPOLL_CTL_MOD, xfd->fd, &xfd->ev)) {
-	  // FIXME: error report? 
-        }
-        
+	if (epoll_ctl(xp->epollfd, EPOLL_CTL_MOD, xfd->fd, &xfd->ev)) {
+		// FIXME: error report? 
+	}
 #else
 #ifdef XP_USE_POLL
 	if (have_outgoing)
@@ -218,22 +217,22 @@ int xpoll(struct xpoll_t *xp, int timeout)
 #ifdef XP_USE_EPOLL
 #define MAX_EPOLL_EVENTS 32
 	struct epoll_event events[MAX_EPOLL_EVENTS];
-
-        int nfds = epoll_wait( xp->epollfd, events, MAX_EPOLL_EVENTS, timeout );
-        int n;
-        for (n = 0; n < nfds; ++n) {
+	
+	int nfds = epoll_wait( xp->epollfd, events, MAX_EPOLL_EVENTS, timeout );
+	int n;
+	for (n = 0; n < nfds; ++n) {
 		// Each event has initialized callback pointer to struct xpoll_fd_t...
-        	struct xpoll_fd_t *xfd = (struct xpoll_fd_t*) events[n].data.ptr;
-                xfd->result = 0;
-                if (events[n].events & (EPOLLIN|EPOLLPRI))
-                  xfd->result |= XP_IN;
-                if (events[n].events & (EPOLLOUT))
-                  xfd->result |= XP_OUT;
-                if (events[n].events & (EPOLLERR|EPOLLHUP))
-                  xfd->result |= XP_ERR;
-                (*xp->handler)(xp, xfd);
-        }
-        return nfds;
+		struct xpoll_fd_t *xfd = (struct xpoll_fd_t*) events[n].data.ptr;
+		xfd->result = 0;
+		if (events[n].events & (EPOLLIN|EPOLLPRI))
+			xfd->result |= XP_IN;
+		if (events[n].events & (EPOLLOUT))
+			xfd->result |= XP_OUT;
+		if (events[n].events & (EPOLLERR|EPOLLHUP))
+			xfd->result |= XP_ERR;
+		(*xp->handler)(xp, xfd);
+	}
+	return nfds;
 #else
 #ifdef XP_USE_POLL
 	struct xpoll_fd_t *xfd, *next;

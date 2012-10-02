@@ -944,6 +944,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 			*k = *p;
 			++p;
 			++k;
+			++i;
 		}
 		*k = 0;
 		/* OK, we have one prefix part collected,

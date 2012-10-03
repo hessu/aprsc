@@ -259,7 +259,7 @@ make-rpm: # actually just a reminder of how to do it..
 MARKDOWN=perl ../tools/Markdown.pl
 WEBDOCS=/data/www/hes/html/aprsc
 DOCS=README.md INSTALLING.md BUILDING.md CONFIGURATION.md DEBUGGING.md \
-	HOME.md CONTRIBUTING.md
+	HOME.md CONTRIBUTING.md TIPS.md
 DESTDOCS=$(addprefix $(WEBDOCS)/,$(addsuffix .html,$(basename $(DOCS))))
 SRCDOCS=$(addprefix ../doc/,$(DOCS))
 install-webdoc: $(DESTDOCS)

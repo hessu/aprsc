@@ -140,7 +140,10 @@ The basic syntax is:
     handle both IPv6 and IPv4 connections with a single configuration
     line! On FreeBSD, separate IPv4 and IPv6 listeners are needed.
     
- *  port: the local TCP or UDP port to listen on.
+ *  port: the local TCP or UDP port to listen on. Must be larger than 1023.
+    aprsc drops root privileges quickly after startup (if it has them), and
+    cannot bind privileged ports. If you need to support a low port such as
+    23, see [TIPS](TIPS.html): "Providing access on low TCP ports"
 
  *  options: one more of:
  

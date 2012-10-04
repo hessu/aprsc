@@ -103,11 +103,11 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 $tx = sprintf("$rx_login>APRS::%-9.9s:%s{ax", "SERVER", "filter p/OZ/ZZ");
 $i_rx->sendline($tx);
 my $ack = $i_rx->getline_noncomment(2);
-warn "received ack: $ack\n";
+#warn "received ack: $ack\n";
 # SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :ackax
 ok($ack, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :ackax$/);
 my $reply = $i_rx->getline_noncomment(2);
-warn "received reply: $reply\n";
+#warn "received reply: $reply\n";
 # SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :filter b/OZ*/ZZ* active{839
 ok($reply, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :filter.*active{.*$/);
 
@@ -124,11 +124,11 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 $tx = sprintf("$rx_login>APRS::%-9.9s:%s{bx", "SERVER", "filter p/OZ/ZZ");
 $i_rx->sendline($tx);
 $ack = $i_rx->getline_noncomment(2);
-warn "received ack: $ack\n";
+#warn "received ack: $ack\n";
 # SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :ackax
 ok($ack, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :ackbx$/);
 $reply = $i_rx->getline_noncomment(2);
-warn "received reply: $reply\n";
+#warn "received reply: $reply\n";
 # SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :filter b/OZ*/ZZ* active{839
 ok($reply, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :filter.*active{.*$/);
 

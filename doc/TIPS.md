@@ -26,3 +26,7 @@ configurations.
         -p tcp --dport 29 -m addrtype --dst-type LOCAL -j DNAT
         --to-destination *youripaddress*:14580
 
+When you wish to view your current NAT configuration on Linux, remember to
+specifically ask for the nat tables:
+
+    root@box:~# iptables -t nat -L

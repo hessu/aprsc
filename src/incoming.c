@@ -426,6 +426,41 @@ char *memstr(char *needle, char *haystack, char *haystack_end)
 }
 
 /*
+ *	Find a string in a binary buffer, case insensitive
+ */
+
+char *memcasestr(char *needle, char *haystack, char *haystack_end)
+{
+	char *hp = haystack;
+	char *np = needle;
+	char *match_start = NULL;
+	
+	while (hp < haystack_end) {
+		if (toupper(*hp) == toupper(*np)) {
+			/* matching... is this the start of a new match? */
+			if (match_start == NULL)
+				match_start = hp;
+			/* increase needle pointer, so we'll check the next char */
+			np++;
+		} else {
+			/* not matching... clear state */
+			match_start = NULL;
+			np = needle;
+		}
+		
+		/* if we've reached the end of the needle, and we have found a match,
+		 * return a pointer to it
+		 */
+		if (*np == 0 && (match_start))
+			return match_start;
+		hp++;
+	}
+	
+	/* out of luck */
+	return NULL;
+}
+
+/*
  *	Check if the digipeater path includes elements indicating that the
  *	packet should be dropped.
  */
@@ -799,7 +834,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 		hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
 		if (l4proto != IPPROTO_UDP && (c->flags & CLFLAGS_USERFILTEROK)) {
 			/* filter adjunct commands ? */
-			char *filtercmd = memstr("filter", s, s + len);
+			char *filtercmd = memcasestr("filter", s, s + len);
 			if (filtercmd)
 				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
 			

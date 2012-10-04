@@ -4,10 +4,11 @@
 # Filter can be set either by a "server adjunct command" in the login:
 # user <username> pass <passcode> vers <soft> <vers> filter <filterstring>
 #
-# or with a #command in the incoming stream:
+# or with a #command (case insensitive) in the incoming stream:
 # "# filter <filterstring>"
 # "#filter <filterstring>"
 # "#alfhilawuehflwieuhffilter <filterstring>"
+# "#FILTER <filterstring>"
 #
 # or with an APRS message with a recipient call of "SERVER", saying
 # "filter <filterstring>"
@@ -69,7 +70,7 @@ $helper = "N2SRC>APRS,qAR,$login:>should pass2";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # change filter, with some spaces
-$i_rx->sendline("#  filter   p/N/K  ");
+$i_rx->sendline("#  fIlTer   p/N/K  ");
 sleep(0.2);
 
 # check that the new filter is applied
@@ -87,7 +88,7 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 #sleep(0.2);
 
 # change filter, with some rubbish in front
-$i_rx->sendline("#blaablaaanxauyg3iuyq2gfilter p/OG/OF/OH");
+$i_rx->sendline("#blaablaaanxauyg3iuyq2gFILTER p/OG/OF/OH");
 sleep(0.2);
 
 # check that the new filter is applied

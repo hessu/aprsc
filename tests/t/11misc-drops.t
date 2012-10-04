@@ -7,7 +7,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 1 + 3 };
+BEGIN { plan tests => 8 + 1 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -23,11 +23,12 @@ my $server_call = "TESTING";
 my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-# First filter is for uncompressed packet, second for compressed,
-# third for mic-e, fourth for prefix filter test.
-# The first and last one also test upper-case letters as filter keys.
 my $i_rx = new Ham::APRS::IS("localhost:55152", "N5CAL-2");
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
+
+my $unver_call = "N5UN-1";
+my $i_un = new Ham::APRS::IS("localhost:55580", $unver_call, 'nopass' => 1);
+ok(defined $i_un, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;
 $ret = $i_tx->connect('retryuntil' => 8);
@@ -36,9 +37,22 @@ ok($ret, 1, "Failed to connect to the server: " . $i_tx->{'error'});
 $ret = $i_rx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
+$ret = $i_un->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to connect to the server: " . $i_un->{'error'});
+
 # do the actual tests
 my($tx, $rx);
 
+# Test that the unverified client does not manage to transmit anything
+# at all.
+$tx = "OH2XXX>APRS,qAR,$login:>should drop from unverified client";
+$i_un->sendline($tx);
+$tx = "$unver_call>APRS,qAR,$unver_call:>should drop from unverified client, 2";
+$i_un->sendline($tx);
+$tx = "$unver_call>APRS,qAR,$unver_call:!6028.52N/02505.61E# Testing";
+$i_un->sendline($tx);
+
+# Other drop reasons
 my @pkts = (
 	"SRC>APRS,NOGATE,qAR,$login:>should drop, NOGATE",
 	"SRC>APRS,RFONLY,qAR,$login:>should drop, RFONLY",
@@ -62,7 +76,7 @@ my $fail = 0;
 
 while (my $rx = $i_rx->getline_noncomment(0.5)) {
 	if ($rx =~ /should pass/) {
-		last;
+		# ok
 	} else {
 		warn "Server passed packet it should have dropped: $rx\n";
 		$fail++;
@@ -78,6 +92,9 @@ ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
 
 $ret = $i_tx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_tx->{'error'});
+
+$ret = $i_un->disconnect();
+ok($ret, 1, "Failed to disconnect from the server: " . $i_un->{'error'});
 
 # stop
 

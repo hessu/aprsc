@@ -1,4 +1,3 @@
-
 aprsc tricks and tips
 =====================
 
@@ -7,7 +6,7 @@ Providing access on low TCP ports (like 23)
 ----------------------------------------------
 
 For security reasons aprsc drops root privileges as soon as possible after
-starting up (if it ever had the in the first place).  Listening on
+starting up (if it ever had them in the first place).  Listening on
 privileged "low" ports below 1024 normally requires root privileges, which
 aprsc no longer has when it comes to the point where it would start binding
 those ports.

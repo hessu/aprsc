@@ -325,7 +325,7 @@ static int dupecheck(struct pbuf_t *pb)
 	while (*dpp) {
 		dp = *dpp;
 		if (dp->hash == hash &&
-		    dp->t > expiretime) {
+		    dp->t >= expiretime) {
 			// HASH match!  And not too old!
 			if (dp->alen == addrlen &&
 			    dp->plen == datalen &&

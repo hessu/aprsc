@@ -13,7 +13,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 9 + 4 + 2 };
+BEGIN { plan tests => 9 + 5 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -62,8 +62,13 @@ my $s;
 $s = "SRC>DST,qAR,IGATE:upstream to client";
 istest::txrx(\&ok, $is1, $client, $s, $s);
 
-# 2) from core peer to client
-$s = "SRC>DST,qAR,IGATE:core peer to client";
+# 2) from core peer to client, with trace
+$s = "SRC>DST,qAI,IGATE,SRV1:core peer to client, 1";
+my $rx = "SRC>DST,qAI,IGATE,SRV1,TESTING:core peer to client, 1";
+istest::txrx(\&ok, $udp, $client, $s, $rx);
+
+# 3) from core peer to client
+$s = "SRC>DST,qAR,IGATE:core peer to client, 2";
 istest::txrx(\&ok, $udp, $client, $s, $s);
 
 # 4) from client to peers and upstreams

@@ -218,6 +218,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		/* we replace the existing Q construct with a regenerated one */
 		*q_replace = q_start+1;
 		
+		//hlog(LOG_DEBUG, "qAI: not INPORT, appending ,username %s", c->username);
 		/* copy over existing qAI trace */
 		new_q_len = path_end - q_start - 1;
 		//hlog(LOG_DEBUG, "qAI replacing, new_q_len %d", new_q_len);
@@ -229,15 +230,14 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		}
 		memcpy(new_q, q_start+1, new_q_len);
 		
-		//hlog(LOG_DEBUG, "qAI first memcpy done, new_q_len %d, q_replace %d", new_q_len, *q_replace);
+		//hlog(LOG_DEBUG, "qAI first memcpy done, new_q_len %d, q_replace %d, new_q %.*s", new_q_len, *q_replace, new_q_len, new_q);
 		
-		/* If the packet is from a verified port where the login is not found after the q construct */
-		if (c->validated && !login_in_path) {
+		/* If the packet is from a verified port where the login is not found after the q construct,
+		 * append ,login
+		 * - but not if this is an UDP core peer, and we don't know the username */
+		if (c->validated && !login_in_path && c->state != CSTATE_COREPEER) {
 			/* Append ,login */
-			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
-		} else if (!(c->flags & CLFLAGS_INPORT) && !login_in_path) {
-			/* from an outbound connection, append client's hexaddr */
-			//hlog(LOG_DEBUG, "qAI appending hex address, starting at %d, got %d left in buffer", new_q_len, new_q_size - new_q_len);
+			//hlog(LOG_DEBUG, "qAI: from validated client, login not in path, appending ,username %s", c->username);
 			new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", c->username);
 		}
 		//hlog(LOG_DEBUG, "qAI append done, new_q_len %d, new_q_size %d, q_replace %d, going to append %d more", new_q_len, new_q_size, *q_replace, strlen(serverid)+1);
@@ -249,6 +249,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		
 		/* Append ,SERVERLOGIN */
 		new_q_len += snprintf(new_q + new_q_len, new_q_size - new_q_len, ",%s", serverid);
+		//hlog(LOG_DEBUG, "qAI: complete, new_q %s", new_q);
 	}
 	
 	return new_q_len;

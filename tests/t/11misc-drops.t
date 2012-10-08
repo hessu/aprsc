@@ -7,7 +7,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 1 + 4 };
+BEGIN { plan tests => 8 + 1 + 5 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -54,6 +54,7 @@ $i_un->sendline($tx);
 
 # Other drop reasons
 my @pkts = (
+	"SRC>APRS,RFONLY,qAR,$login:>should drop, RFONLY",
 	"SRC>APRS,NOGATE,qAR,$login:>should drop, NOGATE",
 	"SRC>APRS,RFONLY,qAR,$login:>should drop, RFONLY",
 	"SRC>DST,DIGI,qAR,$login:}SRC2>DST,DIGI,TCPIP*:>should drop, 3rd party",
@@ -63,8 +64,11 @@ my @pkts = (
 	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query",
 	"SRC>DST\x08,DIGI,qAR,$login:>should drop ctrl-B in dstcall",
 	"SRC\x08>DST,DIGI,qAR,$login:>should drop ctrl-B in srccall",
+	"SRCXXXXXXX>APRS,qAR,$login:>should drop, too long srccall",
+	"SRC>APRSXXXXXX,qAR,$login:>should drop, too long dstcall",
+	"SRC>APRS,OH2DIGI-12,qAR,$login:>should drop, too long call in path",
 	"SRC>APT311,RELAY,WIDE,WIDE/V,qAR,$login:!4239.93N/08254.93Wv342/000 should drop, / in digi path",
-	"SRC>DST,DI*GI,qAR,$login:>should drop, * in middle of digi call",
+	"SRC>DST,DIG*I,qAR,$login:>should drop, * in middle of digi call",
 	"SRC>DST,DI\x08GI,qAR,$login:>should drop, ctrl-B in middle of digi call",
 );
 
@@ -74,14 +78,14 @@ foreach my $s (@pkts) {
 }
 
 # check that the initial p/ filter works
-$tx = "OH2SRC>APRS,DIGI*,qAR,$login:>should pass";
+$tx = "OH2SRC>APRS,OH2DIG-12*,OH2DIG-1*,qAR,200106F8020204020000000000000002,$login:>should pass";
 $i_tx->sendline($tx);
 
 my $fail = 0;
-
+my $success = 0;
 while (my $rx = $i_rx->getline_noncomment(0.5)) {
 	if ($rx =~ /should pass/) {
-		# ok
+		$success = 1; # ok
 	} else {
 		warn "Server passed packet it should have dropped: $rx\n";
 		$fail++;
@@ -89,6 +93,7 @@ while (my $rx = $i_rx->getline_noncomment(0.5)) {
 }
 
 ok($fail, 0, "Server passed packets which it should have dropped.");
+ok($success, 1, "Server did not pass final packet which it should have passed.");
 
 # disconnect
 

@@ -48,7 +48,8 @@ int check_invalid_q_callsign(const char *call, int len)
 	
 	//hlog(LOG_DEBUG, "check_invalid_q_callsign: '%.*s'", len, call);
 	
-	if (len > 12 || len < 1)
+	/* either length of callsign, or length of IPv6 address in hex (128/4) */
+	if ((len > CALLSIGNLEN_MAX || len < 1) && len != 32)
 		return -1;
 	
 	while (p < e) {

@@ -478,6 +478,32 @@ static int digi_path_drop(char *via_start, char *path_end)
 }
 
 /*
+ *	Check if a callsign is good for srccall/dstcall
+ *	(valid APRS-IS callsign, * not allowed)
+ */
+
+static int check_invalid_src_dst(const char *call, int len)
+{
+	const char *p = call;
+	const char *e = call + len;
+	
+	//hlog(LOG_DEBUG, "check_invalid_src_dst: '%.*s'", len, call);
+	
+	if (len < 1 || len > CALLSIGNLEN_MAX)
+		return -1;
+	
+	while (p < e) {
+		/* alphanumeric and - */
+		if ((!isalnum(*p)) && *p != '-')
+			return -1;
+			
+		p++;
+	}
+	
+	return 0;
+}
+
+/*
  *	Check if a callsign is good for a digi path entry
  *	(valid APRS-IS callsign, * allowed in end)
  */
@@ -489,20 +515,32 @@ static int check_invalid_path_callsign(const char *call, int len)
 	
 	//hlog(LOG_DEBUG, "check_invalid_path_callsign: '%.*s'", len, call);
 	
-	if (len > CALLSIGNLEN_MAX || len < 1)
+	/* only check for minimum length first - max length depends on
+	 * if there's a * in the end
+	 */
+	if (len < 1)
 		return -1;
 	
 	while (p < e) {
-		/* * is allowed in the end */
-		if (*p == '*' && p == e-1) {
-			p++;
-			continue;
+		/* alphanumeric and - */
+		/* AND '*' is allowed in the end */
+		if ((!isalnum(*p)) && *p != '-' && !(*p == '*' && p == e-1)) {
+			//hlog(LOG_DEBUG, "check_invalid_path_callsign: invalid char '%c'", *p);
+			return -1;
 		}
 		
-		if ((!isalnum(*p)) && *p != '-')
-			return -1;
-			
 		p++;
+	}
+	
+	if (*(p-1) == '*' && len <= CALLSIGNLEN_MAX+1) {
+		//hlog(LOG_DEBUG, "check_invalid_path_callsign: allowing len %d due to last *", len);
+		return 0;
+	}
+	
+	/* too long? */
+	if (len > CALLSIGNLEN_MAX) {
+		//hlog(LOG_DEBUG, "check_invalid_path_callsign: too long len %d", len);
+		return -1;
 	}
 	
 	return 0;
@@ -522,6 +560,11 @@ static int check_path_calls(const char *via_start, const char *path_end)
 		/* find end of path callsign */
 		while (*e != ',' && e < path_end)
 			e++;
+		/* is this a q construct? bail out. */
+		if (*p == 'q' && e-p == 3) {
+			//hlog(LOG_DEBUG, "check_path_calls bail out at Q construct: '%.*s'", e-p, p);
+			return 0;
+		}
 		//hlog(LOG_DEBUG, "check_path_calls: '%.*s'", e-p, p);
 		if (check_invalid_path_callsign(p, e-p) != 0)
 			return -1;
@@ -636,7 +679,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_start >= packet_end)	// We're already at the path end
 		return INERR_NO_PATH;
 	
-	if (check_invalid_q_callsign(s, src_end - s) != 0 || src_end - s < CALLSIGNLEN_MIN)
+	if (check_invalid_src_dst(s, src_end - s) != 0)
 		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
@@ -659,7 +702,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	while (dstcall_end < path_end && *dstcall_end != ',' && *dstcall_end != ':')
 		dstcall_end++;
 	
-	if (check_invalid_q_callsign(path_start, dstcall_end - path_start) != 0)
+	if (check_invalid_src_dst(path_start, dstcall_end - path_start))
 		return INERR_INV_DSTCALL; /* invalid or too long for destination callsign */
 	
 	/* where does the digipeater path start? */

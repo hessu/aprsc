@@ -30,6 +30,7 @@
 #include "cfgfile.h"
 #include "worker.h"
 #include "filter.h"
+#include "parse_qc.h"
 
 char def_cfgfile[] = "aprsc.conf";
 char def_webdir[] = "web";
@@ -988,22 +989,6 @@ int do_logrotate(int *dest, int argc, char **argv)
 	return 0;
 }
 
-
-/*
- *	Validate an APRS-IS callsign
- */
-
-int valid_aprsis_call(const char *s)
-{
-	// TODO: use the other function in q parser which is stricter
-	if (strlen(s) > 12)
-		return 0;
-	if (strlen(s) < 3)
-		return 0;
-	
-	return 1;
-}
-
 /*
  *	upcase
  */
@@ -1058,7 +1043,7 @@ int read_config(void)
 		if (!new_serverid) {
 			hlog(LOG_CRIT, "Config: serverid is not defined.");
 			failed = 1;
-		} else if (!valid_aprsis_call(new_serverid)) {
+		} else if (check_invalid_q_callsign(new_serverid, strlen(new_serverid)) != 0 || strlen(new_serverid) < 3) {
 			hlog(LOG_CRIT, "Config: serverid '%s' is not valid.", new_serverid);
 			failed = 1;
 		} else {

@@ -46,6 +46,9 @@ int check_invalid_q_callsign(const char *call, int len)
 	const char *p = call;
 	const char *e = call + len;
 	
+	if (len > 12 || len < 1)
+		return -1;
+	
 	while (p < e) {
 		/* these would be redundant, non-ascii and control chars are
 		 * not alphanumeric.

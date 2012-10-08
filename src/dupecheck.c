@@ -253,14 +253,14 @@ static void dupecheck_cleanup(void)
 {
 	struct dupe_record_t *dp, **dpp;
 	time_t expiretime = now - dupefilter_storetime;
+	time_t futuretime = now + dupefilter_storetime;
 	int cleancount = 0, i;
-	
 
 	for (i = 0; i < DUPECHECK_DB_SIZE; ++i) {
 		dpp = & dupecheck_db[i];
 		while (( dp = *dpp )) {
-			if (dp->t < expiretime) {
-				/* Old..  discard. */
+			if (dp->t < expiretime || dp->t > futuretime) {
+				/* Old... or too far in the future, discard. */
 				*dpp = dp->next;
 				dp->next = NULL;
 				dupecheck_db_free(dp);

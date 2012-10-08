@@ -177,7 +177,8 @@ var rx_err_strings = {
 	"aprsc_q_bug": 'aprsc Q construct processing failed',
 	"q_drop": 'Q construct algorithm dropped packet',
 	"short_packet": 'Packet too short',
-	"long_packet": 'Packet too long'
+	"long_packet": 'Packet too long',
+	"inv_path_call": 'Invalid callsign in path'
 };
 
 var key_translate = {

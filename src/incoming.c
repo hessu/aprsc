@@ -56,7 +56,8 @@ const char *inerr_labels[] = {
 	"aprsc_q_bug",
 	"q_drop",
 	"short_packet",
-	"long_packet"
+	"long_packet",
+	"inv_path_call"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -477,6 +478,60 @@ static int digi_path_drop(char *via_start, char *path_end)
 }
 
 /*
+ *	Check if a callsign is good for a digi path entry
+ *	(valid APRS-IS callsign, * allowed in end)
+ */
+
+static int check_invalid_path_callsign(const char *call, int len)
+{
+	const char *p = call;
+	const char *e = call + len;
+	
+	//hlog(LOG_DEBUG, "check_invalid_path_callsign: '%.*s'", len, call);
+	
+	if (len > 12 || len < 1)
+		return -1;
+	
+	while (p < e) {
+		/* * is allowed in the end */
+		if (*p == '*' && p == e-1) {
+			p++;
+			continue;
+		}
+		
+		if ((!isalnum(*p)) && *p != '-')
+			return -1;
+			
+		p++;
+	}
+	
+	return 0;
+}
+
+/*
+ *	Check for invalid callsigns in path
+ */
+
+static int check_path_calls(const char *via_start, const char *path_end)
+{
+	const char *p = via_start + 1;
+	const char *e;
+	
+	while (p < path_end) {
+		e = p;
+		/* find end of path callsign */
+		while (*e != ',' && e < path_end)
+			e++;
+		//hlog(LOG_DEBUG, "check_path_calls: '%.*s'", e-p, p);
+		if (check_invalid_path_callsign(p, e-p) != 0)
+			return -1;
+		p = e + 1;
+	}
+	
+	return 0;
+}
+
+/*
  *	Handle incoming messages to SERVER
  */
 
@@ -627,6 +682,10 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 */
 	if (digi_path_drop(via_start, path_end))
 		return INERR_NOGATE;
+	
+	/* check if there are invalid callsigns in the digipeater path before Q */
+	if (check_path_calls(via_start, path_end) != 0)
+		return INERR_INV_PATH_CALL;
 	
 	/* check for 3rd party packets */
 	if (*(data + 1) == '}')

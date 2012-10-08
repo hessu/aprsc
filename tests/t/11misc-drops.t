@@ -63,6 +63,9 @@ my @pkts = (
 	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query",
 	"SRC>DST\x08,DIGI,qAR,$login:>should drop ctrl-B in dstcall",
 	"SRC\x08>DST,DIGI,qAR,$login:>should drop ctrl-B in srccall",
+	"SRC>APT311,RELAY,WIDE,WIDE/V,qAR,$login:!4239.93N/08254.93Wv342/000 should drop, / in digi path",
+	"SRC>DST,DI*GI,qAR,$login:>should drop, * in middle of digi call",
+	"SRC>DST,DI\x08GI,qAR,$login:>should drop, ctrl-B in middle of digi call",
 );
 
 # send the packets
@@ -71,7 +74,7 @@ foreach my $s (@pkts) {
 }
 
 # check that the initial p/ filter works
-$tx = "OH2SRC>APRS,qAR,$login:>should pass";
+$tx = "OH2SRC>APRS,DIGI*,qAR,$login:>should pass";
 $i_tx->sendline($tx);
 
 my $fail = 0;

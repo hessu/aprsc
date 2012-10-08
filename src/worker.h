@@ -194,7 +194,8 @@ struct client_heard_t {
 #define INERR_Q_DROP			-14	/* q construct drop */
 #define INERR_SHORT_PACKET		-15	/* too short packet */
 #define INERR_LONG_PACKET		-16	/* too long packet */
-#define INERR_MIN			-16	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_INV_PATH_CALL		-17	/* invalid callsign in path */
+#define INERR_MIN			-17	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

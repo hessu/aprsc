@@ -46,17 +46,12 @@ int check_invalid_q_callsign(const char *call, int len)
 	const char *p = call;
 	const char *e = call + len;
 	
+	//hlog(LOG_DEBUG, "check_invalid_q_callsign: '%.*s'", len, call);
+	
 	if (len > 12 || len < 1)
 		return -1;
 	
 	while (p < e) {
-		/* these would be redundant, non-ascii and control chars are
-		 * not alphanumeric.
-		if (!isascii(*p))
-			return -1;
-		if (iscntrl(*p))
-			return -1;
-		*/
 		if ((!isalnum(*p)) && *p != '-')
 			return -1;
 		p++;
@@ -169,7 +164,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		/* 1) */
 		for (j = i + 1; j < qcallc; j++) {
 			/* this match is case sensitive in javaprssrvr, so that's what we'll do */
-			if (l == qcallv[j+1] - qcallv[j] - 1 && strncmp(qcallv[i], qcallv[j], l) == 0) {
+			if (l == qcallv[j+1] - qcallv[j] - 1 && memcmp(qcallv[i], qcallv[j], l) == 0) {
 				/* TODO: The reject log should really log the offending packet */
 				hlog(LOG_DEBUG, "q: dropping due to callsign-SSID '%.*s' found twice after Q construct", l, qcallv[i]);
 			    	return QDROP_QPATH_CALL_TWICE;
@@ -194,7 +189,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "q: dropping due to callsign '%.*s' after Q construct being logged in on another socket, arrived from %s", l, qcallv[i], c->username);
 			return QDROP_PATH_CALL_IS_LOCAL_CLIENT;
-		} else if (check_invalid_q_callsign(qcallv[i], l)) {
+		} else if (check_invalid_q_callsign(qcallv[i], l) != 0) {
 			hlog(LOG_DEBUG, "q: dropping due to callsign '%.*s' after Q construct being invalid as an APRS-IS server name, arrived from %s", l, qcallv[i], c->username);
 			return QDROP_PATH_CALL_IS_INVALID;
 		}

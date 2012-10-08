@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 20 };
+BEGIN { plan tests => 20 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -96,6 +96,27 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,DIGI1*,qAR,$login:xxx",
 	"SRC>DST:dummy3", 1); # will pass (helper packet)
+
+######
+# 17: send a packet with some 8-bit binary data, test that trimmed packets are dropped
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"SRC>DST2,qAR,$login:latin1 \xC5\xC4\xD6 skandit",
+	"SRC>DST2,qAR,$login:latin1 \xC5\xC4\xD6 skandit");
+
+# 18: removed
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST2,qAR,$login:latin1  skandit",
+	"SRC>DST:latin1 dummy1", 1); # will pass (helper packet)
+
+# 19: replaced with spaces
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST2,qAR,$login:latin1     skandit",
+	"SRC>DST:latin1 dummy2", 1); # will pass (helper packet)
+
+# 20: 8th bit trimmed
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST2,qAR,$login:latin1 \x45\x44\x56 skandit",
+	"SRC>DST:latin1 dummy3", 1); # will pass (helper packet)
 
 
 # disconnect

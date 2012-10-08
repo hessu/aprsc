@@ -308,6 +308,57 @@ static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrl
 	return 0;
 }
 
+static int dupecheck_add_buf(const char *s, int len)
+{
+	uint32_t hash, idx;
+	struct dupe_record_t **dpp, *dp;
+	
+	hash = keyhash(s, len, 0);
+	idx  = hash;
+
+	idx ^= (idx >> 13); /* fold the hash bits.. */
+	idx ^= (idx >> 26); /* fold the hash bits.. */
+	idx = idx % DUPECHECK_DB_SIZE;
+	dpp = &dupecheck_db[idx];
+	
+	return 0;
+}
+
+/*
+ *	mangle packet in common ways and store mangled versions
+ *	in dupecheck db, so that the mangled versions will be dropped
+ */
+
+static int dupecheck_mangle_store(const char *addr, int addrlen, const char *data, int datalen)
+{
+        char ib[PACKETLEN_MAX];
+        char tb[PACKETLEN_MAX];
+        int ilen, tlen;
+        
+        ilen = addrlen + datalen;
+        
+        if (ilen > PACKETLEN_MAX)
+                return -1;
+        
+        memcpy(ib, addr, addrlen);
+        memcpy(ib + addrlen, data, datalen);
+        
+        //hlog(LOG_DEBUG, "dupecheck_mangle_store ib: '%.*s'", ilen, ib);
+        
+        /* remove spaces from end */
+        memcpy(tb, ib, ilen);
+        tlen = ilen;
+        while (tlen > 0 && tb[tlen-1] == ' ')
+                --tlen;
+        
+        if (tlen != ilen) {
+                hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen, tlen, tb);
+                dupecheck_add_buf(tb, tlen);
+        }
+                  
+        return 0;
+}
+
 /*
  *	check a single packet for duplicates
  */
@@ -331,7 +382,7 @@ static int dupecheck(struct pbuf_t *pb)
 	addrlen = pb->dstcall_end_or_ssid - addr;
 
 	data    = pb->info_start;
-	datalen = pb->packet_len - (data - pb->data);
+	datalen = pb->packet_len - (data - pb->data) - 2; // ignore CRLF: -2
 
 	/* TODO:
 	 * Do duplicate checking on an unmodified packet
@@ -343,13 +394,7 @@ static int dupecheck(struct pbuf_t *pb)
 	 * packet will pass if the mangled version
 	 * came in first.
 	 */
-	 
-	// Canonic tail has no SPACEs in data portion!
-	// TODO: how to treat 0 bytes ???
-	while (datalen > 0 && data[datalen-1] == ' ')
-	  --datalen;
-
-
+	
 	// there are no 3rd-party frames in APRS-IS ...
 
 	// 2) calculate checksum (from disjoint memory areas)
@@ -386,15 +431,13 @@ static int dupecheck(struct pbuf_t *pb)
 		dpp = &dp->next;
 	}
 	// dpp points to pointer at the tail of the chain
-
-	// 4) Add comparison copy of non-dupe into dupe-db
-	//    .. and historydb wants also copy..
-
-	historydb_insert(pb);
-	filter_postprocess_dupefilter(pb);
 	
+	// 4) Add comparison copy of non-dupe into dupe-db
 	if (dupecheck_append(dpp, hash, addrlen, addr, datalen, data) == -1)
 	        return -1;
+	
+	// 5) mangle packet in a few common ways, and store to dupe-db
+	dupecheck_mangle_store(addr, addrlen, data, datalen);
 	
 	return 0;
 }
@@ -454,6 +497,11 @@ static int dupecheck_drain_worker(struct worker_t *w,
 		pbnext = pb->next; // it may get modified below..
 		
 		if (rc == 0) {
+		        // put non-duplicate packet in history database
+		        // and let filter module do it's thing
+		        historydb_insert(pb);
+		        filter_postprocess_dupefilter(pb);
+	
 			// Not duplicate
 			**pb_out_prevp = pb;
 			*pb_out_prevp = &pb->next;

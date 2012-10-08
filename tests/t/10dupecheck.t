@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 18 };
+BEGIN { plan tests => 20 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -84,6 +84,19 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,DIGI1*,qAR,$login:$data",
 	"SRC>DST2,DIGI1*,qAR,$login:$data");
+
+######
+# 15: send a packet with some whitespace in, the end, then test that the
+# whitespace-trimmed version is dropped
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"SRC>DST2,DIGI1*,qAR,$login:xxx ",
+	"SRC>DST2,DIGI1*,qAR,$login:xxx ");
+
+# 16: make sure the whitespace-version gets dropped
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST2,DIGI1*,qAR,$login:xxx",
+	"SRC>DST:dummy3", 1); # will pass (helper packet)
+
 
 # disconnect
 

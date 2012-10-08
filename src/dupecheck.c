@@ -290,7 +290,7 @@ static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrl
 	*dpp = dp;
 	memcpy(dp->packet, addr, addrlen);
 	memcpy(dp->packet + addrlen, data, datalen);
-	hlog(LOG_DEBUG, "dupecheck_append '%.*s'", addrlen+datalen, dp->packet);
+	//hlog(LOG_DEBUG, "dupecheck_append '%.*s'", addrlen+datalen, dp->packet);
 	dp->hash = hash;
 	dp->t   = now; /* Use the current timestamp instead of the arrival time.
 	                  If our incoming worker, or dupecheck, is lagging for
@@ -313,6 +313,8 @@ static int dupecheck_add_buf(const char *s, int len)
 	uint32_t hash, idx;
 	struct dupe_record_t **dpp, *dp;
 	
+	//hlog(LOG_DEBUG, "dupecheck_add_buf '%.*s'", len, s);
+	
 	hash = keyhash(s, len, 0);
 	idx  = hash;
 
@@ -321,7 +323,32 @@ static int dupecheck_add_buf(const char *s, int len)
 	idx = idx % DUPECHECK_DB_SIZE;
 	dpp = &dupecheck_db[idx];
 	
-	hlog(LOG_DEBUG, "dupecheck_add_buf '%.*s'", len, s);
+	while (*dpp) {
+		dp = *dpp;
+		if (dp->hash == hash) {
+			// HASH match!
+			if (dp->len == len &&
+			    memcmp(s, dp->packet, len) == 0) {
+				// PACKET MATCH!
+				//hlog(LOG_DEBUG, "dupecheck_add_buf got it already: %.*s", len, s);
+				dp->t = now;
+				return 0; /* no need to add, we have it */
+			}
+			// no packet match.. check next
+		}
+		dpp = &dp->next;
+	}
+	// dpp points to pointer at the tail of the chain
+	
+        dp = dupecheck_db_alloc(len);
+	if (!dp)
+	        return -1; // alloc error!
+        
+	*dpp = dp;
+	memcpy(dp->packet, s, len);
+	//hlog(LOG_DEBUG, "dupecheck_add_buf appended '%.*s'", len, s);
+	dp->hash = hash;
+	dp->t = now;
 	
 	return 0;
 }
@@ -354,7 +381,7 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
                 --tlen;
         
         if (tlen != ilen) {
-                hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen, tlen, tb);
+                //hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen, tlen, tb);
                 dupecheck_add_buf(tb, tlen);
         }
                   

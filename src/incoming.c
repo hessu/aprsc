@@ -489,7 +489,7 @@ static int check_invalid_path_callsign(const char *call, int len)
 	
 	//hlog(LOG_DEBUG, "check_invalid_path_callsign: '%.*s'", len, call);
 	
-	if (len > 12 || len < 1)
+	if (len > CALLSIGNLEN_MAX || len < 1)
 		return -1;
 	
 	while (p < e) {

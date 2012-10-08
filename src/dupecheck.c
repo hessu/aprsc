@@ -301,6 +301,17 @@ static int dupecheck(struct pbuf_t *pb)
 	data    = pb->info_start;
 	datalen = pb->packet_len - (data - pb->data);
 
+	/* TODO:
+	 * Do duplicate checking on an unmodified packet
+	 * (no space trimming or anything), but do store
+	 * both trimmed and untrimmed version (if they differ)
+	 * separately to the db.
+	 * This way a space-trimmed second packet will not
+	 * pass (mangled packet), but a non-trimmed second
+	 * packet will pass if the mangled version
+	 * came in first.
+	 */
+	 
 	// Canonic tail has no SPACEs in data portion!
 	// TODO: how to treat 0 bytes ???
 	while (datalen > 0 && data[datalen-1] == ' ')

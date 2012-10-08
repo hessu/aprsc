@@ -60,7 +60,9 @@ my @pkts = (
 	"SRC>DST,DIGI,qAR,$login:}blah, 3rd party ID only",
 	"SRC>DST,DIGI,qAR,$login:?APRS? general query",
 	"SRC>DST,DIGI,qAR,$login:?WX? general query",
-	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query"
+	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query",
+	"SRC>DST\x08,DIGI,qAR,$login:>should drop ctrl-B in dstcall",
+	"SRC\x08>DST,DIGI,qAR,$login:>should drop ctrl-B in srccall",
 );
 
 # send the packets

@@ -44,9 +44,9 @@ const char *inerr_labels[] = {
 	"no_colon",
 	"no_dst",
 	"no_path",
-	"long_srccall",
+	"inv_srccall",
 	"no_body",
-	"long_dstcall",
+	"inv_dstcall",
 	"disallow_unverified",
 	"path_nogate",
 	"3rd_party",
@@ -581,8 +581,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_start >= packet_end)	// We're already at the path end
 		return INERR_NO_PATH;
 	
-	if (src_end - s > CALLSIGNLEN_MAX || src_end - s < CALLSIGNLEN_MIN)
-		return INERR_LONG_SRCCALL; /* too long source callsign */
+	if (check_invalid_q_callsign(s, src_end - s) != 0 || src_end - s < CALLSIGNLEN_MIN)
+		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
 	if (info_start >= packet_end)
@@ -604,8 +604,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	while (dstcall_end < path_end && *dstcall_end != ',' && *dstcall_end != ':')
 		dstcall_end++;
 	
-	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
-		return INERR_LONG_DSTCALL; /* too long for destination callsign */
+	if (check_invalid_q_callsign(path_start, dstcall_end - path_start) != 0)
+		return INERR_INV_DSTCALL; /* invalid or too long for destination callsign */
 	
 	/* where does the digipeater path start? */
 	via_start = dstcall_end;

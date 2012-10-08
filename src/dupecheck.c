@@ -361,30 +361,64 @@ static int dupecheck_add_buf(const char *s, int len)
 static int dupecheck_mangle_store(const char *addr, int addrlen, const char *data, int datalen)
 {
         char ib[PACKETLEN_MAX];
-        char tb[PACKETLEN_MAX];
-        int ilen, tlen;
+        char tb1[PACKETLEN_MAX];
+        char tb2[PACKETLEN_MAX];
+        char tb3[PACKETLEN_MAX];
+        int ilen;
+        int tlen1, tlen2, tlen3;
+        int i;
         
         ilen = addrlen + datalen;
         
         if (ilen > PACKETLEN_MAX)
                 return -1;
         
+        /* create a copy of normal packet data */
         memcpy(ib, addr, addrlen);
         memcpy(ib + addrlen, data, datalen);
         
         //hlog(LOG_DEBUG, "dupecheck_mangle_store ib: '%.*s'", ilen, ib);
         
-        /* remove spaces from end */
-        memcpy(tb, ib, ilen);
-        tlen = ilen;
-        while (tlen > 0 && tb[tlen-1] == ' ')
-                --tlen;
+        /********************************************/
+        /* remove spaces from the end of the packet */
+        memcpy(tb1, ib, ilen);
+        tlen1 = ilen;
+        while (tlen1 > 0 && tb1[tlen1-1] == ' ')
+                --tlen1;
         
-        if (tlen != ilen) {
-                //hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen, tlen, tb);
-                dupecheck_add_buf(tb, tlen);
+        if (tlen1 != ilen) {
+                //hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen1, tlen1, tb1);
+                dupecheck_add_buf(tb1, tlen1);
         }
-                  
+        
+        /*************************/
+        /* tb1: 8th bit data deleted
+         * tb2: 8th bit is cleared
+         */
+        tlen1 = tlen2 = tlen3 = 0;
+        char c;
+        for (i = 0; i < ilen; i++) {
+                c = ib[i] & 0x7F;
+                tb2[tlen2++] = c;
+                if (ib[i] != c) {
+                        /* high bit is on */
+                        tb3[tlen3++] = ' ';
+                } else {
+                        /* 7-bit char */
+                        tb1[tlen1++] = c;
+                        tb3[tlen3++] = c;
+                }
+        }
+        
+        if (tlen1 != ilen) {
+                //hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d 8-bit chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+                //hlog(LOG_DEBUG, "dupecheck_mangle_store: ANDed    %d 8-bit chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+                //hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d 8-bit chars: '%.*s'", ilen-tlen1, tlen3, tb3);
+                dupecheck_add_buf(tb1, tlen1);
+                dupecheck_add_buf(tb2, tlen2);
+                dupecheck_add_buf(tb3, tlen3);
+        }
+        
         return 0;
 }
 

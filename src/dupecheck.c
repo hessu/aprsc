@@ -277,6 +277,38 @@ static void dupecheck_cleanup(void)
 }
 
 /*
+ *	Append a dupecheck record in a leaf list of the hash
+ */
+
+static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrlen, const char *addr, int datalen, const char *data)
+{
+        struct dupe_record_t *dp;
+        
+        dp = dupecheck_db_alloc(addrlen, datalen);
+	if (!dp)
+	        return -1; // alloc error!
+        
+	*dpp = dp;
+	memcpy(dp->addresses, addr, addrlen);
+	memcpy(dp->packet,    data, datalen);
+	dp->hash = hash;
+	dp->t   = now; /* Use the current timestamp instead of the arrival time.
+	                  If our incoming worker, or dupecheck, is lagging for
+	                  reason or another (for example, a huge incoming burst
+	                  of traffic), using the arrival time instead of current
+	                  time could make the dupecheck db entry expire too early.
+	                  In an extreme trouble case, we could expire dupecheck db
+	                  entries very soon after the packet has gone out from us,
+	                  which would make loops more likely and possibly increase
+	                  the traffic and make us lag even more.
+	                  This timestamp should be closer to the *outgoing* time
+	                  than the *incoming* time, and current timestamp is a
+	                  good middle ground. Simulator is not important.
+			*/
+	return 0;
+}
+
+/*
  *	check a single packet for duplicates
  */
 
@@ -360,27 +392,10 @@ static int dupecheck(struct pbuf_t *pb)
 
 	historydb_insert(pb);
 	filter_postprocess_dupefilter(pb);
-
-	dp = dupecheck_db_alloc(addrlen, datalen);
-	if (!dp) return -1; // alloc error!
-
-	*dpp = dp;
-	memcpy(dp->addresses, addr, addrlen);
-	memcpy(dp->packet,    data, datalen);
-	dp->hash = hash;
-	dp->t   = now; /* Use the current timestamp instead of the arrival time.
-	                  If our incoming worker, or dupecheck, is lagging for
-	                  reason or another (for example, a huge incoming burst
-	                  of traffic), using the arrival time instead of current
-	                  time could make the dupecheck db entry expire too early.
-	                  In an extreme trouble case, we could expire dupecheck db
-	                  entries very soon after the packet has gone out from us,
-	                  which would make loops more likely and possibly increase
-	                  the traffic and make us lag even more.
-	                  This timestamp should be closer to the *outgoing* time
-	                  than the *incoming* time, and current timestamp is a
-	                  good middle ground. Simulator is not important.
-			*/
+	
+	if (dupecheck_append(dpp, hash, addrlen, addr, datalen, data) == -1)
+	        return -1;
+	
 	return 0;
 }
 

@@ -202,7 +202,7 @@ void dupecheck_init(void)
 #endif
 }
 
-static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
+static struct dupe_record_t *dupecheck_db_alloc(int len)
 {
 	struct dupe_record_t *dp;
 #ifndef _FOR_VALGRIND_
@@ -219,11 +219,10 @@ static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 	dp = hmalloc(pktlen + sizeof(*dp));
 #endif
 	memset(dp, 0, sizeof(*dp));
-	dp->alen = alen;
-	dp->plen = pktlen;
+	dp->len = len;
 	dp->packet = dp->packetbuf;
-	if (pktlen > sizeof(dp->packetbuf))
-		dp->packet = hmalloc(pktlen+1);
+	if (len > sizeof(dp->packetbuf))
+		dp->packet = hmalloc(len+1);
 
 	++dupecheck_cellgauge;
 
@@ -284,13 +283,14 @@ static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrl
 {
         struct dupe_record_t *dp;
         
-        dp = dupecheck_db_alloc(addrlen, datalen);
+        dp = dupecheck_db_alloc(addrlen + datalen);
 	if (!dp)
 	        return -1; // alloc error!
         
 	*dpp = dp;
-	memcpy(dp->addresses, addr, addrlen);
-	memcpy(dp->packet,    data, datalen);
+	memcpy(dp->packet, addr, addrlen);
+	memcpy(dp->packet + addrlen, data, datalen);
+	hlog(LOG_DEBUG, "dupecheck_append '%.*s'", addrlen+datalen, dp->packet);
 	dp->hash = hash;
 	dp->t   = now; /* Use the current timestamp instead of the arrival time.
 	                  If our incoming worker, or dupecheck, is lagging for
@@ -320,6 +320,8 @@ static int dupecheck_add_buf(const char *s, int len)
 	idx ^= (idx >> 26); /* fold the hash bits.. */
 	idx = idx % DUPECHECK_DB_SIZE;
 	dpp = &dupecheck_db[idx];
+	
+	hlog(LOG_DEBUG, "dupecheck_add_buf '%.*s'", len, s);
 	
 	return 0;
 }
@@ -415,10 +417,9 @@ static int dupecheck(struct pbuf_t *pb)
 		if (dp->hash == hash &&
 		    dp->t >= expiretime) {
 			// HASH match!  And not too old!
-			if (dp->alen == addrlen &&
-			    dp->plen == datalen &&
-			    memcmp(addr, dp->addresses, addrlen) == 0 &&
-			    memcmp(data, dp->packet,    datalen) == 0) {
+			if (dp->len == addrlen + datalen &&
+			    memcmp(addr, dp->packet, addrlen) == 0 &&
+			    memcmp(data, dp->packet + addrlen, datalen) == 0) {
 				// PACKET MATCH!
 				//hlog(LOG_DEBUG, "Dupe: %.*s", pb->packet_len - 2, pb->data);
 				//hlog(LOG_DEBUG, "Orig: %.*s %.*s", addrlen, dp->addresses, datalen, dp->packet);

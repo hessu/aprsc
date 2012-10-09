@@ -32,6 +32,12 @@
 #include <locale.h>
 #include <ctype.h>
 
+#define USE_POSIX_CAP
+#ifdef USE_POSIX_CAP
+#include <sys/capability.h>
+#include <sys/prctl.h>
+#endif
+
 #include "hmalloc.h"
 #include "hlog.h"
 #include "config.h"
@@ -299,9 +305,128 @@ static void set_euid_0(void)
 	}
 }
 
+static void check_caps(char *when)
+{
+#ifdef USE_POSIX_CAP
+	cap_t caps = cap_get_proc();
+	
+	if (caps == NULL) {
+		hlog(LOG_ERR, "check_caps: Failed to get current POSIX capabilities: %s", strerror(errno));
+		return;
+	}
+	
+	char *s = cap_to_text(caps, NULL);
+	
+	if (s) {
+		hlog(LOG_DEBUG, "aprsc: capabilities %s: %s", when, s);
+	}
+	
+	cap_free(caps);
+#endif
+}
+
+static int set_initial_capabilities(void)
+{
+#ifdef USE_POSIX_CAP
+	int ret = -1;
+	
+	cap_t caps = cap_init();
+
+	/* list of capabilities needed at startup - less than what root has */
+#define NCAPS 5
+	cap_value_t cap_list[NCAPS];
+	cap_list[0] = CAP_NET_BIND_SERVICE;
+	cap_list[1] = CAP_SETUID;
+	cap_list[2] = CAP_SETGID;
+	cap_list[3] = CAP_SYS_RESOURCE;
+	cap_list[4] = CAP_SYS_CHROOT;
+	
+	if (cap_set_flag(caps, CAP_PERMITTED, NCAPS, cap_list, CAP_SET) == -1) {
+		fprintf(stderr, "aprsc: Failed to set initial POSIX capability flags: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	if (cap_set_flag(caps, CAP_EFFECTIVE, NCAPS, cap_list, CAP_SET) == -1) {
+		fprintf(stderr, "aprsc: Failed to set initial POSIX capability flags: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	//fprintf(stderr, "aprsc: going to set: %s\n", cap_to_text(caps, NULL));
+	
+	if (cap_set_proc(caps) == -1) {
+		fprintf(stderr, "aprsc: Failed to apply initial POSIX capabilities: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	if (prctl(PR_SET_KEEPCAPS, 1, 0, 0, 0) == -1) {
+		fprintf(stderr, "aprsc: Failed to set PR_SET_KEEPCAPS: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	//fprintf(stderr, "aprsc: Successfully enabled initial POSIX capabilities\n");
+	ret = 0;
+	
+end_caps:
+	if (caps) {
+		if (cap_free(caps) == -1)
+			fprintf(stderr, "aprsc: Failed to free capabilities: %s\n", strerror(errno));
+		caps = NULL;
+	}
+	
+	return ret;
+#else
+	return 0;
+#endif
+}
+
+static int set_final_capabilities(void)
+{
+#ifdef USE_POSIX_CAP
+	int ret = -1;
+	cap_t caps = cap_init();
+
+#define NCAPS_FINAL 1
+	cap_value_t cap_list[NCAPS_FINAL];
+	cap_list[0] = CAP_NET_BIND_SERVICE;
+	
+	if (cap_set_flag(caps, CAP_PERMITTED, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
+		fprintf(stderr, "aprsc: Failed to set final permitted POSIX capability flags: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	if (cap_set_flag(caps, CAP_EFFECTIVE, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
+		fprintf(stderr, "aprsc: Failed to set final effective POSIX capability flags: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	//fprintf(stderr, "aprsc: going to set: %s\n", cap_to_text(caps, NULL));
+	
+	if (cap_set_proc(caps) == -1) {
+		fprintf(stderr, "aprsc: Failed to apply final POSIX capabilities: %s\n", strerror(errno));
+		goto end_caps;
+	}
+	
+	//fprintf(stderr, "aprsc: Successfully enabled final POSIX capabilities\n");
+	ret = 0;
+	
+end_caps:
+	if (caps) {
+		if (cap_free(caps) == -1)
+			fprintf(stderr, "aprsc: Failed to free capabilities: %s\n", strerror(errno));
+		caps = NULL;
+	}
+	
+	return ret;
+#else
+	return -1;
+#endif
+}
+
 /* set real UID to non-root, cannot be reversed */
 static void set_uid(void)
 {
+	//check_caps("before set_uid");
+	
 	if (setgid(pwbuf.pw_gid)) {
 		fprintf(stderr, "aprsc: Failed to set GID %d: %s\n", pwbuf.pw_gid, strerror(errno));
 		exit(1);
@@ -311,6 +436,7 @@ static void set_uid(void)
 		fprintf(stderr, "aprsc: Failed to set UID %d: %s\n", pwbuf.pw_uid, strerror(errno));
 		exit(1);
 	}
+	
 }
 
 /*
@@ -529,6 +655,9 @@ int main(int argc, char **argv)
 	time_t cleanup_tick;
 	time_t version_tick;
 	
+	if (getuid() == 0)
+		set_initial_capabilities();
+	
 	time(&tick);
 	now = tick;
 	cleanup_tick = tick;
@@ -683,8 +812,13 @@ int main(int argc, char **argv)
 	}
 	
 	/* if setuid is needed, do so */
-	if (setuid_s)
+	if (setuid_s) {
 		set_uid();
+		//check_caps("after set_uid");
+		if (set_final_capabilities() == 0)
+			hlog(LOG_INFO, "POSIX capabilities set: can bind low ports"); 
+		check_caps("after set_final_capabilities");
+	}
 	
 	/* check that we're not root - it would be insecure and really not required */
 	check_uid();

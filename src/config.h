@@ -29,6 +29,12 @@
 #include "netdb6.h"
 #endif
 
+#ifdef HAVE_PRCTL_H
+#ifdef HAVE_CAPABILITY_H
+#define USE_POSIX_CAP
+#endif
+#endif
+
 extern int fork_a_daemon;	/* fork a daemon */
 
 extern int dump_requests;	/* print requests */

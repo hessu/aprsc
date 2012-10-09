@@ -63,6 +63,12 @@ AC_CHECK_LIB(event,event_base_new,[LIBEVENT="-levent"],[AC_MSG_ERROR([libevent2 
 AS_IF([test "x$static_libevent" != x],
 	[LIBEVENT="$static_libevent"])
 
+dnl Check for POSIX capabilities
+AC_CHECK_HEADERS([sys/capability.h], AC_DEFINE([HAVE_CAPABILITY_H], [], [POSIX capabilities]))
+AC_CHECK_HEADERS([sys/prctl.h], AC_DEFINE([HAVE_PRCTL_H], [], [Linux process control prctl.h]))
+AC_SUBST(LIBCAP)
+AC_CHECK_LIB(cap,cap_init,[LIBCAP="-lcap"])
+
 dnl Checks for system headers
 AC_CHECK_HEADERS([alloca.h], AC_DEFINE([HAVE_ALLOCA_H]))
 

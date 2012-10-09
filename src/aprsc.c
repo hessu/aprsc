@@ -32,12 +32,6 @@
 #include <locale.h>
 #include <ctype.h>
 
-#define USE_POSIX_CAP
-#ifdef USE_POSIX_CAP
-#include <sys/capability.h>
-#include <sys/prctl.h>
-#endif
-
 #include "hmalloc.h"
 #include "hlog.h"
 #include "config.h"
@@ -53,6 +47,11 @@
 #include "historydb.h"
 #include "client_heard.h"
 #include "keyhash.h"
+
+#ifdef USE_POSIX_CAP
+#include <sys/capability.h>
+#include <sys/prctl.h>
+#endif
 
 struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 

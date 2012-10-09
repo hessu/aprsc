@@ -39,6 +39,10 @@ with it, so you need to download it and compile it from source
 
 libevent2 is also available in MacPorts for OS X and FreeBSD ports.
 
+On Linux, aprsc can utilize POSIX capabilities to enable binding low
+(< 1024) ports while not running as root. This requires the libcap
+library, and compiling against it requires it's development headers
+(package libcap-dev on Debian/Ubuntu).
 
 Preparing the environment
 ----------------------------

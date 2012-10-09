@@ -385,39 +385,44 @@ static int set_final_capabilities(void)
 	cap_t caps = cap_init();
 
 #define NCAPS_FINAL 1
-	cap_value_t cap_list[NCAPS_FINAL];
-	cap_list[0] = CAP_NET_BIND_SERVICE;
-	
-	if (cap_set_flag(caps, CAP_PERMITTED, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
-		fprintf(stderr, "aprsc: Failed to set final permitted POSIX capability flags: %s\n", strerror(errno));
-		goto end_caps;
+	if (listen_low_ports) {
+		cap_value_t cap_list[NCAPS_FINAL];
+		cap_list[0] = CAP_NET_BIND_SERVICE;
+		
+		if (cap_set_flag(caps, CAP_PERMITTED, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
+			hlog(LOG_ERR, "aprsc: Failed to set final permitted POSIX capability flags: %s", strerror(errno));
+			goto end_caps;
+		}
+		
+		if (cap_set_flag(caps, CAP_EFFECTIVE, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
+			hlog(LOG_ERR, "aprsc: Failed to set final effective POSIX capability flags: %s", strerror(errno));
+			goto end_caps;
+		}
+		
+		//fprintf(stderr, "aprsc: going to set: %s\n", cap_to_text(caps, NULL));
+		ret = 1;
+	} else {
+		ret = 0;
 	}
-	
-	if (cap_set_flag(caps, CAP_EFFECTIVE, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
-		fprintf(stderr, "aprsc: Failed to set final effective POSIX capability flags: %s\n", strerror(errno));
-		goto end_caps;
-	}
-	
-	//fprintf(stderr, "aprsc: going to set: %s\n", cap_to_text(caps, NULL));
 	
 	if (cap_set_proc(caps) == -1) {
-		fprintf(stderr, "aprsc: Failed to apply final POSIX capabilities: %s\n", strerror(errno));
+		hlog(LOG_ERR, "aprsc: Failed to apply final POSIX capabilities: %s", strerror(errno));
+		ret = -1;
 		goto end_caps;
 	}
 	
 	//fprintf(stderr, "aprsc: Successfully enabled final POSIX capabilities\n");
-	ret = 0;
 	
 end_caps:
 	if (caps) {
 		if (cap_free(caps) == -1)
-			fprintf(stderr, "aprsc: Failed to free capabilities: %s\n", strerror(errno));
+			hlog(LOG_ERR, "aprsc: Failed to free capabilities: %s", strerror(errno));
 		caps = NULL;
 	}
 	
 	return ret;
 #else
-	return -1;
+	return 0;
 #endif
 }
 
@@ -814,8 +819,8 @@ int main(int argc, char **argv)
 	if (setuid_s) {
 		set_uid();
 		//check_caps("after set_uid");
-		if (set_final_capabilities() == 0)
-			hlog(LOG_INFO, "POSIX capabilities set: can bind low ports"); 
+		if (set_final_capabilities() >= 0)
+			hlog(LOG_INFO, "POSIX capabilities available: can bind low ports"); 
 		check_caps("after set_final_capabilities");
 	}
 	

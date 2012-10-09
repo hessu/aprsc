@@ -56,6 +56,8 @@ char *new_passcode;
 char *new_myemail;
 char *new_myadmin;
 
+int listen_low_ports = 0; /* do we have any < 1024 ports set? need POSIX capabilities? */
+
 struct sockaddr_in uplink_bind_v4;
 socklen_t uplink_bind_v4_len = 0;
 struct sockaddr_in6 uplink_bind_v6;
@@ -909,6 +911,13 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	/* dupefeed port is always hidden */
 	if (clflags & CLFLAGS_DUPEFEED)
 		l->hidden = 1;
+	
+	/* if low ports are configured, make a note of that, so that
+	 * POSIX capability to bind low ports can be reserved
+	 * at startup.
+	 */
+	if (port < 1024)
+		listen_low_ports = 1;
 	
 	/* put in the list */
 	l->next = *lq;

@@ -44,9 +44,9 @@ const char *inerr_labels[] = {
 	"no_colon",
 	"no_dst",
 	"no_path",
-	"long_srccall",
+	"inv_srccall",
 	"no_body",
-	"long_dstcall",
+	"inv_dstcall",
 	"disallow_unverified",
 	"path_nogate",
 	"3rd_party",
@@ -56,7 +56,8 @@ const char *inerr_labels[] = {
 	"aprsc_q_bug",
 	"q_drop",
 	"short_packet",
-	"long_packet"
+	"long_packet",
+	"inv_path_call"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -426,6 +427,41 @@ char *memstr(char *needle, char *haystack, char *haystack_end)
 }
 
 /*
+ *	Find a string in a binary buffer, case insensitive
+ */
+
+char *memcasestr(char *needle, char *haystack, char *haystack_end)
+{
+	char *hp = haystack;
+	char *np = needle;
+	char *match_start = NULL;
+	
+	while (hp < haystack_end) {
+		if (toupper(*hp) == toupper(*np)) {
+			/* matching... is this the start of a new match? */
+			if (match_start == NULL)
+				match_start = hp;
+			/* increase needle pointer, so we'll check the next char */
+			np++;
+		} else {
+			/* not matching... clear state */
+			match_start = NULL;
+			np = needle;
+		}
+		
+		/* if we've reached the end of the needle, and we have found a match,
+		 * return a pointer to it
+		 */
+		if (*np == 0 && (match_start))
+			return match_start;
+		hp++;
+	}
+	
+	/* out of luck */
+	return NULL;
+}
+
+/*
  *	Check if the digipeater path includes elements indicating that the
  *	packet should be dropped.
  */
@@ -438,6 +474,103 @@ static int digi_path_drop(char *via_start, char *path_end)
 	if (memstr(",RFONLY", via_start, path_end))
 		return 1;
 		
+	return 0;
+}
+
+/*
+ *	Check if a callsign is good for srccall/dstcall
+ *	(valid APRS-IS callsign, * not allowed)
+ */
+
+static int check_invalid_src_dst(const char *call, int len)
+{
+	const char *p = call;
+	const char *e = call + len;
+	
+	//hlog(LOG_DEBUG, "check_invalid_src_dst: '%.*s'", len, call);
+	
+	if (len < 1 || len > CALLSIGNLEN_MAX)
+		return -1;
+	
+	while (p < e) {
+		/* alphanumeric and - */
+		if ((!isalnum(*p)) && *p != '-')
+			return -1;
+			
+		p++;
+	}
+	
+	return 0;
+}
+
+/*
+ *	Check if a callsign is good for a digi path entry
+ *	(valid APRS-IS callsign, * allowed in end)
+ */
+
+static int check_invalid_path_callsign(const char *call, int len)
+{
+	const char *p = call;
+	const char *e = call + len;
+	
+	//hlog(LOG_DEBUG, "check_invalid_path_callsign: '%.*s'", len, call);
+	
+	/* only check for minimum length first - max length depends on
+	 * if there's a * in the end
+	 */
+	if (len < 1)
+		return -1;
+	
+	while (p < e) {
+		/* alphanumeric and - */
+		/* AND '*' is allowed in the end */
+		if ((!isalnum(*p)) && *p != '-' && !(*p == '*' && p == e-1)) {
+			//hlog(LOG_DEBUG, "check_invalid_path_callsign: invalid char '%c'", *p);
+			return -1;
+		}
+		
+		p++;
+	}
+	
+	if (*(p-1) == '*' && len <= CALLSIGNLEN_MAX+1) {
+		//hlog(LOG_DEBUG, "check_invalid_path_callsign: allowing len %d due to last *", len);
+		return 0;
+	}
+	
+	/* too long? */
+	if (len > CALLSIGNLEN_MAX) {
+		//hlog(LOG_DEBUG, "check_invalid_path_callsign: too long len %d", len);
+		return -1;
+	}
+	
+	return 0;
+}
+
+/*
+ *	Check for invalid callsigns in path
+ */
+
+static int check_path_calls(const char *via_start, const char *path_end)
+{
+	const char *p = via_start + 1;
+	const char *e;
+	
+	while (p < path_end) {
+		e = p;
+		/* find end of path callsign */
+		while (*e != ',' && e < path_end)
+			e++;
+		/* is this a q construct? bail out. */
+		if (*p == 'q' && e-p == 3) {
+			//hlog(LOG_DEBUG, "check_path_calls bail out at Q construct: '%.*s'", e-p, p);
+			return 0;
+		}
+		//hlog(LOG_DEBUG, "check_path_calls: '%.*s'", e-p, p);
+		if (check_invalid_path_callsign(p, e-p) != 0)
+			return -1;
+		p = e + 1;
+	}
+	
 	return 0;
 }
 
@@ -546,8 +679,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_start >= packet_end)	// We're already at the path end
 		return INERR_NO_PATH;
 	
-	if (src_end - s > CALLSIGNLEN_MAX || src_end - s < CALLSIGNLEN_MIN)
-		return INERR_LONG_SRCCALL; /* too long source callsign */
+	if (check_invalid_src_dst(s, src_end - s) != 0)
+		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
 	if (info_start >= packet_end)
@@ -569,8 +702,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	while (dstcall_end < path_end && *dstcall_end != ',' && *dstcall_end != ':')
 		dstcall_end++;
 	
-	if (dstcall_end - path_start > CALLSIGNLEN_MAX)
-		return INERR_LONG_DSTCALL; /* too long for destination callsign */
+	if (check_invalid_src_dst(path_start, dstcall_end - path_start))
+		return INERR_INV_DSTCALL; /* invalid or too long for destination callsign */
 	
 	/* where does the digipeater path start? */
 	via_start = dstcall_end;
@@ -582,9 +715,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		originated_by_client = 1;
 	
 	/* if disallow_unverified is enabled, don't allow unverified clients
-	 * to send packets where srccall != login
+	 * to send any packets
 	 */
-	if (!c->validated && !originated_by_client && disallow_unverified && !(c->flags & CLFLAGS_UPLINKPORT))
+	if (!c->validated && disallow_unverified)
 		return INERR_DISALLOW_UNVERIFIED;
 	
 	/* check if the path contains NOGATE or other signs which tell the
@@ -592,6 +725,10 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 */
 	if (digi_path_drop(via_start, path_end))
 		return INERR_NOGATE;
+	
+	/* check if there are invalid callsigns in the digipeater path before Q */
+	if (check_path_calls(via_start, path_end) != 0)
+		return INERR_INV_PATH_CALL;
 	
 	/* check for 3rd party packets */
 	if (*(data + 1) == '}')
@@ -799,7 +936,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 		hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
 		if (l4proto != IPPROTO_UDP && (c->flags & CLFLAGS_USERFILTEROK)) {
 			/* filter adjunct commands ? */
-			char *filtercmd = memstr("filter", s, s + len);
+			char *filtercmd = memcasestr("filter", s, s + len);
 			if (filtercmd)
 				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
 			

@@ -111,10 +111,10 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 			
 		lag = pbuf_seqnum_lag(dupecheck_seqnum, pb->seqnum);
 		if (pbuf_lag >= lag) {
-		        hlog(LOG_DEBUG, "global_pbuf_purger: stop at lag %d, dupecheck at %d, pb %d", lag, dupecheck_seqnum, pb->seqnum);
+			hlog(LOG_DEBUG, "global_pbuf_purger: stop at lag %d, dupecheck at %d, pb %d", lag, dupecheck_seqnum, pb->seqnum);
 			break; // some output-worker is lagging behind this item!
-                }
-                
+		}
+		
 		freeset[n++] = pb;
 		++n1;
 		--pbuf_global_count;
@@ -142,10 +142,10 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 			break; // stop at newer than expire2
 		lag = pbuf_seqnum_lag(dupecheck_dupe_seqnum, pb->seqnum);
 		if (pbuf_dupe_lag >= lag) {
-		        hlog(LOG_DEBUG, "global_pbuf_purger: dupe stop at lag %d, dupecheck at %d, pb %d", lag, dupecheck_seqnum, pb->seqnum);
+			hlog(LOG_DEBUG, "global_pbuf_purger: dupe stop at lag %d, dupecheck at %d, pb %d", lag, dupecheck_seqnum, pb->seqnum);
 			break; // some output-worker is lagging behind this item!
-                }
-                
+		}
+		
 		freeset[n++] = pb;
 		++n2;
 		--pbuf_global_dupe_count;
@@ -202,7 +202,7 @@ void dupecheck_init(void)
 #endif
 }
 
-static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
+static struct dupe_record_t *dupecheck_db_alloc(int len)
 {
 	struct dupe_record_t *dp;
 #ifndef _FOR_VALGRIND_
@@ -212,18 +212,17 @@ static struct dupe_record_t *dupecheck_db_alloc(int alen, int pktlen)
 	} else
 		dp = cellmalloc(dupecheck_cells);
 	if (!dp) {
-	        hlog(LOG_ERR, "dupecheck: cellmalloc failed");
+		hlog(LOG_ERR, "dupecheck: cellmalloc failed");
 		return NULL;
-        }
+	}
 #else
 	dp = hmalloc(pktlen + sizeof(*dp));
 #endif
 	memset(dp, 0, sizeof(*dp));
-	dp->alen = alen;
-	dp->plen = pktlen;
+	dp->len = len;
 	dp->packet = dp->packetbuf;
-	if (pktlen > sizeof(dp->packetbuf))
-		dp->packet = hmalloc(pktlen+1);
+	if (len > sizeof(dp->packetbuf))
+		dp->packet = hmalloc(len+1);
 
 	++dupecheck_cellgauge;
 
@@ -254,14 +253,14 @@ static void dupecheck_cleanup(void)
 {
 	struct dupe_record_t *dp, **dpp;
 	time_t expiretime = now - dupefilter_storetime;
+	time_t futuretime = now + dupefilter_storetime;
 	int cleancount = 0, i;
-	
 
 	for (i = 0; i < DUPECHECK_DB_SIZE; ++i) {
 		dpp = & dupecheck_db[i];
 		while (( dp = *dpp )) {
-			if (dp->t < expiretime) {
-				/* Old..  discard. */
+			if (dp->t < expiretime || dp->t > futuretime) {
+				/* Old... or too far in the future, discard. */
 				*dpp = dp->next;
 				dp->next = NULL;
 				dupecheck_db_free(dp);
@@ -274,6 +273,153 @@ static void dupecheck_cleanup(void)
 	}
 	// hlog( LOG_DEBUG, "dupecheck_cleanup() removed %d entries, count now %ld",
 	//       cleancount, dupecheck_cellgauge );
+}
+
+/*
+ *	Append a dupecheck record in a leaf list of the hash
+ */
+
+static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrlen, const char *addr, int datalen, const char *data)
+{
+	struct dupe_record_t *dp;
+	
+	dp = dupecheck_db_alloc(addrlen + datalen);
+	if (!dp)
+		return -1; // alloc error!
+	
+	*dpp = dp;
+	memcpy(dp->packet, addr, addrlen);
+	memcpy(dp->packet + addrlen, data, datalen);
+	//hlog(LOG_DEBUG, "dupecheck_append '%.*s'", addrlen+datalen, dp->packet);
+	dp->hash = hash;
+	dp->t   = now; /* Use the current timestamp instead of the arrival time.
+			  If our incoming worker, or dupecheck, is lagging for
+			  reason or another (for example, a huge incoming burst
+			  of traffic), using the arrival time instead of current
+			  time could make the dupecheck db entry expire too early.
+			  In an extreme trouble case, we could expire dupecheck db
+			  entries very soon after the packet has gone out from us,
+			  which would make loops more likely and possibly increase
+			  the traffic and make us lag even more.
+			  This timestamp should be closer to the *outgoing* time
+			  than the *incoming* time, and current timestamp is a
+			  good middle ground. Simulator is not important.
+			*/
+	return 0;
+}
+
+static int dupecheck_add_buf(const char *s, int len)
+{
+	uint32_t hash, idx;
+	struct dupe_record_t **dpp, *dp;
+	
+	//hlog(LOG_DEBUG, "dupecheck_add_buf '%.*s'", len, s);
+	
+	hash = keyhash(s, len, 0);
+	idx  = hash;
+
+	idx ^= (idx >> 13); /* fold the hash bits.. */
+	idx ^= (idx >> 26); /* fold the hash bits.. */
+	idx = idx % DUPECHECK_DB_SIZE;
+	dpp = &dupecheck_db[idx];
+	
+	while (*dpp) {
+		dp = *dpp;
+		if (dp->hash == hash) {
+			// HASH match!
+			if (dp->len == len &&
+			    memcmp(s, dp->packet, len) == 0) {
+				// PACKET MATCH!
+				//hlog(LOG_DEBUG, "dupecheck_add_buf got it already: %.*s", len, s);
+				dp->t = now;
+				return 0; /* no need to add, we have it */
+			}
+			// no packet match.. check next
+		}
+		dpp = &dp->next;
+	}
+	// dpp points to pointer at the tail of the chain
+	
+	dp = dupecheck_db_alloc(len);
+	if (!dp)
+		return -1; // alloc error!
+	
+	*dpp = dp;
+	memcpy(dp->packet, s, len);
+	//hlog(LOG_DEBUG, "dupecheck_add_buf appended '%.*s'", len, s);
+	dp->hash = hash;
+	dp->t = now;
+	
+	return 0;
+}
+
+/*
+ *	mangle packet in common ways and store mangled versions
+ *	in dupecheck db, so that the mangled versions will be dropped
+ */
+
+static int dupecheck_mangle_store(const char *addr, int addrlen, const char *data, int datalen)
+{
+	char ib[PACKETLEN_MAX];
+	char tb1[PACKETLEN_MAX];
+	char tb2[PACKETLEN_MAX];
+	char tb3[PACKETLEN_MAX];
+	int ilen;
+	int tlen1, tlen2, tlen3;
+	int i;
+	
+	ilen = addrlen + datalen;
+	
+	if (ilen > PACKETLEN_MAX)
+		return -1;
+	
+	/* create a copy of normal packet data */
+	memcpy(ib, addr, addrlen);
+	memcpy(ib + addrlen, data, datalen);
+	
+	//hlog(LOG_DEBUG, "dupecheck_mangle_store ib: '%.*s'", ilen, ib);
+	
+	/********************************************/
+	/* remove spaces from the end of the packet */
+	memcpy(tb1, ib, ilen);
+	tlen1 = ilen;
+	while (tlen1 > 0 && tb1[tlen1-1] == ' ')
+		--tlen1;
+	
+	if (tlen1 != ilen) {
+		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen1, tlen1, tb1);
+		dupecheck_add_buf(tb1, tlen1);
+	}
+	
+	/*************************/
+	/* tb1: 8th bit data deleted
+	 * tb2: 8th bit is cleared
+	 */
+	tlen1 = tlen2 = tlen3 = 0;
+	char c;
+	for (i = 0; i < ilen; i++) {
+		c = ib[i] & 0x7F;
+		tb2[tlen2++] = c;
+		if (ib[i] != c) {
+			/* high bit is on */
+			tb3[tlen3++] = ' ';
+		} else {
+			/* 7-bit char */
+			tb1[tlen1++] = c;
+			tb3[tlen3++] = c;
+		}
+	}
+	
+	if (tlen1 != ilen) {
+		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d 8-bit chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+		//hlog(LOG_DEBUG, "dupecheck_mangle_store: ANDed    %d 8-bit chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d 8-bit chars: '%.*s'", ilen-tlen1, tlen3, tb3);
+		dupecheck_add_buf(tb1, tlen1);
+		dupecheck_add_buf(tb2, tlen2);
+		dupecheck_add_buf(tb3, tlen3);
+	}
+	
+	return 0;
 }
 
 /*
@@ -299,14 +445,19 @@ static int dupecheck(struct pbuf_t *pb)
 	addrlen = pb->dstcall_end_or_ssid - addr;
 
 	data    = pb->info_start;
-	datalen = pb->packet_len - (data - pb->data);
+	datalen = pb->packet_len - (data - pb->data) - 2; // ignore CRLF: -2
 
-	// Canonic tail has no SPACEs in data portion!
-	// TODO: how to treat 0 bytes ???
-	while (datalen > 0 && data[datalen-1] == ' ')
-	  --datalen;
-
-
+	/* TODO:
+	 * Do duplicate checking on an unmodified packet
+	 * (no space trimming or anything), but do store
+	 * both trimmed and untrimmed version (if they differ)
+	 * separately to the db.
+	 * This way a space-trimmed second packet will not
+	 * pass (mangled packet), but a non-trimmed second
+	 * packet will pass if the mangled version
+	 * came in first.
+	 */
+	
 	// there are no 3rd-party frames in APRS-IS ...
 
 	// 2) calculate checksum (from disjoint memory areas)
@@ -325,12 +476,11 @@ static int dupecheck(struct pbuf_t *pb)
 	while (*dpp) {
 		dp = *dpp;
 		if (dp->hash == hash &&
-		    dp->t > expiretime) {
+		    dp->t >= expiretime) {
 			// HASH match!  And not too old!
-			if (dp->alen == addrlen &&
-			    dp->plen == datalen &&
-			    memcmp(addr, dp->addresses, addrlen) == 0 &&
-			    memcmp(data, dp->packet,    datalen) == 0) {
+			if (dp->len == addrlen + datalen &&
+			    memcmp(addr, dp->packet, addrlen) == 0 &&
+			    memcmp(data, dp->packet + addrlen, datalen) == 0) {
 				// PACKET MATCH!
 				//hlog(LOG_DEBUG, "Dupe: %.*s", pb->packet_len - 2, pb->data);
 				//hlog(LOG_DEBUG, "Orig: %.*s %.*s", addrlen, dp->addresses, datalen, dp->packet);
@@ -343,33 +493,14 @@ static int dupecheck(struct pbuf_t *pb)
 		dpp = &dp->next;
 	}
 	// dpp points to pointer at the tail of the chain
-
+	
 	// 4) Add comparison copy of non-dupe into dupe-db
-	//    .. and historydb wants also copy..
-
-	historydb_insert(pb);
-	filter_postprocess_dupefilter(pb);
-
-	dp = dupecheck_db_alloc(addrlen, datalen);
-	if (!dp) return -1; // alloc error!
-
-	*dpp = dp;
-	memcpy(dp->addresses, addr, addrlen);
-	memcpy(dp->packet,    data, datalen);
-	dp->hash = hash;
-	dp->t   = now; /* Use the current timestamp instead of the arrival time.
-	                  If our incoming worker, or dupecheck, is lagging for
-	                  reason or another (for example, a huge incoming burst
-	                  of traffic), using the arrival time instead of current
-	                  time could make the dupecheck db entry expire too early.
-	                  In an extreme trouble case, we could expire dupecheck db
-	                  entries very soon after the packet has gone out from us,
-	                  which would make loops more likely and possibly increase
-	                  the traffic and make us lag even more.
-	                  This timestamp should be closer to the *outgoing* time
-	                  than the *incoming* time, and current timestamp is a
-	                  good middle ground. Simulator is not important.
-			*/
+	if (dupecheck_append(dpp, hash, addrlen, addr, datalen, data) == -1)
+		return -1;
+	
+	// 5) mangle packet in a few common ways, and store to dupe-db
+	dupecheck_mangle_store(addr, addrlen, data, datalen);
+	
 	return 0;
 }
 
@@ -399,11 +530,11 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	struct pbuf_t ***pb_out_dupe_prevp, struct pbuf_t **pb_out_dupe_last,
 	int *pb_out_count, int *pb_out_dupe_count)
 {
-        struct pbuf_t *pb_list;
+	struct pbuf_t *pb_list;
 	struct pbuf_t *pb, *pbnext;
-        int n = 0;
-        
-        /* grab worker's list of packets */
+	int n = 0;
+	
+	/* grab worker's list of packets */
 	pthread_mutex_lock(&w->pbuf_incoming_mutex);
 	pb_list = w->pbuf_incoming;
 	w->pbuf_incoming = NULL;
@@ -428,20 +559,25 @@ static int dupecheck_drain_worker(struct worker_t *w,
 		pbnext = pb->next; // it may get modified below..
 		
 		if (rc == 0) {
+			// put non-duplicate packet in history database
+			// and let filter module do it's thing
+			historydb_insert(pb);
+			filter_postprocess_dupefilter(pb);
+	
 			// Not duplicate
 			**pb_out_prevp = pb;
 			*pb_out_prevp = &pb->next;
 			*pb_out_last  = pb;
 			pb->seqnum = ++dupecheck_seqnum;
 			*pb_out_count = *pb_out_count + 1;
-                } else {
-                	// Duplicate
-                	**pb_out_dupe_prevp = pb;
-                	*pb_out_dupe_prevp = &pb->next;
-                	*pb_out_dupe_last  = pb;
-                	pb->seqnum = ++dupecheck_dupe_seqnum;
-                	*pb_out_dupe_count = *pb_out_dupe_count + 1;
-                	//hlog(LOG_DEBUG, "is duplicate");
+		} else {
+			// Duplicate
+			**pb_out_dupe_prevp = pb;
+			*pb_out_dupe_prevp = &pb->next;
+			*pb_out_dupe_last  = pb;
+			pb->seqnum = ++dupecheck_dupe_seqnum;
+			*pb_out_dupe_count = *pb_out_dupe_count + 1;
+			//hlog(LOG_DEBUG, "is duplicate");
 		}
 		n++;
 	}
@@ -495,11 +631,11 @@ static void dupecheck_thread(void)
 			/* if there are items in the worker's pbuf_incoming, grab them and process */
 			if (!w->pbuf_incoming)
 				continue;
-                        
-                        n += dupecheck_drain_worker(w,
-                        	&pb_out_prevp, &pb_out_last,
-                        	&pb_out_dupe_prevp, &pb_out_dupe_last,
-                        	&pb_out_count, &pb_out_dupe_count);
+			
+			n += dupecheck_drain_worker(w,
+				&pb_out_prevp, &pb_out_last,
+				&pb_out_dupe_prevp, &pb_out_dupe_last,
+				&pb_out_count, &pb_out_dupe_count);
 		}
 		
 		if ((http_worker) && http_worker->pbuf_incoming) {

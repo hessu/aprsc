@@ -45,6 +45,8 @@ sub txrx($$$$$)
 		return;
 	}
 	
+	#warn "received '$rx'\n";
+	
 	if ($received ne $rx) {
 		&$ok($received, $rx, "Server returned wrong line");
 		return;

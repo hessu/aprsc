@@ -30,6 +30,7 @@
 #include "cfgfile.h"
 #include "worker.h"
 #include "filter.h"
+#include "parse_qc.h"
 
 char def_cfgfile[] = "aprsc.conf";
 char def_webdir[] = "web";
@@ -54,6 +55,8 @@ char *new_serverid;
 char *new_passcode;
 char *new_myemail;
 char *new_myadmin;
+
+int listen_low_ports = 0; /* do we have any < 1024 ports set? need POSIX capabilities? */
 
 struct sockaddr_in uplink_bind_v4;
 socklen_t uplink_bind_v4_len = 0;
@@ -112,8 +115,6 @@ int obuf_size = 8*1024;			/* size of output buffer for clients */
 
 int new_fileno_limit;
 
-int disallow_unverified = 1;		/* don't allow unverified clients to transmit packets with srccall != login */
-
 int verbose;
 
 /* address:port pairs being listened */
@@ -156,7 +157,6 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
-	{ "disallow_unverified",	_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ NULL,			NULL,			NULL			}
 };
 
@@ -912,6 +912,13 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	if (clflags & CLFLAGS_DUPEFEED)
 		l->hidden = 1;
 	
+	/* if low ports are configured, make a note of that, so that
+	 * POSIX capability to bind low ports can be reserved
+	 * at startup.
+	 */
+	if (port < 1024)
+		listen_low_ports = 1;
+	
 	/* put in the list */
 	l->next = *lq;
 	if (l->next)
@@ -991,22 +998,6 @@ int do_logrotate(int *dest, int argc, char **argv)
 	return 0;
 }
 
-
-/*
- *	Validate an APRS-IS callsign
- */
-
-int valid_aprsis_call(const char *s)
-{
-	// TODO: use the other function in q parser which is stricter
-	if (strlen(s) > 12)
-		return 0;
-	if (strlen(s) < 3)
-		return 0;
-	
-	return 1;
-}
-
 /*
  *	upcase
  */
@@ -1061,7 +1052,7 @@ int read_config(void)
 		if (!new_serverid) {
 			hlog(LOG_CRIT, "Config: serverid is not defined.");
 			failed = 1;
-		} else if (!valid_aprsis_call(new_serverid)) {
+		} else if (check_invalid_q_callsign(new_serverid, strlen(new_serverid)) != 0 || strlen(new_serverid) < 3) {
 			hlog(LOG_CRIT, "Config: serverid '%s' is not valid.", new_serverid);
 			failed = 1;
 		} else {

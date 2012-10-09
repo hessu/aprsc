@@ -18,11 +18,9 @@ struct dupe_record_t {
 	struct dupe_record_t *next;
 	uint32_t hash;
 	time_t	 t;
-	int	 alen;	// Address length
-	int	 plen;	// Payload length
-	char	 addresses[20];
+	int	 len;	// address + payload length
 	char	*packet;
-	char	 packetbuf[200]; /* 99.9+ % of time this is enough.. */
+	char	 packetbuf[220]; /* 99.9+ % of time this is enough.. */
 };
 
 #define DUPECHECK_CELL_SIZE sizeof(struct dupe_record_t)

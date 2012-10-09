@@ -29,6 +29,12 @@
 #include "netdb6.h"
 #endif
 
+#ifdef HAVE_PRCTL_H
+#ifdef HAVE_CAPABILITY_H
+#define USE_POSIX_CAP
+#endif
+#endif
+
 extern int fork_a_daemon;	/* fork a daemon */
 
 extern int dump_requests;	/* print requests */
@@ -56,7 +62,8 @@ extern int upstream_timeout;
 extern int client_timeout;
 extern int client_login_timeout;
 
-extern int disallow_unverified;		/* don't allow unverified clients to transmit packets with srccall != login */
+/*extern int disallow_unverified;*/	/* don't allow unverified clients to transmit packets */
+#define disallow_unverified (1)
 
 extern int verbose;
 
@@ -136,6 +143,7 @@ extern struct peerip_config_t *peerip_config;
 extern struct uplink_config_t *uplink_config;
 extern struct uplink_config_t *uplink_config_install;
 extern int uplink_config_updated;
+extern int listen_low_ports;
 
 extern struct sockaddr_in uplink_bind_v4;		/* address to bind when connecting out */
 extern socklen_t uplink_bind_v4_len;

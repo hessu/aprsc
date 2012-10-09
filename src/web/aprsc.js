@@ -165,9 +165,9 @@ var rx_err_strings = {
 	"no_colon": 'No colon (":") in packet',
 	"no_dst": 'No ">" in packet to mark beginning of destination callsign',
 	"no_path": 'No path found between source callsign and ":"',
-	"long_srccall": 'Source callsign too long',
+	"inv_srccall": 'Invalid source callsign',
 	"no_body": 'No packet body/data after ":"',
-	"long_dstcall": 'Destination callsign too long',
+	"inv_dstcall": 'Invalid destination callsign',
 	"disallow_unverified": 'Packet from unverified client',
 	"path_nogate": 'Packet with NOGATE/RFONLY in path',
 	"3rd_party": '3rd-party packet',
@@ -177,7 +177,8 @@ var rx_err_strings = {
 	"aprsc_q_bug": 'aprsc Q construct processing failed',
 	"q_drop": 'Q construct algorithm dropped packet',
 	"short_packet": 'Packet too short',
-	"long_packet": 'Packet too long'
+	"long_packet": 'Packet too long',
+	"inv_path_call": 'Invalid callsign in path'
 };
 
 var key_translate = {

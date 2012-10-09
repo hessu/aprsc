@@ -81,12 +81,12 @@ Then, install aprsc:
 
     sudo apt-get install aprsc
 
-Whenever a new aprsc version is available, the upgrade can be performed
+Whenever a new aprsc version is available, an upgrade can be performed
 automatically by running the upgrade command.  Your operating system can
-also be configured to upgrade packages automatically, or instruct you to
+also be configured to upgrade packages automatically, or to instruct you to
 upgrade when upgrades are available.
 
-    sudo apt-get upgrade
+    sudo apt-get update && sudo apt-get upgrade
 
 Before starting aprsc edit the configuration file, which can be found in
 /opt/aprsc/etc/aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)

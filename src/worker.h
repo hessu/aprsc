@@ -181,9 +181,9 @@ struct client_heard_t {
 #define INERR_NO_COLON			-1	/* no : in packet */
 #define INERR_NO_DST			-2	/* no > in packet to mark beginning of dstcall */
 #define INERR_NO_PATH			-3	/* no path found between srccall and : */
-#define INERR_LONG_SRCCALL		-4	/* too long srccall */
+#define INERR_INV_SRCCALL		-4	/* invalid or too long srccall */
 #define INERR_NO_BODY			-5	/* no packet body/data after : */
-#define INERR_LONG_DSTCALL		-6	/* too long dstcall */
+#define INERR_INV_DSTCALL		-6	/* invalid or too long dstcall */
 #define INERR_DISALLOW_UNVERIFIED	-7	/* disallow_unverified = 1, unverified client */
 #define INERR_NOGATE			-8	/* packet path has NOGATE/RFONLY */
 #define INERR_3RD_PARTY			-9	/* 3rd-party packet dropped */
@@ -194,7 +194,8 @@ struct client_heard_t {
 #define INERR_Q_DROP			-14	/* q construct drop */
 #define INERR_SHORT_PACKET		-15	/* too short packet */
 #define INERR_LONG_PACKET		-16	/* too long packet */
-#define INERR_MIN			-16	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_INV_PATH_CALL		-17	/* invalid callsign in path */
+#define INERR_MIN			-17	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

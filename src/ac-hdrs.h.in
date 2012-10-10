@@ -9,15 +9,6 @@
 /* POSIX capabilities */
 #undef HAVE_CAPABILITY_H
 
-/* Define to 1 if you have the <event2/buffer.h> header file. */
-#undef HAVE_EVENT2_BUFFER_H
-
-/* Define to 1 if you have the <event2/event.h> header file. */
-#undef HAVE_EVENT2_EVENT_H
-
-/* Define to 1 if you have the <event2/http.h> header file. */
-#undef HAVE_EVENT2_HTTP_H
-
 /* Define to 1 if you have the `gai_strerror' function. */
 #undef HAVE_GAI_STRERROR
 
@@ -35,6 +26,9 @@
 
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the <poll.h> header file. */
+#undef HAVE_POLL_H
 
 /* Linux process control prctl.h */
 #undef HAVE_PRCTL_H
@@ -62,6 +56,9 @@
 
 /* Define to 1 if you have the <sys/capability.h> header file. */
 #undef HAVE_SYS_CAPABILITY_H
+
+/* Define to 1 if you have the <sys/epoll.h> header file. */
+#undef HAVE_SYS_EPOLL_H
 
 /* Define to 1 if you have the <sys/prctl.h> header file. */
 #undef HAVE_SYS_PRCTL_H

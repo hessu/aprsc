@@ -3549,6 +3549,32 @@ fi
 
 done
 
+for ac_header in poll.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "poll.h" "ac_cv_header_poll_h" "$ac_includes_default"
+if test "x$ac_cv_header_poll_h" = x""yes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_POLL_H 1
+_ACEOF
+ $as_echo "#define HAVE_POLL_H 1" >>confdefs.h
+
+fi
+
+done
+
+for ac_header in sys/epoll.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "sys/epoll.h" "ac_cv_header_sys_epoll_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_epoll_h" = x""yes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_SYS_EPOLL_H 1
+_ACEOF
+ $as_echo "#define HAVE_SYS_EPOLL_H 1" >>confdefs.h
+
+fi
+
+done
+
 
 
 

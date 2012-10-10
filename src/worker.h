@@ -216,6 +216,10 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 	int	refcount;	/* listener = 1, clients ++ */
 };
 
+extern struct portaccount_t client_connects_tcp;
+extern struct portaccount_t client_connects_sctp;
+extern struct portaccount_t client_connects_udp;
+extern struct portaccount_t inbound_connects;
 
 struct client_udp_t {			/* UDP services can be available at multiple
 					   client ports.  This is shared refcounted

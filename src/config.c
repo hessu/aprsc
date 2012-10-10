@@ -107,6 +107,8 @@ int upstream_timeout      = 30;		/* after N seconds of no input from an upstream
 int client_timeout        = 48*60*60;	/* after N seconds of no input from a client, disconnect */
 int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
+int maxclients = 500;			/* maximum number of clients */
+
 /* These two are not currently used. The fixed defines are in worker.h,
  * OBUF_SIZE and IBUF_SIZE.
  */
@@ -116,6 +118,7 @@ int obuf_size = 8*1024;			/* size of output buffer for clients */
 int new_fileno_limit;
 
 int verbose;
+
 
 /* address:port pairs being listened */
 struct listen_config_t *listen_config = NULL;
@@ -151,6 +154,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "clienttimeout",	_CFUNC_ do_interval,	&client_timeout		},
 	{ "logintimeout",	_CFUNC_ do_interval,	&client_login_timeout	},
 	{ "filelimit",		_CFUNC_ do_int,		&new_fileno_limit	},
+	{ "maxclients",		_CFUNC_ do_int,		&maxclients		},
 	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
@@ -911,6 +915,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	/* dupefeed port is always hidden */
 	if (clflags & CLFLAGS_DUPEFEED)
 		l->hidden = 1;
+	
+	if (clflags & CLFLAGS_UDPSUBMIT)
+		l->clients_max = 1;
 	
 	/* if low ports are configured, make a note of that, so that
 	 * POSIX capability to bind low ports can be reserved

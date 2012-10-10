@@ -22,6 +22,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "xpoll.h"
 #include "hmalloc.h"
 #include "hlog.h"
@@ -49,7 +50,8 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
 	xp->handler = handler;
 	
 #ifdef XP_USE_EPOLL
-	xp->epollfd = epoll_create(0);
+	hlog(LOG_DEBUG, "xpoll: initializing %p using epoll()", (void *)xp);
+	xp->epollfd = epoll_create(1000);
 	if (xp->epollfd < 0) {
 		hlog(LOG_CRIT, "xpoll: epoll_create failed: %s", strerror(errno));
 		return NULL;
@@ -57,6 +59,7 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
 	fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC);
 #else
 #ifdef XP_USE_POLL
+	hlog(LOG_DEBUG, "xpoll: initializing %p using poll()", (void *)xp);
 	xp->pollfd_len = XP_INCREMENT;
 	xp->pollfd = hmalloc(sizeof(struct pollfd) * xp->pollfd_len);
 #endif

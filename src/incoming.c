@@ -49,7 +49,7 @@ const char *inerr_labels[] = {
 	"inv_dstcall",
 	"disallow_unverified",
 	"path_nogate",
-	"3rd_party",
+	"party_3rd", /* was 3rd_party, but labels starting with numbers collide with munin */
 	"general_query",
 	"aprsc_oom_pbuf",
 	"aprsc_class_fail",

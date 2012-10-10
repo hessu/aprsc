@@ -192,7 +192,7 @@ void flood_round(struct floodthread_t *self)
 	int ebufpos;
 	while (1) {
 	        round++;
-	        wbufpos = snprintf(wbuf, WBUFLEN, "FOOBAR>TEST,TCPIP*,LOAD,I:test %lld", round);
+	        wbufpos = snprintf(wbuf, WBUFLEN, "FOOBAR>TEST,qAR,TESTING:test %lld", round);
 	        
 	        nfds = epoll_wait(epollfd, events, MAX_EPOLL_EVENTS, 1000);
 	        

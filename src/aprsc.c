@@ -854,7 +854,8 @@ int main(int argc, char **argv)
 	if (have_low_ports)
 		hlog(LOG_INFO, "POSIX capabilities available: can bind low ports"); 
 	
-	hlog(LOG_INFO, "After configuration FileLimit is %d, MaxClients is %d", fileno_limit, maxclients);
+	hlog(LOG_INFO, "After configuration FileLimit is %d, MaxClients is %d, xpoll using %s",
+		fileno_limit, maxclients, xpoll_implementation);
 	
 	/* validate maxclients vs fileno_limit, now when it's determined */
 	if (fileno_limit < maxclients + 50) {

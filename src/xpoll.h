@@ -78,4 +78,6 @@ extern void xpoll_outgoing(struct xpoll_t *xp, struct xpoll_fd_t *xfd, int have_
 extern int xpoll(struct xpoll_t *xp, int timeout);
 extern void xpoll_init(void);
 
+extern const char xpoll_implementation[];
+
 #endif

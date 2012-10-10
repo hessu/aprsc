@@ -192,7 +192,7 @@ void flood_round(struct floodthread_t *self)
 	int ebufpos;
 	while (1) {
 	        round++;
-	        wbufpos = snprintf(wbuf, WBUFLEN, "FOOBAR>TEST,qAR,TESTING:test %lld", round);
+	        wbufpos = snprintf(wbuf, WBUFLEN, "FOOBAR>TEST,qAR,TEST:test %lld", round);
 	        
 	        nfds = epoll_wait(epollfd, events, MAX_EPOLL_EVENTS, 1000);
 	        
@@ -203,7 +203,7 @@ void flood_round(struct floodthread_t *self)
 	        	if (events[n].events & (EPOLLIN|EPOLLPRI)) {
 				rbufpos = read(*xfd, rbuf, WBUFLEN);
 				if (rbufpos > 0) {
-					fprintf(stderr, "%d read %d: %.*s\n", *xfd, rbufpos, rbufpos, rbuf);
+					//fprintf(stderr, "%d read %d: %.*s\n", *xfd, rbufpos, rbufpos, rbuf);
 				} else {
 					fprintf(stderr, "%d got %d\n", *xfd, rbufpos);
 				}
@@ -216,7 +216,7 @@ void flood_round(struct floodthread_t *self)
 			n = nfds + (parallel_conns_per_thread / 12)*i;
 			n = n % parallel_conns_per_thread;
 			n = fds[n];
-			fprintf(stderr, "writing on %d\n", n);
+			//fprintf(stderr, "writing on %d\n", n);
 			ebufpos = wbufpos + snprintf(wbuf + wbufpos, WBUFLEN-wbufpos, "-%d\r\n", n);
 			write(n, wbuf, ebufpos);
 		}

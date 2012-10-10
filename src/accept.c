@@ -570,10 +570,14 @@ static void do_accept(struct listen_t *l)
 	if (l->portaccount->gauge >= l->clients_max || inbound_connects.gauge >= maxclients) {
 		if (inbound_connects.gauge >= maxclients) {
 			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: MaxClients reached (%d)", l->addr_s, fd, s, inbound_connects.gauge);
-			write(fd, "# Server full\r\n", 15);
+			/* The "if" is here only to silence a compiler warning
+			 * about ignoring the result value. We're really
+			 * disconnecting the client right now, so we don't care.
+			 */
+			if (write(fd, "# Server full\r\n", 15));
 		} else {
 			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients on Listener (%d)", l->addr_s, fd, s, l->portaccount->gauge);
-			write(fd, "# Port full\r\n", 13);
+			if (write(fd, "# Port full\r\n", 13));
 		}
 		close(fd);
 		hfree(s);

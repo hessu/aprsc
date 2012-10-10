@@ -658,6 +658,7 @@ int main(int argc, char **argv)
 	struct rlimit rlim;
 	time_t cleanup_tick;
 	time_t version_tick;
+	int have_low_ports = 0;
 	
 	if (getuid() == 0)
 		set_initial_capabilities();
@@ -820,7 +821,7 @@ int main(int argc, char **argv)
 		set_uid();
 		//check_caps("after set_uid");
 		if (set_final_capabilities() >= 0)
-			hlog(LOG_INFO, "POSIX capabilities available: can bind low ports"); 
+			have_low_ports = 1;
 		check_caps("after set_final_capabilities");
 	}
 	
@@ -845,6 +846,13 @@ int main(int argc, char **argv)
 		exit(1);
 	
 	log_dest = orig_log_dest;
+	
+	/* log these only to the final log, after stderr is closed, so that
+	 * a normal, successful startup does not print out informative stuff
+	 * on the console
+	 */
+	if (have_low_ports)
+		hlog(LOG_INFO, "POSIX capabilities available: can bind low ports"); 
 	
 	hlog(LOG_INFO, "After configuration FileLimit is %d, MaxClients is %d", fileno_limit, maxclients);
 	

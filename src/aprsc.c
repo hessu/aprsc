@@ -846,7 +846,12 @@ int main(int argc, char **argv)
 	
 	log_dest = orig_log_dest;
 	
-	hlog(LOG_INFO, "After configuration FileLimit is %d", fileno_limit);
+	hlog(LOG_INFO, "After configuration FileLimit is %d, MaxClients is %d", fileno_limit, maxclients);
+	
+	/* validate maxclients vs fileno_limit, now when it's determined */
+	if (fileno_limit < maxclients + 50) {
+		hlog(LOG_ERR, "FileLimit is smaller than MaxClients + 50: Server may run out of file descriptors and break badly");
+	}
 	
 	/* catch signals */
 	signal(SIGINT, (void *)sighandler);

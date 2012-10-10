@@ -53,6 +53,7 @@ extern int obuf_size;
 extern int ibuf_size;
 
 extern int new_fileno_limit;
+extern int maxclients;
 
 extern int lastposition_storetime;
 extern int dupefilter_storetime;

@@ -108,6 +108,9 @@ automatically start up when the system boots.  You'll find it's log file in
 /opt/aprsc/logs/aprsc.log.  Log rotation is already configured in
 aprsc.conf.
 
+After startup, look at the log file for startup messages, watch out for
+any warnings or errors.
+
 
 CentOS: Installing using yum
 -------------------------------
@@ -162,4 +165,7 @@ When STARTAPRSC is set to YES in the /etc/sysconfig/aprsc file it will
 automatically start up when the system boots.  You'll find it's log file in
 /opt/aprsc/logs/aprsc.log.  Log rotation is already configured in
 aprsc.conf.
+
+After startup, look at the log file for startup messages, watch out for
+any warnings or errors.
 

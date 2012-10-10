@@ -563,11 +563,18 @@ static void do_accept(struct listen_t *l)
 	
 	/* TODO: the dropped connections here are not accounted. */
 	
-	/* limit amount of connections per port... should probably have an error
-	 * message to the client (javaprssrvr has one)
+	/* Limit amount of connections per port, and globally.
+	 * Error messages written just before closing the socet may or may not get
+	 * to the user, but at least we try.
 	 */
-	if (l->portaccount->gauge >= l->clients_max) {
-		hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients (%d)", l->addr_s, fd, s, l->portaccount->gauge);
+	if (l->portaccount->gauge >= l->clients_max || inbound_connects.gauge >= maxclients) {
+		if (inbound_connects.gauge >= maxclients) {
+			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: MaxClients reached (%d)", l->addr_s, fd, s, inbound_connects.gauge);
+			write(fd, "# Server full\r\n", 15);
+		} else {
+			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients on Listener (%d)", l->addr_s, fd, s, l->portaccount->gauge);
+			write(fd, "# Port full\r\n", 13);
+		}
 		close(fd);
 		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
@@ -927,6 +934,7 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		*/
 	}
 	
+	cJSON_AddNumberToObject(totals, "clients_max", maxclients);
 	cJSON_AddNumberToObject(totals, "clients", total_clients);
 	cJSON_AddNumberToObject(totals, "connects", total_connects);
 	/*

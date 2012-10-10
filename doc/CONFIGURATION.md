@@ -88,6 +88,13 @@ Configuration file options in aprsc.conf
     If logging to a file (-o file), this option enables built-in log rotation.
     "LogRotate 10 5" keeps 5 old files of 10 megabytes each.
 
+ *  MaxClients 500
+
+    Maximum clients logged in to the server (not counting peers or uplinks).
+    File descriptor limit must always be slightly larger than MaxClients
+    (FileLimit >= MaxClients + 50 is a good figure), so that Uplink
+    connections and access to local files work even when MaxClients is
+    reached.
 
 ### Timers and timeouts ###
 

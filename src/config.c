@@ -912,6 +912,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	if (clflags & CLFLAGS_DUPEFEED)
 		l->hidden = 1;
 	
+	if (clflags & CLFLAGS_UDPSUBMIT)
+		l->clients_max = 1;
+	
 	/* if low ports are configured, make a note of that, so that
 	 * POSIX capability to bind low ports can be reserved
 	 * at startup.

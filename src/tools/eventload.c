@@ -23,9 +23,10 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/epoll.h>
 
 int threads = 1;
-int parallel_conns_per_thread = 1;
+int parallel_conns_per_thread = 3;
 int rows_between_sleep = 30;
 int sleep_msec = 1000;
 int end_after_seconds = 5;
@@ -36,6 +37,7 @@ time_t end_t;
 struct floodthread_t {
 	struct floodthread_t *next;
 	
+
 	pthread_t th;
 };
 
@@ -107,19 +109,37 @@ void flood_round(struct floodthread_t *self)
 {
 	int *fds;
 	int i;
-	char login_cmd[] = "user floodcl pass -1\r\n";
+	char login_cmd[WBUFLEN+1];
 	int login_len;
 	char wbuf[WBUFLEN+1];
 	int wbufpos;
-	int round;
+	char rbuf[WBUFLEN+1];
+	int rbufpos;
+	long long round;
+	struct epoll_event *evs;  // event flags for each fd.
+	int epollfd;
+#define MAX_EPOLL_EVENTS 500
+	struct epoll_event events[MAX_EPOLL_EVENTS];
 	
 	fprintf(stderr, "flood_round starting\n");
 	
 	login_len = strlen(login_cmd);
 	
+	epollfd = epoll_create(1024);
+	if (epollfd < 0) {
+		fprintf(stderr, "xflood_thread: epoll_create failed: %s\n", strerror(errno));
+		return;
+	}
+	
 	fds = malloc(sizeof(int) * parallel_conns_per_thread);
 	if (!fds) {
 		fprintf(stderr, "flood_thread: out of memory, could not allocate fds\n");
+		return;
+	}
+	
+	evs = malloc(sizeof(*evs) * parallel_conns_per_thread);
+	if (!evs) {
+		fprintf(stderr, "flood_thread: out of memory, could not allocate evs\n");
 		return;
 	}
 	
@@ -141,23 +161,61 @@ void flood_round(struct floodthread_t *self)
 		}
 		
 		if (connect(fd, ai->ai_addr, ai->ai_addrlen)) {
-			fprintf(stderr, "connect failed: %s", strerror(errno));
+			fprintf(stderr, "connect failed: %s\n", strerror(errno));
 			close(fd);
 			fds[i] = -1;
 			continue;
 		}
 		
-		write(fd, login_cmd, login_len);
+		wbufpos = snprintf(wbuf, WBUFLEN, "user OH7LZB-%d pass 20900\r\n", fd);
+		write(fd, wbuf, wbufpos);
+		
+		evs[i].events   = EPOLLIN|EPOLLOUT; // | EPOLLET ?
+		// Each event has initialized callback pointer to struct xpoll_fd_t...
+		evs[i].data.ptr = &fds[i];
+		if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &evs[i]) == -1) {
+		        fprintf(stderr, "epoll_ctl EPOL_CTL_ADD %d failed: %s\n", fd, strerror(errno));
+		        exit(1);
+                }
 	}
 	
+	int n, nfds;
+	int ebufpos;
 	while (1) {
 	        round++;
-	        wbufpos = 0;
-	        wbufpos += snprintf(wbuf, WBUFLEN-wbuflen, "FOOBAR>TEST,TCPIP*,LOAD,I:test %d");
-	        for (i = 0; i < parallel_conns_per_thread; i++) {
-	        }
+	        wbufpos = snprintf(wbuf, WBUFLEN, "FOOBAR>TEST,TCPIP*,LOAD,I:test %lld", round);
+	        
+	        nfds = epoll_wait(epollfd, events, MAX_EPOLL_EVENTS, 1000);
+	        
+	        for (n = 0; n < nfds; ++n) {
+	        	// Each event has initialized callback pointer to struct xpoll_fd_t...
+	        	int *xfd = (int*) events[n].data.ptr;
+	        	
+	        	if (events[n].events & (EPOLLIN|EPOLLPRI)) {
+				rbufpos = read(*xfd, rbuf, WBUFLEN);
+				if (rbufpos > 0) {
+					fprintf(stderr, "%d read %d: %.*s\n", *xfd, rbufpos, rbufpos, rbuf);
+				} else {
+					fprintf(stderr, "%d got %d\n", *xfd, rbufpos);
+				}
+			}
+			
+		}
+		
+		nfds = round % parallel_conns_per_thread;
+		for (i = 0; i < 10; i++) {
+			n = nfds + (parallel_conns_per_thread / 12)*i;
+			n = n % parallel_conns_per_thread;
+			n = fds[n];
+			fprintf(stderr, "writing on %d\n", n);
+			ebufpos = wbufpos + snprintf(wbuf + wbufpos, WBUFLEN-wbufpos, "-%d\r\n", n);
+			write(n, wbuf, ebufpos);
+		}
+		
 	        usleep(sleep_msec*1000);
         }
+	
+	fprintf(stderr, "end of round\n");
 	
 	for (i = 0; i < parallel_conns_per_thread; i++) {
 		if (fds[i] == -1)
@@ -166,7 +224,9 @@ void flood_round(struct floodthread_t *self)
 		fds[i] = -1;
 	}
 	
+	close(epollfd);
 	free(fds);
+	free(evs);
 }
 
 
@@ -245,6 +305,8 @@ int main(int argc, char **argv)
 	
 	/* command line */
 	parse_cmdline(argc, argv);
+	
+	signal(SIGPIPE, SIG_IGN);
 	
 	run_test();
 	

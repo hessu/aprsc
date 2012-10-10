@@ -25,6 +25,9 @@
 #include <arpa/inet.h>
 #include <sys/epoll.h>
 
+char *username = NULL;
+char *passcode = NULL;
+
 int threads = 1;
 int parallel_conns_per_thread = 3;
 int rows_between_sleep = 30;
@@ -55,7 +58,7 @@ void parse_cmdline(int argc, char *argv[])
 	int failed = 0;
 	struct addrinfo req;
 	
-	while ((s = getopt(argc, argv, "t:n:a:i:?h")) != -1) {
+	while ((s = getopt(argc, argv, "t:n:a:i:u:p:?h")) != -1) {
 	switch (s) {
 		case 't':
 			threads = atoi(optarg);
@@ -68,6 +71,12 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case 'i':
 			end_after_seconds = atoi(optarg);
+			break;
+		case 'u':
+			username = strdup(optarg);
+			break;
+		case 'p':
+			passcode = strdup(optarg);
 			break;
 		case '?':
 		case 'h':
@@ -167,7 +176,7 @@ void flood_round(struct floodthread_t *self)
 			continue;
 		}
 		
-		wbufpos = snprintf(wbuf, WBUFLEN, "user OH7LZB-%d pass 20900\r\n", fd);
+		wbufpos = snprintf(wbuf, WBUFLEN, "user %s-%d pass %s\r\n", username, fd, passcode);
 		write(fd, wbuf, wbufpos);
 		
 		evs[i].events   = EPOLLIN|EPOLLOUT; // | EPOLLET ?

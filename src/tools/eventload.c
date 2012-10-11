@@ -205,7 +205,7 @@ void flood_round(struct floodthread_t *self)
 			continue;
 		}
 		
-		sprintf(username, "%x", fd);
+		sprintf(username, "%03x%06x", getpid(), fd);
 		wbufpos = snprintf(wbuf, WBUFLEN, "user %s pass %d\r\n", username, aprs_passcode(username));
 		int w = write(fd, wbuf, wbufpos);
 		if (w != wbufpos) {

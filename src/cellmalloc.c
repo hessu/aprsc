@@ -47,7 +47,7 @@ struct cellarena_t {
 	int	 createsize;
 
 	int	 cellblocks_count;
-#define CELLBLOCKS_MAX 100 /* track client cell allocator limit! */
+#define CELLBLOCKS_MAX 200 /* track client cell allocator limit! */
 	char	*cellblocks[CELLBLOCKS_MAX];	/* ref as 'char pointer' for pointer arithmetics... */
 };
 

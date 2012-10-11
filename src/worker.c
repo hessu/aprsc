@@ -1781,8 +1781,12 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 		cJSON_AddNumberToObject(jw, "pbuf_incoming_local_count", w->pbuf_incoming_local_count);
 		
 		for (c = w->clients; (c); c = c->next) {
+			client_heard_count += c->client_heard_count;
+			client_courtesy_count += c->client_courtesy_count;
+			
 			/* clients on hidden listener sockets are not shown */
-			if (c->hidden)
+			/* if there are a huge amount of clients, don't list them */
+			if (c->hidden || w->client_count > 1000)
 				continue;
 				
 			cJSON *jc = cJSON_CreateObject();
@@ -1844,8 +1848,6 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 				cJSON_AddItemToArray(uplinks, jc);
 			}
 			
-			client_heard_count += c->client_heard_count;
-			client_courtesy_count += c->client_courtesy_count;
 		}
 		
 		cJSON_AddItemToArray(workers, jw);

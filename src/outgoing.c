@@ -61,34 +61,28 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		
 		return;
 	}
+
+	if (pb->flags & F_FROM_DOWNSTR) {
+		/* client is from downstream, send to upstreams and peers */
+		for (c = self->clients_ups; (c); c = cnext) {
+			cnext = c->class_next; // client_write() MAY destroy the client object!
+			if ((c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER) && c != pb->origin)
+				send_single(self, c, pb);
+		}
+	}
 	
 	for (c = self->clients_other; (c); c = cnext) {
 		cnext = c->class_next; // client_write() MAY destroy the client object!
 		
 		/* Do not send to clients that are not logged in. */
-		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
+		if (c->state != CSTATE_CONNECTED) {
 			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
 			continue;
 		}
 		
-		if (c->flags & CLFLAGS_INPORT) {
-			/* Downstream client? If not full feed, process filters
-			 * to see if the packet should be sent.
-			 */
-			if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1) {
-				//hlog(LOG_DEBUG, "fd %d: Not fullfeed or not matching filter, not sending.", c->fd);
-				continue;
-			}
-		} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
-			/* core peer or uplink? Check that the packet is
-			 * coming from a downstream client.
-			 */
-			if ((pb->flags & F_FROM_DOWNSTR) != F_FROM_DOWNSTR) {
-				//hlog(LOG_DEBUG, "fd %d: Not from downstr, not sending to upstr.", c->fd);
-				continue;
-			}
-		} else {
-			hlog(LOG_DEBUG, "fd %d: Odd! Client not upstream or downstream. Not sending packets.", c->fd);
+		/* If not full feed, process filters to see if the packet should be sent. */
+		if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1) {
+			//hlog(LOG_DEBUG, "fd %d: Not fullfeed or not matching filter, not sending.", c->fd);
 			continue;
 		}
 		

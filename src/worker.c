@@ -1293,14 +1293,20 @@ static void collect_new_clients(struct worker_t *self)
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified readonly", self->id, c->fd);
 				class_next = self->clients_ro;
 				class_prevp = &self->clients_ro;
+			} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified upstream/peer", self->id, c->fd);
+				class_next = self->clients_ups;
+				class_prevp = &self->clients_ups;
 			} else if (c->flags & CLFLAGS_DUPEFEED) {
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified dupefeed", self->id, c->fd);
 				class_next = self->clients_dupe;
 				class_prevp = &self->clients_dupe;
-			} else {
+			} else if (c->flags & CLFLAGS_INPORT) {
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified other", self->id, c->fd);
 				class_next = self->clients_other;
 				class_prevp = &self->clients_other;
+			} else {
+				hlog(LOG_ERR, "collect_new_clients(worker %d): client fd %d NOT CLASSIFIED - will not get packets", self->id, c->fd);
 			}
 			c->class_next = class_next;
 			if (class_next)

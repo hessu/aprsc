@@ -391,6 +391,7 @@ struct worker_t {
 	/* c->class_next lists, classified clients for optimized outbound */
 	struct client_t *clients_dupe;		/* dupeclient port clients */
 	struct client_t *clients_ro;		/* read-only clients */
+	struct client_t *clients_ups;		/* upstreams and peers */
 	struct client_t *clients_other;		/* other clients (unoptimized) */
 	pthread_mutex_t clients_mutex;		/* mutex to protect access to the client list by the status dumps */
 	

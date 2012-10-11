@@ -92,12 +92,6 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			continue;
 		}
 		
-		/* Do not send to read-only sockets */
-		if (c->flags & CLFLAGS_PORT_RO) {
-			//hlog(LOG_DEBUG, "%d/%s: not sending to client: read-only socket", c->fd, c->username);
-			continue;
-		}
-		
 		/* Do not send packet back to the source client.
 		   This may reject a packet that came from a socket that got
 		   closed a few milliseconds ago and its client_t got

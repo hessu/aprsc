@@ -599,7 +599,7 @@ static void do_accept(struct listen_t *l)
 	c = client_alloc();
 	
 	if (!c) {
-		hlog(LOG_ERR, "%s - client_alloc returned NULL, too many clients. Denied client on fd %d from %s (ACL)", l->addr_s, fd, s);
+		hlog(LOG_ERR, "%s - client_alloc returned NULL, too many clients. Denied client on fd %d from %s", l->addr_s, fd, s);
 		close(fd);
 		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */

@@ -24,6 +24,16 @@
  *	should have a copy
  */
 
+static inline void send_single(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	if (c->udp_port && c->udpclient)
+		clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0);
+	else
+		clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0);
+	
+	client_write(self, c, pb->data, pb->packet_len);
+}
+
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
@@ -39,39 +49,25 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	}
 	*/
 	
+	/* specific tight loops */
+	
+	if (pb->flags & F_DUPE) {
+		/* Duplicate packet. Don't send, unless client especially wants! */
+		for (c = self->clients; (c); c = cnext) {
+			cnext = c->next; // client_write() MAY destroy the client object!
+			if (c->flags & CLFLAGS_DUPEFEED && c->state == CSTATE_CONNECTED)
+				send_single(self, c, pb);
+		}
+		
+		return;
+	}
+	
 	for (c = self->clients; (c); c = cnext) {
 		cnext = c->next; // client_write() MAY destroy the client object!
-		
-		/* more likely checks first */
-		if ((pb->flags & F_DUPE) && (!(c->flags & CLFLAGS_DUPEFEED))) {
-		  /* Duplicate packet.
-		     Don't send, unless client especially wants! */
-			//hlog(LOG_DEBUG, "%d: not sending to client: packet is duplicate", c->fd);
-			continue;
-		}
 		
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
 			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
-			continue;
-		}
-		
-		/* Do not send to read-only sockets */
-		if (c->flags & CLFLAGS_PORT_RO) {
-			//hlog(LOG_DEBUG, "%d/%s: not sending to client: read-only socket", c->fd, c->username);
-			continue;
-		}
-		
-		/* Do not send packet back to the source client.
-		   This may reject a packet that came from a socket that got
-		   closed a few milliseconds ago and its client_t got
-		   recycled on a newly connected client, but if the new client
-		   is a long living one, all further packets will be accepted
-		   just fine.
-		   For packet history dumps this test shall be ignored!
-		 */
-		if (c == pb->origin) {
-			//hlog(LOG_DEBUG, "%d: not sending to client: originated from this socketsocket", c->fd);
 			continue;
 		}
 		
@@ -92,22 +88,34 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 				continue;
 			}
 		} else if (c->flags & CLFLAGS_DUPEFEED) {
-			/* Duplicate packets feed? Don't send unless the packet is a duplicate. */
-			if (!(pb->flags & F_DUPE)) {
-				continue;
-			}
+			/* Duplicate packets feed? This packet isn't a duplicate, so don't send. */
+			continue;
 		} else {
 			hlog(LOG_DEBUG, "fd %d: Odd! Client not upstream or downstream. Not sending packets.", c->fd);
 			continue;
 		}
 		
-		/* account for the packet sent, and send it! */
-		if (c->udp_port && c->udpclient)
-			clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0);
-		else
-			clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0);
+		/* Do not send to read-only sockets */
+		if (c->flags & CLFLAGS_PORT_RO) {
+			//hlog(LOG_DEBUG, "%d/%s: not sending to client: read-only socket", c->fd, c->username);
+			continue;
+		}
 		
-		client_write(self, c, pb->data, pb->packet_len);
+		/* Do not send packet back to the source client.
+		   This may reject a packet that came from a socket that got
+		   closed a few milliseconds ago and its client_t got
+		   recycled on a newly connected client, but if the new client
+		   is a long living one, all further packets will be accepted
+		   just fine.
+		   For packet history dumps this test shall be ignored!
+		   Very unlikely check, so check for this last.
+		 */
+		if (c == pb->origin) {
+			//hlog(LOG_DEBUG, "%d: not sending to client: originated from this socketsocket", c->fd);
+			continue;
+		}
+		
+		send_single(self, c, pb);
 	}
 }
 

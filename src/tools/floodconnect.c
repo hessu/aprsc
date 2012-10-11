@@ -86,7 +86,7 @@ void parse_cmdline(int argc, char *argv[])
 	
 	s = getaddrinfo(argv[optind], argv[optind+1], &req, &ai);
 	if (s != 0) {
-		fprintf(stderr, "Aaddress parsing or hostname lookup failure for %s: %s\n", argv[optind], gai_strerror(s));
+		fprintf(stderr, "Address parsing or hostname lookup failure for %s: %s\n", argv[optind], gai_strerror(s));
 		exit(1);
 	}
 	

@@ -42,6 +42,14 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	for (c = self->clients; (c); c = cnext) {
 		cnext = c->next; // client_write() MAY destroy the client object!
 		
+		/* more likely checks first */
+		if ((pb->flags & F_DUPE) && (!(c->flags & CLFLAGS_DUPEFEED))) {
+		  /* Duplicate packet.
+		     Don't send, unless client especially wants! */
+			//hlog(LOG_DEBUG, "%d: not sending to client: packet is duplicate", c->fd);
+			continue;
+		}
+		
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
 			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
@@ -67,19 +75,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			continue;
 		}
 		
-		if ((pb->flags & F_DUPE) && (!(c->flags & CLFLAGS_DUPEFEED))) {
-		  /* Duplicate packet.
-		     Don't send, unless client especially wants! */
-			//hlog(LOG_DEBUG, "%d: not sending to client: packet is duplicate", c->fd);
-			continue;
-		}
-		
-		if (c->flags & CLFLAGS_DUPEFEED) {
-			/* Duplicate packets feed? Don't send unless the packet is a duplicate. */
-			if (!(pb->flags & F_DUPE)) {
-				continue;
-			}
-		} else if (c->flags & CLFLAGS_INPORT) {
+		if (c->flags & CLFLAGS_INPORT) {
 			/* Downstream client? If not full feed, process filters
 			 * to see if the packet should be sent.
 			 */
@@ -93,6 +89,11 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			 */
 			if ((pb->flags & F_FROM_DOWNSTR) != F_FROM_DOWNSTR) {
 				//hlog(LOG_DEBUG, "fd %d: Not from downstr, not sending to upstr.", c->fd);
+				continue;
+			}
+		} else if (c->flags & CLFLAGS_DUPEFEED) {
+			/* Duplicate packets feed? Don't send unless the packet is a duplicate. */
+			if (!(pb->flags & F_DUPE)) {
 				continue;
 			}
 		} else {

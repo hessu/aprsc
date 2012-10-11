@@ -53,17 +53,17 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	
 	if (pb->flags & F_DUPE) {
 		/* Duplicate packet. Don't send, unless client especially wants! */
-		for (c = self->clients; (c); c = cnext) {
-			cnext = c->next; // client_write() MAY destroy the client object!
-			if (c->flags & CLFLAGS_DUPEFEED && c->state == CSTATE_CONNECTED)
+		for (c = self->clients_dupe; (c); c = cnext) {
+			cnext = c->class_next; // client_write() MAY destroy the client object!
+			if (c->state == CSTATE_CONNECTED)
 				send_single(self, c, pb);
 		}
 		
 		return;
 	}
 	
-	for (c = self->clients; (c); c = cnext) {
-		cnext = c->next; // client_write() MAY destroy the client object!
+	for (c = self->clients_other; (c); c = cnext) {
+		cnext = c->class_next; // client_write() MAY destroy the client object!
 		
 		/* Do not send to clients that are not logged in. */
 		if (c->state != CSTATE_CONNECTED && c->state != CSTATE_COREPEER) {
@@ -87,9 +87,6 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 				//hlog(LOG_DEBUG, "fd %d: Not from downstr, not sending to upstr.", c->fd);
 				continue;
 			}
-		} else if (c->flags & CLFLAGS_DUPEFEED) {
-			/* Duplicate packets feed? This packet isn't a duplicate, so don't send. */
-			continue;
 		} else {
 			hlog(LOG_DEBUG, "fd %d: Odd! Client not upstream or downstream. Not sending packets.", c->fd);
 			continue;

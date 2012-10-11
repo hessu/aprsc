@@ -478,7 +478,6 @@ int pass_client_to_worker(struct worker_t *wc, struct client_t *c)
 	return 0;
 }
 
-
 char *strsockaddr(const struct sockaddr *sa, const int addr_len)
 {
 	char eb[200], *s;
@@ -761,6 +760,13 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	if (c->next)
 		c->next->prevp = c->prevp;
 	*c->prevp = c->next;
+	
+	/* link the classified clients list together over this node */
+	if (c->class_prevp) {
+		*c->class_prevp = c->class_next;
+		if (c->class_next)
+			c->class_next->class_prevp = c->class_prevp;
+	}
 
 	/* If this happens to be the uplink, tell the uplink connection
 	 * setup module that the connection has gone away.
@@ -1280,6 +1286,23 @@ static void collect_new_clients(struct worker_t *self)
 				c->next->prevp = &c->next;
 			self->clients = c;
 			c->prevp = &self->clients;
+			
+			struct client_t *class_next;
+			struct client_t **class_prevp;
+			if (c->flags & CLFLAGS_DUPEFEED) {
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified dupefeed", self->id, c->fd);
+				class_next = self->clients_dupe;
+				class_prevp = &self->clients_dupe;
+			} else {
+				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified other", self->id, c->fd);
+				class_next = self->clients_other;
+				class_prevp = &self->clients_other;
+			}
+			c->class_next = class_next;
+			if (class_next)
+				class_next->class_prevp = &c->class_next;
+			*class_prevp = c;
+			c->class_prevp = class_prevp;
 		}
 		
 		/* If the new client is an UDP core peer, we will add it's FD to the

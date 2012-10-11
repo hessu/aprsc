@@ -254,6 +254,9 @@ struct client_t {
 	struct client_t *next;
 	struct client_t **prevp;
 	
+	struct client_t *class_next;
+	struct client_t **class_prevp;
+	
 	union sockaddr_u addr;
 	struct portaccount_t *portaccount; /* port specific global account accumulator */
 	struct portaccount_t localaccount; /* client connection specific account accumulator */
@@ -384,7 +387,10 @@ struct worker_t {
 	
 	int shutting_down;			/* should I shut down? */
 	
-	struct client_t *clients;		/* clients handled by this thread */
+	struct client_t *clients;		/* all clients handled by this thread */
+	/* c->class_next lists, classified clients */
+	struct client_t *clients_dupe;		/* dupeclient port clients */
+	struct client_t *clients_other;		/* other clients (unoptimized) */
 	pthread_mutex_t clients_mutex;		/* mutex to protect access to the client list by the status dumps */
 	
 	struct client_t *new_clients;		/* new clients which passed in by accept */

@@ -27,20 +27,36 @@
 #include "clientlist.h"
 #include "hmalloc.h"
 #include "rwlock.h"
+#include "keyhash.h"
+#include "hlog.h"
+
+//#define CLIENTLIST_DEBUG
+
+#ifdef CLIENTLIST_DEBUG
+#define DLOG(fmt, ...) \
+            do { hlog(LOG_DEBUG, fmt, __VA_ARGS__); } while (0)
+#else
+#define DLOG(fmt, ...)
+#endif
+
 
 struct clientlist_t {
 	struct clientlist_t *next;
 	struct clientlist_t **prevp;
 	
 	char  username[16];     /* The callsign */
+	int   username_len;
 	int   validated;	/* Valid passcode given? */
 	int   fd;               /* File descriptor, can be used by another
 	                           thread to shut down a socket */
 	
 	void *client_id;	/* DO NOT REFERENCE - just used for an ID */
+	uint32_t hash;		/* hash value */
 };
 
-struct clientlist_t *clientlist = NULL;
+/* hash buckets - serious overkill, but great for 40k clients */
+#define CLIENTLIST_BUCKETS 512
+struct clientlist_t *clientlist[CLIENTLIST_BUCKETS];
 rwlock_t clientlist_lock = RWL_INITIALIZER;
 
 /*
@@ -48,13 +64,25 @@ rwlock_t clientlist_lock = RWL_INITIALIZER;
  *	before calling!
  */
 
-static struct clientlist_t *clientlist_find_id(void *id)
+static struct clientlist_t *clientlist_find_id(char *username, int len, void *id)
 {
 	struct clientlist_t *cl;
+	uint32_t hash, idx;
+	int i;
 	
-	for (cl = clientlist; cl; cl = cl->next)
-		if (cl->client_id == id)
+	hash = keyhash(username, len, 0);
+	idx = hash;
+	// "CLIENT_HEARD_BUCKETS" is 512..
+	idx ^= (idx >> 16);
+	idx ^= (idx >>  8);
+	i = idx % CLIENTLIST_BUCKETS;
+	
+	DLOG("clientlist_find_id '%.*s' id %p bucket %d", len, username, id, i);
+	for (cl = clientlist[i]; cl; cl = cl->next)
+		if (cl->client_id == id) {
+			DLOG("clientlist_find_id '%.*s' found %p", len, username, cl);
 			return cl;
+		}
 	
 	return NULL;
 }
@@ -68,10 +96,21 @@ static struct clientlist_t *clientlist_find_id(void *id)
 static int check_if_validated_client(char *username, int len)
 {
 	struct clientlist_t *cl;
+	uint32_t hash, idx;
+	int i;
 	
-	for (cl = clientlist; cl; cl = cl->next) {
-		if (memcmp(username, cl->username, len) == 0
-		  && strlen(cl->username) == len && cl->validated) {
+	hash = keyhash(username, len, 0);
+	idx = hash;
+	// "CLIENT_HEARD_BUCKETS" is 512..
+	idx ^= (idx >> 16);
+	idx ^= (idx >>  8);
+	i = idx % CLIENTLIST_BUCKETS;
+	
+	DLOG("check_if_validated_client '%.*s': bucket %d", len, username, i);
+	for (cl = clientlist[i]; cl; cl = cl->next) {
+		if (cl->hash == hash && memcmp(username, cl->username, len) == 0
+		  && cl->username_len == len && cl->validated) {
+			DLOG("check_if_validated_client '%.*s' found validated, fd %d", cl->username_len, cl->username, cl->fd);
 		  	return cl->fd;
 		}
 	}
@@ -106,25 +145,38 @@ int clientlist_add(struct client_t *c)
 {
 	struct clientlist_t *cl;
 	int old_fd;
+	uint32_t hash, idx;
+	int i;
+	
+	hash = keyhash(c->username, c->username_len, 0);
+	idx = hash;
+	// "CLIENT_HEARD_BUCKETS" is 512..
+	idx ^= (idx >> 16);
+	idx ^= (idx >>  8);
+	i = idx % CLIENTLIST_BUCKETS;
+	
+	DLOG("clientlist_add '%s': bucket %d", c->username, i);
 	
 	/* allocate and fill in */
 	cl = hmalloc(sizeof(*cl));
 	strncpy(cl->username, c->username, sizeof(cl->username));
 	cl->username[sizeof(cl->username)-1] = 0;
+	cl->username_len = c->username_len;
 	cl->validated = c->validated;
 	cl->fd = c->fd;
+	cl->hash = hash;
 	
 	/* get lock for list and insert */
 	rwl_wrlock(&clientlist_lock);
 	
-	old_fd = check_if_validated_client(c->username, strlen(c->username));
+	old_fd = check_if_validated_client(c->username, c->username_len);
 	
-	if (clientlist)
-		clientlist->prevp = &cl->next;
-	cl->next = clientlist;
-	cl->prevp = &clientlist;
+	if (clientlist[i])
+		clientlist[i]->prevp = &cl->next;
+	cl->next = clientlist[i];
+	cl->prevp = &clientlist[i];
 	cl->client_id = (void *)c;
-	clientlist = cl;
+	clientlist[i] = cl;
 	rwl_wrunlock(&clientlist_lock);
 	
 	return old_fd;
@@ -138,11 +190,14 @@ void clientlist_remove(struct client_t *c)
 {
 	struct clientlist_t *cl;
 	
+	DLOG("clientlist_remove '%s'", c->username);
+	
 	/* get lock for list, find, and remove */
 	rwl_wrlock(&clientlist_lock);
 	
-	cl = clientlist_find_id((void *)c);
+	cl = clientlist_find_id(c->username, c->username_len, (void *)c);
 	if (cl) {
+		DLOG("clientlist_remove found '%s'", c->username);
 		if (cl->next)
 			cl->next->prevp = cl->prevp;
 		*cl->prevp = cl->next;

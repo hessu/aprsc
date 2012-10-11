@@ -1785,7 +1785,10 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 			client_courtesy_count += c->client_courtesy_count;
 			
 			/* clients on hidden listener sockets are not shown */
-			/* if there are a huge amount of clients, don't list them */
+			/* if there are a huge amount of clients, don't list them
+			 * - cJSON takes huge amounts of CPU to build the list
+			 * - web browser will die due to the big blob
+			 */
 			if (c->hidden || w->client_count > 1000)
 				continue;
 				

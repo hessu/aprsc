@@ -303,7 +303,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	if (rc < -2)
 		return rc; // The client probably got destroyed!
 
-	c->keepalive = now + keepalive_interval;
+	c->keepalive = now + keepalive_interval/2 + random() % keepalive_interval;
 	c->state = CSTATE_CONNECTED;
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",

@@ -24,20 +24,20 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/epoll.h>
-
-char *username = NULL;
-char *passcode = NULL;
+#include <ctype.h>
 
 int threads = 1;
 int parallel_conns_per_thread = 3;
 int rows_between_sleep = 30;
 int sleep_msec = 1000;
+int sleep_conn_msec = 10;
 int end_after_seconds = 5;
 
 time_t start_t;
 time_t end_t;
 
 struct floodthread_t {
+        int id;
 	struct floodthread_t *next;
 	
 
@@ -47,6 +47,38 @@ struct floodthread_t {
 struct addrinfo *ai;
 
 pthread_attr_t pthr_attrs;
+
+/* As of April 11 2000 Steve Dimse has released this code to the open
+ * source aprs community
+ *
+ * (from aprsd sources)
+ */
+
+#define kKey 0x73e2		// This is the key for the data
+
+short aprs_passcode(const char* theCall)
+{
+	char rootCall[10];	// need to copy call to remove ssid from parse
+	char *p1 = rootCall;
+	
+	while ((*theCall != '-') && (*theCall != 0) && (p1 < rootCall + 9))
+		*p1++ = toupper(*theCall++);
+	
+	*p1 = 0;
+	
+	short hash = kKey;		// Initialize with the key value
+	short i = 0;
+	short len = strlen(rootCall);
+	char *ptr = rootCall;
+	
+	while (i < len) {		// Loop through the string two bytes at a time
+		hash ^= (*ptr++)<<8;	// xor high byte with accumulated hash
+		hash ^= (*ptr++);	// xor low byte with accumulated hash
+		i += 2;
+	}
+	
+	return hash & 0x7fff;		// mask off the high bit so number is always positive
+}
 
 /*
  *	Parse arguments
@@ -71,12 +103,6 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case 'i':
 			end_after_seconds = atoi(optarg);
-			break;
-		case 'u':
-			username = strdup(optarg);
-			break;
-		case 'p':
-			passcode = strdup(optarg);
 			break;
 		case '?':
 		case 'h':
@@ -118,6 +144,7 @@ void flood_round(struct floodthread_t *self)
 {
 	int *fds;
 	int i;
+	char username[32];
 	char login_cmd[WBUFLEN+1];
 	int login_len;
 	char wbuf[WBUFLEN+1];
@@ -130,7 +157,7 @@ void flood_round(struct floodthread_t *self)
 #define MAX_EPOLL_EVENTS 500
 	struct epoll_event events[MAX_EPOLL_EVENTS];
 	
-	fprintf(stderr, "flood_round starting\n");
+	fprintf(stderr, "%d: flood_round starting\n", self->id);
 	
 	login_len = strlen(login_cmd);
 	
@@ -155,6 +182,8 @@ void flood_round(struct floodthread_t *self)
 	int arg = 1;
 	
 	for (i = 0; i < parallel_conns_per_thread; i++) {
+	        if (i % 100 == 0)
+	                fprintf(stderr, "%d: now %d connected\n", self->id, i);
 		fds[i] = -1;
 		
 		int fd;
@@ -176,8 +205,12 @@ void flood_round(struct floodthread_t *self)
 			continue;
 		}
 		
-		wbufpos = snprintf(wbuf, WBUFLEN, "user %s-%d pass %s\r\n", username, fd, passcode);
-		write(fd, wbuf, wbufpos);
+		sprintf(username, "%x", fd);
+		wbufpos = snprintf(wbuf, WBUFLEN, "user %s pass %d\r\n", username, aprs_passcode(username));
+		int w = write(fd, wbuf, wbufpos);
+		if (w != wbufpos) {
+		        fprintf(stderr, "%d: failed to write login command for client %d: %s\n", self->id, i, strerror(errno));
+		}
 		
 		evs[i].events   = EPOLLIN|EPOLLOUT; // | EPOLLET ?
 		// Each event has initialized callback pointer to struct xpoll_fd_t...
@@ -186,7 +219,10 @@ void flood_round(struct floodthread_t *self)
 		        fprintf(stderr, "epoll_ctl EPOL_CTL_ADD %d failed: %s\n", fd, strerror(errno));
 		        exit(1);
                 }
+	        usleep(sleep_conn_msec*1000);
 	}
+	
+	fprintf(stderr, "%d: all connected\n", self->id);
 	
 	int n, nfds;
 	int ebufpos;
@@ -224,7 +260,7 @@ void flood_round(struct floodthread_t *self)
 	        usleep(sleep_msec*1000);
         }
 	
-	fprintf(stderr, "end of round\n");
+	fprintf(stderr, "%d: end of round\n", self->id);
 	
 	for (i = 0; i < parallel_conns_per_thread; i++) {
 		if (fds[i] == -1)
@@ -241,7 +277,7 @@ void flood_round(struct floodthread_t *self)
 
 void flood_thread(struct floodthread_t *self)
 {
-	fprintf(stderr, "thread starting\n");
+	fprintf(stderr, "thread %d starting\n", self->id);
 	
 	while (1) {
 		flood_round(self);
@@ -265,7 +301,7 @@ void run_test(void)
 			exit(1);
 		}
 		memset(th, 0, sizeof(*th));
-		
+		th->id = t;
 		th->next = thrs;
 		thrs = th;
 		

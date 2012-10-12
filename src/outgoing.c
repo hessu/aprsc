@@ -71,6 +71,9 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		}
 	}
 	
+	/* packet came from anywhere and is not a dupe - let's go through the
+	 * clients who connected us
+	 */
 	for (c = self->clients_other; (c); c = cnext) {
 		cnext = c->class_next; // client_write() MAY destroy the client object!
 		

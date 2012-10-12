@@ -692,6 +692,37 @@ static void do_accept(struct listen_t *l)
 		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
 #endif
 
+	/* Set up TCP keepalives, so that we'll notice idle clients.
+	 * I'm not sure if this is absolutely required, since we send
+	 * keepalive datetime messages every 30 seconds from the application,
+	 * but it can't hurt.
+	 */
+#ifdef SO_KEEPALIVE
+	int keepalive_arg;
+#ifdef TCP_KEEPIDLE
+	/* start sending keepalives after socket has been idle for 10 minutes */
+	keepalive_arg = 10*60;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPIDLE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+#ifdef TCP_KEEPINTVL
+	/* send keepalive probes every 20 seconds after the idle time has passed */
+	keepalive_arg = 20;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPINTVL, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+#ifdef TCP_KEEPCNT
+	/* send 3 probes before giving up */
+	keepalive_arg = 3;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPCNT, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+	/* enable TCP keepalives */
+	keepalive_arg = 1;
+	if (setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPALIVE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+
 #if 1
 	/* Use simple round-robin on client feeding.  Least clients is
 	 * quite attractive idea, but when clients arrive at huge bursts

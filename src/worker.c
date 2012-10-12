@@ -1287,8 +1287,8 @@ static void collect_new_clients(struct worker_t *self)
 			self->clients = c;
 			c->prevp = &self->clients;
 			
-			struct client_t *class_next;
-			struct client_t **class_prevp;
+			struct client_t *class_next = NULL;
+			struct client_t **class_prevp = NULL;
 			if (c->flags & CLFLAGS_PORT_RO) {
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified readonly", self->id, c->fd);
 				class_next = self->clients_ro;

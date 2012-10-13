@@ -332,6 +332,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {
 		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, username);
+		/* The other client may be on another thread, so cannot client_close() it.
+		 * There is a small potential race here, if the old client disconnected and
+		 * the fd was recycled for another client right after the clientlist check.
+		 */
 		shutdown(old_fd, SHUT_RDWR);
 	}
 	

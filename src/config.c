@@ -107,6 +107,8 @@ int upstream_timeout      = 30;		/* after N seconds of no input from an upstream
 int client_timeout        = 48*60*60;	/* after N seconds of no input from a client, disconnect */
 int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
+int disallow_unverified   = 1;		/* disallow packets from unverified clients */
+
 int maxclients = 500;			/* maximum number of clients */
 
 /* These two are not currently used. The fixed defines are in worker.h,
@@ -161,6 +163,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
+	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ NULL,			NULL,			NULL			}
 };
 

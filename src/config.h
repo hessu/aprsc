@@ -63,8 +63,7 @@ extern int upstream_timeout;
 extern int client_timeout;
 extern int client_login_timeout;
 
-/*extern int disallow_unverified;*/	/* don't allow unverified clients to transmit packets */
-#define disallow_unverified (1)
+extern int disallow_unverified;		/* don't allow unverified clients to transmit packets */
 
 extern int verbose;
 

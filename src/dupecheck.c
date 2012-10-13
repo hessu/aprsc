@@ -90,8 +90,6 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	time_t expire2 = now - pbuf_global_dupe_expiration;
 	time_t expire1 = now - pbuf_global_expiration;
 
-	static int show_zeros = 1;
-
 	if (all) {
 		pbuf_global_count_limit       = 0;
 		pbuf_global_dupe_count_limit  = 0;
@@ -168,6 +166,10 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 
 	if (lastage1 == 0) lastage1 = now+2; // makes printout of "-2" (or "-1")
 	if (lastage2 == 0) lastage2 = now+2;
+	
+	/*
+
+	static int show_zeros = 1;
 
 	if (show_zeros || n1 || n2 || pbuf_lag  || pbuf_dupe_lag) {
 		// report only when there is something to report...
@@ -182,6 +184,7 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		else
 			show_zeros = 1;
 	}
+	*/
 }
 
 

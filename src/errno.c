@@ -16,14 +16,29 @@
 #include "errno.h"
 
 const char *aprsc_errs[] = {
-	"Unknown error"
+	"aprsc success",
+	"Unknown error",
+	"All peers being closed",
+	"aprsc thread shutdown",
+	"Client fd number invalid",
+	"EOF - client closed connection",
+	"Output buffer full",
+	"Output write timeout",
+	"Uplink server protocol error",
+	"Uplink server says we're not verified",
+	"Client login retry count exceeded",
+	"Client login timed out",
+	"Inactivity timeout"
 };
 
-const char *aprsc_strerror(int errnum)
+const char *aprsc_strerror(int er)
 {
-	if (errnum < 0)
-		errnum *= -1;
+	if (er < 0)
+		er *= -1;
 	
-	return "";
+	if (er > APRSC_ERRNO_MAX)
+		er = 1;
+	
+	return aprsc_errs[er];
 }
 

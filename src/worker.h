@@ -25,6 +25,7 @@
 #include "xpoll.h"
 #include "rwlock.h"
 #include "cJSON.h"
+#include "errno.h"
 
 extern time_t now;	/* current time - updated by the main thread, MAY be running under simulator */
 extern time_t tick;	/* clocktick - monotonously increasing, never in simulator */

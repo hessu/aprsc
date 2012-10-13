@@ -331,7 +331,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	 
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {
-		hlog(LOG_DEBUG, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, username);
+		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, username);
 		shutdown(old_fd, SHUT_RDWR);
 	}
 	
@@ -344,8 +344,10 @@ failed_login:
 		return rc;
 	
 	c->failed_cmds++;
-	if (c->failed_cmds >= 3)
-		shutdown(c->fd, SHUT_RDWR);
+	if (c->failed_cmds >= 3) {
+		client_close(self, c, CLIERR_LOGIN_RETRIES);
+		return -3;
+	}
 	
 	return rc;
 }

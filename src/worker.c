@@ -326,7 +326,7 @@ static void corepeer_close_all(struct worker_t *self)
 	
 	for (i = 0; i < worker_corepeer_client_count; i++) {
 		c = worker_corepeer_clients[i];
-		client_close(self, c, 0);
+		client_close(self, c, CLIOK_PEERS_CLOSING);
 		worker_corepeer_clients[i] = NULL;
 	}
 	
@@ -684,18 +684,20 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_INFO, "Closing %s %s (%s) after %d seconds, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, reason %d, worker %d%s%s%s%s",
+	hlog( LOG_INFO, "%s %s (%s) closed after %d seconds: %s, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, worker %d%s%s%s%s",
 	      ( (c->flags & CLFLAGS_UPLINKPORT)
-			  ? ((c->state == CSTATE_COREPEER) ? "peer" : "uplink") : "client" ),
+			  ? ((c->state == CSTATE_COREPEER) ? "Peer" : "Uplink") : "Client" ),
 			  	c->addr_rem,
 			  	c->username,
 			  	tick - c->connect_time,
+			  	((errnum >= 0) ? strerror(errnum) : aprsc_strerror(errnum)),
 			  	c->localaccount.txbytes,
 			  	c->localaccount.rxbytes,
 			  	c->localaccount.txpackets,
 			  	c->localaccount.rxpackets,
 			  	c->localaccount.rxdrops,
-			  	c->fd, errnum, self->id,
+			  	c->fd,
+			  	self->id,
 			  	(c->app_name) ? " app " : "",
 			  	(c->app_name) ? c->app_name : "",
 			  	(c->app_version) ? " ver " : "",
@@ -898,7 +900,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 				/* Oh crap, the data will still not fit! */
 				hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
-				client_close(self, c, e);
+				client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
 				return -12;
 			}
 		}
@@ -1107,7 +1109,7 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 	
 	if (c->fd < 0) {
 		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_rem);
-		client_close(self, c, 0);
+		client_close(self, c, CLIERR_FD_NUM_INVALID);
 		return -1;
 	}
 	
@@ -1116,7 +1118,7 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 	if (r == 0) {
 		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
 		      c->fd, c->addr_rem, c->addr_loc );
-		client_close(self, c, -1);
+		client_close(self, c, CLIERR_EOF);
 		return -1;
 	}
 	
@@ -1443,25 +1445,25 @@ static void send_keepalives(struct worker_t *self)
 		 */
 		if (c->flags & CLFLAGS_INPORT) {
 			if (c->state != CSTATE_CONNECTED) {
-				if (c->connect_time < tick - client_login_timeout) {
+				if (c->connect_time <= tick - client_login_timeout) {
 					hlog(LOG_DEBUG, "%s: Closing client fd %d due to login timeout (%d s)",
 					      c->addr_rem, c->fd, client_login_timeout);
-					client_close(self, c, -2);
+					client_close(self, c, CLIERR_LOGIN_TIMEOUT);
 					continue;
 				}
 			} else {
-				if (c->last_read < tick - client_timeout) {
+				if (c->last_read <= tick - client_timeout) {
 					hlog(LOG_DEBUG, "%s: Closing client fd %d due to inactivity (%d s)",
 						c->addr_rem, c->fd, client_timeout);
-					client_close(self, c, -2);
+					client_close(self, c, CLIERR_INACTIVITY);
 					continue;
 				}
 			}
 		} else {
-			if (c->last_read < tick - upstream_timeout) {
+			if (c->last_read <= tick - upstream_timeout) {
 				hlog(LOG_INFO, "%s: Closing uplink fd %d due to inactivity (%d s)",
 				      c->addr_rem, c->fd, upstream_timeout);
-				client_close(self, c, -2);
+				client_close(self, c, CLIERR_INACTIVITY);
 				continue;
 			}
 		}
@@ -1471,7 +1473,7 @@ static void send_keepalives(struct worker_t *self)
 			// TOO OLD!  Shutdown the client
 			hlog(LOG_DEBUG, "%s: Closing connection fd %d due to obuf wtime timeout",
 			      c->addr_rem, c->fd);
-			client_close(self, c, -2);
+			client_close(self, c, CLIERR_OUTPUT_WRITE_TIMEOUT);
 			continue;
 		}
 		
@@ -1587,7 +1589,7 @@ void worker_thread(struct worker_t *self)
 	
 	/* close all clients */
 	while (self->clients)
-		client_close(self, self->clients, 0);
+		client_close(self, self->clients, CLIOK_THREAD_SHUTDOWN);
 	
 	/* stop polling */
 	xpoll_free(&self->xp);

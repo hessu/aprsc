@@ -688,7 +688,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	      ( (c->flags & CLFLAGS_UPLINKPORT)
 			  ? ((c->state == CSTATE_COREPEER) ? "Peer" : "Uplink") : "Client" ),
 			  	c->addr_rem,
-			  	c->username,
+			  	((c->username[0]) ? c->username : "?"),
 			  	tick - c->connect_time,
 			  	((errnum >= 0) ? strerror(errnum) : aprsc_strerror(errnum)),
 			  	c->localaccount.txbytes,

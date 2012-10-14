@@ -882,9 +882,10 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
 				/* Kernel's transmit buffer is full. They're pretty
 				 * big, so we'll assume the client is dead and disconnect.
+				 * Use "buffer overflow" as error message.
 				 */
 				hlog(LOG_DEBUG, "client_write(%s) fails/2a; disconnecting; %s", c->addr_rem, strerror(e));
-				client_close(self, c, e);
+				client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
 				return -10;
 			}
 			if (i < 0) {
@@ -934,12 +935,14 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 			return -9;
 		}
 		if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-			/* Kernel's transmit buffer is full. They're pretty
-			 * big, so we'll assume the client is dead and disconnect.
+			/* Kernel's transmit buffer is full (per-socket or some more global resource).
+			 * This happens even with small amounts of data in real world:
+			 * aprsc INFO: Client xx.yy.zz.ff:22823 (XXXXX) closed after 1 s:
+			 *    Resource temporarily unavailable, tx/rx 735/51 bytes 8/0 pkts,
+			 *    dropped 0, fd 59, worker 1 app aprx ver 2.00
 			 */
-			hlog(LOG_DEBUG, "client_write(%s) fails/2c; disconnecting; %s", c->addr_rem, strerror(e));
-			client_close(self, c, e);
-			return -10;
+			hlog(LOG_DEBUG, "client_write(%s) fails/2c; %s", c->addr_rem, strerror(e));
+			return -1;
 		}
 		if (i < 0 && len != 0) {
 			hlog(LOG_DEBUG, "client_write(%s) fails/2d; disconnecting; %s", c->addr_rem, strerror(e));

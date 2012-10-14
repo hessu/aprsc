@@ -13,6 +13,8 @@
  *	Error codes and their descriptions
  */
 
+#include <string.h>
+
 #include "errno.h"
 
 const char *aprsc_errs[] = {
@@ -21,7 +23,7 @@ const char *aprsc_errs[] = {
 	"All peers being closed",
 	"aprsc thread shutdown",
 	"Client fd number invalid",
-	"EOF - client closed connection",
+	"EOF - remote end closed connection",
 	"Output buffer full",
 	"Output write timeout",
 	"Uplink server protocol error",
@@ -33,8 +35,10 @@ const char *aprsc_errs[] = {
 
 const char *aprsc_strerror(int er)
 {
-	if (er < 0)
-		er *= -1;
+	if (er >= 0)
+		return strerror(er);
+	
+	er *= -1;
 	
 	if (er > APRSC_ERRNO_MAX)
 		er = 1;

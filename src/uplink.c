@@ -96,16 +96,7 @@ void uplink_close(struct client_t *c, int errnum)
 {
 	int rc;
 
-	if (errnum == 0)
-		hlog(LOG_INFO, "%s: Uplink [%d] has been closed.", c->addr_rem, c->uplink_index);
-	else if (errnum == -1)
-		hlog(LOG_INFO, "%s: Uplink [%d] has been closed by remote host (EOF).", c->addr_rem, c->uplink_index);
-	else if (errnum == -2)
-		hlog(LOG_INFO, "%s: Uplink [%d] has been closed due to a timeout.", c->addr_rem, c->uplink_index);
-	else if (errnum == -3)
-		hlog(LOG_INFO, "%s: Uplink [%d] has been closed due to a protocol error.", c->addr_rem, c->uplink_index);
-	else
-		hlog(LOG_INFO, "%s: Uplink [%d] has been closed due to an error: %s", c->addr_rem, c->uplink_index, strerror(errnum));
+	hlog(LOG_INFO, "%s: Uplink [%d] has been closed: %s", c->addr_rem, c->uplink_index, aprsc_strerror(errnum));
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));

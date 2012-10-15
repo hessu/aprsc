@@ -219,7 +219,7 @@ static struct dupe_record_t *dupecheck_db_alloc(int len)
 		return NULL;
 	}
 #else
-	dp = hmalloc(pktlen + sizeof(*dp));
+	dp = hmalloc(len + sizeof(*dp));
 #endif
 	memset(dp, 0, sizeof(*dp));
 	dp->len = len;

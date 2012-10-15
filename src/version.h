@@ -14,7 +14,7 @@
  */
 #define VERSION "1.4.0"
 
-#define APRSC_TOCALL "APSC13"
+#define APRSC_TOCALL "APSC14"
 
 extern const char version_build[];
 extern const char verstr[];

@@ -103,7 +103,7 @@ struct portaccount_t *port_accounter_alloc(void)
 	p->refcount = 1;
 	pthread_mutex_init( & p->mutex, NULL );
 
-	// hlog(LOG_DEBUG, "new port_accounter %p", p);
+	hlog(LOG_DEBUG, "new port_accounter %p", p);
 
 	return p;
 }
@@ -135,6 +135,8 @@ static void port_accounter_add(struct portaccount_t *p)
 		hlog(LOG_ERR, "port_accounter_add: could not lock portaccount: %s", strerror(i));
 		return;
 	}
+	
+	hlog(LOG_DEBUG, "port_accounter_add %p", p);
 
 	++ p->refcount;
 	++ p->counter;
@@ -169,7 +171,7 @@ void port_accounter_drop(struct portaccount_t *p)
 		return;
 	}
 
-	// hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
+	hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
 
 	if (r == 0) {
 		/* Last reference is being destroyed */
@@ -775,12 +777,18 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	 */
 	if (c->flags & CLFLAGS_UPLINKPORT && c->state != CSTATE_COREPEER)
 		uplink_close(c, errnum);
-	else {
-		/* Else if it is an inbound connection, handle their
-		 * population accounting...
-		 */
+	
+	if (c->portaccount) {
+		/* If port accounting is done, handle population accounting... */
+		hlog(LOG_DEBUG, "client_close dropping inbound_connects_account %p", c->portaccount);
 		inbound_connects_account(0, c->portaccount);
 		c->portaccount = NULL;
+	} else {
+		hlog(LOG_DEBUG, "client_close: has no portaccount");
+	}
+	
+	if (c->udp_port && c->udpclient->portaccount) {
+		inbound_connects_account(2, c->udpclient->portaccount); /* udp client count goes down */
 	}
 
 	/* free it up */
@@ -1329,6 +1337,8 @@ static void collect_new_clients(struct worker_t *self)
 				/* corepeer reconfig flag */
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): closing all existing peergroup peers", self->id);
 				corepeer_close_all(self);
+				client_free(c);
+				i--; /* don't count it in */
 				continue;
 			}
 			

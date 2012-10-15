@@ -220,6 +220,7 @@ void free_listen_config(struct listen_config_t **lc)
 		*lc = this->next;
 		hfree((void*)this->name);
 		hfree((void*)this->host);
+		hfree((void*)this->proto);
 		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
 			if (this->filters[i])
 				hfree((void*)this->filters[i]);
@@ -229,6 +230,33 @@ void free_listen_config(struct listen_config_t **lc)
 		hfree(this);
 	}
 }
+
+struct listen_config_t *find_listen_config_id(struct listen_config_t *l, int id)
+{
+	while (l) {
+		if (l->id == id)
+			return l;
+		l = l->next;
+	}
+	
+	return NULL;
+}
+
+static struct listen_config_t *find_listen_config(struct listen_config_t *l,
+	const char *proto, const char *host, int portnum)
+{
+	while (l) {
+		if (l->portnum == portnum
+			&& strcmp(l->host, host) == 0
+			&& strcmp(l->proto, proto) == 0)
+			return l;
+			
+		l = l->next;
+	}
+	
+	return NULL;
+}
+
 
 /*
  *	Free a peer-ip config tree
@@ -478,9 +506,11 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	/* Configure a listener */
 	li = hmalloc(sizeof(*li));
 	memset(li, 0, sizeof(*li));
+	li->id = random();
 	li->corepeer = 1;
 	li->name = hstrdup(argv[1]);
 	li->host = fullhost;
+	li->proto = hstrdup("udp");
 	li->portnum      = localport;
 	li->client_flags = 0;
 	li->clients_max  = 1;
@@ -770,6 +800,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	/* default parameters for a listener */
 	int clflags = CLFLAGS_INPORT;
 	int clients_max = 200;
+	char *proto;
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -803,23 +834,24 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  hlog(LOG_ERR, "Listen: unknown port type: %s", argv[2]);
 	}
 	
-	if (strcasecmp(argv[3], "tcp") == 0) {
+	proto = argv[3];
+	if (strcasecmp(proto, "tcp") == 0) {
 		/* well, do nothing for now. */
-	} else if (strcasecmp(argv[3], "udp") == 0) {
+	} else if (strcasecmp(proto, "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
 #if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
-	} else if (strcasecmp(argv[3], "sctp") == 0) {
+	} else if (strcasecmp(proto, "sctp") == 0) {
 		req.ai_socktype = SOCK_SEQPACKET;
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
-		hlog(LOG_ERR, "Listen: Unsupported protocol '%s'\n", argv[3]);
+		hlog(LOG_ERR, "Listen: Unsupported protocol '%s'\n", proto);
 		return -2;
 	}
 	
 	if ((clflags & CLFLAGS_UDPSUBMIT) && req.ai_protocol != IPPROTO_UDP) {
-		hlog(LOG_ERR, "Listen: Invalid protocol '%s' for udpsubmit port - only UDP is supported\n", argv[3]);
+		hlog(LOG_ERR, "Listen: Invalid protocol '%s' for udpsubmit port - only UDP is supported\n", proto);
 		return -2;
 	}
 	
@@ -839,6 +871,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	memset(l, 0, sizeof(*l));
 	l->name = hstrdup(argv[1]);
 	l->host = hstrdup(argv[4]);
+	l->proto = hstrdup(proto);
 	l->portnum      = port;
 	l->client_flags = clflags;
 	l->clients_max  = clients_max;
@@ -927,6 +960,19 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	 */
 	if (port < 1024)
 		listen_low_ports = 1;
+	
+	/* find existing config for same proto-host-port combination */
+	struct listen_config_t *old_l;
+	old_l = find_listen_config(listen_config, l->proto, l->host, l->portnum);
+	if (old_l) {
+		/* this is an old config... see if it changed in a way which
+		 * would require listener reconfiguration
+		 */
+		l->id = old_l->id;
+	} else {
+		/* new config, assign new id */
+		l->id = random();
+	}
 	
 	/* put in the list */
 	l->next = *lq;
@@ -1045,7 +1091,13 @@ int read_config(void)
 			hlog(LOG_CRIT, "Config: rundir not defined.");
 			failed = 1;
 		}
+	} else {
+		if (new_rundir) {
+			hfree(new_rundir);
+			new_rundir = NULL;
+		}
 	}
+	
 	if (!log_dir) {
 		hlog(LOG_CRIT, "Config: logdir not defined.");
 		failed = 1;

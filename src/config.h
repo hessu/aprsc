@@ -86,19 +86,25 @@ struct listen_config_t {
 	struct listen_config_t *next;
 	struct listen_config_t **prevp; /* pointer to the *next pointer in the previous node */
 	
-	const char *name;			/* name of socket */
-	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
+	int   id;			/* id of listener config */
+	
+	const char *proto;		/* protocol: tcp / udp / sctp */
+	const char *name;		/* name of socket */
+	const char *host;		/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	int   portnum;
 	int   clients_max;
-	int   corepeer;
+	int   corepeer;			/* special listener for corepeer packets */
 	int   hidden;
 
 	struct addrinfo *ai;
 	struct acl_t *acl;
 	
 	const char *filters[LISTEN_MAX_FILTERS];		/* up to 10 filters, NULL when not defined */
-
-	int client_flags;
+	
+	int client_flags;	/* cflags set for clients of this socket */
+	
+	/* reconfiguration support flags */
+	int   changed;		/* configuration has changed */
 };
 
 struct peerip_config_t {
@@ -177,6 +183,7 @@ extern int parse_args_noshell(char *argv[],char *cmd);
 extern void sanitize_ascii_string(char *s);
 
 extern void free_uplink_config(struct uplink_config_t **lc);
+extern struct listen_config_t *find_listen_config_id(struct listen_config_t *l, int id);
 
 extern int read_config(void);
 extern void free_config(void);

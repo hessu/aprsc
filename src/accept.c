@@ -50,8 +50,9 @@ struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
 	
+	int id;
 	int fd;
-	int clientflags;
+	int client_flags;
 	int portnum;
 	int clients_max;
 	int corepeer;
@@ -84,14 +85,17 @@ static struct listen_t *listener_alloc(void)
 	struct listen_t *l = hmalloc(sizeof(*l));
 	memset( l, 0, sizeof(*l) );
 	l->fd = -1;
-
+	l->id = -1;
+	
 	return l;
 }
 
 static void listener_free(struct listen_t *l)
 {
 	int i;
-
+	
+	hlog(LOG_DEBUG, "Freeing listener %d '%s': %s", l->id, l->name, l->addr_s);
+	
 	if (l->udp) {
 		l->udp->configured = 0;
 		l->fd = -1;
@@ -111,6 +115,12 @@ static void listener_free(struct listen_t *l)
 	
 	if (l->acl)
 		acl_free(l->acl);
+	
+	/* merge listener list around this node */
+	if (l->next)
+		l->next->prevp = l->prevp;
+	if (l->prevp)
+		*(l->prevp) = l->next;
 	
 	hfree(l);
 }
@@ -190,9 +200,6 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	c->af = ai->ai_family;
 	c->portaccount = l->portaccount;
 
-	inbound_connects_account(3, c->portaccount); /* "3" = udp, not listening.. 
-							account all ports + port-specifics */
-
 	if (1) {
 		int len, arg;
 		/* Set bigger socket buffer sizes for the UDP port..
@@ -223,67 +230,120 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 	return fd;
 }
 
-static int open_listeners(void)
+static int open_listener(struct listen_config_t *lc)
+{
+	struct listen_t *l;
+	int i;
+	
+	l = listener_alloc();
+	l->id = lc->id;
+	l->hidden = lc->hidden;
+	l->corepeer = lc->corepeer;
+	l->client_flags = lc->client_flags;
+	l->clients_max = lc->clients_max;
+	
+	l->portaccount = port_accounter_alloc();
+	
+	/* Pick first of the AIs for this listen definition */
+	l->addr_s = strsockaddr( lc->ai->ai_addr, lc->ai->ai_addrlen );
+	l->name   = hstrdup(lc->name);
+	l->portnum = lc->portnum;
+	
+	hlog(LOG_DEBUG, "Opening listener %d '%s': %s", lc->id, lc->name, l->addr_s);
+	
+	if (lc->ai->ai_socktype == SOCK_DGRAM &&
+	    lc->ai->ai_protocol == IPPROTO_UDP) {
+		/* UDP listenting is not quite same as TCP listening.. */
+		i = open_udp_listener(l, lc->ai);
+	} else {
+		/* TCP listenting... */
+		i = open_tcp_listener(l, lc->ai);
+	}
+	
+	if (i < 0) {
+		hlog(LOG_DEBUG, "... failed");
+		listener_free(l);
+		return -1;
+	}
+	
+	hlog(LOG_DEBUG, "... ok, bound");
+	
+	/* Copy access lists */
+	if (lc->acl)
+		l->acl = acl_dup(lc->acl);
+	
+	/* Copy filter definitions */
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
+			l->filters[i] = (lc->filters[i]) ? hstrdup(lc->filters[i]) : NULL;
+		else
+			l->filters[i] = NULL;
+	}
+	
+	hlog(LOG_DEBUG, "... adding %s to listened sockets", l->addr_s);
+	// put (first) in the list of listening sockets
+	l->next = listen_list;
+	l->prevp = &listen_list;
+	if (listen_list)
+		listen_list->prevp = &l->next;
+	listen_list = l;
+	
+	return 0;
+}
+
+struct listen_t *find_listener_id(int id)
+{
+	struct listen_t *l = listen_list;
+	
+	while (l) {
+		if (l->id == id)
+			return l;
+		l = l->next;
+	}
+	
+	return NULL;
+}
+
+
+static int open_missing_listeners(void)
 {
 	struct listen_config_t *lc;
-	struct listen_t *l;
-	int opened = 0, i;
+	int opened = 0;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
-		l = listener_alloc();
-		l->hidden = lc->hidden;
-		l->corepeer = lc->corepeer;
-		l->clientflags = lc->client_flags;
-		l->clients_max = lc->clients_max;
-
-		l->portaccount = port_accounter_alloc();
-
-		/* Pick first of the AIs for this listen definition */
-
-		l->addr_s = strsockaddr( lc->ai->ai_addr, lc->ai->ai_addrlen );
-		l->name   = hstrdup(lc->name);
-		l->portnum = lc->portnum;
-		
-		if (lc->ai->ai_socktype == SOCK_DGRAM &&
-		    lc->ai->ai_protocol == IPPROTO_UDP) {
-			/* UDP listenting is not quite same as TCP listening.. */
-			i = open_udp_listener(l, lc->ai);
-		} else {
-			/* TCP listenting... */
-			i = open_tcp_listener(l, lc->ai);
-		}
-
-		if (i >= 0) {
-			opened++;
-			hlog(LOG_DEBUG, "... ok, bound");
-		} else {
-			hlog(LOG_DEBUG, "... failed");
-			listener_free(l);
+		if (find_listener_id(lc->id)) {
+			hlog(LOG_DEBUG, "open_missing_listeners: already listening %d '%s': %s:%d", lc->id, lc->name, lc->host, lc->portnum);
 			continue;
 		}
 		
-		/* Copy access lists */
-		if (lc->acl)
-			l->acl = acl_dup(lc->acl);
-
-		/* Copy filter definitions */
-		for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-			if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
-				l->filters[i] = (lc->filters[i]) ? hstrdup(lc->filters[i]) : NULL;
-			else
-				l->filters[i] = NULL;
-		}
-
-		hlog(LOG_DEBUG, "... adding %s to listened sockets", l->addr_s);
-		// put (first) in the list of listening sockets
-		l->next = listen_list;
-		l->prevp = &listen_list;
-		if (listen_list)
-			listen_list->prevp = &l->next;
-		listen_list = l;
+		if (open_listener(lc) == 0)
+			opened++;
 	}
 	
 	return opened;
+}
+
+static int close_removed_listeners(void)
+{
+	int closed = 0;
+		
+	hlog(LOG_DEBUG, "Closing removed listening sockets....");
+	struct listen_t *l, *next;
+	next = listen_list;
+	while (next) {
+		l = next;
+		next = l->next;
+		
+		struct listen_config_t *lc = find_listen_config_id(listen_config, l->id);
+		if (!lc) {
+			hlog(LOG_INFO, "Listener %d (%s) no longer in configuration, closing port....",
+				l->id, l->addr_s);
+			listener_free(l);
+			closed++;
+		}
+	}
+	
+	return closed;
 }
 
 static void close_listeners(void)
@@ -292,13 +352,8 @@ static void close_listeners(void)
 		return;
 		
 	hlog(LOG_DEBUG, "Closing listening sockets....");
-	struct listen_t *l;
-	while (listen_list) {
-		l = listen_list;
-		listen_list = listen_list->next;
-
-		listener_free(l);
-	}
+	while (listen_list)
+		listener_free(listen_list);
 }
 
 /*
@@ -343,6 +398,8 @@ static void peerip_clients_config(void)
 		c->keepalive = tick;
 		c->connect_time = tick;
 		c->last_read = tick; /* not simulated time */
+		
+		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
 		
 		/* convert client address to string */
 		s = strsockaddr( &c->udpaddr.sa, c->udpaddrlen );
@@ -493,7 +550,7 @@ static void accept_udp_recv(struct listen_t *l)
 	addrlen = sizeof(addr);
 	
 	while ((i = recvfrom( l->udp->fd, buf, sizeof(buf)-1, MSG_DONTWAIT|MSG_TRUNC, (struct sockaddr *)&addr, &addrlen )) >= 0) {
-		if (!(l->clientflags & CLFLAGS_UDPSUBMIT)) {
+		if (!(l->client_flags & CLFLAGS_UDPSUBMIT)) {
 			hlog(LOG_DEBUG, "accept thread discarded an UDP packet on a listening socket");
 			continue;
 		}
@@ -610,7 +667,7 @@ static void do_accept(struct listen_t *l)
 	c->portnum = l->portnum;
 	c->hidden  = l->hidden;
 	c->state   = CSTATE_LOGIN;
-	c->flags   = l->clientflags;
+	c->flags   = l->client_flags;
 	/* use the default login handler */
 	c->handler = &login_handler;
 	c->udpclient = client_udp_find(udpclients, sa.sa.sa_family, l->portnum);
@@ -777,7 +834,9 @@ void accept_thread(void *asdf)
 	sigset_t sigs_to_block;
 	int e, n;
 	struct pollfd *acceptpfd = NULL;
+	struct listen_t **acceptpl = NULL;
 	int listen_n = 0;
+	int poll_n = 0;
 	struct listen_t *l;
 
 	pthreads_profiling_reset("accept");
@@ -814,17 +873,33 @@ void accept_thread(void *asdf)
 	while (!accept_shutting_down) {
 		if (accept_reconfiguring) {
 			accept_reconfiguring = 0;
-			if (listen_n)
-				close_listeners();
+			listen_n -= close_removed_listeners();
 			
 			/* start listening on the sockets */
-			if ((listen_n = open_listeners()) <= 0) {
+			listen_n += open_missing_listeners();
+			
+			if (listen_n < 1) {
 				hlog(LOG_CRIT, "Failed to listen on any ports.");
 				exit(2);
 			}
 			
-			hlog(LOG_DEBUG, "Generating polling list...");
-			acceptpfd = hmalloc(listen_n * sizeof(*acceptpfd));
+			poll_n = 0;
+			for (l = listen_list; (l); l = l->next)
+				if (!l->corepeer)
+					poll_n++;
+			
+			hlog(LOG_DEBUG, "Generating polling list for %d/%d listeners...", poll_n, listen_n);
+			
+			/* array of FDs for poll() */
+			if (acceptpfd)
+				hfree(acceptpfd);
+			acceptpfd = hmalloc(poll_n * sizeof(*acceptpfd));
+			
+			/* array of listeners */
+			if (acceptpl)
+				hfree(acceptpl);
+			acceptpl = hmalloc(poll_n * sizeof(*acceptpl));
+			
 			n = 0;
 			for (l = listen_list; (l); l = l->next) {
 				/* The accept thread does not poll() UDP sockets for core peers.
@@ -832,7 +907,6 @@ void accept_thread(void *asdf)
 				 */
 				if (l->corepeer) {
 					hlog(LOG_DEBUG, "... %d: fd %d (%s) - not polled, is corepeer", n, (l->udp) ? l->udp->fd : l->fd, l->addr_s);
-					listen_n--;
 					continue;
 				}
 				
@@ -847,6 +921,7 @@ void accept_thread(void *asdf)
 				hlog(LOG_DEBUG, "... %d: fd %d (%s)", n, fd, l->addr_s);
 				acceptpfd[n].fd = fd;
 				acceptpfd[n].events = POLLIN|POLLPRI|POLLERR|POLLHUP;
+				acceptpl[n] = l;
 				n++;
 			}
 			hlog(LOG_INFO, "Accept thread ready.");
@@ -875,7 +950,7 @@ void accept_thread(void *asdf)
 		}
 		
 		/* check for new connections */
-		e = poll(acceptpfd, listen_n, 200);
+		e = poll(acceptpfd, poll_n, 200);
 		if (e == 0)
 			continue;
 		if (e < 0) {
@@ -886,8 +961,8 @@ void accept_thread(void *asdf)
 		}
 		
 		/* now, which socket was that on? */
-		l = listen_list;
-		for (n = 0; n < listen_n; n++) {
+		for (n = 0; n < poll_n; n++) {
+			l = acceptpl[n];
 			if (!(l) || (l->udp ? l->udp->fd : l->fd) != acceptpfd[n].fd) {
 				hlog(LOG_CRIT, "accept_thread: polling list and listener list do mot match!");
 				exit(1);
@@ -898,7 +973,6 @@ void accept_thread(void *asdf)
 				else
 					do_accept(l); /* accept a single connection */
 			}
-			l = l->next;
 		}
 	}
 	
@@ -909,6 +983,9 @@ void accept_thread(void *asdf)
 	http_shutting_down = 1;
 	workers_stop(1);
 	hfree(acceptpfd);
+	hfree(acceptpl);
+	acceptpfd = NULL;
+	acceptpl = NULL;
 	
 	/* free up the pseudo-client */
 	client_free(udp_pseudoclient);
@@ -959,8 +1036,10 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		json_add_rxerrs(jl, "rx_errs", l->portaccount->rxerrs);
 		cJSON_AddItemToArray(listeners, jl);
 		
-		total_clients += l->portaccount->gauge;
-		total_connects += l->portaccount->counter;
+		if (!(l->udp)) {
+			total_clients += l->portaccount->gauge;
+			total_connects += l->portaccount->counter;
+		}
 		/*
 		total_rxbytes += l->portaccount->rxbytes;
 		total_txbytes += l->portaccount->txbytes;

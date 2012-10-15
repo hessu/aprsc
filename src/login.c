@@ -241,6 +241,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 					c->udpaddr.si6.sin6_port = htons(c->udp_port);
 					c->udpaddrlen = sizeof(c->udpaddr.si6);
 				}
+				
+				inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
 			} else {
 				/* Sorry, no UDP service for this port.. */
 				hlog(LOG_DEBUG, "%s/%s: Requested UDP on client port with no UDP configured", c->addr_rem, username);

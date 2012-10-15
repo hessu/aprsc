@@ -126,6 +126,26 @@ static void listener_free(struct listen_t *l)
 }
 
 /*
+ *	Copy / duplicate filters from listener config to an actual listener
+ *	Free old filters if any are set.
+ */
+
+static void listener_copy_filters(struct listen_t *l, struct listen_config_t *lc)
+{
+	int i;
+	
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		if (l->filters[i]) {
+			hfree(l->filters[i]);
+			l->filters[i] = NULL;
+		}
+		
+		if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
+			l->filters[i] = (lc->filters[i]) ? hstrdup(lc->filters[i]) : NULL;
+	}
+}
+
+/*
  *	Open the TCP/SCTP listening socket
  */
 
@@ -273,12 +293,7 @@ static int open_listener(struct listen_config_t *lc)
 		l->acl = acl_dup(lc->acl);
 	
 	/* Copy filter definitions */
-	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-		if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
-			l->filters[i] = (lc->filters[i]) ? hstrdup(lc->filters[i]) : NULL;
-		else
-			l->filters[i] = NULL;
-	}
+	listener_copy_filters(l, lc);
 	
 	hlog(LOG_DEBUG, "... adding %s to listened sockets", l->addr_s);
 	// put (first) in the list of listening sockets
@@ -304,15 +319,40 @@ struct listen_t *find_listener_id(int id)
 	return NULL;
 }
 
+static void listener_update_config(struct listen_t *l, struct listen_config_t *lc)
+{
+	hlog(LOG_DEBUG, "listener_update_config: %d '%s': %s:%d", lc->id, lc->name, lc->host, lc->portnum);
+	
+	/* basic flags which can be changed on the fly */
+	l->clients_max = lc->clients_max; /* could drop clients when decreasing maxclients (done in worker) */
+	l->hidden = lc->hidden; /* could mark old clients on port hidden, too - needs to be done in worker */
+	l->client_flags = lc->client_flags; /* this one must not change old clients */
+	
+	/* Filters */
+	listener_copy_filters(l, lc);
+	
+	/* ACLs */
+	/* TODO: reconfiguration should scan old clients against ACL (in worker context, probably) */
+	if (l->acl) {
+		acl_free(l->acl);
+		l->acl = NULL;
+	}
+	if (lc->acl)
+		l->acl = acl_dup(lc->acl);
+	
+	/* Listen address change? Rebind? */
+}
 
 static int open_missing_listeners(void)
 {
 	struct listen_config_t *lc;
+	struct listen_t *l;
 	int opened = 0;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
-		if (find_listener_id(lc->id)) {
+		if ((l = find_listener_id(lc->id))) {
 			hlog(LOG_DEBUG, "open_missing_listeners: already listening %d '%s': %s:%d", lc->id, lc->name, lc->host, lc->portnum);
+			listener_update_config(l, lc);
 			continue;
 		}
 		

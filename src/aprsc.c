@@ -871,7 +871,7 @@ int main(int argc, char **argv)
 	signal(SIGUSR2, (void *)sighandler);
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGURG, SIG_IGN);
-	signal(SIGUSR1, SIG_IGN);
+	//signal(SIGUSR1, SIG_IGN);
 	
 	/* Early inits in single-thread mode */
 	keyhash_init();

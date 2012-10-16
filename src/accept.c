@@ -976,9 +976,6 @@ void accept_thread(void *asdf)
 				workers_start();
 				dupecheck_start();
 				uplink_start();
-			} else {
-				/* if uplink was not restarted, reconfigure it */
-				uplink_reconfiguring = 1;
 			}
 			
 			/*

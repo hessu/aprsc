@@ -317,8 +317,15 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	const char *latp, *lngp;
 	int i, la, lo;
 	char lac, loc;
-	char sym_table, sym_code;
+	char sym_table = ' ', sym_code = ' ';
 	
+	// Parse symbol from destination callsign, first thing before any possible returns
+	get_symbol_from_dstcall(pb, &sym_table, &sym_code);
+#ifdef DEBUG_PARSE_APRS
+	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s => %c%c",
+		 (int)(pb->dstcall_end_or_ssid - pb->srccall_end-1), pb->srccall_end+1, sym_table, sym_code);
+#endif
+
 	if (memcmp(body,"ULT",3) == 0) {
 		/* Ah..  "$ULT..." - that is, Ultimeter 2000 weather instrument */
 		pb->packettype |= T_WX;
@@ -542,13 +549,6 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	
 	pb->packettype |= T_POSITION;
 	
-	// Parse symbol from destination callsign
-	get_symbol_from_dstcall(pb, &sym_table, &sym_code);
-#ifdef DEBUG_PARSE_APRS
-	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s => %c%c",
-		 (int)(pb->dstcall_end_or_ssid - pb->srccall_end-1), pb->srccall_end+1, sym_table, sym_code);
-#endif
-
 	return pbuf_fill_pos(pb, lat, lng, sym_table, sym_code);
 }
 

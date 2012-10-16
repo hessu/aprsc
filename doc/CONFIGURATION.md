@@ -20,6 +20,9 @@ when installing aprsc from a binary package.
     and debugging, or "syslog" for syslogd)
  *  `-r logs` - log file directory, log files are placed in /opt/aprsc/logs
  *  `-c etc/aprsc.conf` - configuration file location
+ *  `-y` - try to parse the configuration, report success or error,
+    quit after reading configuration. Useful for validating your
+    configuration before restarting aprsc.
 
 Since the daemon does a [chroot][chroot] to /opt/aprsc, all paths are
 relative to that directory and the daemon cannot access any files outside

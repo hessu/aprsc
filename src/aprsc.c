@@ -9,7 +9,8 @@
  */
 
 #define HELPS	"Usage: aprsc [-t <chrootdir>] [-u <setuid user>] [-c <cfgfile>] [-f (fork)]\n" \
-	" [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>] [-h (help)]\n"
+	" [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>]\n" \
+	" [-y (try config)] [-h (help)]\n"
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -60,6 +61,7 @@ int reopen_logs;		// should we reopen log files now?
 int reconfiguring;		// should we reconfigure now?
 int fileno_limit = -1;
 int dbdump_at_exit;
+int quit_after_config;
 int want_dbdump;
 
 /* random instance ID, alphanumeric low-case */
@@ -77,7 +79,7 @@ void parse_cmdline(int argc, char *argv[])
 	int s, i;
 	int failed = 0;
 	
-	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:De:o:?h")) != -1) {
+	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:Dye:o:?h")) != -1) {
 	switch (s) {
 		case 'c':
 			cfgfile = hstrdup(optarg);
@@ -109,6 +111,9 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case 'D':
 			dbdump_at_exit = 1;
+			break;
+		case 'y':
+			quit_after_config = 1;
 			break;
 		case 'e':
 			i = pick_loglevel(optarg, log_levelnames);
@@ -143,6 +148,10 @@ void parse_cmdline(int argc, char *argv[])
 	if (failed) {
 		fputs(HELPS, stderr);
 		exit(failed);
+	}
+	
+	if (quit_after_config) {
+		fork_a_daemon = 0;
 	}
 }
 
@@ -784,7 +793,8 @@ int main(int argc, char **argv)
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);
-	hlog(LOG_NOTICE, "Starting up version %s, instance id %s ...", version_build, instance_id);
+	if (!quit_after_config)
+		hlog(LOG_NOTICE, "Starting up version %s, instance id %s ...", version_build, instance_id);
 	
 	int orig_log_dest = log_dest;
 	log_dest |= L_STDERR;
@@ -793,6 +803,9 @@ int main(int argc, char **argv)
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);
 	}
+	
+	if (quit_after_config)
+		exit(0);
 	
 	/* adjust file limits as requested, not after every reconfigure
 	 * but only at startup - we won't have root privileges available

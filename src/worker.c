@@ -1638,7 +1638,7 @@ void workers_stop(int stop_all)
 	int stopped = 0;
 	
 	hlog(LOG_INFO, "Stopping %d worker threads...",
-		(stop_all) ? workers_running : workers_configured - workers_running);
+		(stop_all) ? workers_running : workers_running - workers_configured);
 	while (workers_running > workers_configured || (stop_all && workers_running > 0)) {
 		hlog(LOG_DEBUG, "Stopping a worker thread...");
 		/* find the last worker thread and shut it down...

@@ -63,7 +63,6 @@ socklen_t uplink_bind_v4_len = 0;
 struct sockaddr_in6 uplink_bind_v6;
 socklen_t uplink_bind_v6_len = 0;
 
-struct uplink_config_t *uplink_config; /* currently running uplink config */
 struct uplink_config_t *uplink_config_install; /* uplink config waiting to be installed by uplink thread */
 int uplink_config_updated = 0;
 struct uplink_config_t *new_uplink_config; /* uplink config being generated from config file */
@@ -304,6 +303,8 @@ void free_uplink_config(struct uplink_config_t **lc)
 	while (*lc) {
 		this = *lc;
 		*lc = this->next;
+		this->next = (void *)1; /* poison the list, in case of referencing freed entries */
+		this->prevp = (void *)1;
 		hfree((void*)this->name);
 		hfree((void*)this->proto);
 		hfree((void*)this->host);
@@ -623,7 +624,7 @@ err:
 int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 {
 	struct uplink_config_t *l;
-	int i, port;
+	int port;
 	int clflags = CLFLAGS_UPLINKPORT;
 
 	if (argc < 5)
@@ -674,7 +675,8 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	l->port  = hstrdup(argv[5]);
 	l->client_flags = clflags;
 	l->state = UPLINK_ST_UNKNOWN;
-
+	
+	/* Hmm, no? Filters are sent to the upstream.
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		l->filters[i] = NULL;
 		if (argc - 6 > i) {
@@ -685,7 +687,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 			}
 			l->filters[i] = hstrdup(argv[i+6]);
 		}
-	}
+	}*/
 	
 	/* put in the end of the list */
 	while (*lq)
@@ -896,8 +898,8 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 				return -2;
 			}
 			
-			if (clflags & (CLFLAGS_UDPSUBMIT|CLFLAGS_DUPEFEED)) {
-				hlog(LOG_ERR, "Listen: 'filter' argument is not valid for port type of '%s'", argv[1]);
+			if (clflags & (CLFLAGS_FULLFEED|CLFLAGS_UDPSUBMIT|CLFLAGS_DUPEFEED)) {
+				hlog(LOG_ERR, "Listen: '%s': 'filter' argument is not valid for port type of '%s'", argv[1], argv[2]);
 				free_listen_config(&l);
 				return -2;
 			}
@@ -1209,9 +1211,16 @@ int read_config(void)
 	listen_config_new = NULL;
 
 	/* put in the new aprsis-uplink  config */
-	uplink_config_install = new_uplink_config;
-	new_uplink_config = NULL;
-	uplink_config_updated = 1;
+	if (uplink_config_install) {
+		// too quick reconfig - uplink thread has not reconfigured yet
+		hlog(LOG_WARNING, "New uplink config discarded - too quick reload, Uplink thread has not reconfigured yet");
+		free_uplink_config(&new_uplink_config);
+	} else {
+		uplink_config_install = new_uplink_config;
+		new_uplink_config = NULL;
+		__sync_synchronize();
+		uplink_config_updated = 1;
+	}
 
 	/* put in the new aprsis-peerip  config */
 	free_peerip_config(&peerip_config);
@@ -1269,7 +1278,6 @@ void free_config(void)
 	serverid = passcode = myemail = myadmin = NULL;
 	logname = NULL;
 	free_listen_config(&listen_config);
-	free_uplink_config(&uplink_config);
 	free_peerip_config(&peerip_config);
 	free_http_config(&http_config);
 }

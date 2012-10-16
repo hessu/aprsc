@@ -146,7 +146,6 @@ struct uplink_config_t {
 
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
-extern struct uplink_config_t *uplink_config;
 extern struct uplink_config_t *uplink_config_install;
 extern int uplink_config_updated;
 extern int listen_low_ports;

@@ -51,6 +51,8 @@ struct client_t *uplink_client[MAX_UPLINKS];
 int uplink_running;
 pthread_t uplink_th;
 
+struct uplink_config_t *uplink_config; /* currently running uplink config */
+
 /* global uplink connects, and protocol traffic accounters */
 
 struct portaccount_t uplink_connects = {
@@ -580,11 +582,13 @@ void uplink_thread(void *asdf)
 	while (!uplink_shutting_down) {
 		if (uplink_reconfiguring || uplink_config_updated) {
 			hlog(LOG_INFO, "Uplink thread applying new configuration...");
+			__sync_synchronize();
 			uplink_reconfiguring = 0;
 			close_uplinkers();
 			
 			free_uplink_config(&uplink_config);
 			uplink_config = uplink_config_install;
+			uplink_config_install = NULL;
 			if (uplink_config)
 				uplink_config->prevp = &uplink_config;
 			
@@ -703,4 +707,6 @@ void uplink_stop(void)
 		hlog(LOG_INFO, "Uplink thread has terminated.");
 		uplink_running = 0;
 	}
+	
+	free_uplink_config(&uplink_config);
 }

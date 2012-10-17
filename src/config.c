@@ -1108,7 +1108,7 @@ int read_config(void)
 	/* serverid is only applied when running for the first time. */
 	if (serverid) {
 		if (new_serverid && strcasecmp(new_serverid, serverid) != 0)
-			hlog(LOG_WARNING, "Config: Not changing serverid while running.");
+			hlog(LOG_ERR, "Config: Not changing serverid while running.");
 		hfree(new_serverid);
 		new_serverid = NULL;
 	} else {
@@ -1131,7 +1131,7 @@ int read_config(void)
 		passcode = new_passcode;
 		new_passcode = NULL;
 	} else {
-		hlog(LOG_WARNING, "Config: passcode is not defined.");
+		hlog(LOG_ERR, "Config: passcode is not defined.");
 		failed = 1;
 	}
 	
@@ -1141,7 +1141,7 @@ int read_config(void)
 		myadmin = new_myadmin;
 		new_myadmin = NULL;
 	} else {
-		hlog(LOG_WARNING, "Config: myadmin is not defined.");
+		hlog(LOG_ERR, "Config: myadmin is not defined.");
 		failed = 1;
 	}
 	
@@ -1151,7 +1151,7 @@ int read_config(void)
 		myemail = new_myemail;
 		new_myemail = NULL;
 	} else {
-		hlog(LOG_WARNING, "Config: myemail is not defined.");
+		hlog(LOG_ERR, "Config: myemail is not defined.");
 		failed = 1;
 	}
 	
@@ -1185,11 +1185,11 @@ int read_config(void)
 			got_non_multiro = 1;
 		if ((up->client_flags & CLFLAGS_UPLINKMULTI) && !(up->client_flags & CLFLAGS_PORT_RO)) {
 			uplink_config_failed = 1;
-			hlog(LOG_WARNING, "Config: uplink with non-RO MULTI uplink - would cause a loop, not allowed.");
+			hlog(LOG_ERR, "Config: uplink with non-RO MULTI uplink - would cause a loop, not allowed.");
 		}
 	}
 	if ((got_multiro) && (got_non_multiro)) {
-		hlog(LOG_WARNING, "Config: Configured both multiro and non-multiro uplinks - would cause a loop, not allowed.");
+		hlog(LOG_ERR, "Config: Configured both multiro and non-multiro uplinks - would cause a loop, not allowed.");
 		failed = 1;
 		free_uplink_config(&new_uplink_config);
 	}
@@ -1203,12 +1203,17 @@ int read_config(void)
 		workers_configured = 32;
 	}
 	
-	/* put in the new listening config */
-	free_listen_config(&listen_config);
-	listen_config = listen_config_new;
-	if (listen_config)
-		listen_config->prevp = &listen_config;
-	listen_config_new = NULL;
+	if (!listen_config_new) {
+		hlog(LOG_ERR, "No Listen directives found in configuration.");
+		failed = 1;
+	} else {
+		/* put in the new listening config */
+		free_listen_config(&listen_config);
+		listen_config = listen_config_new;
+		if (listen_config)
+			listen_config->prevp = &listen_config;
+		listen_config_new = NULL;
+	}
 
 	/* put in the new aprsis-uplink  config */
 	if (uplink_config_install) {

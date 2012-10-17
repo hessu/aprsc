@@ -53,6 +53,9 @@ without requiring a full software restarts.  Many APRS server operators
 value high uptimes and service availability, so server restarts should be
 kept to a minimum.
 
+With the known exception of ServerId and FileLimit, all parameters can be
+adjusted without a restart.
+
 To reload configuration, execute the `reload` option of the startup script.
 
 On Ubuntu or Debian:
@@ -67,6 +70,11 @@ If there are any obvious problems with the new configuration, the startup
 script will complain about that and skip the reconfiguration step.  The same
 check will be executed before restarting, should you use the `restart`
 option of the start script.
+
+After executing an on-line reconfiguration you should always check the log
+file for any errors or suspicious things happening after the reload. 
+Strange things may happen and the pre-flight check might not catch all
+errors in the configuration.
 
 
 Configuration file format

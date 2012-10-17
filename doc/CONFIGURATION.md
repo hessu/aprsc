@@ -53,7 +53,7 @@ without requiring a full software restarts.  Many APRS server operators
 value high uptimes and service availability, so server restarts should be
 kept to a minimum.
 
-With the known exception of ServerId and FileLimit, all parameters can be
+With the known exception of `ServerId` and `FileLimit`, all parameters can be
 adjusted without a restart.
 
 To reload configuration, execute the `reload` option of the startup script.

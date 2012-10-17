@@ -16,6 +16,7 @@
 
 #include "cfgfile.h"
 #include "hmalloc.h"
+#include "hlog.h"
 
  /* ***************************************************************** */
 
@@ -243,7 +244,7 @@ int cmdparse(struct cfgcmd *cmds, char *cmdline)
 		if (strncasecmp(cmdp->name, argv[0], strlen(argv[0])) == 0 && strlen(argv[0]) == strlen(cmdp->name))
 			break;
 	if (cmdp->function == NULL) {
-		fprintf(stderr, "No such configuration file directive: %s\n", argv[0]);
+		hlog(LOG_ERR, "No such configuration file directive: %s", argv[0]);
 		return -1;
 	}
 	return (*cmdp->function)(cmdp->dest, argc, argv);
@@ -262,7 +263,7 @@ int read_cfgfile(char *f, struct cfgcmd *cmds)
 	int ret, n = 0;
 	
 	if ((fp = fopen(f, "r")) == NULL) {
-		fprintf(stderr, "Cannot open %s: %s\n", f, strerror(errno));
+		hlog(LOG_ERR, "Cannot open %s: %s", f, strerror(errno));
 		return 1;
 	}
 	
@@ -270,7 +271,7 @@ int read_cfgfile(char *f, struct cfgcmd *cmds)
 		n++;
 		ret = cmdparse(cmds, line);
 		if (ret < 0) {
-			fprintf(stderr, "Problem in %s at line %d: %s\n", f, n, line);
+			hlog(LOG_ERR, "Problem in %s at line %d: %s", f, n, line);
 			fclose(fp);
 			return 2;
 		}

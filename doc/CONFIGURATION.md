@@ -45,6 +45,30 @@ syslog socket within the chroot.
 [chroot]: http://en.wikipedia.org/wiki/Chroot
 
 
+On-line reconfiguration
+--------------------------
+
+aprsc has been designed from the start to support configuration reloading
+without requiring a full software restarts.  Many APRS server operators
+value high uptimes and service availability, so server restarts should be
+kept to a minimum.
+
+To reload configuration, execute the `reload` option of the startup script.
+
+On Ubuntu or Debian:
+
+    sudo service aprsc reload
+
+On Centos (and others):
+
+    /etc/init.d/aprsc reload
+
+If there are any obvious problems with the new configuration, the startup
+script will complain about that and skip the reconfiguration step.  The same
+check will be executed before restarting, should you use the `restart`
+option of the start script.
+
+
 Configuration file format
 ----------------------------
 

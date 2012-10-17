@@ -42,9 +42,16 @@ fi
 
 # copy files required for chrooted operation
 prepare_chroot () {
-	echo -n "Preparing chroot for aprsc"
+	echo "Preparing chroot for aprsc..."
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
-	echo
+}
+
+check_configuration() {
+  	echo "Testing aprsc configuration..."
+	if ! $APRSC $DAEMON_OPTS -y > /dev/null 2>&1; then
+		$APRSC $DAEMON_OPTS -y || true
+		exit 1
+	fi
 }
 
 start()
@@ -76,8 +83,9 @@ stop()
 
 reload()
 {
+	check_configuration
 	echo -n $"Reloading $prog: "
-	if [ -n "`pidfileofproc $APRSC`" ] ; then
+	if [ -f $PID_FILE ] ; then
 	    killproc -p $PID_FILE $APRSC -USR1
 	else
 	    failure $"Reloading $prog"
@@ -87,6 +95,7 @@ reload()
 }
 
 restart() {
+	check_configuration
 	stop
 	start
 }

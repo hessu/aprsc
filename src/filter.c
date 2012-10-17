@@ -61,6 +61,7 @@
   t/poimntqsu*c		Type filter
   t/poimntqsu*c/call/km	Type filter
   u/unproto1/unproto2/.. Unproto filter (*)
+  g/call/call2/...      Message destination filter (*)
 
   Sample usage frequencies (out of entire APRS-IS):
 
@@ -1119,7 +1120,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	}
 	f0.h.type = *filt;
 
-	if (!strchr("abdefmopqrstuABDEFMOPQRSTU",*filt)) {
+	if (!strchr("abdefgmopqrstuABDEFGMOPQRSTU", *filt)) {
 		/* Not valid filter code */
 		hlog(LOG_DEBUG, "Bad filter code: %s", filt0);
 		return -1;
@@ -1239,6 +1240,18 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		** and then use the same way as 'r' range does.  The friends
 		** are rarely moving...
 		*/
+
+		break;
+
+	case 'g':
+	case 'G':
+		/*   g/call1/call1/...  Text message destination filter (*) */
+
+		i = filter_parse_one_callsignset(c, filt0, &f0, ff, fff, MatchWild );
+		if (i < 0)
+			return i;
+		if (i > 0) /* extended previous */
+			return 0;
 
 		break;
 
@@ -1835,6 +1848,33 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 	return 0;
 }
 
+static int filter_process_one_g(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
+{
+	/* g/call1/call1/...  	Test message recipient callsign filter
+
+	   This filter passes all packets with the specified
+	   callsign-SSID(s) appearing as the text message
+	   recipient. Wildcards supported.
+
+	   Appeared in javAPRSSrvr 4.0, not widely used.
+	*/
+
+	if ( (pb->packettype & T_MESSAGE) == 0 ) /* not a message */
+		return 0;
+
+	struct filter_refcallsign_t ref;
+	const char *e = pb->dstname;
+	int         i = pb->dstname_len;
+
+	if (i < 1) /* should not happen.. */
+		return 0; /* Bad Entry-station callsign */
+
+	memcpy( ref.callsign, e, i);
+	memset( ref.callsign+i, 0, sizeof(ref)-i );
+
+	return filter_match_on_callsignset(&ref, i, f, MatchWild);
+}
+
 static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
 {
 	/* m/dist  	My Range filter
@@ -2289,6 +2329,11 @@ static int filter_process_one(struct client_t *c, struct pbuf_t *pb, struct filt
 	case 'f':
 	case 'F':
 		rc = filter_process_one_f(c, pb, f);
+		break;
+
+	case 'g':
+	case 'G':
+		rc = filter_process_one_g(c, pb, f);
 		break;
 
 	case 'm':

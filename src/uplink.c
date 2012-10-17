@@ -597,10 +597,8 @@ void uplink_thread(void *asdf)
 			hlog(LOG_INFO, "Uplink thread configured.");
 		}
 		
-		/* sleep for 1 second */
-		for (rc = 0; (!uplink_shutting_down) && rc < 5; rc++) {
-			poll(NULL, 0, 200);
-		}
+		/* sleep just 0.1 second to avoid busylooping in an extreme case */
+		poll(NULL, 0, 100);
 		
 		/* speed up shutdown */
 		if (uplink_shutting_down || uplink_reconfiguring)

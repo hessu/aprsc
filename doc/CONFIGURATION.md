@@ -138,7 +138,7 @@ The basic syntax is:
  *  porttype: one of:
  
     - fullfeed - everything, after dupe filtering
-    - igate - igate / client port with user-specified filters
+    - igate - igate / client port with user-specified or fixed filters
     - udpsubmit - UDP packet submission port (8080)
     - dupefeed - duplicate packets dropped by the server
  
@@ -159,7 +159,8 @@ The basic syntax is:
  
     - filter "m/500 t/m" - force a filter for users connected here.
       If you wish to specify multiple filters, put them in the same "string",
-      separated by spaces.
+      separated by spaces. The filter option only works with the igate port
+      type.
     - maxclients 100 - limit clients connected on this port (defaults to 200)
     - acl etc/client.acl - match client addresses against ACL
     - hidden - don't show the port in the status page

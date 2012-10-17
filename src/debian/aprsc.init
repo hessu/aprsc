@@ -34,16 +34,26 @@ fi
 
 # copy files required for chrooted operation
 prepare_chroot () {
-	log_daemon_msg "Preparing chroot for $DESC" "aprsc chroot"
+	log_daemon_msg "Preparing chroot for $DESC:" "aprsc chroot"
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
 	log_end_msg 0
+}
+
+check_configuration() {
+  	log_daemon_msg "Testing aprsc configuration:" "aprsc"
+	if ! $DAEMON $DAEMON_OPTS -y > /dev/null 2>&1; then
+		$DAEMON $DAEMON_OPTS -y || true
+		log_end_msg 1
+		exit 1
+	fi
 }
 
 case "$1" in
   start)
 	set -e
 	prepare_chroot
-  	log_daemon_msg "Starting $DESC" "aprsc"
+  	check_configuration
+  	log_daemon_msg "Starting $DESC:" "aprsc"
 	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0
 	else
@@ -51,7 +61,7 @@ case "$1" in
 	fi
 	;;
   stop)
-  	log_daemon_msg "Stopping $DESC" "aprsc"
+  	log_daemon_msg "Stopping $DESC:" "aprsc"
 	#set -e  # don't upset if it fails..
 	if start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON --oknodo --retry 15; then
 		log_end_msg 0
@@ -59,8 +69,9 @@ case "$1" in
 		log_end_msg 1
 	fi
 	;;
-  reload)
-  	log_daemon_msg "Reloading $DESC configuration files" "aprsc"
+  graceful | reload )
+  	check_configuration
+  	log_daemon_msg "Reloading $DESC configuration files:" "aprsc"
 	if start-stop-daemon --stop --signal USR1 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
 		log_end_msg 0
 	else
@@ -81,7 +92,8 @@ case "$1" in
 	|| exit 0
 	;;
   restart)
-  	log_daemon_msg "Stopping $DESC" "aprsc"
+  	check_configuration
+  	log_daemon_msg "Stopping $DESC:" "aprsc"
 	#set -e  # don't upset if it fails..
 	if start-stop-daemon --stop --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON --retry 15; then
 		log_end_msg 0
@@ -90,7 +102,7 @@ case "$1" in
 	fi
 	
 	prepare_chroot
-  	log_daemon_msg "Starting $DESC" "aprsc"
+  	log_daemon_msg "Starting $DESC:" "aprsc"
 	set -e
 	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0

@@ -350,9 +350,9 @@ If prefix length is not specified, a host rule is created (32 bits for IPv4,
 addresses you should specify a prefix length of 0 (::/0 for IPv6, 0.0.0.0/0
 for IPv4).
 
-ACL files are read and parsed when aprsc starts or reconfigures itself.
-However, reconfiguration is currently not working, so you'll need to
-do a full restart after changing ACLs.
+ACL files are read and parsed when aprsc starts or reconfigures itself, so
+you need to do a configuration reload (on-line reconfiguration) after
+changing the contents of an ACL file.
 
 The same ACL file can be referenced from multiple main configuration
 directives to reduce the amount of configuration files. For example, you

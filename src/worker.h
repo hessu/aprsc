@@ -430,6 +430,8 @@ struct worker_t {
 	uint32_t	last_pbuf_dupe_seqnum;
 };
 
+extern cJSON *worker_shutdown_clients;
+
 extern int workers_running;
 
 extern void pbuf_init(void);

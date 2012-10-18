@@ -77,7 +77,6 @@ int accept_reconfiguring;
 struct worker_t *udp_worker = NULL;
 struct client_t *udp_pseudoclient = NULL;
 
-
 /* structure allocator/free */
 
 static struct listen_t *listener_alloc(void)
@@ -1013,12 +1012,15 @@ void accept_thread(void *asdf)
 		}
 	}
 	
+	if (accept_shutting_down == 2)
+		worker_shutdown_clients = cJSON_CreateArray();
+	
 	hlog(LOG_DEBUG, "Accept thread shutting down listening sockets and worker threads...");
 	uplink_stop();
 	close_listeners();
 	dupecheck_stop();
 	http_shutting_down = 1;
-	workers_stop(1);
+	workers_stop(accept_shutting_down);
 	hfree(acceptpfd);
 	hfree(acceptpl);
 	acceptpfd = NULL;

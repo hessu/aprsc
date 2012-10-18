@@ -91,6 +91,10 @@ struct client_t *worker_corepeer_clients[MAX_COREPEERS];
 cellarena_t *client_cells;
 #endif
 
+/* clientlist collected at shutdown for live upgrade */
+cJSON *worker_shutdown_clients = NULL;
+
+static struct cJSON *worker_client_json(struct client_t *c);
 
 /* port accounters */
 struct portaccount_t *port_accounter_alloc(void)
@@ -1600,9 +1604,22 @@ void worker_thread(struct worker_t *self)
 #endif
 	}
 	
-	/* close all clients */
-	while (self->clients)
-		client_close(self, self->clients, CLIOK_THREAD_SHUTDOWN);
+	if (self->shutting_down == 2) {
+		/* live upgrade: must free all UDP client structs - we need to close the UDP listener fd. */
+		struct client_t *c;
+		for (c = self->clients; (c); c = c->next) {
+			client_udp_free(c->udpclient);
+			c->udpclient = NULL;
+			if (worker_shutdown_clients) {
+				cJSON *jc = worker_client_json(c);
+				cJSON_AddItemToArray(worker_shutdown_clients, jc);
+			}
+		}
+	} else {
+		/* close all clients, if not shutting down for a live upgrade */
+		while (self->clients)
+			client_close(self, self->clients, CLIOK_THREAD_SHUTDOWN);
+	}
 	
 	/* stop polling */
 	xpoll_free(&self->xp);
@@ -1620,15 +1637,16 @@ void worker_thread(struct worker_t *self)
 	if (self->pbuf_incoming_count)
 		hlog(LOG_INFO, "Worker %d: %d packets left in incoming queue",
 			self->id, self->pbuf_incoming_count);
-		
+	
 	/* clean up thread-local pbuf pools */
 	worker_free_buffers(self);
 	
-	hlog(LOG_DEBUG, "Worker %d shut down.", self->id);
+	hlog(LOG_DEBUG, "Worker %d shut down%s.", self->id, (self->shutting_down == 2) ? " - clients left hanging" : "");
 }
 
 /*
  *	Stop workers - runs from accept_thread
+ *	stop_all: 1 => stop all threads, 2 => stop all threads for live upgrade
  */
 
 void workers_stop(int stop_all)
@@ -1654,7 +1672,7 @@ void workers_stop(int stop_all)
 		while ((w) && (w->next))
 			w = w->next;
 		
-		w->shutting_down = 1;
+		w->shutting_down = (stop_all == 2) ? 2 : 1;
 		if ((e = pthread_join(w->th, NULL))) {
 			hlog(LOG_ERR, "Could not pthread_join worker %d: %s", w->id, strerror(e));
 		} else {
@@ -1798,21 +1816,83 @@ void json_add_rxerrs(cJSON *root, const char *key, long long vals[])
  *	(called from another thread - watch out and lock!)
  */
 
-int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory)
+static struct cJSON *worker_client_json(struct client_t *c)
 {
-	struct worker_t *w = worker_threads;
-	struct client_t *c;
-	int pe;
-	static char *uplink_modes[] = {
+	char addr_s[80];
+	char *s;
+	static const char *uplink_modes[] = {
 		"ro",
 		"multiro",
 		"full",
 		"peer"
 	};
-	char *mode;
-	char addr_s[80];
-	char *s;
+	const char *mode;
 	
+	cJSON *jc = cJSON_CreateObject();
+	cJSON_AddNumberToObject(jc, "fd", c->fd);
+	
+	if (c->state == CSTATE_COREPEER) {
+		/* cut out ports in the name of security by obscurity */
+		strncpy(addr_s, c->addr_rem, sizeof(addr_s));
+		if ((s = strrchr(addr_s, ':')))
+			*s = 0;
+		cJSON_AddStringToObject(jc, "addr_rem", addr_s);
+		strncpy(addr_s, c->addr_loc, sizeof(addr_s));
+		if ((s = strrchr(addr_s, ':')))
+			*s = 0;
+		cJSON_AddStringToObject(jc, "addr_loc", addr_s);
+	} else {
+		cJSON_AddStringToObject(jc, "addr_rem", c->addr_rem);
+		cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
+	}
+	
+	cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
+	
+	if (c->udp_port && c->udpclient)
+		cJSON_AddNumberToObject(jc, "udp_downstream", 1);
+	
+	cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
+	cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);
+	cJSON_AddNumberToObject(jc, "since_last_read", tick - c->last_read);
+	cJSON_AddStringToObject(jc, "username", c->username);
+	cJSON_AddStringToObject(jc, "app_name", c->app_name);
+	cJSON_AddStringToObject(jc, "app_version", c->app_version);
+	cJSON_AddNumberToObject(jc, "verified", c->validated);
+	cJSON_AddNumberToObject(jc, "obuf_q", c->obuf_end - c->obuf_start);
+	cJSON_AddNumberToObject(jc, "bytes_rx", c->localaccount.rxbytes);
+	cJSON_AddNumberToObject(jc, "bytes_tx", c->localaccount.txbytes);
+	cJSON_AddNumberToObject(jc, "pkts_rx", c->localaccount.rxpackets);
+	cJSON_AddNumberToObject(jc, "pkts_tx", c->localaccount.txpackets);
+	cJSON_AddNumberToObject(jc, "pkts_ign", c->localaccount.rxdrops);
+	cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
+	cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
+	
+	json_add_rxerrs(jc, "rx_errs", c->localaccount.rxerrs);
+	
+	if (c->state == CSTATE_COREPEER) {
+		cJSON_AddStringToObject(jc, "mode", uplink_modes[3]);
+	} else if (c->flags & CLFLAGS_INPORT) {
+		/* client */
+		cJSON_AddStringToObject(jc, "filter", c->filter_s);
+	} else {
+		if (c->flags & CLFLAGS_UPLINKMULTI)
+			mode = uplink_modes[1];
+		else if (c->flags & CLFLAGS_PORT_RO)
+			mode = uplink_modes[0];
+		else
+			mode = uplink_modes[2];
+			
+		cJSON_AddStringToObject(jc, "mode", mode);
+	}
+	
+	return jc;
+}
+
+int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory)
+{
+	struct worker_t *w = worker_threads;
+	struct client_t *c;
+	int pe;
 	int client_heard_count = 0;
 	int client_courtesy_count = 0;
 	
@@ -1840,65 +1920,15 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 			if (c->hidden || w->client_count > 1000)
 				continue;
 				
-			cJSON *jc = cJSON_CreateObject();
-			cJSON_AddNumberToObject(jc, "fd", c->fd);
+			cJSON *jc = worker_client_json(c);
 			
 			if (c->state == CSTATE_COREPEER) {
-				/* cut out ports in the name of security by obscurity */
-				strncpy(addr_s, c->addr_rem, sizeof(addr_s));
-				if ((s = strrchr(addr_s, ':')))
-					*s = 0;
-				cJSON_AddStringToObject(jc, "addr_rem", addr_s);
-				strncpy(addr_s, c->addr_loc, sizeof(addr_s));
-				if ((s = strrchr(addr_s, ':')))
-					*s = 0;
-				cJSON_AddStringToObject(jc, "addr_loc", addr_s);
-			} else {
-				cJSON_AddStringToObject(jc, "addr_rem", c->addr_rem);
-				cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
-			}
-			
-			cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
-			
-			if (c->udp_port && c->udpclient)
-				cJSON_AddNumberToObject(jc, "udp_downstream", 1);
-				
-			cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
-			cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);
-			cJSON_AddNumberToObject(jc, "since_last_read", tick - c->last_read);
-			cJSON_AddStringToObject(jc, "username", c->username);
-			cJSON_AddStringToObject(jc, "app_name", c->app_name);
-			cJSON_AddStringToObject(jc, "app_version", c->app_version);
-			cJSON_AddNumberToObject(jc, "verified", c->validated);
-			cJSON_AddNumberToObject(jc, "obuf_q", c->obuf_end - c->obuf_start);
-			cJSON_AddNumberToObject(jc, "bytes_rx", c->localaccount.rxbytes);
-			cJSON_AddNumberToObject(jc, "bytes_tx", c->localaccount.txbytes);
-			cJSON_AddNumberToObject(jc, "pkts_rx", c->localaccount.rxpackets);
-			cJSON_AddNumberToObject(jc, "pkts_tx", c->localaccount.txpackets);
-			cJSON_AddNumberToObject(jc, "pkts_ign", c->localaccount.rxdrops);
-			cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
-			cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
-			
-			json_add_rxerrs(jc, "rx_errs", c->localaccount.rxerrs);
-			
-			if (c->state == CSTATE_COREPEER) {
-				cJSON_AddStringToObject(jc, "mode", uplink_modes[3]);
 				cJSON_AddItemToArray(peers, jc);
 			} else if (c->flags & CLFLAGS_INPORT) {
-				cJSON_AddStringToObject(jc, "filter", c->filter_s);
 				cJSON_AddItemToArray(clients, jc);
 			} else {
-				if (c->flags & CLFLAGS_UPLINKMULTI)
-					mode = uplink_modes[1];
-				else if (c->flags & CLFLAGS_PORT_RO)
-					mode = uplink_modes[0];
-				else
-					mode = uplink_modes[2];
-				cJSON_AddStringToObject(jc, "mode", mode);
-					
 				cJSON_AddItemToArray(uplinks, jc);
 			}
-			
 		}
 		
 		cJSON_AddItemToArray(workers, jw);

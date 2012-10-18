@@ -315,6 +315,47 @@ char *status_json_string(int no_cache, int periodical)
 
 #define PATHLEN 500
 
+int json_write_file(char *basename, const char *s)
+{
+	char path[PATHLEN+1];
+	char tmppath[PATHLEN+1];
+	FILE *fp;
+	time_t start_t, end_t;
+	
+	time(&start_t);
+	
+	snprintf(path, PATHLEN, "%s/%s.json", rundir, basename);
+	snprintf(tmppath, PATHLEN, "%s.tmp", path);
+	fp = fopen(tmppath,"w");
+	if (!fp) {
+		hlog(LOG_ERR, "json file write failed: Could not open %s for writing: %s", tmppath, strerror(errno));
+		return -1;
+	}
+	
+	if (fputs(s, fp) == EOF) {
+		hlog(LOG_ERR, "json file write failed: Could not write to %s: %s", tmppath, strerror(errno));
+		fclose(fp);
+		return -1;
+	}
+	
+	if (fclose(fp)) {
+		hlog(LOG_ERR, "json file update failed: close(%s): %s", tmppath, strerror(errno));
+		return -1;
+	}
+	
+	if (rename(tmppath, path)) {
+		hlog(LOG_ERR, "json file update failed: Could not rename %s to %s: %s", tmppath, path, strerror(errno));
+		return -1;
+	}
+	
+	/* check if we're having I/O delays */
+	time(&end_t);
+	if (end_t - start_t > 2) {
+		hlog(LOG_ERR, "json file update took %d seconds", end_t - start_t);
+	}
+	
+	return 0;
+}
 
 /*
  *	Status dumping to file is currently disabled, since doing any
@@ -400,6 +441,28 @@ int status_dump_file(void)
 
 #endif
 
+/*
+ *	Save enough status to a JSON file so that live upgrade can continue
+ *	serving existing clients with it
+ */
+
+int status_dump_liveupgrade(void)
+{
+	const char *out;
+	
+	if (!worker_shutdown_clients) {
+		return 0;
+	}
+	
+	cJSON *root = cJSON_CreateObject();
+	cJSON_AddItemToObject(root, "clients", worker_shutdown_clients);
+	
+	out = cJSON_Print(root);
+	cJSON_Delete(root);
+	worker_shutdown_clients = NULL;
+	
+	return json_write_file("liveupgrade", out);
+}
 
 void status_init(void)
 {

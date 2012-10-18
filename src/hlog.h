@@ -47,5 +47,6 @@ extern int accesslog_close(char *reopenpath);
 extern int accesslog(const char *fmt, ...);
 
 extern int writepid(char *name);
+extern int closepid(void);
 
 #endif

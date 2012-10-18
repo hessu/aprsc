@@ -62,6 +62,8 @@ int reconfiguring;		// should we reconfigure now?
 int fileno_limit = -1;
 int dbdump_at_exit;
 int quit_after_config;
+int liveupgrade_startup;
+int liveupgrade_fired;
 int want_dbdump;
 
 /* random instance ID, alphanumeric low-case */
@@ -79,7 +81,7 @@ void parse_cmdline(int argc, char *argv[])
 	int s, i;
 	int failed = 0;
 	
-	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:Dye:o:?h")) != -1) {
+	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:DyZe:o:?h")) != -1) {
 	switch (s) {
 		case 'c':
 			cfgfile = hstrdup(optarg);
@@ -115,6 +117,9 @@ void parse_cmdline(int argc, char *argv[])
 		case 'y':
 			quit_after_config = 1;
 			break;
+		case 'Z':
+			liveupgrade_startup = 1;
+			break;
 		case 'e':
 			i = pick_loglevel(optarg, log_levelnames);
 			if (i > -1)
@@ -138,6 +143,12 @@ void parse_cmdline(int argc, char *argv[])
 			fprintf(stderr, "%s\n", verstr);
 			failed = 1;
 	}
+	}
+	
+	/* when doing a live upgrade, we're already with the right user */
+	if (liveupgrade_startup && setuid_s) {
+		hfree(setuid_s);
+		setuid_s = NULL;
 	}
 	
 	if ((log_dest == L_FILE) && (!log_dir)) {
@@ -181,8 +192,9 @@ int sighandler(int signum)
 		break;
 		
 	case SIGUSR2:
-		hlog(LOG_INFO, "SIGUSR2 received: database dumping");
-		want_dbdump = 1;
+		hlog(LOG_INFO, "SIGUSR2 received: performing live upgrade");
+		liveupgrade_fired = 1;
+		shutting_down = 1;
 		break;
 		
 	default:
@@ -589,6 +601,45 @@ void version_report(const char *state)
 }
 
 /*
+ *	Execute a new myself to perform a live upgrade
+ */
+
+static void liveupgrade_exec(int argc, char **argv)
+{
+	char **nargv;
+	int i, e;
+	int need_live_flag = 1;
+	
+	hlog(LOG_NOTICE, "Live upgrade: Executing the new me: %s", argv[0]);
+	
+	/* generate argument list for the new executable, it should be appended with
+	 * -Z (live upgrade startup flag) unless it's there already
+	 */
+	nargv = malloc(sizeof(char *) * (argc+2));
+	
+	for (i = 0; i < argc; i++) {
+		nargv[i] = argv[i];
+		/* check if the live upgrade flag is already present */
+		if (strcmp(argv[i], "-Z") == 0)
+			need_live_flag = 0;
+	}
+	
+	if (need_live_flag)
+		nargv[i++] = hstrdup("-Z");
+		
+	nargv[i++] = NULL;
+	
+	/* close pid file and free the lock on it */
+	closepid();
+	
+	/* execute new binary, should not return if all goes fine */
+	e = execv(argv[0], nargv);
+	
+	hlog(LOG_CRIT, "liveupgrade: exec failed, I'm still here! %s", strerror(errno));
+}
+
+
+/*
  *	Time-keeping thread
  */
 
@@ -653,6 +704,25 @@ void time_thread(void *asdf)
 	}
 	
 }	
+
+static void init_reopen_stdio(void)
+{
+	/* close stdin and stdout, and any other FDs that might be left open */
+	/* closing stderr masks error logs between this point and opening the logs... suboptimal. */
+	{
+		int i;
+		close(0);
+		close(1);
+		for (i = 3; i < 100; i++)
+			close(i);
+	}
+	
+	/* all of this fails in chroot, so do it before */
+	if (open("/dev/null", O_RDWR) == -1) /* stdin */
+		hlog(LOG_ERR, "open(/dev/null) failed for stdin: %s", strerror(errno));
+	if (dup(0) == -1) /* stdout */
+		hlog(LOG_ERR, "dup(0) failed for stdout: %s", strerror(errno));
+}
 
 /*
  *	Main
@@ -744,21 +814,9 @@ int main(int argc, char **argv)
 	}
 	
 	/* close stdin and stdout, and any other FDs that might be left open */
-	/* closing stderr masks error logs between this point and opening the logs... suboptimal. */
-	{
-		int i;
-		close(0);
-		close(1);
-		for (i = 3; i < 100; i++)
-			close(i);
-	}
-	
-	/* all of this fails in chroot, so do it before */
-	if (open("/dev/null", O_RDWR) == -1) /* stdin */
-		hlog(LOG_ERR, "open(/dev/null) failed for stdin: %s", strerror(errno));
-	if (dup(0) == -1) /* stdout */
-		hlog(LOG_ERR, "dup(0) failed for stdout: %s", strerror(errno));
-	
+	if (!liveupgrade_startup)
+		init_reopen_stdio();
+		
 	/* prepare for a possible chroot, force loading of
 	 * resolver libraries at this point, so that we don't
 	 * need a copy of the shared libs within the chroot dir
@@ -767,7 +825,7 @@ int main(int argc, char **argv)
 	version_report("startup");
 	
 	/* do a chroot if required */
-	if (chrootdir) {
+	if (chrootdir && !liveupgrade_startup) {
 		if ((!setuid_s) || pwbuf.pw_uid == 0) {
 			fprintf(stderr, "aprsc: chroot requested but not setuid to non-root user - insecure\n"
 				"configuration detected. Using -u <username> and start as root required.\n");
@@ -788,13 +846,14 @@ int main(int argc, char **argv)
 	}
 	
 	/* set effective UID to non-root before opening files */
-	if (setuid_s)
+	if (setuid_s && !liveupgrade_startup)
 		set_euid();
 	
 	/* open syslog, write an initial log message and read configuration */
 	open_log(logname, 0);
 	if (!quit_after_config)
-		hlog(LOG_NOTICE, "Starting up version %s, instance id %s ...", version_build, instance_id);
+		hlog(LOG_NOTICE, "Starting up version %s, instance id %s %s...",
+			version_build, instance_id, (liveupgrade_startup) ? "- LIVE UPGRADE " : "");
 	
 	int orig_log_dest = log_dest;
 	log_dest |= L_STDERR;
@@ -814,7 +873,7 @@ int main(int argc, char **argv)
 	if (setuid_s)
 		set_euid_0();
 		
-	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit) {
+	if (new_fileno_limit > 0 && new_fileno_limit != fileno_limit && !liveupgrade_startup) {
 		/* Adjust process global fileno limit */
 		struct rlimit rlim;
 		if (getrlimit(RLIMIT_NOFILE, &rlim) < 0)
@@ -884,7 +943,6 @@ int main(int argc, char **argv)
 	signal(SIGUSR2, (void *)sighandler);
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGURG, SIG_IGN);
-	//signal(SIGUSR1, SIG_IGN);
 	
 	/* Early inits in single-thread mode */
 	keyhash_init();
@@ -930,6 +988,7 @@ int main(int argc, char **argv)
 			close_log(1);
 		}
 		
+		
 		if (reconfiguring) {
 			reconfiguring = 0;
 			if (read_config()) {
@@ -956,11 +1015,14 @@ int main(int argc, char **argv)
 		}
 	}
 	
+	if (liveupgrade_fired)
+		hlog(LOG_INFO, "Shutdown for LIVE UPGRADE!");
+	
 	hlog(LOG_DEBUG, "Dumping status to file");
 	status_dump_file();
 	
 	hlog(LOG_INFO, "Signalling threads to shut down...");
-	accept_shutting_down = 1;
+	accept_shutting_down = (liveupgrade_fired) ? 2 : 1;
 	
 	if ((e = pthread_join(http_th, NULL)))
 		hlog(LOG_ERR, "Could not pthread_join http_th: %s", strerror(e));
@@ -979,6 +1041,11 @@ int main(int argc, char **argv)
 		dbdump_all();
 	}
 
+	if (liveupgrade_fired) {
+		status_dump_liveupgrade();
+		liveupgrade_exec(argc, argv);
+	}
+	
 	free_config();
 	dupecheck_atend();
 	historydb_atend();

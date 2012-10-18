@@ -418,6 +418,8 @@ int accesslog(const char *fmt, ...)
  *	as long as the process is running.
  */
 
+int pidfile_fd = -1;
+
 int writepid(char *name)
 {
 	int f;
@@ -429,6 +431,8 @@ int writepid(char *name)
 			name, strerror(errno));
 		return 0;
 	}
+	
+	pidfile_fd = f;
 	
 	if (flock(f, LOCK_EX|LOCK_NB) < 0) {
 		if (errno == EWOULDBLOCK) {
@@ -456,3 +460,15 @@ int writepid(char *name)
 	return 1;
 }
 
+int closepid(void)
+{
+	if (pidfile_fd >= 0) {
+		if (close(pidfile_fd) != 0) {
+			hlog(LOG_CRIT, "Could not close pid file: %s", strerror(errno));
+			return -1;
+		}
+		pidfile_fd = -1;
+	}
+	
+	return 0;
+}

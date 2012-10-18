@@ -464,6 +464,49 @@ int status_dump_liveupgrade(void)
 	return json_write_file("liveupgrade", out);
 }
 
+int status_read_liveupgrade(void)
+{
+	char path[PATHLEN+1];
+	FILE *fp;
+	char *s = NULL;
+	int sl = 0;
+	char buf[32768];
+	int i;
+	
+	snprintf(path, PATHLEN, "%s/liveupgrade.json", rundir);
+	
+	hlog(LOG_DEBUG, "Live upgrade: reading status from %s", path);
+	
+	fp = fopen(path, "r");
+	if (!fp) {
+		hlog(LOG_ERR, "liveupgrade dump file read failed: Could not open %s for reading: %s", path, strerror(errno));
+		return -1;
+	}
+	
+	while ((i = fread(buf, 1, sizeof(buf), fp)) > 0) {
+		//hlog(LOG_DEBUG, "read %d bytes", i);
+		s = hrealloc(s, sl + i+1);
+		memcpy(s + sl, buf, i);
+		sl += i;
+		s[sl] = 0; // keep null-terminated
+		//hlog(LOG_DEBUG, "now: %s", s);
+	}
+	
+	if (fclose(fp)) {
+		hlog(LOG_ERR, "liveupgrade dump file read failed: close(%s): %s", path, strerror(errno));
+		return -1;
+	}
+	
+	/* decode JSON */
+	cJSON *liveupgrade_status = cJSON_Parse(s);
+	if (!liveupgrade_status) {
+		hlog(LOG_ERR, "liveupgrade dump parsing failed");
+		return -1;
+	}
+	
+	return 0;
+}
+
 void status_init(void)
 {
 	int i;

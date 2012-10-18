@@ -944,6 +944,10 @@ int main(int argc, char **argv)
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGURG, SIG_IGN);
 	
+	/* if live upgrading, load status file */
+	if (liveupgrade_startup)
+		status_read_liveupgrade();
+	
 	/* Early inits in single-thread mode */
 	keyhash_init();
 	filter_init();

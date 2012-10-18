@@ -983,6 +983,8 @@ void accept_thread(void *asdf)
 			peerip_clients_close();
 			if (peerip_config)
 				peerip_clients_config();
+			
+			/* TODO: accept liveupgrade clients */
 		}
 		
 		/* check for new connections */

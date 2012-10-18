@@ -348,7 +348,8 @@ int make_uplink(struct uplink_config_t *l)
 		ap[i] = NULL;
 		addr_s = strsockaddr(a->ai_addr, a->ai_addrlen);
 
-		hlog(LOG_INFO, "Uplink %s: Connecting to %s [link %d, addr %d/%d]", l->name, addr_s, uplink_index, i+1, addrc);
+		hlog(LOG_INFO, "Uplink %s: Connecting to %s:%s (%s) [link %d, addr %d/%d]",
+			l->name, l->host, l->port, addr_s, uplink_index, i+1, addrc);
 		i++;
 		if (i == addrc)
 			i = 0;

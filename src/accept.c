@@ -39,6 +39,7 @@
 #include "http.h"
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
+#include "status.h"
 
 /*
  *	The listen_t structure holds data for a currently open
@@ -865,6 +866,64 @@ err:
 }
 
 /*
+ *	Live upgrade: accept old clients
+ */
+
+static void accept_liveupgrade_single(cJSON *client)
+{
+	cJSON *fd, *username, *t_connect;
+	cJSON *app_name, *app_version;
+	cJSON *verified;
+	cJSON *obuf_q;
+	cJSON *bytes_rx, *bytes_tx;
+	cJSON *pkts_rx, *pkts_tx, *pkts_ign;
+	cJSON *rx_errs;
+	cJSON *filter;
+	
+	fd = cJSON_GetObjectItem(client, "fd");
+	username = cJSON_GetObjectItem(client, "username");
+	t_connect = cJSON_GetObjectItem(client, "t_connect");
+	app_name = cJSON_GetObjectItem(client, "app_name");
+	app_version = cJSON_GetObjectItem(client, "app_version");
+	verified = cJSON_GetObjectItem(client, "verified");
+	obuf_q = cJSON_GetObjectItem(client, "obuf_q");
+	bytes_rx = cJSON_GetObjectItem(client, "bytes_rx");
+	bytes_tx = cJSON_GetObjectItem(client, "bytes_tx");
+	pkts_rx = cJSON_GetObjectItem(client, "pkts_rx");
+	pkts_tx = cJSON_GetObjectItem(client, "pkts_tx");
+	pkts_ign = cJSON_GetObjectItem(client, "pkts_ign");
+	rx_errs = cJSON_GetObjectItem(client, "rx_errs");
+	filter = cJSON_GetObjectItem(client, "filter");
+	
+	hlog(LOG_DEBUG, "Old client on fd %d: %s", fd->valueint, username->valuestring);
+}
+
+static void accept_liveupgrade_accept(void)
+{
+	int clen, i;
+	
+	hlog(LOG_DEBUG, "Accept: Collecting live upgrade clients...");
+	
+	cJSON *clients = cJSON_GetObjectItem(liveupgrade_status, "clients");
+	if (!clients) {
+		hlog(LOG_ERR, "Accept: Live upgrade JSON does not contain 'clients'!");
+	} else {
+		clen = cJSON_GetArraySize(clients);
+		for (i = 0; i < clen; i++) {
+			cJSON *client = cJSON_GetArrayItem(clients, i);
+			if (!client) {
+				hlog(LOG_ERR, "Accept: Live upgrade JSON file, get client %d failed", i);
+				continue;
+			}
+			accept_liveupgrade_single(client);
+		}
+	}
+	
+	cJSON_Delete(liveupgrade_status);
+	liveupgrade_status = NULL;
+}
+
+/*
  *	Accept thread
  */
 
@@ -985,6 +1044,8 @@ void accept_thread(void *asdf)
 				peerip_clients_config();
 			
 			/* TODO: accept liveupgrade clients */
+			if (liveupgrade_status)
+				accept_liveupgrade_accept();
 		}
 		
 		/* check for new connections */

@@ -48,6 +48,8 @@ struct cdata_list_t {
 	int gauge;
 } *cdata_list = NULL;
 
+cJSON *liveupgrade_status = NULL;
+
 /*
  *	status_uname: get operating system name and architecture
  */
@@ -498,11 +500,13 @@ int status_read_liveupgrade(void)
 	}
 	
 	/* decode JSON */
-	cJSON *liveupgrade_status = cJSON_Parse(s);
-	if (!liveupgrade_status) {
+	cJSON *dec = cJSON_Parse(s);
+	if (!dec) {
 		hlog(LOG_ERR, "liveupgrade dump parsing failed");
 		return -1;
 	}
+	
+	liveupgrade_status = dec;
 	
 	return 0;
 }

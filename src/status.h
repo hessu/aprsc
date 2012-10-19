@@ -12,8 +12,10 @@
 #define STATUS_H
 
 #include <time.h>
+#include "cJSON.h"
 
 extern time_t startup_tick;
+extern cJSON *liveupgrade_status;
 
 extern char *status_json_string(int no_cache, int periodical);
 extern int status_dump_file(void);

@@ -104,6 +104,28 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 	return validated;
 }
 
+/*
+ *	Set and sanitize application name and version strings
+ */
+
+void login_set_app_name(struct client_t *c, const char *app_name, const char *app_ver)
+{
+#ifndef FIXED_IOBUFS
+	c->app_name = hstrdup(app_name);
+#else
+	strncpy(c->app_name, app_name, sizeof(c->app_name));
+	c->app_name[sizeof(c->app_name)-1] = 0;
+#endif
+	sanitize_ascii_string(c->app_name);
+			
+#ifndef FIXED_IOBUFS
+	c->app_version = hstrdup(app_ver);
+#else
+	strncpy(c->app_version, app_ver, sizeof(c->app_version));
+	c->app_version[sizeof(c->app_version)-1] = 0;
+#endif
+	sanitize_ascii_string(c->app_version);
+}
 
 /*
  *	login.c: works in the context of the worker thread
@@ -200,26 +222,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				break;
 			}
 			
-#ifndef FIXED_IOBUFS
-			c->app_version = hstrdup(argv[++i]);
-#else
-			strncpy(c->app_name,    argv[++i], sizeof(c->app_name));
-			c->app_name[sizeof(c->app_name)-1] = 0;
-#endif
-			sanitize_ascii_string(c->app_name);
-
-			if (i+1 >= argc) {
-				hlog(LOG_DEBUG, "%s/%s: No application version after 'vers' in login", c->addr_rem, username);
-				break;
-			}
-			
-#ifndef FIXED_IOBUFS
-			c->app_version = hstrdup(argv[++i]);
-#else
-			strncpy(c->app_version, argv[++i], sizeof(c->app_version));
-			c->app_version[sizeof(c->app_version)-1] = 0;
-#endif
-			sanitize_ascii_string(c->app_version);
+			login_set_app_name(c, argv[i+1], (i+2 < argc) ? argv[i+2] : "");
+			i += 2;
 
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {

@@ -1007,6 +1007,14 @@ static int accept_liveupgrade_single(cJSON *client)
 	c->keepalive = tick;
 	
 	c->connect_time = t_connect->valueint;
+	c->validated = verified->valueint;
+	c->localaccount.rxbytes = bytes_rx->valueint;
+	c->localaccount.txbytes = bytes_tx->valueint;
+	c->localaccount.rxpackets = pkts_rx->valueint;
+	c->localaccount.txpackets = pkts_tx->valueint;
+	c->localaccount.rxdrops = pkts_ign->valueint;
+	
+	login_set_app_name(c, app_name->valuestring, app_version->valuestring);
 	
 	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	

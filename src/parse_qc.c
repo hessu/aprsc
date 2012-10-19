@@ -495,7 +495,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				if (*p == ',') {
 					const char *prevcall = p+1;
 					const char *prevcall_end = *path_end - 2;
-					hlog(LOG_DEBUG, "previous callsign is %.*s\n", (int)(prevcall_end - prevcall), prevcall);
+					hlog(LOG_DEBUG, "previous callsign is %.*s", (int)(prevcall_end - prevcall), prevcall);
 					/* if the path is terminated with ,login,I */
 					// TODO: Should validate that prevcall is a nice callsign
 					if (1) {

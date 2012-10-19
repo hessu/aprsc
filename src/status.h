@@ -24,4 +24,7 @@ extern int status_read_liveupgrade(void);
 extern void status_init(void);
 extern void status_atend(void);
 
+extern char *hex_encode(const char *buf, int len);
+extern int hex_decode(char *obuf, int olen, const char *hex);
+
 #endif

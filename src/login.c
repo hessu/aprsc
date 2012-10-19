@@ -127,6 +127,26 @@ void login_set_app_name(struct client_t *c, const char *app_name, const char *ap
 	sanitize_ascii_string(c->app_version);
 }
 
+int login_setup_udp_feed(struct client_t *c, int port)
+{
+	if (!c->udpclient)
+		return -1;
+	
+	c->udp_port = port;
+	c->udpaddr = c->addr;
+	if (c->udpaddr.sa.sa_family == AF_INET) {
+		c->udpaddr.si.sin_port = htons(c->udp_port);
+		c->udpaddrlen = sizeof(c->udpaddr.si);
+	} else {
+		c->udpaddr.si6.sin6_port = htons(c->udp_port);
+		c->udpaddrlen = sizeof(c->udpaddr.si6);
+	}
+	
+	inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
+	
+	return 0;
+}
+
 /*
  *	login.c: works in the context of the worker thread
  */
@@ -230,27 +250,16 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				hlog(LOG_WARNING, "%s/%s: Missing UDP port number after UDP command", c->addr_rem, username);
 				break;
 			}
-			c->udp_port = atoi(argv[i]);
-			if (c->udp_port < 1024 || c->udp_port > 65535) {
+			
+			int udp_port = atoi(argv[i]);
+			if (udp_port < 1024 || udp_port > 65535) {
 				hlog(LOG_WARNING, "%s/%s: UDP port number %s is out of range", c->addr_rem, username, argv[i]);
-				c->udp_port = 0;
+				break;
 			}
 
-			if (c->udpclient) {
-				c->udpaddr = c->addr;
-				if (c->udpaddr.sa.sa_family == AF_INET) {
-					c->udpaddr.si.sin_port = htons(c->udp_port);
-					c->udpaddrlen = sizeof(c->udpaddr.si);
-				} else {
-					c->udpaddr.si6.sin6_port = htons(c->udp_port);
-					c->udpaddrlen = sizeof(c->udpaddr.si6);
-				}
-				
-				inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
-			} else {
+			if (login_setup_udp_feed(c, udp_port) != 0) {
 				/* Sorry, no UDP service for this port.. */
 				hlog(LOG_DEBUG, "%s/%s: Requested UDP on client port with no UDP configured", c->addr_rem, username);
-				c->udp_port = 0;
 				rc = client_printf(self, c, "# No UDP service available on this port\r\n");
 				if (rc < -2)
 					return rc; // client got destroyed

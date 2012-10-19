@@ -34,6 +34,7 @@
 #include "client_heard.h"
 #include "cellmalloc.h"
 #include "version.h"
+#include "status.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
 time_t tick;	/* real monotonous clock, may or may not be wallclock */
@@ -94,7 +95,7 @@ cellarena_t *client_cells;
 /* clientlist collected at shutdown for live upgrade */
 cJSON *worker_shutdown_clients = NULL;
 
-static struct cJSON *worker_client_json(struct client_t *c);
+static struct cJSON *worker_client_json(struct client_t *c, int liveup_info);
 
 /* port accounters */
 struct portaccount_t *port_accounter_alloc(void)
@@ -1381,6 +1382,8 @@ static void collect_new_clients(struct worker_t *self)
 		
 		/* According to http://www.aprs-is.net/ServerDesign.aspx, the server must
 		 * initially transmit it's software name and version string.
+		 * In case of a live upgrade, this should maybe be skipped, but
+		 * I'll leave it in for now.
 		 */
 		client_printf(self, c, "# %s\r\n", verstr_aprsis);
 		
@@ -1608,12 +1611,13 @@ void worker_thread(struct worker_t *self)
 		/* live upgrade: must free all UDP client structs - we need to close the UDP listener fd. */
 		struct client_t *c;
 		for (c = self->clients; (c); c = c->next) {
-			client_udp_free(c->udpclient);
-			c->udpclient = NULL;
+			/* collect client state first before closing or freeing anything */
 			if (worker_shutdown_clients) {
-				cJSON *jc = worker_client_json(c);
+				cJSON *jc = worker_client_json(c, 1);
 				cJSON_AddItemToArray(worker_shutdown_clients, jc);
 			}
+			client_udp_free(c->udpclient);
+			c->udpclient = NULL;
 		}
 	} else {
 		/* close all clients, if not shutting down for a live upgrade */
@@ -1850,7 +1854,7 @@ static const char *client_state_string(CStateEnum state)
  *	(called from another thread - watch out and lock!)
  */
 
-static struct cJSON *worker_client_json(struct client_t *c)
+static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 {
 	char addr_s[80];
 	char *s;
@@ -1864,8 +1868,29 @@ static struct cJSON *worker_client_json(struct client_t *c)
 	
 	cJSON *jc = cJSON_CreateObject();
 	cJSON_AddNumberToObject(jc, "fd", c->fd);
-	cJSON_AddNumberToObject(jc, "listener_id", c->listener_id);
-	cJSON_AddStringToObject(jc, "state", client_state_string(c->state));
+	
+	/* additional information for live upgrade, not published */
+	if (liveup_info) {
+		cJSON_AddNumberToObject(jc, "listener_id", c->listener_id);
+		cJSON_AddStringToObject(jc, "state", client_state_string(c->state));
+		if (c->udp_port && c->udpclient)
+			cJSON_AddNumberToObject(jc, "udp_port", c->udp_port);
+		
+		/* output buffer and input buffer data */
+		if (c->obuf_end - c->obuf_start > 0) {
+			s = hex_encode(c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+			cJSON_AddStringToObject(jc, "obuf", s);
+			hfree(s);
+		}
+		
+		if (c->ibuf_end > 0) {
+			s = hex_encode(c->ibuf, c->ibuf_end);
+			cJSON_AddStringToObject(jc, "ibuf", s);
+			hlog(LOG_DEBUG, "Encoded ibuf %d bytes: '%.*s'", c->ibuf_end, c->ibuf_end, c->ibuf);
+			hlog(LOG_DEBUG, "Hex: %s", s);
+			hfree(s);
+		}
+	}
 	
 	if (c->state == CSTATE_COREPEER) {
 		/* cut out ports in the name of security by obscurity */
@@ -1882,7 +1907,7 @@ static struct cJSON *worker_client_json(struct client_t *c)
 		cJSON_AddStringToObject(jc, "addr_loc", c->addr_loc);
 	}
 	
-	cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
+	//cJSON_AddStringToObject(jc, "addr_q", c->addr_hex);
 	
 	if (c->udp_port && c->udpclient)
 		cJSON_AddNumberToObject(jc, "udp_downstream", 1);
@@ -1956,7 +1981,7 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 			if (c->hidden || w->client_count > 1000)
 				continue;
 				
-			cJSON *jc = worker_client_json(c);
+			cJSON *jc = worker_client_json(c, 0);
 			
 			if (c->state == CSTATE_COREPEER) {
 				cJSON_AddItemToArray(peers, jc);

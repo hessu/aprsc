@@ -923,6 +923,7 @@ static int accept_liveupgrade_single(cJSON *client)
 	cJSON *fd, *listener_id, *username, *t_connect;
 	cJSON *state;
 	cJSON *addr_loc;
+	cJSON *udp_port;
 	cJSON *app_name, *app_version;
 	cJSON *verified;
 	cJSON *obuf_q;
@@ -930,6 +931,7 @@ static int accept_liveupgrade_single(cJSON *client)
 	cJSON *pkts_rx, *pkts_tx, *pkts_ign;
 	cJSON *rx_errs;
 	cJSON *filter;
+	cJSON *ibuf, *obuf;
 	unsigned addr_len;
 	union sockaddr_u sa;
 	
@@ -939,6 +941,7 @@ static int accept_liveupgrade_single(cJSON *client)
 	username = cJSON_GetObjectItem(client, "username");
 	t_connect = cJSON_GetObjectItem(client, "t_connect");
 	addr_loc = cJSON_GetObjectItem(client, "addr_loc");
+	udp_port = cJSON_GetObjectItem(client, "udp_port");
 	app_name = cJSON_GetObjectItem(client, "app_name");
 	app_version = cJSON_GetObjectItem(client, "app_version");
 	verified = cJSON_GetObjectItem(client, "verified");
@@ -950,8 +953,11 @@ static int accept_liveupgrade_single(cJSON *client)
 	pkts_ign = cJSON_GetObjectItem(client, "pkts_ign");
 	rx_errs = cJSON_GetObjectItem(client, "rx_errs");
 	filter = cJSON_GetObjectItem(client, "filter");
+	ibuf = cJSON_GetObjectItem(client, "ibuf");
+	obuf = cJSON_GetObjectItem(client, "obuf");
 	
-	if (!((fd) && (listener_id) && (state) && (username) && (t_connect) && (addr_loc) && (app_name) && (app_version)
+	if (!((fd) && (listener_id) && (state) && (username) && (t_connect)
+		&& (addr_loc) && (app_name) && (app_version)
 		&& (verified) && (obuf_q) && (bytes_rx) && (bytes_tx)
 		&& (pkts_tx) && (pkts_rx) && (pkts_ign) && (rx_errs) && (filter))) {
 			hlog(LOG_ERR, "Live upgrade: Fields missing from client JSON");
@@ -1015,6 +1021,50 @@ static int accept_liveupgrade_single(cJSON *client)
 	c->localaccount.rxdrops = pkts_ign->valueint;
 	
 	login_set_app_name(c, app_name->valuestring, app_version->valuestring);
+	
+	// handle client's filter setting
+	if (c->flags & CLFLAGS_USERFILTEROK) {
+		// archive a copy of the filters, for status display
+		strncpy(c->filter_s, filter->valuestring, FILTER_S_SIZE);
+		c->filter_s[FILTER_S_SIZE-1] = 0;
+		sanitize_ascii_string(c->filter_s);
+		
+		char *f = hstrdup(filter->valuestring);
+		filter_parse(c, f, 1);
+		hfree(f);
+	}
+	
+	// set up UDP downstream if necessary
+	if (udp_port && udp_port->valueint > 1024 && udp_port->valueint < 65536) {
+		if (login_setup_udp_feed(c, udp_port->valueint) != 0) {
+			hlog(LOG_DEBUG, "%s/%s: Requested UDP on client port with no UDP configured", c->addr_rem, c->username);
+		}
+	}
+	
+	// fill up ibuf
+	if (ibuf && ibuf->valuestring) {
+		int l = hex_decode(c->ibuf, c->ibuf_size, ibuf->valuestring);
+		if (l < 0) {
+			hlog(LOG_ERR, "Live upgrade: %s/%s: Failed to decode ibuf: %s", c->addr_rem, c->username, ibuf->valuestring);
+		} else {
+			c->ibuf_end = l;
+			hlog(LOG_DEBUG, "Live upgrade: Decoded ibuf %d bytes: '%.*s'", l, l, c->ibuf);
+			hlog(LOG_DEBUG, "Hex: %s", ibuf->valuestring);
+		}
+	}
+	
+	// fill up obuf
+	if (obuf && obuf->valuestring) {
+		int l = hex_decode(c->obuf, c->obuf_size, obuf->valuestring);
+		if (l < 0) {
+			hlog(LOG_ERR, "Live upgrade: %s/%s: Failed to decode obuf: %s", c->addr_rem, c->username, obuf->valuestring);
+		} else {
+			c->obuf_start = 0;
+			c->obuf_end = l;
+			hlog(LOG_DEBUG, "Live upgrade: Decoded obuf %d bytes: '%.*s'", l, l, c->obuf);
+			hlog(LOG_DEBUG, "Hex: %s", obuf->valuestring);
+		}
+	}
 	
 	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	

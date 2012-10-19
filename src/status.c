@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/utsname.h>
+#include <ctype.h>
 
 #include "status.h"
 #include "cellmalloc.h"
@@ -575,3 +576,57 @@ void status_atend(void)
 	}
 }
 
+/*
+ *	Helper functions for encoding binary data to string buffers in JSON
+ */
+
+char *hex_encode(const char *buf, int len)
+{
+	static const char *lut = "0123456789abcdef";
+	int i;
+	char *s = hmalloc(len*2+1);
+	
+	for (i = 0; i < len; i++) {
+		const char c = buf[i];
+		s[i*2] = lut[c >> 4];
+		s[i*2+1] = lut[c & 15];
+	}
+	s[i*2] = 0;
+	
+	return s;
+}
+
+int hex_decode(char *obuf, int olen, const char *hex)
+{
+	int i;
+	int len = strlen(hex);
+	int oi = 0;
+	
+	if (len & 1)
+		return -1; // odd length
+	
+	if (olen < len / 2)
+		return -1; // output buffer too large
+	
+	for (i = 0; i < len; i += 2) {
+		char h = toupper(hex[i]);
+		if (h >= 0x30 && h <= 0x39)
+			h -= 0x30; /* 0..9 are now right */
+		else if (h >= 0x41 && h <= 0x46)
+			h = h - 0x41 + 10; /* A-F are now right */
+		else
+			return -1;
+			
+		char l = toupper(hex[i+1]);
+		if (l >= 0x30 && l <= 0x39)
+			l -= 0x30; /* 0..9 are now right */
+		else if (l >= 0x41 && l <= 0x46)
+			l = l - 0x41 + 10; /* A-F are now right */
+		else
+			return -1;
+			
+		obuf[oi++] = h*16 + l;
+	}
+	
+	return oi;
+}

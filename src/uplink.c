@@ -691,7 +691,7 @@ void uplink_start(void)
 
 void uplink_stop(void)
 {
-	int e;
+	int i, e;
 	
 	if (!uplink_running)
 		return;
@@ -706,5 +706,21 @@ void uplink_stop(void)
 		uplink_running = 0;
 	}
 	
+	/* free uplink config - and clean up the uplink_client indexed pointers
+	 * which refer to the configs
+	 */
+	if ((e = pthread_mutex_lock(&uplink_client_mutex))) {
+		hlog( LOG_ERR, "uplink_stop(): could not lock uplink_client_mutex: %s", strerror(e) );
+		return;
+	}
+	
+	for (i = 0; i < MAX_UPLINKS; i++)
+		uplink_client[i] = NULL;
+	
 	free_uplink_config(&uplink_config);
+	
+	if ((e = pthread_mutex_unlock(&uplink_client_mutex))) {
+		hlog( LOG_ERR, "uplink_stop(): could not unlock uplink_client_mutex: %s", strerror(e) );
+		return;
+	}
 }

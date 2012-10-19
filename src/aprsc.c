@@ -609,8 +609,15 @@ static void liveupgrade_exec(int argc, char **argv)
 	char **nargv;
 	int i, e;
 	int need_live_flag = 1;
+	char *bin = argv[0];
 	
-	hlog(LOG_NOTICE, "Live upgrade: Executing the new me: %s", argv[0]);
+	i = strlen(argv[0]);
+	if (chrootdir && strncmp(argv[0], chrootdir, strlen(chrootdir)) == 0) {
+		bin = hmalloc(i);
+		strncpy(bin, argv[0] + strlen(chrootdir), i);
+	}
+	
+	hlog(LOG_NOTICE, "Live upgrade: Executing the new me: %s", bin);
 	
 	/* generate argument list for the new executable, it should be appended with
 	 * -Z (live upgrade startup flag) unless it's there already
@@ -618,7 +625,11 @@ static void liveupgrade_exec(int argc, char **argv)
 	nargv = malloc(sizeof(char *) * (argc+2));
 	
 	for (i = 0; i < argc; i++) {
-		nargv[i] = argv[i];
+		if (i == 0)
+			nargv[i] = bin;
+		else
+			nargv[i] = argv[i];
+		
 		/* check if the live upgrade flag is already present */
 		if (strcmp(argv[i], "-Z") == 0)
 			need_live_flag = 0;
@@ -633,7 +644,7 @@ static void liveupgrade_exec(int argc, char **argv)
 	closepid();
 	
 	/* execute new binary, should not return if all goes fine */
-	e = execv(argv[0], nargv);
+	e = execv(bin, nargv);
 	
 	hlog(LOG_CRIT, "liveupgrade: exec failed, I'm still here! %s", strerror(errno));
 }

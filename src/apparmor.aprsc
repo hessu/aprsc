@@ -10,8 +10,12 @@
   capability sys_chroot,
   capability sys_resource,
 
+  /opt/aprsc/sbin/aprsc rpx,
+  /sbin/aprsc rpx,
   /opt/aprsc/etc/* r,
   /opt/aprsc/web/* r,
   /opt/aprsc/logs/aprsc.* rwk,
   owner /opt/aprsc/data/* rwk,
+  /opt/aprsc/lib/* rm,
+  /opt/aprsc/lib64/* rm,
 }

@@ -601,19 +601,181 @@ static void accept_udp_recv(struct listen_t *l)
 	}
 }
 
+struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *addr_s, union sockaddr_u *sa, unsigned addr_len)
+{
+	struct client_t *c;
+	char *s;
+	int i;
+	
+	c = client_alloc();
+	if (!c)
+		return NULL;
+		
+	c->fd    = fd;
+	c->addr  = *sa;
+	c->portnum = l->portnum;
+	c->hidden  = l->hidden;
+	c->flags   = l->client_flags;
+	c->udpclient = client_udp_find(udpclients, sa->sa.sa_family, l->portnum);
+	c->portaccount = l->portaccount;
+	c->last_read = tick; /* not simulated time */
+	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
+	
+	/* text format of client's IP address + port */
+#ifndef FIXED_IOBUFS
+	c->addr_rem = addr_s;
+#else
+	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
+	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
+	hfree(addr_s);
+#endif
+
+	/* hex format of client's IP address + port */
+	s = hexsockaddr( &sa->sa, addr_len );
+#ifndef FIXED_IOBUFS
+	c->addr_hex = s;
+#else
+	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
+	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
+#endif
+
+	/* text format of servers' connected IP address + port */
+	addr_len = sizeof(sa);
+	if (getsockname(fd, &sa->sa, &addr_len) == 0) { /* Fails very rarely.. */
+		/* present my socket end address as a malloced string... */
+		s = strsockaddr( &sa->sa, addr_len );
+	} else {
+		s = hstrdup( l->addr_s ); /* Server's bound IP address */
+	}
+#ifndef FIXED_IOBUFS
+	c->addr_loc = s;
+#else
+	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
+	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
+	hfree(s);
+#endif
+
+	/* apply predefined filters */
+	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
+		if (l->filters[i])
+			if (filter_parse(c, l->filters[i], 0) < 0) { /* system filters */
+				hlog(LOG_ERR, "Bad system filter definition: %s", l->filters[i]);
+			}
+	}
+	
+	return c;
+}
+
+/*
+ *	set client socket options, return -1 on serious errors, just log smaller ones
+ */
+
+static int set_client_sockopt(struct listen_t *l, struct client_t *c)
+{
+	/* set non-blocking mode */
+	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
+		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
+		return -1;
+	}
+	
+	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
+	 * the dupe filters.
+	 */
+#ifdef TCP_NODELAY
+	int arg = 1;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
+#endif
+
+	/* Set up TCP keepalives, so that we'll notice idle clients.
+	 * I'm not sure if this is absolutely required, since we send
+	 * keepalive datetime messages every 30 seconds from the application,
+	 * but it can't hurt.
+	 */
+#ifdef SO_KEEPALIVE
+	int keepalive_arg;
+#ifdef TCP_KEEPIDLE
+	/* start sending keepalives after socket has been idle for 10 minutes */
+	keepalive_arg = 10*60;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPIDLE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+#ifdef TCP_KEEPINTVL
+	/* send keepalive probes every 20 seconds after the idle time has passed */
+	keepalive_arg = 20;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPINTVL, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+#ifdef TCP_KEEPCNT
+	/* send 3 probes before giving up */
+	keepalive_arg = 3;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPCNT, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+	/* enable TCP keepalives */
+	keepalive_arg = 1;
+	if (setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPALIVE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
+#endif
+	
+	return 0;
+}
+
+/*
+ *	Pick next worker to feed a client to
+ */
+
+static struct worker_t *pick_next_worker(void)
+{
+	static int next_receiving_worker;
+	struct worker_t *w, *wc;
+	int i;
+
+#if 1
+	/* Use simple round-robin on client feeding.  Least clients is
+	 * quite attractive idea, but when clients arrive at huge bursts
+	 * they tend to move in big bunches, and it takes quite some while
+	 * before the worker updates its client-counters.
+	 */
+	for (i = 0, w = worker_threads; w ;  w = w->next, i++) {
+		if ( i >= next_receiving_worker)
+			break;
+	}
+	wc = w;
+	if (! w) {
+		wc = worker_threads;       // ran out of the worker chain, back to the first..
+		next_receiving_worker = 0; // and reset the index too
+	}
+	// in every case, increment the next receiver index for the next call.
+	++next_receiving_worker;
+
+#else
+	/* find the worker with least clients...
+	 * This isn't strictly accurate, since the threads could change their
+	 * client counts during scanning, but we don't really care if the load distribution
+	 * is _exactly_ fair.
+	 */
+	
+	int client_min = -1;
+	for (wc = w = worker_threads; (w); w = w->next)
+		if (w->client_count < client_min || client_min == -1) {
+			wc = w;
+			client_min = w->client_count;
+		}
+#endif
+	return wc;
+}
+
 /*
  *	Accept a single connection
  */
 
 static void do_accept(struct listen_t *l)
 {
-	int fd, i;
+	int fd;
 	struct client_t *c;
 	union sockaddr_u sa; /* large enough for also IPv6 address */
 	socklen_t addr_len = sizeof(sa);
-	static int next_receiving_worker;
-	struct worker_t *w;
-	struct worker_t *wc;
 	static time_t last_EMFILE_report;
 	char *s;
 
@@ -693,167 +855,30 @@ static void do_accept(struct listen_t *l)
 		}
 	}
 	
-	c = client_alloc();
 	
+	c = accept_client_for_listener(l, fd, s, &sa, addr_len);
 	if (!c) {
 		hlog(LOG_ERR, "%s - client_alloc returned NULL, too many clients. Denied client on fd %d from %s", l->addr_s, fd, s);
 		close(fd);
 		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 	}
+
 	
-	c->fd    = fd;
-	c->addr  = sa;
-	c->portnum = l->portnum;
-	c->hidden  = l->hidden;
 	c->state   = CSTATE_LOGIN;
-	c->flags   = l->client_flags;
 	/* use the default login handler */
 	c->handler = &login_handler;
-	c->udpclient = client_udp_find(udpclients, sa.sa.sa_family, l->portnum);
-	c->portaccount = l->portaccount;
 	c->keepalive = tick;
 	c->connect_time = tick;
-	c->last_read = tick; /* not simulated time */
-	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
-
-	/* text format of client's IP address + port */
-#ifndef FIXED_IOBUFS
-	c->addr_rem = s;
-#else
-	strncpy(c->addr_rem, s, sizeof(c->addr_rem));
-	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
-	hfree(s);
-#endif
-
-	/* hex format of client's IP address + port */
-	s = hexsockaddr( &sa.sa, addr_len );
-#ifndef FIXED_IOBUFS
-	c->addr_hex = s;
-#else
-	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
-	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
-	hfree(s);
-#endif
-
-	/* text format of servers' connected IP address + port */
-	addr_len = sizeof(sa);
-	if (getsockname(fd, &sa.sa, &addr_len) == 0) { /* Fails very rarely.. */
-	  /* present my socket end address as a malloced string... */
-	  s = strsockaddr( &sa.sa, addr_len );
-	} else {
-	  s = hstrdup( l->addr_s ); /* Server's bound IP address */
-	}
-#ifndef FIXED_IOBUFS
-	c->addr_loc = s;
-#else
-	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
-	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
-	hfree(s);
-#endif
-
-#if WBUF_ADJUSTER
-	{
-	  int len, arg;
-	  /* Ask system's idea about what the sndbuf size is.  */
-	  len = sizeof(arg);
-	  i = getsockopt(fd, SOL_SOCKET, SO_SNDBUF, &arg, &len);
-	  if (i == 0)
-	    c->wbuf_size = arg;
-	  else
-	    c->wbuf_size = 8192; // default is syscall fails
-	}
-#endif
 
 	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
-	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-		if (l->filters[i])
-			if (filter_parse(c, l->filters[i], 0) < 0) { /* system filters */
-				hlog(LOG_ERR, "Bad system filter definition: %s", l->filters[i]);
-			}
-	}
-	
-	/* set non-blocking mode */
-	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
-		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
+	/* set client socket options, return -1 on serious errors */
+	if (set_client_sockopt(l, c) != 0)
 		goto err;
-	}
 	
-	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
-	 * the dupe filters.
-	 */
-#ifdef TCP_NODELAY
-	int arg = 1;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
-#endif
-
-	/* Set up TCP keepalives, so that we'll notice idle clients.
-	 * I'm not sure if this is absolutely required, since we send
-	 * keepalive datetime messages every 30 seconds from the application,
-	 * but it can't hurt.
-	 */
-#ifdef SO_KEEPALIVE
-	int keepalive_arg;
-#ifdef TCP_KEEPIDLE
-	/* start sending keepalives after socket has been idle for 10 minutes */
-	keepalive_arg = 10*60;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPIDLE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-#ifdef TCP_KEEPINTVL
-	/* send keepalive probes every 20 seconds after the idle time has passed */
-	keepalive_arg = 20;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPINTVL, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-#ifdef TCP_KEEPCNT
-	/* send 3 probes before giving up */
-	keepalive_arg = 3;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPCNT, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-	/* enable TCP keepalives */
-	keepalive_arg = 1;
-	if (setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPALIVE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-
-#if 1
-	/* Use simple round-robin on client feeding.  Least clients is
-	 * quite attractive idea, but when clients arrive at huge bursts
-	 * they tend to move in big bunches, and it takes quite some while
-	 * before the worker updates its client-counters.
-	 */
-	for (i = 0, w = worker_threads; w ;  w = w->next, ++i) {
-	  if ( i >= next_receiving_worker) break;
-	}
-	wc = w;
-	if (! w) {
-	  wc = worker_threads;       // ran out of the worker chain, back to the first..
-	  next_receiving_worker = 0; // and reset the index too
-	}
-	// in every case, increment the next receiver index for the next call.
-	++next_receiving_worker;
-
-#else
-	/* find the worker with least clients...
-	 * This isn't strictly accurate, since the threads could change their
-	 * client counts during scanning, but we don't really care if the load distribution
-	 * is _exactly_ fair.
-	 */
-	
-	int client_min = -1;
-	for (wc = w = worker_threads; (w); w = w->next)
-		if (w->client_count < client_min || client_min == -1) {
-			wc = w;
-			client_min = w->client_count;
-		}
-#endif
-
 	/* ok, found it... lock the new client queue and pass the client */
-	if (pass_client_to_worker(wc, c))
+	if (pass_client_to_worker(pick_next_worker(), c))
 		goto err;
 	
 	return;

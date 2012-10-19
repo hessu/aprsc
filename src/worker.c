@@ -1812,6 +1812,40 @@ void json_add_rxerrs(cJSON *root, const char *key, long long vals[])
 }
 
 /*
+ *	Client state string
+ */
+
+static const char *client_state_string(CStateEnum state)
+{
+	static const char *states[] = {
+		"unknown",
+		"init",
+		"login",
+		"logresp",
+		"connected",
+		"udp",
+		"corepeer"
+	};
+	
+	switch (state) {
+	case CSTATE_CONNECTED:
+		return states[4];
+	case CSTATE_INIT:
+		return states[1];
+	case CSTATE_LOGIN:
+		return states[2];
+	case CSTATE_LOGRESP:
+		return states[3];
+	case CSTATE_UDP:
+		return states[5];
+	case CSTATE_COREPEER:
+		return states[6];
+	};
+	
+	return states[0];
+}
+
+/*
  *	Fill worker client list for status display
  *	(called from another thread - watch out and lock!)
  */
@@ -1830,6 +1864,8 @@ static struct cJSON *worker_client_json(struct client_t *c)
 	
 	cJSON *jc = cJSON_CreateObject();
 	cJSON_AddNumberToObject(jc, "fd", c->fd);
+	cJSON_AddNumberToObject(jc, "listener_id", c->listener_id);
+	cJSON_AddStringToObject(jc, "state", client_state_string(c->state));
 	
 	if (c->state == CSTATE_COREPEER) {
 		/* cut out ports in the name of security by obscurity */

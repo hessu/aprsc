@@ -40,6 +40,7 @@
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 #include "status.h"
+#include "keyhash.h"
 
 /*
  *	The listen_t structure holds data for a currently open
@@ -51,7 +52,8 @@ struct listen_t {
 	struct listen_t *next;
 	struct listen_t **prevp;
 	
-	int id;
+	int id; /* random id */
+	int listener_id; /* hash of protocol and local bound address */
 	int fd;
 	int client_flags;
 	int portnum;
@@ -86,6 +88,7 @@ static struct listen_t *listener_alloc(void)
 	memset( l, 0, sizeof(*l) );
 	l->fd = -1;
 	l->id = -1;
+	l->listener_id = -1;
 	
 	return l;
 }
@@ -268,8 +271,10 @@ static int open_listener(struct listen_config_t *lc)
 	l->addr_s = strsockaddr( lc->ai->ai_addr, lc->ai->ai_addrlen );
 	l->name   = hstrdup(lc->name);
 	l->portnum = lc->portnum;
-	
-	hlog(LOG_DEBUG, "Opening listener %d '%s': %s", lc->id, lc->name, l->addr_s);
+	l->listener_id = keyhash(l->addr_s, strlen(l->addr_s), 0);
+	l->listener_id = keyhash(&lc->ai->ai_socktype, sizeof(lc->ai->ai_socktype), l->listener_id);
+	l->listener_id = keyhash(&lc->ai->ai_protocol, sizeof(lc->ai->ai_protocol), l->listener_id);
+	hlog(LOG_DEBUG, "Opening listener %d/%d '%s': %s", lc->id, l->listener_id, lc->name, l->addr_s);
 	
 	if (lc->ai->ai_socktype == SOCK_DGRAM &&
 	    lc->ai->ai_protocol == IPPROTO_UDP) {
@@ -612,6 +617,7 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 		return NULL;
 		
 	c->fd    = fd;
+	c->listener_id = l->listener_id;
 	c->addr  = *sa;
 	c->portnum = l->portnum;
 	c->hidden  = l->hidden;
@@ -864,13 +870,12 @@ static void do_accept(struct listen_t *l)
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 	}
 
-	
 	c->state   = CSTATE_LOGIN;
 	/* use the default login handler */
 	c->handler = &login_handler;
 	c->keepalive = tick;
 	c->connect_time = tick;
-
+	
 	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
 	/* set client socket options, return -1 on serious errors */
@@ -891,12 +896,33 @@ err:
 }
 
 /*
+ *	Find a listener which this client is connected on
+ */
+
+struct listen_t *liveupgrade_find_listener(int listener_id)
+{
+	struct listen_t *l;
+	
+	l = listen_list;
+	
+	while (l) {
+		if (l->listener_id == listener_id)
+			break;
+		l = l->next;
+	}
+	
+	return l;
+}
+
+/*
  *	Live upgrade: accept old clients
  */
 
-static void accept_liveupgrade_single(cJSON *client)
+static int accept_liveupgrade_single(cJSON *client)
 {
-	cJSON *fd, *username, *t_connect;
+	cJSON *fd, *listener_id, *username, *t_connect;
+	cJSON *state;
+	cJSON *addr_loc;
 	cJSON *app_name, *app_version;
 	cJSON *verified;
 	cJSON *obuf_q;
@@ -904,10 +930,15 @@ static void accept_liveupgrade_single(cJSON *client)
 	cJSON *pkts_rx, *pkts_tx, *pkts_ign;
 	cJSON *rx_errs;
 	cJSON *filter;
+	unsigned addr_len;
+	union sockaddr_u sa;
 	
 	fd = cJSON_GetObjectItem(client, "fd");
+	listener_id = cJSON_GetObjectItem(client, "listener_id");
+	state = cJSON_GetObjectItem(client, "state");
 	username = cJSON_GetObjectItem(client, "username");
 	t_connect = cJSON_GetObjectItem(client, "t_connect");
+	addr_loc = cJSON_GetObjectItem(client, "addr_loc");
 	app_name = cJSON_GetObjectItem(client, "app_name");
 	app_version = cJSON_GetObjectItem(client, "app_version");
 	verified = cJSON_GetObjectItem(client, "verified");
@@ -920,7 +951,80 @@ static void accept_liveupgrade_single(cJSON *client)
 	rx_errs = cJSON_GetObjectItem(client, "rx_errs");
 	filter = cJSON_GetObjectItem(client, "filter");
 	
+	if (!((fd) && (listener_id) && (state) && (username) && (t_connect) && (addr_loc) && (app_name) && (app_version)
+		&& (verified) && (obuf_q) && (bytes_rx) && (bytes_tx)
+		&& (pkts_tx) && (pkts_rx) && (pkts_ign) && (rx_errs) && (filter))) {
+			hlog(LOG_ERR, "Live upgrade: Fields missing from client JSON");
+			return -1;
+	}
+	
 	hlog(LOG_DEBUG, "Old client on fd %d: %s", fd->valueint, username->valuestring);
+	
+	/* fetch peer address from the fd instead of parsing it from text */
+	addr_len = sizeof(sa);
+	if (getpeername(fd->valueint, &sa.sa, &addr_len) != 0) { /* Fails very rarely.. */
+		hlog(LOG_ERR, "Live upgrade: getpeername client fd %d failed: %s", fd->valueint, strerror(errno));
+		close(fd->valueint);
+		return -1;
+	}
+	
+	/* convert client address to string */
+	char *s = strsockaddr( &sa.sa, addr_len );
+	
+	/* find the right listener for this client, for configuration and accounting */
+	struct listen_t *l = liveupgrade_find_listener(listener_id->valueint);
+	if (!l) {
+		hlog(LOG_ERR, "Live upgrade: Failed to find listener for fd %d (%s - local %s) - closing", fd->valueint, s, addr_loc->valuestring);
+		close(fd->valueint);
+		return -1;
+	}
+	
+	struct client_t *c = accept_client_for_listener(l, fd->valueint, s, &sa, addr_len);
+	if (!c) {
+		hlog(LOG_ERR, "Live upgrade - client_alloc returned NULL, too many clients. Denied client on fd %d from %s", l->addr_s, fd->valueint, s);
+		close(fd->valueint);
+		hfree(s);
+		return -1;
+	}
+	
+	if (strcmp(state->valuestring, "connected") == 0) {
+		c->state   = CSTATE_CONNECTED;
+		c->handler = &incoming_handler;
+#ifndef FIXED_IOBUFS
+		c->username = hstrdup(username->valuestring);
+#else
+		strncpy(c->username, username->valuestring, sizeof(c->username));
+		c->username[sizeof(c->username)-1] = 0;
+#endif
+		c->username_len = strlen(c->username);
+	} else if (strcmp(state->valuestring, "login") == 0) {
+		c->state   = CSTATE_LOGIN;
+		c->handler = &login_handler;
+	} else {
+		hlog(LOG_ERR, "Live upgrade: Client %s is in invalid state '%s' (fd %d)", l->addr_s, state->valuestring, l->fd);
+		goto err;
+	}
+	c->keepalive = tick;
+	
+	c->connect_time = t_connect->valueint;
+	
+	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
+	
+	/* set client socket options, return -1 on serious errors */
+	if (set_client_sockopt(l, c) != 0)
+		goto err;
+	
+	/* ok, found it... lock the new client queue and pass the client */
+	if (pass_client_to_worker(pick_next_worker(), c))
+		goto err;
+	
+	return 0;
+	
+err:
+	close(c->fd);
+	inbound_connects_account(0, c->portaccount); /* something failed, remove this from accounts.. */
+	client_free(c);
+	return -1;
 }
 
 static void accept_liveupgrade_accept(void)
@@ -934,6 +1038,7 @@ static void accept_liveupgrade_accept(void)
 		hlog(LOG_ERR, "Accept: Live upgrade JSON does not contain 'clients'!");
 	} else {
 		clen = cJSON_GetArraySize(clients);
+		hlog(LOG_DEBUG, "Clients array length %d", clen);
 		for (i = 0; i < clen; i++) {
 			cJSON *client = cJSON_GetArrayItem(clients, i);
 			if (!client) {

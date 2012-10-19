@@ -275,6 +275,7 @@ struct client_t {
 #endif
 	int    uplink_index; /* uplink array index */
 	int    portnum;
+	int    listener_id;  /* which listener is this client connected to */
 	time_t connect_time;/* Time of connection */
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */

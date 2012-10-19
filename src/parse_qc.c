@@ -25,16 +25,17 @@
 #define Q_ERR_MAX -60
 #define Q_ERR_MIN -80
 
-#define QDROP_QAZ -61
-#define QDROP_QPATH_MYCALL -62
-#define QDROP_QPATH_CALL_TWICE -63
-#define QDROP_PATH_LOGIN_NOT_LAST -64
-#define QDROP_PATH_CALL_IS_LOCAL_CLIENT -65
-#define QDROP_PATH_CALL_IS_INVALID -66
-#define QDROP_QAU_PATH_CALL_IS_SRCCALL -67
-#define QDROP_NEWQ_BUFFER_SMALL -68
-#define QDROP_NONVAL_MULTI_Q_CALLS -69
-#define QDROP_I_NO_VIACALL -70
+#define QDROP_QAX -61
+#define QDROP_QAZ -62
+#define QDROP_QPATH_MYCALL -63
+#define QDROP_QPATH_CALL_TWICE -64
+#define QDROP_PATH_LOGIN_NOT_LAST -65
+#define QDROP_PATH_CALL_IS_LOCAL_CLIENT -66
+#define QDROP_PATH_CALL_IS_INVALID -67
+#define QDROP_QAU_PATH_CALL_IS_SRCCALL -68
+#define QDROP_NEWQ_BUFFER_SMALL -69
+#define QDROP_NONVAL_MULTI_Q_CALLS -70
+#define QDROP_I_NO_VIACALL -71
 
 /*
  *	Check if a callsign is good for a Q construct
@@ -79,6 +80,12 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	int serverid_len, username_len;
 	int login_in_path = 0;
 	int i, j, l;
+	
+	/* If disallow_unverified is on, drop packets with qAX (packet from unverified client) */
+	if (q_type == 'X' && disallow_unverified) {
+		hlog(LOG_DEBUG, "q: dropping due to q%c%c (unverified client)", q_proto, q_type);
+		return QDROP_QAX; /* drop the packet */
+	}
 	
 	/*
 	 * if ,qAZ, is the q construct:

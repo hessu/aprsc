@@ -717,8 +717,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* if disallow_unverified is enabled, don't allow unverified clients
 	 * to send any packets
 	 */
-	if (!c->validated && disallow_unverified)
-		return INERR_DISALLOW_UNVERIFIED;
+	if (disallow_unverified) {
+		if (!c->validated)
+			return INERR_DISALLOW_UNVERIFIED;
+		if (memstr(",TCPXX", via_start, path_end))
+			return INERR_DISALLOW_UNVERIFIED;
+	}
 	
 	/* check if the path contains NOGATE or other signs which tell the
 	 * packet should be dropped

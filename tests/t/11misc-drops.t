@@ -70,6 +70,9 @@ my @pkts = (
 	"SRC>APT311,RELAY,WIDE,WIDE/V,qAR,$login:!4239.93N/08254.93Wv342/000 should drop, / in digi path",
 	"SRC>DST,DIG*I,qAR,$login:>should drop, * in middle of digi call",
 	"SRC>DST,DI\x08GI,qAR,$login:>should drop, ctrl-B in middle of digi call",
+	"SRC2>DST,DIGI,qAX,$login:>Packet from unverified login according to qAX",
+	"SRC2>DST,DIGI,TCPXX,qAR,$login:>Packet from unverified login according to TCPXX in path",
+	"SRC2>DST,DIGI,TCPXX*,qAR,$login:>Packet from unverified login according to TCPXX* in path",
 );
 
 # send the packets
@@ -77,7 +80,7 @@ foreach my $s (@pkts) {
 	$i_tx->sendline($s);
 }
 
-# check that the initial p/ filter works
+# check that a packet passes at all and the previous packets were dropped
 $tx = "OH2SRC>APRS,OH2DIG-12*,OH2DIG-1*,qAR,200106F8020204020000000000000002,$login:>should pass";
 $i_tx->sendline($tx);
 

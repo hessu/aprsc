@@ -7,7 +7,7 @@ stderr=logs/err.log
 #
 excludeCalls=NITRUS;N0CALL;NOCALL
 useHistoryQueue=false
-disallowUnverified=false
+disallowUnverified=true
 #
 # Server Adjunct
 #

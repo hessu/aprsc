@@ -1023,7 +1023,7 @@ static int accept_liveupgrade_single(cJSON *client)
 	login_set_app_name(c, app_name->valuestring, app_version->valuestring);
 	
 	// handle client's filter setting
-	if (c->flags & CLFLAGS_USERFILTEROK) {
+	if (c->flags & CLFLAGS_USERFILTEROK && (filter) && (filter->valuestring) && *(filter->valuestring)) {
 		// archive a copy of the filters, for status display
 		strncpy(c->filter_s, filter->valuestring, FILTER_S_SIZE);
 		c->filter_s[FILTER_S_SIZE-1] = 0;
@@ -1088,8 +1088,9 @@ err:
 static void accept_liveupgrade_accept(void)
 {
 	int clen, i;
+	int accepted = 0;
 	
-	hlog(LOG_DEBUG, "Accept: Collecting live upgrade clients...");
+	hlog(LOG_INFO, "Accept: Collecting live upgrade clients...");
 	
 	cJSON *clients = cJSON_GetObjectItem(liveupgrade_status, "clients");
 	if (!clients) {
@@ -1103,8 +1104,12 @@ static void accept_liveupgrade_accept(void)
 				hlog(LOG_ERR, "Accept: Live upgrade JSON file, get client %d failed", i);
 				continue;
 			}
-			accept_liveupgrade_single(client);
+			if (accept_liveupgrade_single(client) == 0)
+				accepted++;
 		}
+		hlog(LOG_INFO, "Accepted %d of %d old clients in live upgrade", accepted, clen);
+		if (accepted != clen)
+			hlog(LOG_ERR, "Live upgrade: Failed to accept %d old clients, see above for reasons", clen-accepted);
 	}
 	
 	cJSON_Delete(liveupgrade_status);
@@ -1231,7 +1236,7 @@ void accept_thread(void *asdf)
 			if (peerip_config)
 				peerip_clients_config();
 			
-			/* TODO: accept liveupgrade clients */
+			/* accept liveupgrade clients */
 			if (liveupgrade_status)
 				accept_liveupgrade_accept();
 		}

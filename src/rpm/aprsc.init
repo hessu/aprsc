@@ -44,6 +44,11 @@ fi
 prepare_chroot () {
 	echo "Preparing chroot for aprsc..."
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
+	# live upgrade requires libraries to be visible within chroot, so
+	# set up a read-only bind mount of /lib
+	grep -q aprsc /proc/mounts || \
+		( mount --bind /lib $BASEDIR/lib \
+		&& mount -o remount,ro $BASEDIR/lib )
 }
 
 check_configuration() {
@@ -94,6 +99,19 @@ reload()
 	echo
 }
 
+liveupgrade()
+{
+	check_configuration
+	echo -n $"Performing live upgrade of $prog: "
+	if [ -f $PID_FILE ] ; then
+	    killproc -p $PID_FILE $APRSC -USR2
+	else
+	    failure $"Performing live upgrade of $prog"
+	fi
+	RETVAL=$?
+	echo
+}
+
 restart() {
 	check_configuration
 	stop
@@ -130,6 +148,10 @@ case "$1" in
 	reload)
 		rh_status_q || exit 7
 		reload
+		;;
+	liveupgrade)
+		rh_status_q || exit 7
+		liveupgrade
 		;;
 	force-reload)
 		force_reload

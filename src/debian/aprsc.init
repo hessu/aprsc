@@ -38,7 +38,7 @@ prepare_chroot () {
 	# config files
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
 	# live upgrade requires libraries to be visible within chroot, so
-	# set up a bind mount of /lib
+	# set up a read-only bind mount of /lib
 	grep -q aprsc /proc/mounts || \
 		( mount --bind /lib $BASEDIR/lib \
 		&& mount -o remount,ro $BASEDIR/lib )
@@ -83,7 +83,18 @@ case "$1" in
 	else
 		log_end_msg 1
 	fi
-  ;;
+	;;
+  liveupgrade )
+  	check_configuration
+  	log_daemon_msg "Performing $DESC live upgrade:" "aprsc"
+	if start-stop-daemon --stop --signal USR2 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
+	echo "Black magic invoked - live upgrade triggered."
+	echo "Remember to check /opt/aprsc/logs/aprsc.log for any errors!"
+	;;
   force-reload)
 	#
 	#	If the "reload" option is implemented, move the "force-reload"

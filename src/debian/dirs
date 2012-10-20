@@ -5,4 +5,5 @@ opt/aprsc/sbin
 opt/aprsc/data
 opt/aprsc/web
 opt/aprsc/logs
+opt/aprsc/lib
 etc/apparmor.d

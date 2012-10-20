@@ -35,7 +35,13 @@ fi
 # copy files required for chrooted operation
 prepare_chroot () {
 	log_daemon_msg "Preparing chroot for $DESC:" "aprsc chroot"
+	# config files
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
+	# live upgrade requires libraries to be visible within chroot, so
+	# set up a bind mount of /lib
+	grep -q aprsc /proc/mounts || \
+		( mount --bind /lib $BASEDIR/lib \
+		&& mount -o remount,ro $BASEDIR/lib )
 	log_end_msg 0
 }
 

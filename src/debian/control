@@ -7,7 +7,7 @@ Standards-Version: 3.7.2
 
 Package: aprsc
 Architecture: any
-Depends: ${shlibs:Depends}, adduser (>= 2), libwww-perl (>= 5), libjson-xs-perl (>= 2)
+Depends: ${shlibs:Depends}, adduser (>= 2), libwww-perl (>= 5), libjson-xs-perl (>= 2), libcap2-bin (>= 2)
 Description: APRS-IS server
  aprsc is an APRS-IS server intended to be used on core and Tier2 servers.
  .

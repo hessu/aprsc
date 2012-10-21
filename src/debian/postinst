@@ -24,6 +24,7 @@ setup_aprsc_user() {
 
 fix_permissions() {
 	chown aprsc:aprsc /opt/aprsc/logs /opt/aprsc/data
+	setcap cap_net_bind_service=+eip /opt/aprsc/sbin/aprsc
 }
 
 apparmor_config() {

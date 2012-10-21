@@ -58,7 +58,7 @@ my @pkts = (
 	"SRC>APRS,NOGATE,qAR,$login:>should drop, NOGATE",
 	"SRC>APRS,RFONLY,qAR,$login:>should drop, RFONLY",
 	"SRC>DST,DIGI,qAR,$login:}SRC2>DST,DIGI,TCPIP*:>should drop, 3rd party",
-	"SRC>DST,DIGI,qAR,$login:}blah, 3rd party ID only",
+	"SRC>DST,DIGI,qAR,$login:}SRC3>DST,DIGI,TCPXX*:>should drop, 3rd party TCPXX",
 	"SRC>DST,DIGI,qAR,$login:?APRS? general query",
 	"SRC>DST,DIGI,qAR,$login:?WX? general query",
 	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query",
@@ -81,7 +81,7 @@ foreach my $s (@pkts) {
 }
 
 # check that a packet passes at all and the previous packets were dropped
-$tx = "OH2SRC>APRS,OH2DIG-12*,OH2DIG-1*,qAR,200106F8020204020000000000000002,$login:>should pass";
+$tx = "OH2SRC>APRS,OH2DIG-12*,OH2DIG-1*,qAR,200106F8020204020000000000000002,$login:}SRC2>DST:should pass";
 $i_tx->sendline($tx);
 
 my $fail = 0;

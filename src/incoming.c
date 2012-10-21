@@ -643,7 +643,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	char *via_start; /* start of the digipeater path (after dstcall,) */
 	char *q_start = NULL; /* start of the Q construct (points to the 'q') */
 	char *q_replace = NULL; /* whether the existing Q construct is replaced */
-	const char *data;	  /* points to original incoming path/payload separating ':' character */
+	char *data;	  /* points to original incoming path/payload separating ':' character */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
 	int rc;
@@ -735,8 +735,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		return INERR_INV_PATH_CALL;
 	
 	/* check for 3rd party packets */
-	if (*(data + 1) == '}')
-		return INERR_3RD_PARTY;
+	if (*(data + 1) == '}') {
+		/* if the 3rd-party packet's header has TCPIP or TCPXX, drop it */
+		char *party_hdr_end = memchr(data+2, ':', packet_end-data-2);
+		if (party_hdr_end) {
+			if ((memstr(",TCPXX", data+2, party_hdr_end)) || (memstr(",TCPIP", data+2, party_hdr_end)) )
+				return INERR_3RD_PARTY;
+		}
+	}
 	
 	/* process Q construct, path_append_len of path_append will be copied
 	 * to the end of the path later

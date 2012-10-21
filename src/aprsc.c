@@ -651,6 +651,9 @@ static void liveupgrade_exec(int argc, char **argv)
 	/* close pid file and free the lock on it */
 	closepid();
 	
+	/* close log file so that we don't leak the file descriptor */
+	close_log(0);
+	
 	/* execute new binary, should not return if all goes fine */
 	e = execv(bin, nargv);
 	

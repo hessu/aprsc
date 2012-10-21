@@ -209,8 +209,8 @@ IPv4 and IPv6:
     Listen "Client-Defined Filters"   igate     tcp ::  14580
     Listen ""                         igate     udp ::  14580
 
-    Listen "350 km from my position"  fullfeed  tcp ::  20350 filter "m/350"
-    Listen ""                         fullfeed  udp ::  20350 filter "m/350"
+    Listen "350 km from my position"  igate     tcp ::  20350 filter "m/350"
+    Listen ""                         igate     udp ::  20350 filter "m/350"
 
     Listen "UDP submit"               udpsubmit udp ::  8080
 

@@ -420,6 +420,14 @@ static int set_final_capabilities(void)
 			goto end_caps;
 		}
 		
+		/* when we exec() myself in live upgrade, these capabilities are also
+		 * needed by the new process. INHERITABLE FTW!
+		 */
+		if (cap_set_flag(caps, CAP_INHERITABLE, NCAPS_FINAL, cap_list, CAP_SET) == -1) {
+			hlog(LOG_ERR, "aprsc: Failed to set final inheritable POSIX capability flags: %s", strerror(errno));
+			goto end_caps;
+		}
+		
 		//fprintf(stderr, "aprsc: going to set: %s\n", cap_to_text(caps, NULL));
 		ret = 1;
 	} else {

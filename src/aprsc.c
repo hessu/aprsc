@@ -615,7 +615,7 @@ void version_report(const char *state)
 static void liveupgrade_exec(int argc, char **argv)
 {
 	char **nargv;
-	int i, e;
+	int i;
 	int need_live_flag = 1;
 	char *bin = argv[0];
 	
@@ -655,7 +655,7 @@ static void liveupgrade_exec(int argc, char **argv)
 	close_log(0);
 	
 	/* execute new binary, should not return if all goes fine */
-	e = execv(bin, nargv);
+	execv(bin, nargv);
 	
 	hlog(LOG_CRIT, "liveupgrade: exec failed, I'm still here! %s", strerror(errno));
 }

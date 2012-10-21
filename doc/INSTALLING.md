@@ -84,7 +84,8 @@ Then, install aprsc:
 Whenever a new aprsc version is available, an upgrade can be performed
 automatically by running the upgrade command.  Your operating system can
 also be configured to upgrade packages automatically, or to instruct you to
-upgrade when upgrades are available.
+upgrade when upgrades are available. The following upgrade command will also
+restart aprsc for you, if possible.
 
     sudo apt-get update && sudo apt-get upgrade
 
@@ -102,6 +103,10 @@ Start it up:
 To shut it down:
 
     sudo service aprsc stop
+
+To perform a restart:
+
+    sudo service aprsc restart
 
 When STARTAPRSC is set to YES in the /etc/default/aprsc file it will
 automatically start up when the system boots.  You'll find it's log file in
@@ -160,6 +165,10 @@ Start it up:
 To shut it down:
 
     sudo /etc/init.d/aprsc stop
+
+To perform a restart after upgrading aprsc:
+
+    sudo /etc/init.d/aprsc restart
 
 When STARTAPRSC is set to YES in the /etc/sysconfig/aprsc file it will
 automatically start up when the system boots.  You'll find it's log file in

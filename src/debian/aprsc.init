@@ -85,6 +85,7 @@ case "$1" in
 	fi
 	;;
   liveupgrade )
+	prepare_chroot
   	check_configuration
   	log_daemon_msg "Performing $DESC live upgrade:" "aprsc"
 	if start-stop-daemon --stop --signal USR2 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then

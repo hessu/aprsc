@@ -102,6 +102,7 @@ reload()
 liveupgrade()
 {
 	check_configuration
+	prepare_chroot
 	echo -n $"Performing live upgrade of $prog: "
 	if [ -f $PID_FILE ] ; then
 	    killproc -p $PID_FILE $APRSC -USR2

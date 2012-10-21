@@ -118,12 +118,22 @@ init_chkconf() {
 	chkconfig aprsc on
 }
 
+create_lib_mountpoint() {
+	if [ ! -d /opt/aprsc/lib ]; then
+		mkdir /opt/aprsc/lib
+	fi
+	if [ ! -e /opt/aprsc/lib64 ]; then
+		( cd /opt/aprsc && ln -s lib lib64 )
+	fi
+}
+
 # main
 
 setup_aprsc_user
 fix_permissions
 #apparmor_config
 munin_config
+create_lib_mountpoint
 init_chkconf
 
 

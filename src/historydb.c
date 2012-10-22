@@ -153,6 +153,7 @@ static int historydb_load_entry(char *s)
 	struct history_cell_t *cp;
 	int keylen, packetlen;
 	uint32_t h1, h2, i;
+	time_t expirytime   = now - lastposition_storetime;
 	
 	j = cJSON_Parse(s);
 	if (!j) {
@@ -168,10 +169,25 @@ static int historydb_load_entry(char *s)
 	lon = cJSON_GetObjectItem(j, "lon");
 	packet = cJSON_GetObjectItem(j, "packet");
 	
+	/* make sure all required keys are present */
 	if (!((arrivaltime) && (key) && (packettype) && (flags) && (lat) && (lon) && (packet)))
 		goto fail;
 	
-	/* TODO: check types of items */
+	/* check types of items */
+	if (arrivaltime->type != cJSON_Number
+		|| key->type != cJSON_String
+		|| packettype->type != cJSON_Number
+		|| flags->type != cJSON_Number
+		|| lat->type != cJSON_Number
+		|| lon->type != cJSON_Number
+		|| packet->type != cJSON_String) {
+			goto fail;
+	}
+	
+	if (arrivaltime->valueint < expirytime) {
+		/* too old */
+		goto fail;
+	}
 	
 	keylen = strlen(key->valuestring);
 	packetlen = strlen(packet->valuestring);
@@ -244,10 +260,8 @@ void historydb_dump(FILE *fp)
 int historydb_load(FILE *fp)
 {
 	char *s;
-	char *t;
 	int n = 0;
 	int ok = 0;
-	time_t expirytime   = now - lastposition_storetime;
 	char buf[32768];
 	
 	hlog(LOG_INFO, "Loading historydb from dump...");

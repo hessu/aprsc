@@ -225,6 +225,19 @@ void pthreads_profiling_reset(const char *name)
 }
 
 #define PATHLEN 500
+static void dbdump_historydb(void)
+{
+	FILE *fp;
+	char path[PATHLEN+1];
+	
+	snprintf(path, PATHLEN, "%s/historydb.dump", rundir);
+	fp = fopen(path,"w");
+	if (fp) {
+		historydb_dump(fp);
+		fclose(fp);
+	}
+}
+
 static void dbdump_all(void)
 {
 	FILE *fp;
@@ -234,13 +247,9 @@ static void dbdump_all(void)
 	 *    As a general rule, dumping of databases is not a Good Idea in
 	 *    operational system.  Development time debugging on other hand..
 	 */
-
-	snprintf(path, PATHLEN, "%s/historydb.dump", rundir);
-	fp = fopen(path,"w");
-	if (fp) {
-		historydb_dump(fp);
-		fclose(fp);
-	}
+	 
+	dbdump_historydb();
+	
 	snprintf(path, PATHLEN, "%s/filter.wx.dump", rundir);
 	fp = fopen(path,"w");
 	if (fp) {
@@ -1079,12 +1088,15 @@ int main(int argc, char **argv)
 	if ((e = pthread_join(time_th, NULL)))
 		hlog(LOG_ERR, "Could not pthread_join time_th: %s", strerror(e));
 	
-	if (dbdump_at_exit || liveupgrade_fired) {
+	if (dbdump_at_exit) {
 		dbdump_all();
 	}
 
 	if (liveupgrade_fired) {
+		hlog(LOG_INFO, "Live upgrade: Dumping state to files...");
+		dbdump_historydb();
 		status_dump_liveupgrade();
+		hlog(LOG_INFO, "Live upgrade: Dumps completed.");
 		liveupgrade_exec(argc, argv);
 	}
 	

@@ -20,6 +20,7 @@
 #include "historydb.h"
 #include "hmalloc.h"
 #include "keyhash.h"
+#include "cJSON.h"
 
 #ifndef _FOR_VALGRIND_
 cellarena_t *historydb_cells;
@@ -110,19 +111,113 @@ void historydb_atend(void)
 			historydb_free(hp);
 			hp = hp2;
 		}
+		historydb_hash[i] = NULL;
 	}
 }
 
 static void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
-	fprintf(fp, "%ld\t", (long)hp->arrivaltime);
-	fwrite(hp->key, hp->keylen, 1, fp);
-	fprintf(fp, "\t");
-	fprintf(fp, "%d\t%d\t", hp->packettype, hp->flags);
-	fprintf(fp, "%f\t%f\t", hp->lat, hp->lon);
-	fprintf(fp, "%d\t", hp->packetlen);
-	fwrite(hp->packet, hp->packetlen-2, 1, fp); /* without terminating CRLF */
-	fprintf(fp, "\n"); /* newline */
+	int klen;
+	char key[CALLSIGNLEN_MAX+1];
+	int plen;
+	char packet[PACKETLEN_MAX+3];
+	
+	/* create a null-terminated key string */
+	klen = (hp->keylen < CALLSIGNLEN_MAX) ? hp->keylen : CALLSIGNLEN_MAX;
+	strncpy(key, hp->key, klen);
+	key[klen] = 0;
+	plen = hp->packetlen > PACKETLEN_MAX ? PACKETLEN_MAX : hp->packetlen;
+	strncpy(packet, hp->packet, plen);
+	packet[plen] = 0;
+	
+	cJSON *js = cJSON_CreateObject();
+	cJSON_AddNumberToObject(js, "arrivaltime", hp->arrivaltime);
+	cJSON_AddStringToObject(js, "key", key);
+	cJSON_AddNumberToObject(js, "packettype", hp->packettype);
+	cJSON_AddNumberToObject(js, "flags", hp->flags);
+	cJSON_AddNumberToObject(js, "lat", (double)hp->lat);
+	cJSON_AddNumberToObject(js, "lon", (double)hp->lon);
+	cJSON_AddStringToObject(js, "packet", packet);
+	
+	/* the tree is built, print it out to a malloc'ed string */
+	char *out = cJSON_PrintUnformatted(js);
+	cJSON_Delete(js);
+	fprintf(fp, "%s\n", out);
+	hfree(out);
+}
+
+static int historydb_load_entry(char *s)
+{
+	cJSON *j;
+	cJSON *arrivaltime, *key, *packettype, *flags, *lat, *lon, *packet;
+	struct history_cell_t *cp;
+	int keylen, packetlen;
+	uint32_t h1, h2, i;
+	
+	j = cJSON_Parse(s);
+	if (!j) {
+		hlog(LOG_ERR, "historydb_load_entry JSON decode failed: %s", s);
+		return -1;
+	}
+	
+	arrivaltime = cJSON_GetObjectItem(j, "arrivaltime");
+	key = cJSON_GetObjectItem(j, "key");
+	packettype = cJSON_GetObjectItem(j, "packettype");
+	flags = cJSON_GetObjectItem(j, "flags");
+	lat = cJSON_GetObjectItem(j, "lat");
+	lon = cJSON_GetObjectItem(j, "lon");
+	packet = cJSON_GetObjectItem(j, "packet");
+	
+	if (!((arrivaltime) && (key) && (packettype) && (flags) && (lat) && (lon) && (packet)))
+		goto fail;
+	
+	/* TODO: check types of items */
+	
+	keylen = strlen(key->valuestring);
+	packetlen = strlen(packet->valuestring);
+	
+	/* ok, we're going to add this one - allocate, fill and push */
+	cp = historydb_alloc(packetlen);
+	if (!cp) {
+		hlog(LOG_ERR, "historydb_load_entry: cellmalloc failed");
+		goto fail;
+	}
+	
+	/* calculate hash */
+	h1 = keyhash(key->valuestring, keylen, 0);
+	h2 = h1 ^ (h1 >> 13) ^ (h1 >> 26); /* fold hash bits.. */
+	i = h2 % HISTORYDB_HASH_MODULO;
+
+	memcpy(cp->key, key->valuestring, keylen);
+	cp->key[keylen] = 0; /* zero terminate */
+	cp->keylen = keylen;
+	//cp->hash1 = h1;
+	
+	cp->lat         = lat->valuedouble;
+	cp->coslat      = cosf(lat->valuedouble);
+	cp->lon         = lon->valuedouble;
+	cp->arrivaltime = arrivaltime->valueint;
+	cp->packettype  = packettype->valueint;
+	cp->flags       = flags->valueint;
+	cp->packetlen   = packetlen;
+	cp->packet      = cp->packetbuf; /* default case */
+	if (cp->packetlen > sizeof(cp->packetbuf)) {
+		/* Needs bigger buffer */
+		cp->packet = hmalloc( cp->packetlen );
+	}
+	memcpy( cp->packet, packet->valuestring, packetlen );
+	
+	/* ok, insert it in the hash table */
+	cp->next = historydb_hash[i];
+	historydb_hash[i] = cp;
+	
+	cJSON_Delete(j);
+	return 1;
+	
+fail:	
+	cJSON_Delete(j);
+	
+	return 0;
 }
 
 void historydb_dump(FILE *fp)
@@ -141,9 +236,29 @@ void historydb_dump(FILE *fp)
 			if (hp->arrivaltime > expirytime)
 				historydb_dump_entry(fp, hp);
 	}
-
+	
 	/* Free the lock */
 	rwl_rdunlock(&historydb_rwlock);
+}
+
+int historydb_load(FILE *fp)
+{
+	char *s;
+	char *t;
+	int n = 0;
+	int ok = 0;
+	time_t expirytime   = now - lastposition_storetime;
+	char buf[32768];
+	
+	hlog(LOG_INFO, "Loading historydb from dump...");
+	while ((s = fgets(buf, sizeof(buf), fp))) {
+		if (historydb_load_entry(s) > 0)
+			ok++;
+		n++;
+	}
+	hlog(LOG_INFO, "Loaded %d of %d historydb entries.", ok, n);
+	
+	return 0;
 }
 
 /* insert... */

@@ -267,6 +267,19 @@ static void dbdump_all(void)
 	}
 }
 
+static void dbload_all(void)
+{
+	FILE *fp;
+	char path[PATHLEN+1];
+	
+	snprintf(path, PATHLEN, "%s/historydb.dump", rundir);
+	fp = fopen(path,"r");
+	if (fp) {
+		historydb_load(fp);
+		fclose(fp);
+	}
+}
+
 /*
  *	switch uid
  */
@@ -966,10 +979,6 @@ int main(int argc, char **argv)
 	signal(SIGPIPE, SIG_IGN);
 	signal(SIGURG, SIG_IGN);
 	
-	/* if live upgrading, load status file */
-	if (liveupgrade_startup)
-		status_read_liveupgrade();
-	
 	/* Early inits in single-thread mode */
 	keyhash_init();
 	filter_init();
@@ -981,6 +990,12 @@ int main(int argc, char **argv)
 	xpoll_init();
 	status_init();
 
+	/* if live upgrading, load status file and database dumps */
+	if (liveupgrade_startup) {
+		status_read_liveupgrade();
+		dbload_all();
+	}
+	
 	time(&cleanup_tick);
 
 	pthread_attr_init(&pthr_attrs);
@@ -1063,7 +1078,7 @@ int main(int argc, char **argv)
 	if ((e = pthread_join(time_th, NULL)))
 		hlog(LOG_ERR, "Could not pthread_join time_th: %s", strerror(e));
 	
-	if (dbdump_at_exit) {
+	if (dbdump_at_exit || liveupgrade_fired) {
 		dbdump_all();
 	}
 

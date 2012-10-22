@@ -470,6 +470,7 @@ int status_dump_liveupgrade(void)
 int status_read_liveupgrade(void)
 {
 	char path[PATHLEN+1];
+	char path_renamed[PATHLEN+1];
 	FILE *fp;
 	char *s = NULL;
 	int sl = 0;
@@ -477,6 +478,7 @@ int status_read_liveupgrade(void)
 	int i;
 	
 	snprintf(path, PATHLEN, "%s/liveupgrade.json", rundir);
+	snprintf(path_renamed, PATHLEN, "%s/liveupgrade.json.old", rundir);
 	
 	hlog(LOG_DEBUG, "Live upgrade: reading status from %s", path);
 	
@@ -484,6 +486,12 @@ int status_read_liveupgrade(void)
 	if (!fp) {
 		hlog(LOG_ERR, "liveupgrade dump file read failed: Could not open %s for reading: %s", path, strerror(errno));
 		return -1;
+	}
+	
+	if (rename(path, path_renamed) < 0) {
+		hlog(LOG_ERR, "Failed to rename liveupgrade dump file %s to %s: %s",
+			path, path_renamed, strerror(errno));
+		unlink(path);
 	}
 	
 	while ((i = fread(buf, 1, sizeof(buf), fp)) > 0) {

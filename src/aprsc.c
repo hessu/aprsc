@@ -280,10 +280,18 @@ static void dbload_all(void)
 {
 	FILE *fp;
 	char path[PATHLEN+1];
+	char path_renamed[PATHLEN+1];
 	
 	snprintf(path, PATHLEN, "%s/historydb.dump", rundir);
 	fp = fopen(path,"r");
 	if (fp) {
+		snprintf(path_renamed, PATHLEN, "%s/historydb.dump.old", rundir);
+		if (rename(path, path_renamed) < 0) {
+			hlog(LOG_ERR, "Failed to rename historydb dump file %s to %s: %s",
+				path, path_renamed, strerror(errno));
+			unlink(path);
+		}
+		
 		historydb_load(fp);
 		fclose(fp);
 	}

@@ -480,13 +480,13 @@ int status_read_liveupgrade(void)
 	snprintf(path, PATHLEN, "%s/liveupgrade.json", rundir);
 	snprintf(path_renamed, PATHLEN, "%s/liveupgrade.json.old", rundir);
 	
-	hlog(LOG_DEBUG, "Live upgrade: reading status from %s", path);
-	
 	fp = fopen(path, "r");
 	if (!fp) {
 		hlog(LOG_ERR, "liveupgrade dump file read failed: Could not open %s for reading: %s", path, strerror(errno));
 		return -1;
 	}
+	
+	hlog(LOG_INFO, "Live upgrade: Loading client status from %s ...", path);
 	
 	if (rename(path, path_renamed) < 0) {
 		hlog(LOG_ERR, "Failed to rename liveupgrade dump file %s to %s: %s",

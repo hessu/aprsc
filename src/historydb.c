@@ -264,7 +264,6 @@ int historydb_load(FILE *fp)
 	int ok = 0;
 	char buf[32768];
 	
-	hlog(LOG_INFO, "Loading historydb from dump...");
 	while ((s = fgets(buf, sizeof(buf), fp))) {
 		if (historydb_load_entry(s) > 0)
 			ok++;

@@ -992,8 +992,9 @@ int main(int argc, char **argv)
 
 	/* if live upgrading, load status file and database dumps */
 	if (liveupgrade_startup) {
-		status_read_liveupgrade();
 		dbload_all();
+		/* historydb must be loaded before applying filters, so do dbload_all first */
+		status_read_liveupgrade();
 	}
 	
 	time(&cleanup_tick);

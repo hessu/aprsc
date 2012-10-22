@@ -240,8 +240,7 @@ cellarena_t *filter_wx_cells;
 #endif
 
 
-int hist_lookup_interval = 20; /* FIXME: Configurable: Cache historydb
-				  position lookups this much seconds on
+#define HIST_LOOKUP_INTERVAL 10 /* Cache historydb position lookups this much seconds on
 				  each filter entry referring to some
 				  fixed callsign (f,m,t) */
 
@@ -1821,10 +1820,10 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 		return 0; /* No position data... */
 
 	/* find friend's last location packet */
-	if (f->h.hist_age < now) {
+	if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {
 		i = historydb_lookup( callsign, i, &history );
 		f->h.numnames = i;
-		f->h.hist_age = now + hist_lookup_interval;
+		f->h.hist_age = now + HIST_LOOKUP_INTERVAL;
 		if (!i) return 0; /* no lookup result.. */
 		f->h.f_latN   = history->lat;
 		f->h.f_lonE   = history->lon;
@@ -1907,17 +1906,21 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	if (!c->username) /* Should not happen... */
 		return 0;
 
-	if (f->h.hist_age < now) {
+	if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {
 		i = historydb_lookup( c->username, strlen(c->username), &history );
-		f->h.hist_age = now + hist_lookup_interval;
 		f->h.numnames = i;
-		if (!i) return 0; /* no result */
+		if (!i) {
+			f->h.hist_age = now + HIST_LOOKUP_INTERVAL/2;
+			return 0; /* no result */
+		}
+		f->h.hist_age = now + HIST_LOOKUP_INTERVAL;
 		f->h.f_latN   = history->lat;
 		f->h.f_lonE   = history->lon;
 		f->h.f_coslat = history->coslat;
 	}
-	if (!f->h.numnames) return 0; /* cached lookup invalid.. */
-
+	if (!f->h.numnames)
+		return 0; /* cached lookup invalid.. */
+	
 	lat1    = f->h.f_latN;
 	lon1    = f->h.f_lonE;
 	coslat1 = f->h.f_coslat;
@@ -2234,7 +2237,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 		   Lets find callsign's location, and range to that item..
 		   .. 60-100 lookups per second. */
 
-		if (f->h.hist_age < now) {
+		if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {
 			i = historydb_lookup( callsign, callsignlen, &history );
 			f->h.numnames = i;
 
@@ -2244,7 +2247,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 
 
 			if (!i) return 0; /* no lookup result.. */
-			f->h.hist_age = now + hist_lookup_interval;
+			f->h.hist_age = now + HIST_LOOKUP_INTERVAL;
 			f->h.f_latN   = history->lat;
 			f->h.f_lonE   = history->lon;
 			f->h.f_coslat = history->coslat;

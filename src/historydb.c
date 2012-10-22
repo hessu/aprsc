@@ -191,10 +191,10 @@ static int historydb_load_entry(char *s)
 	memcpy(cp->key, key->valuestring, keylen);
 	cp->key[keylen] = 0; /* zero terminate */
 	cp->keylen = keylen;
-	//cp->hash1 = h1;
+	cp->hash1 = h1;
 	
 	cp->lat         = lat->valuedouble;
-	cp->coslat      = cosf(lat->valuedouble);
+	cp->coslat      = cosf(cp->lat);
 	cp->lon         = lon->valuedouble;
 	cp->arrivaltime = arrivaltime->valueint;
 	cp->packettype  = packettype->valueint;

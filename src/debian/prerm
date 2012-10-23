@@ -1,0 +1,21 @@
+#!/bin/sh
+set -e
+
+action="$1"
+version="$2"
+
+if [ "$action" = "upgrade" ]; then
+	exit 0
+fi
+
+# shut it down
+if [ -x "/etc/init.d/aprsc" ]; then
+	if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+		invoke-rc.d aprsc stop || exit $?
+	else
+		/etc/init.d/aprsc stop || exit $?
+	fi
+fi
+
+umount /opt/aprsc/lib 2>/dev/null || true
+umount /opt/aprsc/lib64 2>/dev/null || true

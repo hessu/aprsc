@@ -41,7 +41,7 @@ prepare_chroot () {
 	# set up a read-only bind mount of /lib
 	grep -q aprsc /proc/mounts || \
 		( mount --bind /lib $BASEDIR/lib \
-		&& mount -o remount,ro $BASEDIR/lib )
+		&& mount -o remount,ro,bind $BASEDIR/lib )
 	log_end_msg 0
 }
 

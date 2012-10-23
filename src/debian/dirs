@@ -6,4 +6,5 @@ opt/aprsc/data
 opt/aprsc/web
 opt/aprsc/logs
 opt/aprsc/lib
+opt/aprsc/lib64
 etc/apparmor.d

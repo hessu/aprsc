@@ -16,7 +16,7 @@
   /opt/aprsc/web/* r,
   /opt/aprsc/logs/aprsc.* rwk,
   owner /opt/aprsc/data/* rwk,
-  /opt/aprsc/lib/* rm,
-  /opt/aprsc/lib64/* rm,
+  /opt/aprsc/lib/** rm,
+  /opt/aprsc/lib64/** rm,
   /opt/aprsc/var/core/* rwk,
 }

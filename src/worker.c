@@ -1890,6 +1890,12 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 			hlog(LOG_DEBUG, "Hex: %s", s);
 			hfree(s);
 		}
+		
+		/* If message routing for stations heard by this client is enabled,
+		 * dump the client_heard hash table, too.
+		 */
+		if (c->flags & CLFLAGS_IGATE)
+			cJSON_AddItemToObject(jc, "client_heard", client_heard_json(c->client_heard));
 	}
 	
 	if (c->state == CSTATE_COREPEER) {

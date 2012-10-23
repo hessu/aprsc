@@ -240,7 +240,6 @@ static void heard_free_single(struct client_heard_t **list)
 		}
 		list[i] = NULL;
 	}
-	
 }
 
 void client_heard_free(struct client_t *c)
@@ -261,6 +260,27 @@ void client_heard_init(void)
 				  512 /* 512 KB at the time */, 0 /* minfree */ );
 	/* 512 KB arena size -> about 18k entries per single arena */
 #endif
+}
+
+/*
+ *	Generate JSON tree containing a client_heard_t list
+ */
+
+struct cJSON *client_heard_json(struct client_heard_t **list)
+{
+	struct client_heard_t *h;
+	int i;
+	cJSON *j = cJSON_CreateArray();
+	
+	for (i = 0; i < CLIENT_HEARD_BUCKETS; i++) {
+		h = list[i];
+		while (h) {
+			cJSON_AddItemToArray(j, cJSON_CreateString(h->callsign));
+			h = h->next;
+		}
+	}
+	
+	return j;
 }
 
 /*

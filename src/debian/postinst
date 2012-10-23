@@ -55,5 +55,28 @@ munin_config
 
 #DEBHELPER#
 
+# Finally, do a start or restart
+if [ -x "/etc/init.d/aprsc" ]; then
+	# set up links
+	update-rc.d aprsc defaults >/dev/null
+	# start or upgrade
+	if [ -n "$2" ]; then
+		# Upgrading. If previous version is new enough, perform
+		# a live upgrade.
+		if dpkg --compare-versions "$2" gt "1.6.0"; then
+			_dh_action=liveupgrade
+		else
+			_dh_action=restart
+		fi
+	else
+		_dh_action=start
+	fi
+	if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+		invoke-rc.d aprsc $_dh_action || exit $?
+	else
+		/etc/init.d/aprsc $_dh_action || exit $?
+	fi
+fi
+
 exit 0
 

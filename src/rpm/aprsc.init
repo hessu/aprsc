@@ -46,9 +46,14 @@ prepare_chroot () {
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
 	# live upgrade requires libraries to be visible within chroot, so
 	# set up a read-only bind mount of /lib
-	grep -q aprsc /proc/mounts || \
+	grep -q "aprsc/lib " /proc/mounts || \
 		( mount --bind /lib $BASEDIR/lib \
 		&& mount -o remount,ro,bind $BASEDIR/lib )
+	if [ -e /lib64 ]; then
+		grep -q "aprsc/lib64 " /proc/mounts || \
+			( mount --bind /lib64 $BASEDIR/lib64 \
+			&& mount -o remount,ro,bind $BASEDIR/lib64 )
+	fi
 }
 
 check_configuration() {

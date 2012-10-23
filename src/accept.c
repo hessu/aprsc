@@ -40,6 +40,7 @@
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 #include "status.h"
+#include "client_heard.h"
 #include "keyhash.h"
 
 /*
@@ -932,6 +933,7 @@ static int accept_liveupgrade_single(cJSON *client)
 	cJSON *rx_errs;
 	cJSON *filter;
 	cJSON *ibuf, *obuf;
+	cJSON *client_heard;
 	unsigned addr_len;
 	union sockaddr_u sa;
 	
@@ -955,6 +957,7 @@ static int accept_liveupgrade_single(cJSON *client)
 	filter = cJSON_GetObjectItem(client, "filter");
 	ibuf = cJSON_GetObjectItem(client, "ibuf");
 	obuf = cJSON_GetObjectItem(client, "obuf");
+	client_heard = cJSON_GetObjectItem(client, "client_heard");
 	
 	if (!((fd) && (listener_id) && (state) && (username) && (t_connect)
 		&& (addr_loc) && (app_name) && (app_version)
@@ -1065,6 +1068,9 @@ static int accept_liveupgrade_single(cJSON *client)
 			hlog(LOG_DEBUG, "Hex: %s", obuf->valuestring);
 		}
 	}
+	
+	if (client_heard && client_heard->type == cJSON_Array)
+		client_heard_json_load(c, client_heard);
 	
 	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	

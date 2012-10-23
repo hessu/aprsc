@@ -24,6 +24,7 @@ extern void client_heard_free(struct client_t *c);
 extern void client_heard_init(void);
 
 extern struct cJSON *client_heard_json(struct client_heard_t **list);
+extern int client_heard_json_load(struct client_t *c, cJSON *dump);
 
 #ifndef _FOR_VALGRIND_
 extern void client_heard_cell_stats(struct cellstatus_t *cellst);

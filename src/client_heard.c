@@ -55,15 +55,13 @@ cellarena_t *client_heard_cells;
  *	callsign or insert a new entry
  */
 
-static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct client_heard_t **list, int *entrycount, char *which)
+static void heard_list_update(struct client_t *c, char *call, int call_len, time_t t, struct client_heard_t **list, int *entrycount, char *which)
 {
 	struct client_heard_t *h;
-	int call_len;
 	uint32_t hash, idx;
 	int i;
 	
-	call_len = pb->srccall_end - pb->data;
-	hash = keyhashuc(pb->data, call_len, 0);
+	hash = keyhashuc(call, call_len, 0);
 	idx = hash;
 	// "CLIENT_HEARD_BUCKETS" is 16..
 	idx ^= (idx >> 16);
@@ -71,15 +69,15 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	idx ^= (idx >>  4);
 	i = idx % CLIENT_HEARD_BUCKETS;
 	
-	//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s (hash %u i %d)", c->fd, which, call_len, pb->data, hash, i);
+	//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: updating heard table for %.*s (hash %u i %d)", c->fd, which, call_len, pcall, hash, i);
 	
 	for (h = list[i]; (h); h = h->next) {
 		if (h->hash == hash && call_len == h->call_len
-		    && strncasecmp(pb->data, h->callsign, h->call_len) == 0) {
+		    && strncasecmp(call, h->callsign, h->call_len) == 0) {
 			// OK, found it from the list
 
-			//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: found, updating %.*s", c->fd, which, call_len, pb->data);
-			h->last_heard = pb->t;
+			//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: found, updating %.*s", c->fd, which, call_len, call);
+			h->last_heard = t;
 			
 			/* Because of digipeating we'll see the same station
 			 * really quickly again, and the less active stations are, well, less active,
@@ -87,7 +85,7 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 			 */
 			 
 			 if (list[i] != h) {
-				//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, pb->data);
+				//DLOG(LOG_DEBUG, "heard_list_update fd %d %s: moving to front %.*s", c->fd, which, call_len, call);
 				*h->prevp = h->next;
 				if (h->next)
 					h->next->prevp = h->prevp;
@@ -104,7 +102,7 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	}
 	
 	/* Not found, insert. */
-	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, pb->data);
+	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, call);
 #ifndef _FOR_VALGRIND_
 	h = cellmalloc(client_heard_cells);
 	if (!h) {
@@ -115,10 +113,10 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 	h = hmalloc(sizeof(*h));
 #endif
 	h->hash = hash;
-	strncpy(h->callsign, pb->data, call_len);
+	strncpy(h->callsign, call, call_len);
 	h->callsign[sizeof(h->callsign)-1] = 0;
 	h->call_len = call_len;
-	h->last_heard = pb->t;
+	h->last_heard = t;
 	
 	/* insert in beginning of linked list */
 	h->next = list[i];
@@ -131,12 +129,12 @@ static void heard_list_update(struct client_t *c, struct pbuf_t *pb, struct clie
 
 void client_heard_update(struct client_t *c, struct pbuf_t *pb)
 {
-	heard_list_update(c, pb, c->client_heard, &c->client_heard_count, "heard");
+	heard_list_update(c, pb->data, pb->srccall_end - pb->data, pb->t, c->client_heard, &c->client_heard_count, "heard");
 }
 
 void client_courtesy_update(struct client_t *c, struct pbuf_t *pb)
 {
-	heard_list_update(c, pb, c->client_courtesy, &c->client_courtesy_count, "courtesy");
+	heard_list_update(c, pb->data, pb->srccall_end - pb->data, pb->t, c->client_courtesy, &c->client_courtesy_count, "courtesy");
 }
 
 static int heard_find(struct client_t *c, struct client_heard_t **list, int *entrycount, const char *callsign, int call_len, int storetime, int drop_if_found, char *which)
@@ -281,6 +279,29 @@ struct cJSON *client_heard_json(struct client_heard_t **list)
 	}
 	
 	return j;
+}
+
+/*
+ *	Load client_heard_t list from a JSON dump
+ */
+
+int client_heard_json_load(struct client_t *c, cJSON *dump)
+{
+	int i, len;
+	cJSON *h;
+	time_t t = time(NULL);
+	
+	len = cJSON_GetArraySize(dump);
+	
+	for (i = 0; i < len; i++) {
+		h = cJSON_GetArrayItem(dump, i);
+		if (!h || !h->valuestring)
+			continue;
+		heard_list_update(c, h->valuestring, strlen(h->valuestring), t, c->client_heard, &c->client_heard_count, "heard");
+		
+	}
+	
+	return i;
 }
 
 /*

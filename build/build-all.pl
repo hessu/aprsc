@@ -13,6 +13,8 @@ my @platforms = (
 	'ubuntu-1004-amd64',
 	'debian-60-i386',
 	'debian-60-amd64',
+	'debian-70-i386',
+	'debian-70-amd64',
 	'centos-63-i686',
 	'centos-63-x86_64',
 );

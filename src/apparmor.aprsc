@@ -18,4 +18,5 @@
   owner /opt/aprsc/data/* rwk,
   /opt/aprsc/lib/* rm,
   /opt/aprsc/lib64/* rm,
+  /opt/aprsc/var/core/* rwk,
 }

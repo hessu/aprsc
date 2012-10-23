@@ -160,6 +160,8 @@ int open_log(char *name, int reopen)
  
 int close_log(int reopen)
 {
+	hlog(LOG_DEBUG, "close_log");
+	
 	char *s = NULL;
 	if (log_name)
 		s = hstrdup(log_name);
@@ -174,9 +176,11 @@ int close_log(int reopen)
 	if (log_dest == L_SYSLOG) {
 		closelog();
 	} else if (log_dest == L_FILE) {
-		if (close(log_file))
-			fprintf(stderr, "aprsc logger: Could not close log file %s: %s\n", log_fname, strerror(errno));
-		log_file = -1;
+		if (log_file >= 0) {
+			if (close(log_file))
+				fprintf(stderr, "aprsc logger: Could not close log file %s: %s\n", log_fname, strerror(errno));
+			log_file = -1;
+		}
 		if (log_fname) {
 			hfree(log_fname);
 			log_fname = NULL;
@@ -189,7 +193,8 @@ int close_log(int reopen)
 	if (!reopen)
 		rwl_wrunlock(&log_file_lock);
 	
-	hfree(s);
+	if (s)
+		hfree(s);
 	
 	return 0;
 }

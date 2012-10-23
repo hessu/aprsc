@@ -11,6 +11,7 @@ aprsc has been built and tested on:
 
 * Ubuntu LTS (10.04, 12.04)
 * Debian stable (6.0, "squeeze")
+* Debian testing (7.0, "wheezy")
 * Debian 5.0 "lenny": i386 and x86_64
 * Mac OS X 10.8 (Snow Leopard): x86
 * FreeBSD 8.2 and 9.0 on amd64, 7.2 on i386

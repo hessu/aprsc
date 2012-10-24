@@ -12,7 +12,7 @@
  * If you're making modifications, put your own variant version
  * identification in version_branch.h. Thanks!
  */
-#define VERSION "1.6.4"
+#define VERSION "1.6.5"
 
 #define APRSC_TOCALL "APSC16"
 

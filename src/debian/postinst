@@ -58,7 +58,7 @@ if [ -x "/etc/init.d/aprsc" ]; then
 	if [ -n "$2" ]; then
 		# Upgrading. If previous version is new enough, perform
 		# a live upgrade.
-		if dpkg --compare-versions "$2" gt "1.6.2"; then
+		if dpkg --compare-versions "$2" gt "1.6.4"; then
 			_dh_action=liveupgrade
 		else
 			_dh_action=restart

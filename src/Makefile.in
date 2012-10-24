@@ -16,7 +16,15 @@ CFGFILE=	/opt/aprsc/etc/aprsc.conf
 # generate version strings
 VERSION:=$(shell cat VERSION)
 GIT_CMD:=$(shell which git)
-GITVERSION:=$(shell if test -x $(GIT_CMD) -a \( -d .git -o -d ../.git \) ; then $(GIT_CMD) describe --long --dirty=M | sed -e 's/^.*-//' | tee GITVERSION; else (if test -f GITVERSION; then cat GITVERSION; fi); fi)
+GITVERSION:=$(shell if test -x $(GIT_CMD) -a \( -d .git -o -d ../.git \) ; then \
+		$(GIT_CMD) describe --long --dirty=M | sed -e 's/^.*-//' | tee GITVERSION; \
+	else \
+		(if test -f GITVERSION; then \
+			cat GITVERSION; \
+		else \
+			(pwd | sed -e 's/.*-//' | sed -e 's/\/.*//' | egrep '^[a-f0-9]+$$' | tee GITVERSION ) \
+		fi); \
+	fi)
 SRCVERSION:=$(GITVERSION)
 DATE:=$(shell TZ=UTC date +"%Y %B %d")
 RFCDATE:=$(shell TZ=UTC date +"%a, %d %b %Y %H:%M:%S %z")

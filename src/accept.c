@@ -612,6 +612,8 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 	struct client_t *c;
 	char *s;
 	int i;
+	union sockaddr_u sa_loc; /* local address */
+	socklen_t addr_len_loc = sizeof(sa_loc);
 	
 	c = client_alloc();
 	if (!c)
@@ -647,12 +649,14 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 #endif
 
 	/* text format of servers' connected IP address + port */
-	addr_len = sizeof(sa);
-	if (getsockname(fd, &sa->sa, &addr_len) == 0) { /* Fails very rarely.. */
+	if (getsockname(fd, &sa_loc.sa, &addr_len_loc) == 0) { /* Fails very rarely.. */
+		if (addr_len_loc > sizeof(sa_loc))
+			hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s truncated local address of %d to %d bytes", c->addr_rem, addr_len_loc, sizeof(sa_loc));
 		/* present my socket end address as a malloced string... */
-		s = strsockaddr( &sa->sa, addr_len );
+		s = strsockaddr( &sa_loc.sa, addr_len_loc );
 	} else {
 		s = hstrdup( l->addr_s ); /* Server's bound IP address */
+		hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s failed: %s (using '%s' instead)", c->addr_rem, strerror(errno), s);
 	}
 #ifndef FIXED_IOBUFS
 	c->addr_loc = s;

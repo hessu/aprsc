@@ -18,12 +18,18 @@ struct dupe_record_t {
 	struct dupe_record_t *next;
 	uint32_t hash;
 	time_t	 t;
+	int	 dtype; // dupecheck dupe type
 	int	 len;	// address + payload length
 	char	*packet;
 	char	 packetbuf[220]; /* 99.9+ % of time this is enough.. */
 };
 
 #define DUPECHECK_CELL_SIZE sizeof(struct dupe_record_t)
+
+#define DTYPE_SPACE_TRIM	1
+#define DTYPE_STRIP_8BIT	2
+#define DTYPE_CLEAR_8BIT	3
+#define DTYPE_SPACED_8BIT	4
 
 extern long long dupecheck_outcount;  /* statistics counter */
 extern long long dupecheck_dupecount; /* statistics counter */

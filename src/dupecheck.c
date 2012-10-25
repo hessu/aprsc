@@ -311,7 +311,7 @@ static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrl
 	return 0;
 }
 
-static int dupecheck_add_buf(const char *s, int len)
+static int dupecheck_add_buf(const char *s, int len, int dtype)
 {
 	uint32_t hash, idx;
 	struct dupe_record_t **dpp, *dp;
@@ -352,6 +352,7 @@ static int dupecheck_add_buf(const char *s, int len)
 	//hlog(LOG_DEBUG, "dupecheck_add_buf appended '%.*s'", len, s);
 	dp->hash = hash;
 	dp->t = now;
+	dp->dtype = dtype;
 	
 	return 0;
 }
@@ -391,12 +392,13 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	
 	if (tlen1 != ilen) {
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen1, tlen1, tb1);
-		dupecheck_add_buf(tb1, tlen1);
+		dupecheck_add_buf(tb1, tlen1, DTYPE_SPACE_TRIM);
 	}
 	
 	/*************************/
 	/* tb1: 8th bit data deleted
 	 * tb2: 8th bit is cleared
+	 * tb3: 8th bit replaced with a space
 	 */
 	tlen1 = tlen2 = tlen3 = 0;
 	char c;
@@ -417,9 +419,9 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d 8-bit chars: '%.*s'", ilen-tlen1, tlen1, tb1);
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: ANDed    %d 8-bit chars: '%.*s'", ilen-tlen1, tlen2, tb2);
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d 8-bit chars: '%.*s'", ilen-tlen1, tlen3, tb3);
-		dupecheck_add_buf(tb1, tlen1);
-		dupecheck_add_buf(tb2, tlen2);
-		dupecheck_add_buf(tb3, tlen3);
+		dupecheck_add_buf(tb1, tlen1, DTYPE_STRIP_8BIT);
+		dupecheck_add_buf(tb2, tlen2, DTYPE_CLEAR_8BIT);
+		dupecheck_add_buf(tb3, tlen3, DTYPE_SPACED_8BIT);
 	}
 	
 	return 0;

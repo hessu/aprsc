@@ -13,6 +13,7 @@ use warnings;
 use Config;
 use Socket;
 use LWP::UserAgent;
+use File::Compare;
 
 my $base = "/opt/aprsc";
 my $acl_file = "$base/etc/t2.acl";
@@ -110,6 +111,10 @@ my $acl_tmp = "$acl_file.tmp";
 open(ACL, ">$acl_tmp") || die "Failed to open $acl_tmp for writing: $!\n";
 print ACL $acl || die "Failed to write $acl_tmp: $!\n";
 close(ACL) || die "Failed to close $acl_tmp after writing: $!\n";
+
+if (-f $acl_file && compare($acl_tmp, $acl_file) == 0) {
+	exit(0);
+}
 
 rename($acl_tmp, $acl_file) || die "Failed to rename $acl_tmp to $acl_file: $!\n";
 

@@ -1,5 +1,12 @@
 #!/usr/bin/perl
 
+# t2acl.pl
+#
+# Download T2 leaf server list and convert it to an ACL that is suitable
+# to be used on T2 hubs with aprsc
+#
+# Heikki Hannikainen, 2012
+
 use strict;
 use warnings;
 

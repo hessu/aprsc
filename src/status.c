@@ -249,6 +249,14 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(dupecheck, "uniques_out", dupecheck_outcount);
 	cJSON_AddItemToObject(root, "dupecheck", dupecheck);
 	
+	cJSON *dupe_vars = cJSON_CreateObject();
+	cJSON_AddNumberToObject(dupe_vars, "exact", dupecheck_dupetypes[0]);
+	cJSON_AddNumberToObject(dupe_vars, "space_trim", dupecheck_dupetypes[DTYPE_SPACE_TRIM]);
+	cJSON_AddNumberToObject(dupe_vars, "8bit_strip", dupecheck_dupetypes[DTYPE_STRIP_8BIT]);
+	cJSON_AddNumberToObject(dupe_vars, "8bit_clear", dupecheck_dupetypes[DTYPE_CLEAR_8BIT]);
+	cJSON_AddNumberToObject(dupe_vars, "8bit_spaced", dupecheck_dupetypes[DTYPE_SPACED_8BIT]);
+	cJSON_AddItemToObject(dupecheck, "variations", dupe_vars);
+	
 	cJSON *json_totals = cJSON_CreateObject();
 	cJSON *json_listeners = cJSON_CreateArray();
 	accept_listener_status(json_listeners, json_totals);

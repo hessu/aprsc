@@ -45,6 +45,7 @@ int pbuf_global_dupe_count_limit =   100; /* .. but we set some minimum packet c
 
 long long dupecheck_outcount;  /* 64 bit counters for statistics */
 long long dupecheck_dupecount;
+long long dupecheck_dupetypes[DTYPE_MAX+1];
 
 #define DUPECHECK_DB_SIZE 8192        /* Hash index table size */
 struct dupe_record_t *dupecheck_db[DUPECHECK_DB_SIZE]; /* Hash index table      */
@@ -491,6 +492,8 @@ static int dupecheck(struct pbuf_t *pb)
 				//hlog(LOG_DEBUG, "Orig: %.*s %.*s", addrlen, dp->addresses, datalen, dp->packet);
 				pb->flags |= F_DUPE;
 				filter_postprocess_dupefilter(pb);
+				if (dp->dtype >= 0 && dp->dtype < DTYPE_MAX)
+				        dupecheck_dupetypes[dp->dtype]++;
 				return F_DUPE;
 			}
 			// no packet match.. check next

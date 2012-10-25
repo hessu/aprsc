@@ -30,9 +30,11 @@ struct dupe_record_t {
 #define DTYPE_STRIP_8BIT	2
 #define DTYPE_CLEAR_8BIT	3
 #define DTYPE_SPACED_8BIT	4
+#define DTYPE_MAX		4
 
 extern long long dupecheck_outcount;  /* statistics counter */
 extern long long dupecheck_dupecount; /* statistics counter */
+extern long long dupecheck_dupetypes[DTYPE_MAX+1];
 extern long      dupecheck_cellgauge; /* statistics gauge   */
 
 extern int  outgoing_lag_report(struct worker_t *self, int*lag, int*dupelag);

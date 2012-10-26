@@ -47,7 +47,7 @@ long long dupecheck_outcount;  /* 64 bit counters for statistics */
 long long dupecheck_dupecount;
 long long dupecheck_dupetypes[DTYPE_MAX+1];
 
-#define DUPECHECK_DB_SIZE 8192        /* Hash index table size */
+#define DUPECHECK_DB_SIZE 8192		/* Hash index table size */
 struct dupe_record_t *dupecheck_db[DUPECHECK_DB_SIZE]; /* Hash index table      */
 
 #ifndef _FOR_VALGRIND_
@@ -436,19 +436,19 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	 */
 	tlen1 = tlen2 = 0;
 	for (i = 0; i < ilen; i++) {
-	        c = ib[i];
+		c = ib[i];
 		if (c < 0x20 && c > 0) {
-			/* low data */
+			/* low data, tb2 gets a space and tb1 gets nothing */
 			tb2[tlen2++] = ' ';
 		} else {
-		        /* regular stuff */
+			/* regular stuff */
 			tb1[tlen1++] = c;
 			tb2[tlen2++] = c;
 		}
 	}
 	
 	if (tlen1 != ilen) {
-	        /* if there was low data, store it */
+		/* if there was low data, store it */
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
 		dupecheck_add_buf(tb1, tlen1, DTYPE_LOWDATA_STRIP);
@@ -523,7 +523,7 @@ static int dupecheck(struct pbuf_t *pb)
 				pb->flags |= F_DUPE;
 				filter_postprocess_dupefilter(pb);
 				if (dp->dtype >= 0 && dp->dtype < DTYPE_MAX)
-				        dupecheck_dupetypes[dp->dtype]++;
+					dupecheck_dupetypes[dp->dtype]++;
 				return F_DUPE;
 			}
 			// no packet match.. check next

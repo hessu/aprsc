@@ -1584,8 +1584,8 @@ void worker_thread(struct worker_t *self)
 		t5 = tick;
 
 		/* time of next keepalive broadcast ? */
-		if (tick > next_keepalive) {
-			next_keepalive += keepalive_poll_freq; /* Run them every 2 seconds */
+		if (tick >= next_keepalive) {
+			next_keepalive = tick + keepalive_poll_freq; /* Run them every 2 seconds */
 			send_keepalives(self);
 		}
 		

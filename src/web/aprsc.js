@@ -214,9 +214,11 @@ var key_translate = {
 	// dupecheck_more (variations) block
 	'exact': 'Exact duplicates',
 	'space_trim': 'Dupes with spaces trimmed from end',
-	'8bit_strip': 'Dupes with 8-bit chars stripped out',
+	'8bit_strip': 'Dupes with 8-bit bytes stripped out',
 	'8bit_clear': 'Dupes with 8th bit set to 0',
-	'8bit_spaced': 'Dupes with 8-bit characters replaced with spaces',
+	'8bit_spaced': 'Dupes with 8-bit bytes replaced with spaces',
+	'low_strip': 'Dupes with low bytes stripped out',
+	'low_spaced': 'Dupes with low bytes replaced with spaces',
 	
 	// totals block
 	'clients': 'Clients',

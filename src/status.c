@@ -257,6 +257,8 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(dupe_vars, "8bit_strip", dupecheck_dupetypes[DTYPE_STRIP_8BIT]);
 	cJSON_AddNumberToObject(dupe_vars, "8bit_clear", dupecheck_dupetypes[DTYPE_CLEAR_8BIT]);
 	cJSON_AddNumberToObject(dupe_vars, "8bit_spaced", dupecheck_dupetypes[DTYPE_SPACED_8BIT]);
+	cJSON_AddNumberToObject(dupe_vars, "low_strip", dupecheck_dupetypes[DTYPE_LOWDATA_STRIP]);
+	cJSON_AddNumberToObject(dupe_vars, "low_spaced", dupecheck_dupetypes[DTYPE_LOWDATA_SPACED]);
 	cJSON_AddItemToObject(dupecheck, "variations", dupe_vars);
 	
 	cJSON *json_totals = cJSON_CreateObject();

@@ -30,7 +30,9 @@ struct dupe_record_t {
 #define DTYPE_STRIP_8BIT	2
 #define DTYPE_CLEAR_8BIT	3
 #define DTYPE_SPACED_8BIT	4
-#define DTYPE_MAX		4
+#define DTYPE_LOWDATA_STRIP	5
+#define DTYPE_LOWDATA_SPACED	6
+#define DTYPE_MAX		6
 
 extern long long dupecheck_outcount;  /* statistics counter */
 extern long long dupecheck_dupecount; /* statistics counter */

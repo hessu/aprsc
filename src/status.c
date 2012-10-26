@@ -103,6 +103,8 @@ char *status_json_string(int no_cache, int periodical)
 	
 	/* Ok, go and build the JSON tree */
 	cJSON *root = cJSON_CreateObject();
+	if (http_status_options)
+		cJSON_AddStringToObject(root, "status_options", http_status_options);
 	
 	cJSON *server = cJSON_CreateObject();
 	cJSON_AddStringToObject(server, "server_id", serverid);

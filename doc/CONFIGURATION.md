@@ -285,6 +285,17 @@ multiple addresses or ports:
     HTTPUpload f00d::beef:bac0:ca1f 8080
 
 
+### HTTP status page ###
+
+The status page can currently take one optional configuration parameter,
+which enables displaying the admin's email address. If ShowEmail is set
+to 0 (the default setting), the address is still available in the status.json
+file which can be downloaded from the server, it's just not rendered on
+within HTML page.
+
+    HTTPStatusOptions ShowEmail=1
+
+
 ### Environment ###
 
 When the server starts up as the super-user (root), it can increase some

@@ -82,6 +82,9 @@ int http_port_upload = 8080;
 char *new_http_bind_upload;
 int new_http_port_upload;
 
+char *http_status_options = NULL;
+char *new_http_status_options = NULL;
+
 int fork_a_daemon;	/* fork a daemon */
 
 int dump_splay;	/* print splay tree information */
@@ -158,6 +161,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "maxclients",		_CFUNC_ do_int,		&maxclients		},
 	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
+	{ "httpstatusoptions",	_CFUNC_ do_string,	&new_http_status_options	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
 	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
@@ -1169,6 +1173,18 @@ int read_config(void)
 		http_bind_upload = new_http_bind_upload;
 		new_http_bind_upload = NULL;
 		http_port_upload = new_http_port_upload;
+	}
+	
+	if (new_http_status_options) {
+		char *o = http_status_options;
+		http_status_options = new_http_status_options;
+		new_http_status_options = NULL;
+		if (o)
+			hfree(o);
+	} else {
+		char *o = http_status_options;
+		http_status_options = NULL;
+		hfree(o);
 	}
 	
 	/* validate uplink config: if there is a single 'multiro' connection

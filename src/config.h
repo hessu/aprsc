@@ -71,6 +71,7 @@ extern char *serverid;
 extern char *passcode;
 extern char *myemail;
 extern char *myadmin;
+extern char *http_status_options;
 
 extern char *cfgfile;
 extern char *pidfile;

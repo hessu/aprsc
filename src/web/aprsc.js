@@ -1,5 +1,7 @@
 <!--
 
+var options = {};
+
 function top_status(c, s)
 {
 	if (!c) {
@@ -28,6 +30,20 @@ function cancel_events(e)
 	if (e.preventDefault) e.preventDefault();
 	if (window.event) e.returnValue = false;
 	if (e.cancel != null) e.cancel = true;
+}
+
+function parse_options(s)
+{
+	options = {};
+	var a = s.split(' ');
+	for (var i = 0; i < a.length; i++) {
+		var p = a[i].split('=');
+		var c = p[0].toLowerCase();
+		options[c] = p[1];
+	}
+	
+	if (options['showemail'] == 1)
+		key_translate['email'] = 'Admin email';
 }
 
 function server_status_host(s)
@@ -605,8 +621,14 @@ var totals_keys = [
 	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx'
 ];
 
+var options_s;
+
 function render(d)
 {
+	if (d['status_options'] != options_s) {
+		options_s = d['status_options'];
+		parse_options(options_s);
+	}
 	if (d['server'] && d['server']['t_now']) {
 		var s = d['server'];
 		

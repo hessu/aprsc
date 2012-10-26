@@ -158,7 +158,8 @@ function conv_none(s)
 	return s;
 }
 
-var listeners_table, uplinks_table, peers_table, clients_table, memory_table, dupecheck_table, totals_table;
+var listeners_table, uplinks_table, peers_table, clients_table, memory_table,
+	dupecheck_table, dupecheck_more_table, totals_table;
 
 var rx_err_strings = {
 	"unknown": 'Unknown error',
@@ -193,6 +194,13 @@ var key_translate = {
 	// dupecheck block
 	'dupes_dropped': 'Duplicate packets dropped',
 	'uniques_out': 'Unique packets seen',
+	
+	// dupecheck_more (variations) block
+	'exact': 'Exact duplicates',
+	'space_trim': 'Dupes with spaces trimmed from end',
+	'8bit_strip': 'Dupes with 8-bit chars stripped out',
+	'8bit_clear': 'Dupes with 8th bit set to 0',
+	'8bit_spaced': 'Dupes with 8-bit characters replaced with spaces',
 	
 	// totals block
 	'clients': 'Clients',
@@ -626,6 +634,8 @@ function render(d)
 		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
 		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
 		render_block('dupecheck', dupecheck_table, u);
+		if (u['variations'])
+			render_block(0, dupecheck_more_table, u['variations']);
 	}
 	
 	if (d['totals']) {
@@ -815,6 +825,13 @@ function gr_switch(id)
 	load_graph();
 }
 
+function toggle(id)
+{
+	$('#' + id + '_show').toggle(100);
+	$('#' + id + '_hide').toggle(100);
+	$('#' + id).toggle(200);
+}
+
 function init()
 {
 	listeners_table = $('#listeners');
@@ -823,6 +840,7 @@ function init()
 	clients_table = $('#clients');
 	memory_table = $('#memory');
 	dupecheck_table = $('#dupecheck');
+	dupecheck_more_table = $('#dupecheck_more');
 	totals_table = $('#totals');
 	server_table = $('#server');
 	

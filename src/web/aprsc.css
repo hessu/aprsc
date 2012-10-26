@@ -9,6 +9,10 @@ body {
 .red { color: #ff5370; }
 .rxerr { color: #0000ff; cursor: pointer; }
 .rxerr_red { color: #ff5370; cursor: pointer; }
+.link { color: #0000ff; cursor: pointer; }
+/* show/hide buttons */
+.show { color: #0000ff; cursor: pointer; }
+.hide { color: #0000ff; cursor: pointer; display: none; }
 
 div.page_title {
 	color: #000;
@@ -84,3 +88,9 @@ div.ttip {
 	display: none;
 }
 
+/* specific tables */
+
+div#dupecheck_more {
+	display: none;
+	margin-left: 20px;
+}

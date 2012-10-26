@@ -1017,7 +1017,9 @@ static int accept_liveupgrade_single(cJSON *client)
 		hlog(LOG_ERR, "Live upgrade: Client %s is in invalid state '%s' (fd %d)", l->addr_s, state->valuestring, l->fd);
 		goto err;
 	}
-	c->keepalive = tick;
+	/* distribute keepalive intervals for the existing old clients
+	 * but send them rather sooner than later */
+	c->keepalive = tick + (random() % (keepalive_interval/2));
 	
 	c->connect_time = t_connect->valueint;
 	c->validated = verified->valueint;

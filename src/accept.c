@@ -29,6 +29,7 @@
 
 #include "accept.h"
 #include "config.h"
+#include "cfgfile.h"
 #include "hlog.h"
 #include "hmalloc.h"
 #include "netlib.h"
@@ -940,6 +941,8 @@ static int accept_liveupgrade_single(cJSON *client)
 	cJSON *client_heard;
 	unsigned addr_len;
 	union sockaddr_u sa;
+	char *argv[256];
+	int i, argc;
 	
 	fd = cJSON_GetObjectItem(client, "fd");
 	listener_id = cJSON_GetObjectItem(client, "listener_id");
@@ -1039,7 +1042,10 @@ static int accept_liveupgrade_single(cJSON *client)
 		sanitize_ascii_string(c->filter_s);
 		
 		char *f = hstrdup(filter->valuestring);
-		filter_parse(c, f, 1);
+		argc = parse_args(argv, f);
+		for (i = 0; i < argc; ++i) {
+			filter_parse(c, argv[i], 1);
+		}
 		hfree(f);
 	}
 	

@@ -27,9 +27,9 @@
 static inline void send_single(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	if (c->udp_port && c->udpclient)
-		clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0);
+		clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0, 0);
 	else
-		clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0);
+		clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0, 0);
 	
 	client_write(self, c, pb->data, pb->packet_len);
 }
@@ -57,6 +57,17 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			cnext = c->class_next; // client_write() MAY destroy the client object!
 			if (c->state == CSTATE_CONNECTED)
 				send_single(self, c, pb);
+		}
+		
+		/* Check if I have the client which sent this dupe, and
+		 * increment it's dupe counter
+		 */
+		/* OPTIMIZE: we walk through all clients for each dupe - how to find it quickly? */
+		for (c = self->clients; (c); c = c->next) {
+			if (c == pb->origin) {
+				clientaccount_add(c, -1, 0, 0, 0, 0, 0, 1);
+				break;
+			}
 		}
 		
 		return;

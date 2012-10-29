@@ -587,7 +587,7 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 	return hstrdup(eb);
 }
 
-void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr)
+void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr, int rxdupes)
 {
 	struct portaccount_t *pa = NULL;
 	int rxdrops = 0;
@@ -604,6 +604,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 	c->localaccount.txbytes   += txbytes;
 	c->localaccount.rxpackets += rxpackets;
 	c->localaccount.txpackets += txpackets;
+	c->localaccount.rxdupes   += rxdupes;
 	if (rxdrops) {
 		c->localaccount.rxdrops += 1;
 		c->localaccount.rxerrs[rxerr] += 1;
@@ -621,6 +622,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 		__sync_fetch_and_add(&pa->txbytes, txbytes);
 		__sync_fetch_and_add(&pa->rxpackets, rxpackets);
 		__sync_fetch_and_add(&pa->txpackets, txpackets);
+		__sync_fetch_and_add(&pa->rxdupes, rxdupes);
 		if (rxdrops) {
 			__sync_fetch_and_add(&pa->rxdrops, 1);
 			__sync_fetch_and_add(&pa->rxerrs[rxerr], 1);
@@ -631,6 +633,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 		pa->txbytes   += txbytes;
 		pa->rxpackets += rxpackets;
 		pa->txpackets += txpackets;
+		pa->rxdupes   += rxdupes;
 		if (rxdrops) {
 			pa->rxdrops += 1;
 			pa->rxerrs[rxerr] += 1;
@@ -848,7 +851,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
 
 		if (i > 0)
-			clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0);
+			clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0, 0);
 			
 		return i;
 	}
@@ -863,7 +866,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		 * will be incremented only when we actually transmit a packet
 		 * instead of a keepalive.
 		 */
-		clientaccount_add( c, IPPROTO_TCP, 0, 0, len, 0, 0);
+		clientaccount_add( c, IPPROTO_TCP, 0, 0, len, 0, 0, 0);
 	}
 	
 	if (c->obuf_end + len > c->obuf_size) {
@@ -1088,7 +1091,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	hlog(LOG_DEBUG, "worker thread passing UDP packet from %s to handler: %*s", addrs, r, c->ibuf);
 	hfree(addrs);
 	*/
-	clientaccount_add( rc, IPPROTO_UDP, r, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	clientaccount_add( rc, IPPROTO_UDP, r, 0, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
 	rc->last_read = tick;
 	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
@@ -1150,7 +1153,7 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 
-	clientaccount_add(c, IPPROTO_TCP, r, 0, 0, 0, 0); /* Number of packets is now unknown,
+	clientaccount_add(c, IPPROTO_TCP, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
 					     byte count is collected.
 					     The incoming_handler() will account
 					     packets. */
@@ -1931,6 +1934,7 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	cJSON_AddNumberToObject(jc, "pkts_rx", c->localaccount.rxpackets);
 	cJSON_AddNumberToObject(jc, "pkts_tx", c->localaccount.txpackets);
 	cJSON_AddNumberToObject(jc, "pkts_ign", c->localaccount.rxdrops);
+	cJSON_AddNumberToObject(jc, "pkts_dup", c->localaccount.rxdupes);
 	cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 	cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 	

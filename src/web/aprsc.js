@@ -98,12 +98,12 @@ function client_bytes_rates(c, k)
 
 function client_pkts_rx(c, k)
 {
-	if (isUndefined(c['pkts_ign']))
-		return c['pkts_rx'];
+	//if (isUndefined(c['pkts_ign']))
+	//	return c['pkts_rx'];
 	
-	var s = c['pkts_rx'] + '/' + c['pkts_ign'];
+	var s = c['pkts_rx'] + '/' + c['pkts_dup'] + '/' + c['pkts_ign'];
 	
-	if (c['pkts_ign'] > 0)
+	if (c['pkts_ign'] > 0 || c['pkts_dup'] > 0)
 		return '<span class="'
 			+ ((c['pkts_ign'] / c['pkts_rx'] > 0.1) ? 'rxerr_red' : 'rxerr')
 			+ '" onclick="return rx_err_popup(event, ' + c['fd'] + ');">' + s + '</span>';
@@ -386,7 +386,7 @@ function rx_err_contents(fd)
 	if (isUndefined(er))
 		return 'No rx errors for client on fd ' + fd;
 	
-	var s = '<b>Received packets dropped: ' + fd_clients[fd]['pkts_ign'] + ' out of ' + fd_clients[fd]['pkts_rx'] + '</b><br />';
+	var s = '<b>Receive drops: ' + fd_clients[fd]['pkts_dup'] + ' dupes, ' + fd_clients[fd]['pkts_ign'] + ' errors in ' + fd_clients[fd]['pkts_rx'] + '</b><br />';
 	
 	for (var i = 0; i < rx_err_codes.length; i++) {
 		if (er[i] < 1)

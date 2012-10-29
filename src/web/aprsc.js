@@ -219,6 +219,8 @@ var key_translate = {
 	'8bit_spaced': 'Dupes with 8-bit bytes replaced with spaces',
 	'low_strip': 'Dupes with low bytes stripped out',
 	'low_spaced': 'Dupes with low bytes replaced with spaces',
+	'del_strip': 'Dupes with DEL bytes stripped out',
+	'del_spaced': 'Dupes with DEL bytes replaced with spaces',
 	
 	// totals block
 	'clients': 'Clients',

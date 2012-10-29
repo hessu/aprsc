@@ -455,6 +455,31 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 		dupecheck_add_buf(tb2, tlen2, DTYPE_LOWDATA_SPACED);
 	}
 	
+	/**********************************************
+	 * tb1: Del characters (0x7f) deleted
+	 * tb2: Del characters replaced with spaces
+	 */
+	tlen1 = tlen2 = 0;
+	for (i = 0; i < ilen; i++) {
+		c = ib[i];
+		if (c == 0x7f) {
+			/* low data, tb2 gets a space and tb1 gets nothing */
+			tb2[tlen2++] = ' ';
+		} else {
+			/* regular stuff */
+			tb1[tlen1++] = c;
+			tb2[tlen2++] = c;
+		}
+	}
+	
+	if (tlen1 != ilen) {
+		/* if there was low data, store it */
+		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+		dupecheck_add_buf(tb1, tlen1, DTYPE_DEL_STRIP);
+		dupecheck_add_buf(tb2, tlen2, DTYPE_DEL_SPACED);
+	}
+	
 	return 0;
 }
 
@@ -766,7 +791,7 @@ static void dupecheck_thread(void)
 		//    hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little, if there was nothing to do */
 		if (n == 0)
-			poll(NULL, 0, 20); // 50 ms
+			poll(NULL, 0, 20); // 20 ms
 	}
 	
 	hlog( LOG_INFO, "Dupecheck thread shut down; seqnum=%u/%u",

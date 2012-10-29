@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 23 + 4 };
+BEGIN { plan tests => 26 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -133,6 +133,22 @@ istest::should_drop(\&ok, $i_tx, $i_rx,
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:lowdata    end",
 	"SRC>DST:low dummy2", 1); # will pass (helper packet)
+
+######
+# 24 send a packet with some DEL chars (< 0x7f), test that trimmed packets are dropped
+istest::txrx(\&ok, $i_tx, $i_rx,
+	"SRC>DST3,qAR,$login:del \x7F\x7Fend",
+	"SRC>DST3,qAR,$login:del \x7F\x7Fend");
+
+# 25: removed
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST3,qAR,$login:del end",
+	"SRC>DST:del dummy1", 1); # will pass (helper packet)
+
+# 26: replaced with spaces
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRC>DST3,qAR,$login:del   end",
+	"SRC>DST:del dummy2", 1); # will pass (helper packet)
 
 # disconnect
 

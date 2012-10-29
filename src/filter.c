@@ -2506,7 +2506,7 @@ static int filter_command_reply(struct worker_t *self, struct client_t *c, int i
  */
 int filter_commands(struct worker_t *self, struct client_t *c, int in_message, const char *s, int len)
 {
-	char *argv[256];	
+	char *argv[256];
 	struct filter_t *f;
 	char *b, *p;
 	int i, argc;

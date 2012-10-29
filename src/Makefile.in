@@ -159,6 +159,7 @@ distclean: clean
 	rm -rf debian/aprsc debian/*.debhelper debian/*.log \
 		debian/aprsc.substvars debian/changelog
 	rm -f ../*.deb ../*.changes
+	rm -f ../tests/data/* ../tests/logs/*
 
 aprsc: $(OBJS)
 	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)

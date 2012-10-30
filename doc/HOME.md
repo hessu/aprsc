@@ -85,7 +85,7 @@ After the software is installed, please go through the
 Other documentation
 ----------------------
 
-* [README](README.html) 
+* [README](README.html)
 * [Paper on aprsc for TAPR DCC 2012](dcc-2012-aprsc.pdf)
 * Presentation slides from TAPR DCC 2012 (will be here shortly)
 

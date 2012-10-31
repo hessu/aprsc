@@ -196,7 +196,19 @@ struct client_heard_t {
 #define INERR_SHORT_PACKET		-15	/* too short packet */
 #define INERR_LONG_PACKET		-16	/* too long packet */
 #define INERR_INV_PATH_CALL		-17	/* invalid callsign in path */
-#define INERR_MIN			-17	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_Q_QAX			-18
+#define INERR_Q_QAZ			-19
+#define INERR_Q_QPATH_MYCALL		-20
+#define INERR_Q_QPATH_CALL_TWICE	-21
+#define INERR_Q_PATH_LOGIN_NOT_LAST	-22
+#define INERR_Q_PATH_CALL_IS_LOCAL_CLIENT	-23
+#define INERR_Q_PATH_CALL_IS_INVALID		-24
+#define INERR_Q_QAU_PATH_CALL_IS_SRCCALL	-25
+#define INERR_Q_NEWQ_BUFFER_SMALL		-26
+#define INERR_Q_NONVAL_MULTI_Q_CALLS		-27
+#define INERR_Q_I_NO_VIACALL			-28
+
+#define INERR_MIN			-28	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

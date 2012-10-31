@@ -57,7 +57,18 @@ const char *inerr_labels[] = {
 	"q_drop",
 	"short_packet",
 	"long_packet",
-	"inv_path_call"
+	"inv_path_call",
+	"q_qax",
+	"q_qaz",
+	"q_path_mycall",
+	"q_path_call_twice",
+	"q_path_login_not_last",
+	"q_path_call_is_local",
+	"q_path_call_inv",
+	"q_qau_path_call_srccall",
+	"q_newq_buffer_small",
+	"q_nonval_multi_q_calls",
+	"q_i_no_viacall"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -754,7 +765,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (path_append_len < 0) {
 		/* the q construct algorithm decided to drop the packet */
 		hlog(LOG_DEBUG, "%s/%s: q construct drop: %d", c->addr_rem, c->username, path_append_len);
-		return INERR_Q_DROP;
+		return path_append_len;
 	}
 	
 	/* get a packet buffer */

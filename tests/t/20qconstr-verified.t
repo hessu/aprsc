@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 40 };
+BEGIN { plan tests => 42 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -293,6 +293,18 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"K1FRA>qAR,K1RFI-C,qAS,$login:/281402z4144.72N/07125.65W>178/001",
 	"K1FRA>qAR,K1RFI-C,qAS,$login:/281402z4144.72N/07125.65W>178/001");
+
+# Test drop case: INERR_Q_QPATH_CALL_TWICE
+
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,qAI,FOO1,FOO1,$login:Same callsign twice in Q path", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
+
+# Test drop case: INERR_Q_I_NO_VIACALL
+
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,I:Old-style I path with no viacall", # should drop
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 # disconnect
 

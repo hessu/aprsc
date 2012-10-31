@@ -185,7 +185,7 @@ var rx_err_strings = {
 	"inv_srccall": 'Invalid source callsign',
 	"no_body": 'No packet body/data after ":"',
 	"inv_dstcall": 'Invalid destination callsign',
-	"disallow_unverified": 'Packet from unverified client',
+	"disallow_unverified": 'Packet from unverified local client',
 	"path_nogate": 'Packet with NOGATE/RFONLY in path',
 	"party_3rd": '3rd-party packet',
 	"general_query": 'General query',
@@ -195,7 +195,18 @@ var rx_err_strings = {
 	"q_drop": 'Q construct algorithm dropped packet',
 	"short_packet": 'Packet too short',
 	"long_packet": 'Packet too long',
-	"inv_path_call": 'Invalid callsign in path'
+	"inv_path_call": 'Invalid callsign in path',
+	"q_qax": 'qAX: Packet from unverified remote client',
+	"q_qaz": 'qAZ construct',
+	"q_path_mycall": 'My ServerID in Q path',
+	"q_path_call_twice": 'Same callsign twice in the Q path',
+	"q_path_login_not_last": 'Local client login found but not last in Q path',
+	"q_path_call_is_local": 'Call in Q path is a local verified client',
+	"q_path_call_inv": 'Invalid callsin in Q path',
+	"q_qau_path_call_srccall": 'qAU callsign in path equals srccall',
+	"q_newq_buffer_small": 'New Q construct too big',
+	"q_nonval_multi_q_calls": 'Multiple callsigns in Q path from unverified client',
+	"q_i_no_viacall": 'I path has no viacall'
 };
 
 var key_translate = {

@@ -669,7 +669,7 @@ void uplink_thread(void *asdf)
 			status_error(3600, "no_uplink");
 			uplink_error_set = 1;
 		} else {
-			if (uplink_error_set != 0) {
+			if (uplink_error_set == 1) {
 				status_error(-1, "no_uplink");
 				uplink_error_set = 0;
 			}

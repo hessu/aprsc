@@ -31,6 +31,7 @@
 
 #include "config.h"
 #include "version.h"
+#include "status.h"
 #include "uplink.h"
 #include "hmalloc.h"
 #include "hlog.h"
@@ -562,6 +563,7 @@ void uplink_thread(void *asdf)
 	sigset_t sigs_to_block;
 	int rc;
 	int next_uplink = -1; /* the index to the next regular uplink candidate */
+	int uplink_error_set = -1;
 	
 	pthreads_profiling_reset("uplink");
 	
@@ -661,6 +663,16 @@ void uplink_thread(void *asdf)
 		if ((rc = pthread_mutex_unlock(&uplink_client_mutex))) {
 			hlog(LOG_CRIT, "close_uplinkers(): could not unlock uplink_client_mutex: %s", strerror(rc));
 			continue;
+		}
+		
+		if (avail_uplink && !has_uplink) {
+			status_error(3600, "no_uplink");
+			uplink_error_set = 1;
+		} else {
+			if (uplink_error_set != 0) {
+				status_error(-1, "no_uplink");
+				uplink_error_set = 0;
+			}
 		}
 		
 		/* sleep for 4 seconds between successful rounds */

@@ -54,6 +54,7 @@ cJSON *liveupgrade_status = NULL;
 struct status_error_t {
 	struct status_error_t *next;
 	char *err;
+	int set;
 	time_t started;
 	time_t ends;
 } *status_errs = NULL;
@@ -76,6 +77,7 @@ struct status_error_t *status_error_find(const char *err)
 	e = hmalloc(sizeof(*e));
 	e->err = hstrdup(err);
 	e->next = status_errs;
+	e->set = -1;
 	status_errs = e;
 	
 	return e;
@@ -99,8 +101,18 @@ void status_error(int ttl, const char *err)
 	}
 	
 	e = status_error_find(err);
-	e->started = time(NULL);
-	e->ends = e->started + ttl;
+	if (ttl > 0) {
+		if (e->set != 1) {
+			e->started = time(NULL);
+			e->ends = e->started + ttl;
+			e->set = 1;
+		}
+	} else {
+		if (e->set != 0) {
+			e->ends = time(NULL);
+			e->set = 0;
+		}
+	}
 	
 	if ((pe = pthread_mutex_unlock(&status_errs_mt))) {
 		hlog(LOG_ERR, "status_error(): could not unlock status_errs_mt: %s", strerror(pe));

@@ -474,6 +474,10 @@ int status_dump_liveupgrade(void)
 	cJSON *root = cJSON_CreateObject();
 	cJSON_AddItemToObject(root, "clients", worker_shutdown_clients);
 	
+	/* rx error counter labels */
+	cJSON *json_rx_errs = cJSON_CreateStringArray(inerr_labels, INERR_BUCKETS);
+	cJSON_AddItemToObject(root, "rx_errs", json_rx_errs);
+	
 	out = cJSON_Print(root);
 	cJSON_Delete(root);
 	worker_shutdown_clients = NULL;

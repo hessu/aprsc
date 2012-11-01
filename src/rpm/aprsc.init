@@ -183,7 +183,7 @@ case "$1" in
 		fi
 		;;
 	*)
-		echo $"Usage: $0 {start|stop|restart|reload|force-reload|condrestart|try-restart|status}"
+		echo $"Usage: $0 {start|stop|restart|reload|force-reload|condrestart|try-restart|liveupgrade|status}"
 		RETVAL=2
 esac
 exit $RETVAL

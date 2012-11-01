@@ -18,6 +18,7 @@
 #include "outgoing.h"
 #include "hlog.h"
 #include "filter.h"
+#include "status.h"
 
 /*
  *	send a single packet to all clients (and peers and uplinks) which
@@ -146,10 +147,12 @@ void process_outgoing(struct worker_t *self)
 			 */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d from future with t %d > tick %d!\n%.*s",
 				self->id, pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
+			status_error(86400, "packet_drop_future");
 		} else if (tick - pb->t > 5) {
 			/* this is a bit too old, are we stuck? */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d aged %d sec (now %d t %d)\n%.*s",
 				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
+			status_error(86400, "packet_drop_hang");
 		} else {
 			process_outgoing_single(self, pb);
 		}

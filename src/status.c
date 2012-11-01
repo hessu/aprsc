@@ -51,6 +51,63 @@ struct cdata_list_t {
 
 cJSON *liveupgrade_status = NULL;
 
+struct status_error_t {
+	struct status_error_t *next;
+	char *err;
+	time_t started;
+	time_t ends;
+} *status_errs = NULL;
+
+pthread_mutex_t status_errs_mt = PTHREAD_MUTEX_INITIALIZER;
+
+/*
+ *	Find an error entry, allocate new if one does not exist
+ */
+
+struct status_error_t *status_error_find(const char *err)
+{
+	struct status_error_t *e;
+	
+	for (e = status_errs; (e); e = e->next) {
+		if (strcmp(e->err, err) == 0)
+			return e;
+	}
+	
+	e = hmalloc(sizeof(*e));
+	e->err = hstrdup(err);
+	e->next = status_errs;
+	status_errs = e;
+	
+	return e;
+}
+
+/*
+ *	Update error flag status
+ *	ttl: seconds to expire the error in, or 0 to clear error now
+ */
+
+void status_error(int ttl, const char *err)
+{
+	struct status_error_t *e;
+	int pe;
+	
+	hlog(LOG_INFO, "status_error: setting error flag %s ttl %d", err, ttl);
+	
+	if ((pe = pthread_mutex_lock(&status_errs_mt))) {
+		hlog(LOG_ERR, "status_error(): could not lock status_errs_mt: %s", strerror(pe));
+		return;
+	}
+	
+	e = status_error_find(err);
+	e->started = time(NULL);
+	e->ends = e->started + ttl;
+	
+	if ((pe = pthread_mutex_unlock(&status_errs_mt))) {
+		hlog(LOG_ERR, "status_error(): could not unlock status_errs_mt: %s", strerror(pe));
+		return;
+	}
+}
+
 /*
  *	status_uname: get operating system name and architecture
  */

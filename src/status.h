@@ -17,6 +17,8 @@
 extern time_t startup_tick;
 extern cJSON *liveupgrade_status;
 
+extern void status_error(int ttl, const char *err);
+
 extern char *status_json_string(int no_cache, int periodical);
 extern int status_dump_file(void);
 extern int status_dump_liveupgrade(void);

@@ -201,7 +201,7 @@ var rx_err_strings = {
 	"q_path_mycall": 'My ServerID in Q path',
 	"q_path_call_twice": 'Same callsign twice in the Q path',
 	"q_path_login_not_last": 'Local client login found but not last in Q path',
-	"q_path_call_is_local": 'Call in Q path is a local verified client',
+	"q_path_call_is_local": 'Callsign in Q path is a local verified client',
 	"q_path_call_inv": 'Invalid callsin in Q path',
 	"q_qau_path_call_srccall": 'qAU callsign in path equals srccall',
 	"q_newq_buffer_small": 'New Q construct too big',

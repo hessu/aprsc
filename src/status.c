@@ -120,6 +120,35 @@ void status_error(int ttl, const char *err)
 	}
 }
 
+cJSON *status_error_json(void)
+{
+	struct status_error_t *e;
+	int pe;
+	struct cJSON *ea;
+	
+	if ((pe = pthread_mutex_lock(&status_errs_mt))) {
+		hlog(LOG_ERR, "status_error_json(): could not lock status_errs_mt: %s", strerror(pe));
+		return NULL;
+	}
+	
+	ea = cJSON_CreateArray();
+	
+	for (e = status_errs; (e); e = e->next) {
+		cJSON *ej = cJSON_CreateObject();
+		cJSON_AddStringToObject(ej, "err", e->err);
+		cJSON_AddNumberToObject(ej, "set", e->set);
+		cJSON_AddNumberToObject(ej, "start", e->started);
+		cJSON_AddNumberToObject(ej, "end", e->ends);
+		cJSON_AddItemToArray(ea, ej);
+	}
+	
+	if ((pe = pthread_mutex_unlock(&status_errs_mt))) {
+		hlog(LOG_ERR, "status_error_json(): could not unlock status_errs_mt: %s", strerror(pe));
+	}
+	
+	return ea;
+}
+
 /*
  *	status_uname: get operating system name and architecture
  */
@@ -375,6 +404,8 @@ char *status_json_string(int no_cache, int periodical)
 	
 	cJSON *json_rx_errs = cJSON_CreateStringArray(inerr_labels, INERR_BUCKETS);
 	cJSON_AddItemToObject(root, "rx_errs", json_rx_errs);
+	
+	cJSON_AddItemToObject(root, "alarms", status_error_json());
 	
 	/* the tree is built, print it out to a malloc'ed string */
 	out = cJSON_Print(root);

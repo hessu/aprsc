@@ -177,6 +177,12 @@ function conv_none(s)
 var listeners_table, uplinks_table, peers_table, clients_table, memory_table,
 	dupecheck_table, dupecheck_more_table, totals_table;
 
+var alarm_strings = {
+	'no_uplink': "Server does not have any uplink connections.",
+	'packet_drop_hang': "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",
+	'packet_drop_future': "Server has dropped packets due to backward time leaps."
+};
+
 var rx_err_strings = {
 	"unknown": 'Unknown error',
 	"no_colon": 'No colon (":") in packet',
@@ -636,6 +642,38 @@ var totals_keys = [
 	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx'
 ];
 
+var alarms_visible = 0;
+
+function render_alarms(alarms)
+{
+	var s = '';
+	for (var i = 0; i < alarms.length; i++) {
+		a = alarms[i];
+		//console.log("alarm " + i + ": " + a['err']);
+		if (a['set'] != 1)
+			continue;
+		s += '<div class="msg_e">'
+			+ ((alarm_strings[a['err']]) ? alarm_strings[a['err']] : a['err'])
+			+ ' See server log for details.</div>';
+	}
+	
+	if (s == "") {
+		if (alarms_visible) {
+			alarms_visible = 0;
+			alarm_div.hide('slow', function() { alarm_div.empty(); });
+			return;
+		}
+		return;
+	}
+	
+	alarm_div.html(s);
+	
+	if (!alarms_visible) {
+		alarm_div.show('fast');
+		alarms_visible = 1;
+	}
+}
+
 var options_s;
 
 function render(d)
@@ -665,6 +703,15 @@ function render(d)
 	
 	t_now = d['server']['t_now'];
 	rx_err_codes = d['rx_errs'];
+	
+	if (d['alarms']) {
+		render_alarms(d['alarms']);
+	} else {
+		if (alarms_visible) {
+			alarms_visible = 0;
+			alarm_div.hide('slow', function() { alarm_div.empty(); });
+		}
+	}
 	
 	if (d['dupecheck']) {
 		var u = d['dupecheck'];
@@ -880,6 +927,7 @@ function init()
 	dupecheck_more_table = $('#dupecheck_more');
 	totals_table = $('#totals');
 	server_table = $('#server');
+	alarm_div = $('#alarms');
 	
 	update_status();
 	gr_switch('totals.tcp_bytes_rx');

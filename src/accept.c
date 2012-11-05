@@ -921,10 +921,56 @@ struct listen_t *liveupgrade_find_listener(int listener_id)
 }
 
 /*
+ *	Map old rxerrs counter values to new ones based on the string mapping
+ */
+
+static int *accept_rx_err_map(cJSON *rx_err_labels, int *old_rxerrs_len)
+{
+	int *rxerr_map = NULL;
+	int i, j;
+
+	*old_rxerrs_len = cJSON_GetArraySize(rx_err_labels);
+	
+	if (*old_rxerrs_len > 0) {
+		rxerr_map = hmalloc(sizeof(*rxerr_map) * *old_rxerrs_len);
+		for (i = 0; i < *old_rxerrs_len; i++) {
+			rxerr_map[i] = -1; // default: no mapping
+			
+			cJSON *rxerr = cJSON_GetArrayItem(rx_err_labels, i);
+			if (!rxerr || rxerr->type != cJSON_String)
+				continue;
+			
+			for (j = 0; j < INERR_BUCKETS; j++) {
+				if (strcmp(inerr_labels[j], rxerr->valuestring) == 0) {
+					hlog(LOG_DEBUG, "Mapped old rxerr index %d with new index %d: %s", i, j, rxerr->valuestring);
+					rxerr_map[i] = j;
+				}
+			}
+		}
+	}
+	
+	return rxerr_map;
+}
+
+static void accept_rx_err_load(struct client_t *c, cJSON *rx_errs, int *rxerr_map, int rxerr_map_len)
+{
+	int i;
+	int alen = cJSON_GetArraySize(rx_errs);
+	
+	for (i = 0; i < rxerr_map_len && i < alen; i++) {
+		if (rxerr_map[i] >= 0 && rxerr_map[i] < INERR_BUCKETS) {
+			cJSON *val = cJSON_GetArrayItem(rx_errs, i);
+			if ((val) && val->type == cJSON_Number && val->valueint > 0)
+				c->localaccount.rxerrs[rxerr_map[i]] = val->valueint;
+		}
+	}
+}
+
+/*
  *	Live upgrade: accept old clients
  */
 
-static int accept_liveupgrade_single(cJSON *client)
+static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_map_len)
 {
 	cJSON *fd, *listener_id, *username, *t_connect;
 	cJSON *state;
@@ -1081,8 +1127,17 @@ static int accept_liveupgrade_single(cJSON *client)
 		}
 	}
 	
+	/* load list of stations heard by this client, to immediately support
+	 * messaging
+	 */
 	if (client_heard && client_heard->type == cJSON_Array)
 		client_heard_json_load(c, client_heard);
+	
+	/* load rxerrs counters, with error name string mapping to support
+	 * adding/reordering of error counters
+	 */
+	if (rx_errs && rx_errs->type == cJSON_Array && rxerr_map && rxerr_map_len > 0)
+		accept_rx_err_load(c, rx_errs, rxerr_map, rxerr_map_len);
 	
 	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
@@ -1107,22 +1162,32 @@ static void accept_liveupgrade_accept(void)
 {
 	int clen, i;
 	int accepted = 0;
+	int old_rxerrs_len = 0;
+	int *rxerr_map = NULL;
 	
 	hlog(LOG_INFO, "Accept: Collecting live upgrade clients...");
 	
+	/* Create mapping for rx_errs table indexes, so that rxerrs can be
+	 * loaded right even if new ones were added in the middle, or if
+	 * the error counters were reordered
+	 */
+	cJSON *rx_err_labels = cJSON_GetObjectItem(liveupgrade_status, "rx_errs");
+	if ((rx_err_labels) && rx_err_labels->type == cJSON_Array)
+		rxerr_map = accept_rx_err_map(rx_err_labels, &old_rxerrs_len);
+	
 	cJSON *clients = cJSON_GetObjectItem(liveupgrade_status, "clients");
-	if (!clients) {
-		hlog(LOG_ERR, "Accept: Live upgrade JSON does not contain 'clients'!");
+	if (!clients || clients->type != cJSON_Array) {
+		hlog(LOG_ERR, "Accept: Live upgrade JSON does not contain 'clients' array!");
 	} else {
 		clen = cJSON_GetArraySize(clients);
 		hlog(LOG_DEBUG, "Clients array length %d", clen);
 		for (i = 0; i < clen; i++) {
 			cJSON *client = cJSON_GetArrayItem(clients, i);
-			if (!client) {
+			if (!client || client->type != cJSON_Object) {
 				hlog(LOG_ERR, "Accept: Live upgrade JSON file, get client %d failed", i);
 				continue;
 			}
-			if (accept_liveupgrade_single(client) == 0)
+			if (accept_liveupgrade_single(client, rxerr_map, old_rxerrs_len) == 0)
 				accepted++;
 		}
 		hlog(LOG_INFO, "Accepted %d of %d old clients in live upgrade", accepted, clen);
@@ -1132,6 +1197,9 @@ static void accept_liveupgrade_accept(void)
 	
 	cJSON_Delete(liveupgrade_status);
 	liveupgrade_status = NULL;
+	
+	if (rxerr_map)
+		hfree(rxerr_map);
 }
 
 /*

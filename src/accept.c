@@ -41,6 +41,7 @@
 #include "incoming.h" /* incoming_handler prototype */
 #include "uplink.h"
 #include "status.h"
+#include "clientlist.h"
 #include "client_heard.h"
 #include "keyhash.h"
 
@@ -1158,6 +1159,13 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	/* set client socket options, return -1 on serious errors */
 	if (set_client_sockopt(l, c) != 0)
 		goto err;
+	
+	/* Add the client to the client list. */
+	int old_fd = clientlist_add(c);
+	if (c->validated && old_fd != -1) {
+		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, c->username);
+		shutdown(old_fd, SHUT_RDWR);
+	}
 	
 	/* ok, found it... lock the new client queue and pass the client */
 	if (pass_client_to_worker(pick_next_worker(), c))

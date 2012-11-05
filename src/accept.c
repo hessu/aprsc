@@ -1012,10 +1012,24 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	obuf = cJSON_GetObjectItem(client, "obuf");
 	client_heard = cJSON_GetObjectItem(client, "client_heard");
 	
-	if (!((fd) && (listener_id) && (state) && (username) && (t_connect)
-		&& (addr_loc) && (app_name) && (app_version)
-		&& (verified) && (obuf_q) && (bytes_rx) && (bytes_tx)
-		&& (pkts_tx) && (pkts_rx) && (pkts_ign) && (rx_errs) && (filter))) {
+	if (!((fd) && fd->type == cJSON_Number
+		&& (listener_id) && listener_id->type == cJSON_Number
+		&& (state) && state->type == cJSON_String
+		&& (username) && username->type == cJSON_String
+		&& (t_connect) && t_connect->type == cJSON_Number
+		&& (addr_loc) && addr_loc->type == cJSON_String
+		&& (app_name) && app_name->type == cJSON_String
+		&& (app_version) && app_version->type == cJSON_String
+		&& (verified) && verified->type == cJSON_Number
+		&& (obuf_q) && obuf_q->type == cJSON_Number
+		&& (bytes_rx) && bytes_rx->type == cJSON_Number
+		&& (bytes_tx) && bytes_tx->type == cJSON_Number
+		&& (pkts_rx) && pkts_rx->type == cJSON_Number
+		&& (pkts_tx) && pkts_tx->type == cJSON_Number
+		&& (pkts_ign) && pkts_ign->type == cJSON_Number
+		&& (rx_errs) && rx_errs->type == cJSON_Array
+		&& (filter) && filter->type == cJSON_String
+		)) {
 			hlog(LOG_ERR, "Live upgrade: Fields missing from client JSON");
 			return -1;
 	}
@@ -1096,14 +1110,14 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	}
 	
 	// set up UDP downstream if necessary
-	if (udp_port && udp_port->valueint > 1024 && udp_port->valueint < 65536) {
+	if (udp_port && udp_port->type == cJSON_Number && udp_port->valueint > 1024 && udp_port->valueint < 65536) {
 		if (login_setup_udp_feed(c, udp_port->valueint) != 0) {
 			hlog(LOG_DEBUG, "%s/%s: Requested UDP on client port with no UDP configured", c->addr_rem, c->username);
 		}
 	}
 	
 	// fill up ibuf
-	if (ibuf && ibuf->valuestring) {
+	if (ibuf && ibuf->type == cJSON_String && ibuf->valuestring) {
 		int l = hex_decode(c->ibuf, c->ibuf_size, ibuf->valuestring);
 		if (l < 0) {
 			hlog(LOG_ERR, "Live upgrade: %s/%s: Failed to decode ibuf: %s", c->addr_rem, c->username, ibuf->valuestring);
@@ -1115,7 +1129,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	}
 	
 	// fill up obuf
-	if (obuf && obuf->valuestring) {
+	if (obuf && obuf->type == cJSON_String && obuf->valuestring) {
 		int l = hex_decode(c->obuf, c->obuf_size, obuf->valuestring);
 		if (l < 0) {
 			hlog(LOG_ERR, "Live upgrade: %s/%s: Failed to decode obuf: %s", c->addr_rem, c->username, obuf->valuestring);

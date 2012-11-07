@@ -933,7 +933,10 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		memset(prefixbuf, 0, sizeof(prefixbuf));
 		i = 0;
 		wildcard = 0;
-		while (*p != 0 && *p != '/' && i < (CALLSIGNLEN_MAX)) {
+		/* loop through the whole callsign, but only copy max CALLSIGNLEN_MAX
+		 * bytes to the buffer
+		 */
+		while (*p != 0 && *p != '/') {
 			if (*p == '*') {
 				wildcard = 1;
 				++p;
@@ -941,17 +944,20 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 					return -1;
 				continue;
 			}
-			*k = *p;
+			if (i < CALLSIGNLEN_MAX) {
+				*k = *p;
+				++k;
+			}
 			++p;
-			++k;
 			++i;
 		}
 		*k = 0;
+		
 		/* OK, we have one prefix part collected,
 		   scan source until next '/' */
-
 		if (*p != 0 && *p != '/') ++p;
 		if (*p == '/') ++p;
+		
 		/* If there is more of patterns, the loop continues.. */
 
 		/* Store the refprefix */

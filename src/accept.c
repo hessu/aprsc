@@ -961,8 +961,8 @@ static void accept_rx_err_load(struct client_t *c, cJSON *rx_errs, int *rxerr_ma
 	for (i = 0; i < rxerr_map_len && i < alen; i++) {
 		if (rxerr_map[i] >= 0 && rxerr_map[i] < INERR_BUCKETS) {
 			cJSON *val = cJSON_GetArrayItem(rx_errs, i);
-			if ((val) && val->type == cJSON_Number && val->valueint > 0)
-				c->localaccount.rxerrs[rxerr_map[i]] = val->valueint;
+			if ((val) && val->type == cJSON_Number && val->valuedouble > 0)
+				c->localaccount.rxerrs[rxerr_map[i]] = val->valuedouble;
 		}
 	}
 }
@@ -1087,11 +1087,11 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	
 	c->connect_time = t_connect->valueint;
 	c->validated = verified->valueint;
-	c->localaccount.rxbytes = bytes_rx->valueint;
-	c->localaccount.txbytes = bytes_tx->valueint;
-	c->localaccount.rxpackets = pkts_rx->valueint;
-	c->localaccount.txpackets = pkts_tx->valueint;
-	c->localaccount.rxdrops = pkts_ign->valueint;
+	c->localaccount.rxbytes = bytes_rx->valuedouble;
+	c->localaccount.txbytes = bytes_tx->valuedouble;
+	c->localaccount.rxpackets = pkts_rx->valuedouble;
+	c->localaccount.txpackets = pkts_tx->valuedouble;
+	c->localaccount.rxdrops = pkts_ign->valuedouble;
 	
 	login_set_app_name(c, app_name->valuestring, app_version->valuestring);
 	

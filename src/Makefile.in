@@ -234,6 +234,7 @@ dist: rpm/aprsc.spec
 
 dist-upload: dist
 	scp ../../$(DISTVERSION).tar.gz aprsc-dist:/data/www/hes/html/aprsc/down/
+	ssh aprsc-dist "cd /data/www/hes/html/aprsc/down/ && rm aprsc-latest.tar.gz; ln -s $(DISTVERSION).tar.gz aprsc-latest.tar.gz"
 
 rpm/aprsc.spec: rpm/aprsc.spec.in
 	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\

@@ -393,7 +393,9 @@ To remove the MOTD, simply remove motd.html or rename it to nomotd.html (or
 something).  There is no need to restart aprsc to make changes in the MOTD.
 
 To display consistent HTML messages, you might want to use the same div CSS
-classes as aprsc itself:
+classes as aprsc itself.  Here are some good sample contents - you can paste
+these as-is to motd.html (without any other extra tags around them - no <html>
+or <body> needed):
 
     <div class='msg_i'>
     Informative message about upcoming maintenance or configuration change.

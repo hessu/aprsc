@@ -74,6 +74,7 @@ static struct http_static_t http_static_files[] = {
 	{ "/aprsc-logo2.png", "aprsc-logo2.png" },
 	{ "/excanvas.min.js", "excanvas.min.js" },
 	{ "/jquery.flot.min.js", "jquery.flot.min.js" },
+	{ "/motd.html", "motd.html" },
 	{ NULL, NULL }
 };
 
@@ -443,10 +444,14 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	
 	snprintf(fname, HTTP_FNAME_LEN, "%s/%s", webdir, cmdp->filename);
 	
-	hlog(LOG_DEBUG, "static file request %s", uri);
+	//hlog(LOG_DEBUG, "static file request %s", uri);
 	
 	if (stat(fname, &st) == -1) {
-		hlog(LOG_ERR, "http static file '%s' not found", fname);
+		/* don't complain about missing motd.html - it's optional. */
+		int level = LOG_ERR;
+		if (strcmp(cmdp->filename, "motd.html") == 0)
+			level = LOG_DEBUG;
+		hlog(level, "http static file '%s' not found", fname);
 		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 		return;
 	}

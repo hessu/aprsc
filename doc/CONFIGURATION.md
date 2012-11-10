@@ -371,3 +371,45 @@ could have a single "allow.acl" file which would contain allow lines for
 both IPv4 and IPv6 addresses, and the ACL can then be referred to from both
 the IPv4 and IPv6 listeners.
 
+
+Message Of The Day
+---------------------
+
+The MOTD feature allows you to push information on the status web page.  The
+message is published by simply creating a HTML file named `motd.html` in the
+web directory (typically `/opt/aprsc/web/motd.html`).  The MOTD will then be
+automatically loaded to the top of the status page, and whenever it's
+updated, it will be automatically refreshed within about 1 minute to anyone
+having the status page open.
+
+The motd.html file contents must be encoded in UTF-8, as that is what the
+rest of the status page uses.  Be sure to select UTF-8 in your editor or
+terminal application.  If you're only using plain English ASCII text and
+HTML tags, this doesn't matter so much.  aprsc does not have a problem with
+displaying Finnish or Japanese, or any other language, as long as the MOTD
+is in UTF-8.
+
+To remove the MOTD, simply remove motd.html or rename it to nomotd.html (or
+something).  There is no need to restart aprsc to make changes in the MOTD.
+
+To display consistent HTML messages, you might want to use the same div CSS
+classes as aprsc itself:
+
+    <div class='msg_i'>
+    Informative message about upcoming maintenance or configuration change.
+    Gets a yellow background and a box with round corners.
+    </div>
+    
+    <div class='msg_s'>
+    Success, green background - happy news!
+    </div>
+    
+    <div class='msg_e'>
+    Error message! Red background.
+    </div>
+
+Make sure your message is correctly HTML formatted and all tags are closed
+properly!  Even if your web browser is happy to display broken HTML, someone
+else's web browser might not, which can potentially break the whole status
+page.  Test formatting with a couple of web browsers (Chrome, Firefox, IE).
+

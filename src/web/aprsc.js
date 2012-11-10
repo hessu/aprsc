@@ -767,6 +767,8 @@ function schedule_update()
 	next_req_timer = setTimeout(update_status, 10000);
 }
 
+var current_status;
+
 function update_success(data)
 {
 	if (next_req_timer) {
@@ -775,6 +777,15 @@ function update_success(data)
 	}
 	
 	top_status();
+	/* If this is the first successful status download, motd needs to be
+	 * updated too.
+	 */
+	if (!current_status) {
+		current_status = data;
+		motd_check();
+	} else {
+		current_status = data;
+	}
 	render(data);
 	schedule_update();
 }
@@ -907,6 +918,43 @@ function gr_switch(id)
 {
 	graph_selected = id;
 	load_graph();
+}
+
+var motd_last;
+
+function motd_hide()
+{
+	$('#motd').hide('slow');
+	motd_last = '';
+}
+
+function motd_success(data)
+{
+	if (data) {
+		/* don't refill and re-animate if it doesn't change. */
+		if (data == motd_last)
+			return;
+		motd_last = data;
+		$('#motd').html(data);
+		$('#motd').show('fast');
+	} else
+		motd_hide();
+}
+
+function motd_check()
+{
+	if (current_status && current_status['motd']) {
+		$.ajax({
+			url: current_status['motd'],
+			dataType: 'html',
+			timeout: 30000,
+			success: motd_success,
+			error: motd_hide
+		});
+	}
+		motd_hide();		
+	
+	setTimeout(motd_check, 61000);
 }
 
 function toggle(id)

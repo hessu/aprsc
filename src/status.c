@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <sys/utsname.h>
 #include <ctype.h>
+#include <sys/stat.h>
 
 #include "status.h"
 #include "cellmalloc.h"
@@ -171,6 +172,24 @@ static void status_uname(cJSON *root)
 }
 
 /*
+ *	Check if motd.html is available
+ */
+
+#define HTTP_FNAME_LEN 1024
+
+static void status_check_motd(cJSON *node)
+{
+	char fname[HTTP_FNAME_LEN];
+	struct stat st;
+	
+	snprintf(fname, HTTP_FNAME_LEN, "%s/motd.html", webdir);
+	if (stat(fname, &st) == -1)
+		return;
+	
+	cJSON_AddStringToObject(node, "motd", "/motd.html");
+}
+
+/*
  *	Generate a JSON status string
  */
 
@@ -203,6 +222,7 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON *root = cJSON_CreateObject();
 	if (http_status_options)
 		cJSON_AddStringToObject(root, "status_options", http_status_options);
+	status_check_motd(root);
 	
 	cJSON *server = cJSON_CreateObject();
 	cJSON_AddStringToObject(server, "server_id", serverid);

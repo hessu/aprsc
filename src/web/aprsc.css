@@ -94,3 +94,6 @@ div#dupecheck_more {
 	display: none;
 	margin-left: 20px;
 }
+
+div#motd { display: none; }
+

@@ -394,8 +394,8 @@ something).  There is no need to restart aprsc to make changes in the MOTD.
 
 To display consistent HTML messages, you might want to use the same div CSS
 classes as aprsc itself.  Here are some good sample contents - you can paste
-these as-is to motd.html (without any other extra tags around them - no <html>
-or <body> needed):
+these as-is to motd.html (without any other extra tags around them - no `html`
+or `body` tags needed):
 
     <div class='msg_i'>
     Informative message about upcoming maintenance or configuration change.

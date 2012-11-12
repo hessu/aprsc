@@ -64,12 +64,12 @@ sub print_config($$)
 	}
 	
 	if (defined $title_add) {
-		$attrs->{'title'} = $title_add . " - " . $attrs->{'title'};
-		$attrs->{'category'} .= ' ' . $title_add;
+		$attrs->{'graph_title'} = $title_add . " - " . $attrs->{'graph_title'};
+		$attrs->{'graph_category'} .= ' ' . $title_add;
 	}
 	
 	foreach my $k (keys %{ $attrs }) {
-		printf("graph_%s %s\n", $k, $attrs->{$k});
+		printf("%s %s\n", $k, $attrs->{$k});
 	}
 	
 	foreach my $src (@order) {
@@ -129,10 +129,10 @@ my $category = 'aprsc';
 my %graphs = (
 	'0clients' => {
 		'config_attrs' => {
-			'title' => 'Clients allocated',
-			'vlabel' => 'clients + pseudoclients allocated',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Clients allocated',
+			'graph_vlabel' => 'clients + pseudoclients allocated',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'clients_total' => {
@@ -148,10 +148,10 @@ my %graphs = (
 	},
 	'1connects' => {
 		'config_attrs' => {
-			'title' => 'Connections',
-			'vlabel' => 'connections/s',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Connections',
+			'graph_vlabel' => 'connections/s',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'conns' => {
@@ -168,10 +168,10 @@ my %graphs = (
 	},
 	'dupecheck' => {
 		'config_attrs' => {
-			'title' => 'Dupechecked packets',
-			'vlabel' => 'packets/s',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Dupechecked packets',
+			'graph_vlabel' => 'packets/s',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'uniq' => {
@@ -195,11 +195,11 @@ my %graphs = (
 	},
 	'dpktstcp' => {
 		'config_attrs' => {
-			'title' => 'APRS packets over TCP',
-			'vlabel' => 'packets/s in (-) / out (+)',
-			'args' => '--base 1000',
-			'order' => 'rx tx',
-			'category' => $category,
+			'graph_title' => 'APRS packets over TCP',
+			'graph_vlabel' => 'packets/s in (-) / out (+)',
+			'graph_args' => '--base 1000',
+			'graph_order' => 'rx tx',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'rx' => {
@@ -228,11 +228,11 @@ my %graphs = (
 	},
 	'dpktsudp' => {
 		'config_attrs' => {
-			'title' => 'APRS packets over UDP',
-			'vlabel' => 'packets/s in (-) / out (+)',
-			'args' => '--base 1000',
-			'order' => 'rx tx',
-			'category' => $category,
+			'graph_title' => 'APRS packets over UDP',
+			'graph_vlabel' => 'packets/s in (-) / out (+)',
+			'graph_args' => '--base 1000',
+			'graph_order' => 'rx tx',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'rx' => {
@@ -261,11 +261,11 @@ my %graphs = (
 	},
 	'ddatatcp' => {
 		'config_attrs' => {
-			'title' => 'APRS data over TCP',
-			'vlabel' => 'bits/s in (-) / out (+)',
-			'args' => '--base 1000',
-			'order' => 'rx tx',
-			'category' => $category,
+			'graph_title' => 'APRS data over TCP',
+			'graph_vlabel' => 'bits/s in (-) / out (+)',
+			'graph_args' => '--base 1000',
+			'graph_order' => 'rx tx',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'rx' => {
@@ -296,11 +296,11 @@ my %graphs = (
 	},
 	'ddataudp' => {
 		'config_attrs' => {
-			'title' => 'APRS data over UDP',
-			'vlabel' => 'bits/s in (-) / out (+)',
-			'args' => '--base 1000',
-			'order' => 'rx tx',
-			'category' => $category,
+			'graph_title' => 'APRS data over UDP',
+			'graph_vlabel' => 'bits/s in (-) / out (+)',
+			'graph_args' => '--base 1000',
+			'graph_order' => 'rx tx',
+			'graph_category' => $category,
 		},
 		'sources' => {
 			'rx' => {
@@ -331,10 +331,10 @@ my %graphs = (
 	},
 	'memcellu' => {
 		'config_attrs' => {
-			'title' => 'Memory cells used',
-			'vlabel' => 'cells',
-			'args' => '--base 1024',
-			'category' => $category,
+			'graph_title' => 'Memory cells used',
+			'graph_vlabel' => 'cells',
+			'graph_args' => '--base 1024',
+			'graph_category' => $category,
 		},
 		'keytail' => 'cells_used',
 		'sources' => {
@@ -342,10 +342,10 @@ my %graphs = (
 	},
 	'memcellub' => {
 		'config_attrs' => {
-			'title' => 'Memory bytes used',
-			'vlabel' => 'bytes',
-			'args' => '--base 1024',
-			'category' => $category,
+			'graph_title' => 'Memory bytes used',
+			'graph_vlabel' => 'bytes',
+			'graph_args' => '--base 1024',
+			'graph_category' => $category,
 		},
 		'keytail' => 'used_bytes',
 		'sources' => {
@@ -353,10 +353,10 @@ my %graphs = (
 	},
 	'memcelluba' => {
 		'config_attrs' => {
-			'title' => 'Memory bytes allocated',
-			'vlabel' => 'bytes',
-			'args' => '--base 1024',
-			'category' => $category,
+			'graph_title' => 'Memory bytes allocated',
+			'graph_vlabel' => 'bytes',
+			'graph_args' => '--base 1024',
+			'graph_category' => $category,
 		},
 		'keytail' => 'allocated_bytes',
 		'sources' => {
@@ -364,10 +364,10 @@ my %graphs = (
 	},
 	'clientlist' => {
 		'config_attrs' => {
-			'title' => 'Clients per listener',
-			'vlabel' => 'clients connected',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Clients per listener',
+			'graph_vlabel' => 'clients connected',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'keytail' => 'clients',
 		'type' => 'GAUGE',
@@ -376,10 +376,10 @@ my %graphs = (
 	},
 	'clientx0pin' => {
 		'config_attrs' => {
-			'title' => 'Packets in per listener',
-			'vlabel' => 'packets/s',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Packets in per listener',
+			'graph_vlabel' => 'packets/s',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'keytail' => 'pkts_rx',
 		'type' => 'DERIVE',
@@ -388,10 +388,10 @@ my %graphs = (
 	},
 	'clientx0dout' => {
 		'config_attrs' => {
-			'title' => 'Data out per listener',
-			'vlabel' => 'bits/s',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Data out per listener',
+			'graph_vlabel' => 'bits/s',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'keytail' => 'bytes_tx',
 		'type' => 'DERIVE',
@@ -399,12 +399,24 @@ my %graphs = (
 		'sources' => {
 		}
 	},
+	'peerinpkts' => {
+		'config_attrs' => {
+			'graph_title' => 'Packets in per peer',
+			'graph_vlabel' => 'packets/s',
+			'graph_args' => '--base 1000 --lower-limit 0',
+			'graph_category' => $category,
+		},
+		'keytail' => 'pkts_rx',
+		'type' => 'DERIVE',
+		'sources' => {
+		}
+	},
 	'rxerrstcp' => {
 		'config_attrs' => {
-			'title' => 'Packets dropped from TCP clients',
-			'vlabel' => 'packets/min',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Packets dropped from TCP clients',
+			'graph_vlabel' => 'packets/min',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'key' => 'totals.tcp_rx_errs',
 		'type' => 'DERIVE',
@@ -414,10 +426,10 @@ my %graphs = (
 	},
 	'rxerrsudp' => {
 		'config_attrs' => {
-			'title' => 'Packets dropped from UDP clients',
-			'vlabel' => 'packets/min',
-			'args' => '--base 1000',
-			'category' => $category,
+			'graph_title' => 'Packets dropped from UDP clients',
+			'graph_vlabel' => 'packets/min',
+			'graph_args' => '--base 1000',
+			'graph_category' => $category,
 		},
 		'key' => 'totals.udp_rx_errs',
 		'type' => 'DERIVE',
@@ -517,6 +529,48 @@ if ($graph =~ /^memcell/) {
 		$draw = 'STACK';
 	}
 	$gr->{'order'} = \@ord;
+} elsif ($graph =~ /^peer/) {
+	my @ord;
+	# convert array to hash
+	my $h = {};
+	foreach my $l (@{ $j->{'peers'} }) {
+		my $k = sprintf("p%s", $l->{'addr_rem'});
+		$k =~ s/[^\w]/_/g;
+		$h->{$k} = $l;
+		
+		if ($graph =~ /^peerinpkts/ && !defined $h->{'out'}) {
+			$h->{'out'} = $l;
+		}
+	}
+	
+	$j->{'peers'} = $h;
+	my $draw = 'AREA';
+	foreach my $k (sort keys %{ $j->{'peers'} }) {
+		push @ord, $k;
+		my $keytail = $gr->{'keytail'};
+		my $label = $j->{'peers'}->{$k}->{'addr_rem'};
+		if ($k eq 'out') {
+			$label = 'Packets out per peer';
+			$keytail = 'pkts_tx';	
+		}
+		$gr->{'sources'}->{$k} = {
+			'k' => 'peers.' . $k . '.' . $keytail,
+			'attrs' => {
+				'label' => $label,
+				'min' => 0,
+				'type' => $gr->{'type'},
+				'draw' => $draw
+			}
+		};
+		if ($gr->{'cdef'}) {
+			$gr->{'sources'}->{$k}->{'attrs'}->{'cdef'} = $k . $gr->{'cdef'};
+		}
+		$draw = 'STACK';
+	}
+	$gr->{'order'} = \@ord;
+	if ($#ord == -1) {
+		$gr->{'config_attrs'}->{'update'} = 'no';
+	}
 } elsif ($graph =~ /^rxerrs(tcp|udp)/) {
 	my @ord;
 	my $keys = $j->{'rx_errs'};

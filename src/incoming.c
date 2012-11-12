@@ -663,8 +663,20 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	int originated_by_client = 0;
 	char *p;
 	
+	/* for quirky clients, trim spaces and NULs from beginning */
+	if (c->quirks_mode) {
+		while ((*s == ' ' || *s == 0) && len > 0) {
+			len--;
+			s++;
+		}
+	}
+	
+	/* check for minimum length of packet */
 	if (len < PACKETLEN_MIN-2)
 		return INERR_SHORT_PACKET;
+	
+	// Easy pointer for comparing against far end..
+	packet_end = s + len;
 	
 	/* a packet looks like:
 	 * SRCCALL>DSTCALL,PATH,PATH:INFO\r\n
@@ -678,8 +690,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 
 	data = path_end;            // Begins with ":"
 	datalen = len - pathlen;    // Not including line end \r\n
-
-	packet_end = s + len;	    // Just to compare against far end..
 
 	/* look for the '>' */
 	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
@@ -732,7 +742,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		if (!c->validated)
 			return INERR_DISALLOW_UNVERIFIED;
 		if (memstr(",TCPXX", via_start, path_end))
-			return INERR_DISALLOW_UNVERIFIED;
+			return INERR_DISALLOW_UNVERIFIED; // TODO: use INERR_DISALLOW_UNVERIFIED_PATH
 	}
 	
 	/* check if the path contains NOGATE or other signs which tell the
@@ -972,8 +982,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 in_drop:	
 	if (e < 0) {
 		/* failed parsing */
-		hlog(LOG_DEBUG, "%s/%s: Dropped packet (%d: %s): %.*s",
-			c->addr_rem, c->username, e, incoming_strerror(e), len, s);
+		hlog(LOG_DEBUG, "%s/%s: Dropped packet (%d: %s) len %d: %.*s",
+			c->addr_rem, c->username, e, incoming_strerror(e), len, len, s);
 	}
 	
 	/* Account the one incoming packet.

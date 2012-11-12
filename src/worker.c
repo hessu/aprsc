@@ -1183,8 +1183,11 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 			  if (c->handler(self, c, IPPROTO_TCP, row_start, s - row_start) < 0)
 			    return -1;
 			}
-			/* skip the rest of EOL (it might have been zeroed by the handler) */
-			while (s < ibuf_end && (*s == '\r' || *s == '\n' || *s == 0))
+			/* skip the first, just-found part of EOL, which might have been
+			 * NULled by the login handler (TODO: make it not NUL it) */
+			s++;
+			/* skip the rest of EOL */
+			while (s < ibuf_end && (*s == '\r' || *s == '\n'))
 				s++;
 			row_start = s;
 		}
@@ -1937,6 +1940,9 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	cJSON_AddNumberToObject(jc, "pkts_dup", c->localaccount.rxdupes);
 	cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 	cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
+	
+	if (c->quirks_mode)
+		cJSON_AddNumberToObject(jc, "quirks_mode", c->quirks_mode);
 	
 	json_add_rxerrs(jc, "rx_errs", c->localaccount.rxerrs);
 	

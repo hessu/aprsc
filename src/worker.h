@@ -334,6 +334,7 @@ struct client_t {
 	char  username_len; /* length of user name */
 	char  hidden;       /* is the user on a hidden listener socket, not shown on status */
 	char  failed_cmds;  /* how many login commands have failed */
+	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
 	
 #ifndef FIXED_IOBUFS
 	char *username;     /* The callsign */

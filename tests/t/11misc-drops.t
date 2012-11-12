@@ -64,6 +64,8 @@ my @pkts = (
 	"SRC>DST,DIGI,qAR,$login:?FOOBAR? general query",
 	"SRC>DST\x08,DIGI,qAR,$login:>should drop ctrl-B in dstcall",
 	"SRC\x08>DST,DIGI,qAR,$login:>should drop ctrl-B in srccall",
+	" SRC>DST,DIGI,qAR,$login:>should drop, space in front of srccall",
+	"\x00SRC>DST,DIGI,qAR,$login:>should drop, null in front of srccall",
 	"SRCXXXXXXX>APRS,qAR,$login:>should drop, too long srccall",
 	"SRC>APRSXXXXXX,qAR,$login:>should drop, too long dstcall",
 	"SRC>APRS,OH2DIGI-12,qAR,$login:>should drop, too long call in path",

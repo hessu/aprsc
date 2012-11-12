@@ -28,6 +28,14 @@ static const char *disallow_login_usernames[] = {
 	NULL
 };
 
+/* a static list of unmaintained applications which receive some
+ * special "treatment"
+ */
+static const char *quirks_mode_blacklist[] = {
+	"HR-IXPWIND", /* Haute Networks HauteWIND: transmits LF NUL for line termination */
+	NULL
+};
+
 /*
  *	Parse the login string in a HTTP POST or UDP submit packet
  *	Argh, why are these not in standard POST parameters in HTTP?
@@ -105,11 +113,35 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 }
 
 /*
+ *	Check if string haystack starts with needle, return 1 if true
+ */
+
+static int prefixmatch(const char *haystack, const char *needle)
+{
+	do {
+		if (*needle == 0)
+			return 1; /* we're at the end of the needle, and no mismatches found */
+		
+		if (*haystack == 0)
+			return 0; /* haystack is shorter than needle, cannot match */
+		
+		if (*haystack != *needle)
+			return 0; /* mismatch found... */
+		
+		/* advance pointers */
+		haystack++;
+		needle++;
+	} while (1);
+}
+
+/*
  *	Set and sanitize application name and version strings
  */
 
 void login_set_app_name(struct client_t *c, const char *app_name, const char *app_ver)
 {
+	int i;
+	
 #ifndef FIXED_IOBUFS
 	c->app_name = hstrdup(app_name);
 #else
@@ -125,6 +157,18 @@ void login_set_app_name(struct client_t *c, const char *app_name, const char *ap
 	c->app_version[sizeof(c->app_version)-1] = 0;
 #endif
 	sanitize_ascii_string(c->app_version);
+	
+	/* check the application name against a static list of broken apps */
+	c->quirks_mode = 0;
+	for (i = 0; (quirks_mode_blacklist[i]); i++) {
+		if (prefixmatch(c->app_name, quirks_mode_blacklist[i])) {
+			hlog(LOG_DEBUG, "%s/%s: Enabling quirks mode for application %s %s",
+				c->addr_rem, c->username, c->app_name, c->app_version);
+			c->quirks_mode = 1;
+			break;
+		}
+	}
+	
 }
 
 int login_setup_udp_feed(struct client_t *c, int port)
@@ -158,6 +202,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	int i, rc;
 	
 	/* make it null-terminated for our string processing */
+	/* TODO: do not modify incoming stream - make s a const char! */
 	char *e = s + len;
 	*e = 0;
 	hlog(LOG_DEBUG, "%s: login string: '%s' (%d)", c->addr_rem, s, len);

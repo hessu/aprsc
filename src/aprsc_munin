@@ -570,6 +570,7 @@ if ($graph =~ /^memcell/) {
 	$gr->{'order'} = \@ord;
 	if ($#ord == -1) {
 		$gr->{'config_attrs'}->{'update'} = 'no';
+		$gr->{'config_attrs'}->{'graph'} = 'no';
 	}
 } elsif ($graph =~ /^rxerrs(tcp|udp)/) {
 	my @ord;

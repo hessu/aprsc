@@ -48,6 +48,7 @@ const char *inerr_labels[] = {
 	"no_body",
 	"inv_dstcall",
 	"disallow_unverified",
+	"disallow_unverified_path",
 	"path_nogate",
 	"party_3rd", /* was 3rd_party, but labels starting with numbers collide with munin */
 	"general_query",
@@ -742,7 +743,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		if (!c->validated)
 			return INERR_DISALLOW_UNVERIFIED;
 		if (memstr(",TCPXX", via_start, path_end))
-			return INERR_DISALLOW_UNVERIFIED; // TODO: use INERR_DISALLOW_UNVERIFIED_PATH
+			return INERR_DISALLOW_UNVERIFIED_PATH;
 	}
 	
 	/* check if the path contains NOGATE or other signs which tell the

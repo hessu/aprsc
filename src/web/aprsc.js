@@ -192,6 +192,7 @@ var rx_err_strings = {
 	"no_body": 'No packet body/data after ":"',
 	"inv_dstcall": 'Invalid destination callsign',
 	"disallow_unverified": 'Packet from unverified local client',
+	"disallow_unverified_path": 'Packet from unverified client (TCPXX)',
 	"path_nogate": 'Packet with NOGATE/RFONLY in path',
 	"party_3rd": '3rd-party packet',
 	"general_query": 'General query',

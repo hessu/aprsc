@@ -186,29 +186,30 @@ struct client_heard_t {
 #define INERR_NO_BODY			-5	/* no packet body/data after : */
 #define INERR_INV_DSTCALL		-6	/* invalid or too long dstcall */
 #define INERR_DISALLOW_UNVERIFIED	-7	/* disallow_unverified = 1, unverified client */
-#define INERR_NOGATE			-8	/* packet path has NOGATE/RFONLY */
-#define INERR_3RD_PARTY			-9	/* 3rd-party packet dropped */
-#define INERR_GENERAL_QUERY		-10	/* general query ?APRS? dropped */
-#define INERR_OUT_OF_PBUFS		-11	/* aprsc ran out of packet buffers */
-#define INERR_CLASS_FAIL		-12	/* aprsc failed to classify packet */
-#define INERR_Q_BUG			-13	/* aprsc q construct code bugging */
-#define INERR_Q_DROP			-14	/* q construct drop */
-#define INERR_SHORT_PACKET		-15	/* too short packet */
-#define INERR_LONG_PACKET		-16	/* too long packet */
-#define INERR_INV_PATH_CALL		-17	/* invalid callsign in path */
-#define INERR_Q_QAX			-18
-#define INERR_Q_QAZ			-19
-#define INERR_Q_QPATH_MYCALL		-20
-#define INERR_Q_QPATH_CALL_TWICE	-21
-#define INERR_Q_PATH_LOGIN_NOT_LAST	-22
-#define INERR_Q_PATH_CALL_IS_LOCAL_CLIENT	-23
-#define INERR_Q_PATH_CALL_IS_INVALID		-24
-#define INERR_Q_QAU_PATH_CALL_IS_SRCCALL	-25
-#define INERR_Q_NEWQ_BUFFER_SMALL		-26
-#define INERR_Q_NONVAL_MULTI_Q_CALLS		-27
-#define INERR_Q_I_NO_VIACALL			-28
+#define INERR_DISALLOW_UNVERIFIED_PATH	-8	/* disallow_unverified = 1, TCPXX path */
+#define INERR_NOGATE			-9	/* packet path has NOGATE/RFONLY */
+#define INERR_3RD_PARTY			-10	/* 3rd-party packet dropped */
+#define INERR_GENERAL_QUERY		-11	/* general query ?APRS? dropped */
+#define INERR_OUT_OF_PBUFS		-12	/* aprsc ran out of packet buffers */
+#define INERR_CLASS_FAIL		-13	/* aprsc failed to classify packet */
+#define INERR_Q_BUG			-14	/* aprsc q construct code bugging */
+#define INERR_Q_DROP			-15	/* q construct drop */
+#define INERR_SHORT_PACKET		-16	/* too short packet */
+#define INERR_LONG_PACKET		-17	/* too long packet */
+#define INERR_INV_PATH_CALL		-18	/* invalid callsign in path */
+#define INERR_Q_QAX			-19
+#define INERR_Q_QAZ			-20
+#define INERR_Q_QPATH_MYCALL		-21
+#define INERR_Q_QPATH_CALL_TWICE	-22
+#define INERR_Q_PATH_LOGIN_NOT_LAST	-23
+#define INERR_Q_PATH_CALL_IS_LOCAL_CLIENT	-24
+#define INERR_Q_PATH_CALL_IS_INVALID		-25
+#define INERR_Q_QAU_PATH_CALL_IS_SRCCALL	-26
+#define INERR_Q_NEWQ_BUFFER_SMALL		-27
+#define INERR_Q_NONVAL_MULTI_Q_CALLS		-28
+#define INERR_Q_I_NO_VIACALL			-29
 
-#define INERR_MIN			-28	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-29	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

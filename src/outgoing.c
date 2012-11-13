@@ -38,6 +38,7 @@ static inline void send_single(struct worker_t *self, struct client_t *c, struct
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
+	struct client_t *origin = pb->origin; /* reduce pointer deferencing in tight loops */
 	
 	/*
 	// debug dump
@@ -65,7 +66,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		 */
 		/* OPTIMIZE: we walk through all clients for each dupe - how to find it quickly? */
 		for (c = self->clients; (c); c = c->next) {
-			if (c == pb->origin) {
+			if (c == origin) {
 				clientaccount_add(c, -1, 0, 0, 0, 0, 0, 1);
 				break;
 			}
@@ -78,7 +79,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		/* client is from downstream, send to upstreams and peers */
 		for (c = self->clients_ups; (c); c = cnext) {
 			cnext = c->class_next; // client_write() MAY destroy the client object!
-			if ((c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER) && c != pb->origin)
+			if ((c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER) && c != origin)
 				send_single(self, c, pb);
 		}
 	}
@@ -110,7 +111,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		   For packet history dumps this test shall be ignored!
 		   Very unlikely check, so check for this last.
 		 */
-		if (c == pb->origin) {
+		if (c == origin) {
 			//hlog(LOG_DEBUG, "%d: not sending to client: originated from this socketsocket", c->fd);
 			continue;
 		}

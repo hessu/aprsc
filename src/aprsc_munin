@@ -170,7 +170,7 @@ my %graphs = (
 		'config_attrs' => {
 			'graph_title' => 'Dupechecked packets',
 			'graph_vlabel' => 'packets/s',
-			'graph_args' => '--base 1000',
+			'graph_args' => '--base 1000  --lower-limit 0',
 			'graph_category' => $category,
 		},
 		'sources' => {
@@ -335,7 +335,7 @@ my %graphs = (
 		'config_attrs' => {
 			'graph_title' => 'Memory cells used',
 			'graph_vlabel' => 'cells',
-			'graph_args' => '--base 1024',
+			'graph_args' => '--base 1024 --lower-limit 0',
 			'graph_category' => $category,
 		},
 		'keytail' => 'cells_used',
@@ -346,7 +346,7 @@ my %graphs = (
 		'config_attrs' => {
 			'graph_title' => 'Memory bytes used',
 			'graph_vlabel' => 'bytes',
-			'graph_args' => '--base 1024',
+			'graph_args' => '--base 1024 --lower-limit 0',
 			'graph_category' => $category,
 		},
 		'keytail' => 'used_bytes',
@@ -357,7 +357,7 @@ my %graphs = (
 		'config_attrs' => {
 			'graph_title' => 'Memory bytes allocated',
 			'graph_vlabel' => 'bytes',
-			'graph_args' => '--base 1024',
+			'graph_args' => '--base 1024 --lower-limit 0',
 			'graph_category' => $category,
 		},
 		'keytail' => 'allocated_bytes',

@@ -179,7 +179,9 @@ my %graphs = (
 				'attrs' => {
 					'label' => 'Unique packets',
 					'min' => 0,
-					'type' => 'DERIVE'
+					'type' => 'DERIVE',
+					'warning' => '30:200',
+					'critical' => '10:400'
 				}
 			},
 			'dup' => {
@@ -559,7 +561,9 @@ if ($graph =~ /^memcell/) {
 				'label' => $label,
 				'min' => 0,
 				'type' => $gr->{'type'},
-				'draw' => $draw
+				'draw' => $draw,
+				'warning' => '0.2:100',
+				'critical' => '0.05:200',
 			}
 		};
 		if ($gr->{'cdef'}) {

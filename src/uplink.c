@@ -189,6 +189,8 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 		return 0;
 	}
 	
+	/* todo: validate server callsign with the q valid path algorithm */
+	
 	/* store the remote server's callsign as the "client username" */
 #ifndef FIXED_IOBUFS
 	if (c->username)

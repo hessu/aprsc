@@ -135,6 +135,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 {
 	int argc;
 	char *argv[256];
+	char *p;
 	
 	hlog(LOG_INFO, "%s: Uplink server login response: \"%.*s\"", c->addr_rem, len, s);
 	
@@ -177,6 +178,10 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 		return 0;
 	}
+	
+	p = strchr(argv[5], ',');
+	if (p)
+		*p = 0;
 	
 	if (strlen(argv[5]) > CALLSIGNLEN_MAX) {
 		hlog(LOG_ERR, "%s: Uplink's server name is too long: '%s'", c->addr_rem, argv[5]);

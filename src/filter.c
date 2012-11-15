@@ -786,11 +786,25 @@ static void filter_check_tcpip(struct pbuf_t *pbuf)
 		pbuf->flags |= F_HAS_TCPIP;
 }
 
+static void filter_keyhashes(struct pbuf_t *pb)
+{
+	pb->srccall_hash = keyhashuc(pb->data, pb->srccall_end - pb->data, 0);
+	
+	if (pb->srcname == pb->data)
+		pb->srcname_hash = pb->srccall_hash;
+	else
+		pb->srcname_hash = keyhashuc(pb->srcname, pb->srcname_len, 0);
+		
+	if (pb->dstname)
+		pb->dstname_hash = keyhashuc(pb->dstname, pb->dstname_len, 0);
+}
+
 void filter_preprocess_dupefilter(struct pbuf_t *pbuf)
 {
 	filter_check_tcpip(pbuf);
 	filter_entrycall_insert(pbuf);
 	filter_wx_insert(pbuf);
+	filter_keyhashes(pbuf);
 }
 
 void filter_postprocess_dupefilter(struct pbuf_t *pbuf)
@@ -2407,7 +2421,7 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		if (pb->packettype & T_MESSAGE) {
 			if (
 				(pb->dstname_len == c->username_len && memcmp(pb->dstname, c->username, c->username_len) == 0)
-				|| (client_heard_check(c, pb->dstname, pb->dstname_len))
+				|| (client_heard_check(c, pb->dstname, pb->dstname_len, pb->dstname_hash))
 			) {
 				/* insert the source callsign to the courtesy position list */
 				client_courtesy_update(c, pb);
@@ -2419,17 +2433,16 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 		 * single position packet, too.
 		 */
 		if (pb->packettype & (T_POSITION|T_OBJECT|T_ITEM)
-			&& client_courtesy_needed(c, pb->srcname, pb->srcname_len)) {
+			&& client_courtesy_needed(c, pb)) {
 				FILTER_CLIENT_DEBUG(self, c, "# courtesy position after message\r\n", NULL);
 				return 1;
-			
 		}
 		/* If the source callsign of a packet having TCPIP* in the path has been
 		 * recently heard on this socket, do pass on the packets to this socket too.
 		 * This lets igates know that the station is also available on the Internet,
 		 * and no TX igating to RF should be done.
 		 */
-		if ((pb->flags & F_HAS_TCPIP) && client_heard_check(c, pb->data, pb->srccall_end - pb->data)) {
+		if ((pb->flags & F_HAS_TCPIP) && client_heard_check(c, pb->data, pb->srccall_end - pb->data, pb->srccall_hash)) {
 			FILTER_CLIENT_DEBUG(self, c, "# igate support TCPIP* packet from a heard station\r\n", NULL);
 			return 1;
 		}

@@ -17,9 +17,10 @@
 
 extern void client_heard_update(struct client_t *c, struct pbuf_t *pb);
 extern void client_courtesy_update(struct client_t *c, struct pbuf_t *pb);
-extern int client_heard_check(struct client_t *c, const char *callsign, int call_len);
-extern int client_courtesy_needed(struct client_t *c, const char *callsign, int call_len);
+extern int client_heard_check(struct client_t *c, const char *callsign, int call_len, uint32_t hash);
+extern int client_courtesy_needed(struct client_t *c, struct pbuf_t *pb);
 
+extern void client_heard_expire(struct client_t *c);
 extern void client_heard_free(struct client_t *c);
 extern void client_heard_init(void);
 

@@ -1084,6 +1084,8 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	/* distribute keepalive intervals for the existing old clients
 	 * but send them rather sooner than later */
 	c->keepalive = tick + (random() % (keepalive_interval/2));
+	/* distribute cleanup intervals over the next 2 minutes */
+	c->cleanup = tick + (random() % 120);
 	
 	c->connect_time = t_connect->valueint;
 	c->validated = verified->valueint;

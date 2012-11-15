@@ -105,14 +105,17 @@ struct pbuf_t {
 		   is ignored while history dumping is being done.
 		*/
 
-	time_t t;		/* when the packet was received */
-	uint32_t seqnum;	/* ever increasing counter, dupecheck sets */
+	uint32_t srcname_hash;	/* source name hash */
+	uint32_t srccall_hash;	/* srccall hash */
+	uint32_t dstname_hash;	/* srccall hash */
 	uint16_t packettype;	/* bitmask: one or more of T_* */
 	uint16_t flags;		/* bitmask: one or more of F_* */
 	uint16_t srcname_len;	/* parsed length of source (object, item, srcall) name 3..9 */
 	uint16_t dstcall_len;	/* parsed length of destination callsign *including* SSID */
 	uint16_t dstname_len;   /* parsed length of message destination including SSID */
 	uint16_t entrycall_len;
+	uint32_t seqnum;	/* ever increasing counter, dupecheck sets */
+	time_t t;		/* when the packet was received */
 	
 	int packet_len;		/* the actual length of the packet, including CRLF */
 	int buf_len;		/* the length of this buffer */
@@ -162,7 +165,7 @@ union sockaddr_u {
 };
 
 /* list of message recipient callsigns heard on a client port */
-#define CLIENT_HEARD_BUCKETS 16 /* up to ~300 calls in heard list per client */
+#define CLIENT_HEARD_BUCKETS 32 /* up to ~300 calls in heard list per client */
 struct client_heard_t {
 	struct client_heard_t *next;
 	struct client_heard_t **prevp;
@@ -292,6 +295,7 @@ struct client_t {
 	time_t connect_time;/* Time of connection */
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
+	time_t cleanup;     /* Time of next cleanup */
 
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 

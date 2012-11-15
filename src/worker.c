@@ -383,6 +383,8 @@ struct client_t *client_alloc(void)
 	c->obuf      = hmalloc(c->obuf_size);
 #endif
 
+	c->cleanup   = tick + 120;
+
 	return c;
 }
 
@@ -1446,6 +1448,13 @@ static void send_keepalives(struct worker_t *self)
 		/* No keepalives on PEER links.. */
 		if ( c->state == CSTATE_COREPEER )
 			continue;
+		
+		/* is it time to clean up? */
+		if (c->cleanup <= tick || c->cleanup > tick + 120+120) {
+			c->cleanup = tick + 120;
+			hlog(LOG_DEBUG, "%s/%s: client cleanup", c->addr_rem, c->username);
+			client_heard_expire(c);
+		}
 		
 		/* Is it time for keepalive? Also send a keepalive if clock jumped backwards. */
 		if ((c->keepalive <= tick && c->obuf_wtime < w_keepalive)

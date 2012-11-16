@@ -3536,6 +3536,21 @@ if test "x$ac_cv_lib_cap_cap_init" = x""yes; then :
 fi
 
 
+for ac_header in sys/eventfd.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "sys/eventfd.h" "ac_cv_header_sys_eventfd_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_eventfd_h" = x""yes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_SYS_EVENTFD_H 1
+_ACEOF
+
+$as_echo "#define HAVE_EVENTFD_H /**/" >>confdefs.h
+
+fi
+
+done
+
+
 for ac_header in alloca.h
 do :
   ac_fn_c_check_header_mongrel "$LINENO" "alloca.h" "ac_cv_header_alloca_h" "$ac_includes_default"

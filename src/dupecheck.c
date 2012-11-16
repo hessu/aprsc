@@ -20,6 +20,10 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#ifdef USE_EVENTFD
+#include <sys/eventfd.h>
+#endif
+
 #include "dupecheck.h"
 #include "config.h"
 #include "hlog.h"
@@ -58,6 +62,11 @@ cellarena_t *dupecheck_cells;
 
 volatile uint32_t  dupecheck_seqnum      = -2000; // Explicit early wrap-around..
 volatile uint32_t  dupecheck_dupe_seqnum = -2000; // Explicit early wrap-around..
+
+#ifdef USE_EVENTFD
+int dupecheck_eventfd = -1;
+struct pollfd dupecheck_eventfd_poll;
+#endif
 
 static int pbuf_seqnum_lag(const uint32_t seqnum, const uint32_t pbuf_seq)
 {
@@ -204,6 +213,18 @@ void dupecheck_init(void)
 				    2048 /* 2 MB at the time */,
 				    0 /* minfree */);
 #endif
+
+#ifdef USE_EVENTFD
+	dupecheck_eventfd = eventfd(0, EFD_NONBLOCK|EFD_CLOEXEC);
+	if (dupecheck_eventfd < 0) {
+		hlog(LOG_ERR, "dupecheck: eventfd init failed: %s", strerror(errno));
+		exit(1);
+	}
+	dupecheck_eventfd_poll.fd = dupecheck_eventfd;
+	dupecheck_eventfd_poll.events = POLLIN;
+	hlog(LOG_DEBUG, "dupecheck: eventfd initialized on fd %d", dupecheck_eventfd);
+#endif
+
 }
 
 static struct dupe_record_t *dupecheck_db_alloc(int len)
@@ -790,14 +811,25 @@ static void dupecheck_thread(void)
 		// if (n > 0)
 		//    hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little, if there was nothing to do */
-		if (n == 0)
+		if (n == 0) {
+#ifdef USE_EVENTFD
+			int p = poll(&dupecheck_eventfd_poll, 1, 1000);
+			hlog(LOG_DEBUG, "dupecheck: poll returned %d", p);
+			if (p > 0) {
+				uint64_t u;
+				p = read(dupecheck_eventfd, &u, sizeof(uint64_t));
+				hlog(LOG_DEBUG, "dupecheck: eventfd read %d: %lu", p, u);
+			}
+#else
 			poll(NULL, 0, 20); // 20 ms
+#endif
+                }
 	}
 	
 	hlog( LOG_INFO, "Dupecheck thread shut down; seqnum=%u/%u",
 	      pbuf_seqnum_lag(dupecheck_seqnum,(uint32_t)-2000),     // initial bias..
 	      pbuf_seqnum_lag(dupecheck_dupe_seqnum,(uint32_t)-2000));
-
+	
 	dupecheck_running = 0;
 }
 
@@ -826,6 +858,15 @@ void dupecheck_stop(void)
 		return;
 	
 	dupecheck_shutting_down = 1;
+	
+#ifdef USE_EVENTFD
+	/* wake up dupecheck from sleep */
+	uint64_t u = 1;
+	int i = write(dupecheck_eventfd, &u, sizeof(uint64_t));
+	if (i != sizeof(uint64_t)) {
+		hlog(LOG_ERR, "incoming_stop() failed to write to dupecheck_eventfd: %s", strerror(errno));
+	}
+#endif
 	
 	if ((e = pthread_join(dupecheck_th, NULL)))
 		hlog(LOG_ERR, "Could not pthread_join dupecheck_th: %s", strerror(e));

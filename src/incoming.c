@@ -17,6 +17,9 @@
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
 
 #ifdef HAVE_ALLOCA_H
 #include <alloca.h>
@@ -35,6 +38,7 @@
 #include "version.h"
 #include "cellmalloc.h"
 #include "messaging.h"
+#include "dupecheck.h"
 
 /* When adding labels here, remember to add the description strings in
  * web/aprsc.js rx_err_strings
@@ -394,8 +398,17 @@ void incoming_flush(struct worker_t *self)
 	self->pbuf_incoming_count += self->pbuf_incoming_local_count;
 	pthread_mutex_unlock(&self->pbuf_incoming_mutex);
 
-	// hlog( LOG_DEBUG, "incoming_flush() sent out %d packets, incoming_count %d",
-	//       self->pbuf_incoming_local_count, incoming_count );
+	hlog( LOG_DEBUG, "incoming_flush() sent out %d packets",
+	       self->pbuf_incoming_local_count );
+
+#ifdef USE_EVENTFD
+	/* wake up dupecheck from sleep */
+	uint64_t u = 1;
+	int i = write(dupecheck_eventfd, &u, sizeof(uint64_t));
+	if (i != sizeof(uint64_t)) {
+		hlog(LOG_ERR, "incoming_flush() failed to write to dupecheck_eventfd: %s", strerror(errno));
+	}
+#endif
 	
 	/* clean the local lockfree queue */
 	self->pbuf_incoming_local = NULL;

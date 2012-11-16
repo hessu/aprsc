@@ -9,6 +9,9 @@
 /* POSIX capabilities */
 #undef HAVE_CAPABILITY_H
 
+/* Linux event fd support */
+#undef HAVE_EVENTFD_H
+
 /* Define to 1 if you have the `gai_strerror' function. */
 #undef HAVE_GAI_STRERROR
 
@@ -59,6 +62,9 @@
 
 /* Define to 1 if you have the <sys/epoll.h> header file. */
 #undef HAVE_SYS_EPOLL_H
+
+/* Define to 1 if you have the <sys/eventfd.h> header file. */
+#undef HAVE_SYS_EVENTFD_H
 
 /* Define to 1 if you have the <sys/prctl.h> header file. */
 #undef HAVE_SYS_PRCTL_H

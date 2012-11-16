@@ -35,6 +35,15 @@
 #endif
 #endif
 
+#ifdef HAVE_EVENTFD_H
+#include <sys/eventfd.h>
+#ifdef EFD_NONBLOCK
+#ifdef EFD_CLOEXEC
+#define USE_EVENTFD
+#endif
+#endif
+#endif
+
 extern int fork_a_daemon;	/* fork a daemon */
 
 extern int dump_requests;	/* print requests */

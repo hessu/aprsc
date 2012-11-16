@@ -69,6 +69,9 @@ AC_CHECK_HEADERS([sys/prctl.h], AC_DEFINE([HAVE_PRCTL_H], [], [Linux process con
 AC_SUBST(LIBCAP)
 AC_CHECK_LIB(cap,cap_init,[LIBCAP="-lcap"])
 
+dnl Check for 
+AC_CHECK_HEADERS([sys/eventfd.h], AC_DEFINE([HAVE_EVENTFD_H], [], [Linux event fd support]))
+
 dnl Checks for system headers
 AC_CHECK_HEADERS([alloca.h],    AC_DEFINE([HAVE_ALLOCA_H]))
 AC_CHECK_HEADERS([poll.h],      AC_DEFINE([HAVE_POLL_H]))

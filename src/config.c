@@ -274,6 +274,7 @@ void free_peerip_config(struct peerip_config_t **lc)
 		*lc = this->next;
 		hfree((void*)this->name);
 		hfree((void*)this->host);
+		hfree((void*)this->serverid);
 		freeaddrinfo(this->ai);
 		hfree(this);
 	}
@@ -454,6 +455,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	struct peerip_config_t *pe;
 	struct listen_config_t *li;
 	struct addrinfo req, *my_ai, *ai, *a;
+	char *peerid = NULL;
 	char *fullhost, *host_s, *port_s;
 	int af;
 
@@ -540,6 +542,14 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	for (i = 4; i < argc; i++) {
 		//hlog(LOG_DEBUG, "PeerGroup: configuring peer %s", argv[i]);
 		
+		peerid = hstrdup(argv[i]);
+		i++;
+		
+		if (i >= argc) {
+			hlog(LOG_ERR, "PeerGroup: No host:port specified for peer ServerID '%s'", peerid);
+			goto err;
+		}
+		
 		/* Parse address */
 		fullhost = hstrdup(argv[i]);
 		if (parse_hostport(argv[i], &host_s, &port_s)) {
@@ -597,6 +607,8 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		memset(pe, 0, sizeof(*pe));
 		pe->name = hstrdup(host_s);
 		pe->host = hstrdup(host_s);
+		pe->serverid = peerid;
+		peerid = NULL;
 		pe->af = af;
 		pe->local_port = localport;
 		pe->remote_port = port;
@@ -614,7 +626,9 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 err:
 	if (fullhost)
 		hfree(fullhost);
-	
+	if (peerid)
+		hfree(peerid);
+		
 	return -2;
 }
 

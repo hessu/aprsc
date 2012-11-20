@@ -449,6 +449,15 @@ static void peerip_clients_config(void)
 		
 		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
 		
+		/* set up peer serverid to username */
+#ifndef FIXED_IOBUFS
+		c->username = hstrdup(pe->serverid);
+#else
+		strncpy(c->username, pe->serverid, sizeof(c->username));
+		c->username[sizeof(c->username)-1] = 0;
+#endif
+		c->username_len = strlen(c->username);
+		
 		/* convert client address to string */
 		s = strsockaddr( &c->udpaddr.sa, c->udpaddrlen );
 		

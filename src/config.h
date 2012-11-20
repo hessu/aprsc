@@ -123,11 +123,13 @@ struct peerip_config_t {
 	
 	const char *name;			/* name of socket */
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
+	const char *serverid;			/* expected/configured serverid of remote */
+	struct addrinfo *ai;
+	
 	int   af;
 	int remote_port;
 	int local_port;
 
-	struct addrinfo *ai;
 
 	int client_flags;
 };

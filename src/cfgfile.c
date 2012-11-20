@@ -252,6 +252,40 @@ int cmdparse(struct cfgcmd *cmds, char *cmdline)
 
  /* ***************************************************************** */
 
+
+char *fgets_multiline(char *buf, int buflen, FILE *fp)
+{
+	char *p = buf;
+	int left = buflen;
+	char *s;
+	int len;
+	
+	while (1) {
+		s = fgets(p, left, fp);
+		if (!s)
+			return NULL;
+		
+		len = strlen(s);
+		
+		/* trim newlines and whitespace */
+		while (len > 1 && (s[len-1] == '\r' || s[len-1] == '\n' || s[len-1] == ' ' || s[len-1] == '\t'))
+			len--;
+		
+		/* nul-terminate */
+		s[len] = 0;
+		
+		/* If the string does not end with a '\', return it */
+		if (s[len-1] != '\\')
+			return buf;
+			
+		/* ahh, line continues... remove the \ and read next line. */
+		len--;
+		s[len] = 0;
+		p = s + len;
+		left = buflen - len;
+	}
+}
+
 /*
  *	Read configuration
  */
@@ -267,8 +301,9 @@ int read_cfgfile(char *f, struct cfgcmd *cmds)
 		return 1;
 	}
 	
-	while (fgets(line, CFGLINE_LEN, fp) != NULL) {
+	while (fgets_multiline(line, CFGLINE_LEN, fp) != NULL) {
 		n++;
+		
 		ret = cmdparse(cmds, line);
 		if (ret < 0) {
 			hlog(LOG_ERR, "Problem in %s at line %d: %s", f, n, line);

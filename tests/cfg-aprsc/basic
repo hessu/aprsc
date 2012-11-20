@@ -52,8 +52,12 @@ Listen "UDP submit port"                          udpsubmit   udp ::0      55080
 Uplink full1 full tcp 127.0.0.1 10153
 
 # UDP peering, first address is my local address, the rest are remote.
-PeerGroup TEST udp 127.0.0.1:16404 127.0.0.1:16405 127.0.0.1:16406
-PeerGroup TEST6 udp [::1]:16504 [::1]:16505 [::1]:16506
+PeerGroup TEST udp 127.0.0.1:16404 \
+	PEER1 127.0.0.1:16405 \
+	PEER2 127.0.0.1:16406
+PeerGroup TEST6 udp [::1]:16504 \
+	PEER61 [::1]:16505 \
+	PEER62 [::1]:16506
 
 ### HTTP listener ##########
 # Status port provides a status view to web browsers.

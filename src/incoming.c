@@ -933,13 +933,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
 	
-	/* If the packet came in on a filtered port, and if it's a position packet
-	 * (not object/item), mark the station as heard on this port, so that
-	 * messages can be routed to it.
+	/* If the packet came in on a filtered port, mark the station as
+	 * heard on this port, so that messages can be routed to it.
 	 */
-	if ((c->flags & CLFLAGS_IGATE) && (pb->packettype & T_POSITION))
+	if (c->flags & CLFLAGS_IGATE)
 		client_heard_update(c, pb);
-
+	
 	/* put the buffer in the thread's incoming queue */
 	*self->pbuf_incoming_local_last = pb;
 	self->pbuf_incoming_local_last = &pb->next;

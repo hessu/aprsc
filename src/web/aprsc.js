@@ -322,6 +322,7 @@ var uplink_cols = {
 };
 
 var peer_cols = {
+	'username': 'Server ID',
 	'addr_rem_shown': 'Address',
 	'since_last_read': 'Last in',
 	'pkts_tx': 'Packets Tx',

@@ -108,7 +108,7 @@ struct portaccount_t *port_accounter_alloc(void)
 	p->refcount = 1;
 	pthread_mutex_init( & p->mutex, NULL );
 
-	hlog(LOG_DEBUG, "new port_accounter %p", p);
+	//hlog(LOG_DEBUG, "new port_accounter %p", p);
 
 	return p;
 }
@@ -141,7 +141,7 @@ static void port_accounter_add(struct portaccount_t *p)
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "port_accounter_add %p", p);
+	//hlog(LOG_DEBUG, "port_accounter_add %p", p);
 
 	++ p->refcount;
 	++ p->counter;
@@ -176,7 +176,7 @@ void port_accounter_drop(struct portaccount_t *p)
 		return;
 	}
 
-	hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
+	//hlog(LOG_DEBUG, "port_accounter_drop(%p) refcount=%d", p, r);
 
 	if (r == 0) {
 		/* Last reference is being destroyed */

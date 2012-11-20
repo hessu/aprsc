@@ -398,12 +398,11 @@ void incoming_flush(struct worker_t *self)
 	self->pbuf_incoming_count += self->pbuf_incoming_local_count;
 	pthread_mutex_unlock(&self->pbuf_incoming_mutex);
 
-	hlog( LOG_DEBUG, "incoming_flush() sent out %d packets",
-	       self->pbuf_incoming_local_count );
+	//hlog( LOG_DEBUG, "incoming_flush() sent out %d packets", self->pbuf_incoming_local_count );
 
 #ifdef USE_EVENTFD
 	/* wake up dupecheck from sleep */
-	uint64_t u = 1;
+	uint64_t u = 1; // could set to pbuf_incoming_local_count, but it wouldn't be used for anything.
 	int i = write(dupecheck_eventfd, &u, sizeof(uint64_t));
 	if (i != sizeof(uint64_t)) {
 		hlog(LOG_ERR, "incoming_flush() failed to write to dupecheck_eventfd: %s", strerror(errno));

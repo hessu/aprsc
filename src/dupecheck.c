@@ -814,11 +814,11 @@ static void dupecheck_thread(void)
 		if (n == 0) {
 #ifdef USE_EVENTFD
 			int p = poll(&dupecheck_eventfd_poll, 1, 1000);
-			hlog(LOG_DEBUG, "dupecheck: poll returned %d", p);
+			//hlog(LOG_DEBUG, "dupecheck: poll returned %d", p);
 			if (p > 0) {
 				uint64_t u;
 				p = read(dupecheck_eventfd, &u, sizeof(uint64_t));
-				hlog(LOG_DEBUG, "dupecheck: eventfd read %d: %lu", p, u);
+				//hlog(LOG_DEBUG, "dupecheck: eventfd read %d: %lu", p, u);
 			}
 #else
 			poll(NULL, 0, 20); // 20 ms

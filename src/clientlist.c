@@ -50,8 +50,8 @@ struct clientlist_t {
 	int   fd;               /* File descriptor, can be used by another
 	                           thread to shut down a socket */
 	
-	void *client_id;	/* DO NOT REFERENCE - just used for an ID */
 	uint32_t hash;		/* hash value */
+	void *client_id;	/* DO NOT REFERENCE - just used for an ID */
 };
 
 /* hash buckets - serious overkill, but great for 40k clients */

@@ -129,7 +129,7 @@ sub connect($;%)
 				return 0;
 			}
 			
-			select(undef, undef, undef, 0.5);
+			select(undef, undef, undef, 0.1);
 		}
 	}
 	

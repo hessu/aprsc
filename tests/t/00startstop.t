@@ -10,5 +10,6 @@ my $p = new runproduct('basic');
 
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
+sleep(1);
 ok($p->stop(), 1, "Failed to stop product");
 

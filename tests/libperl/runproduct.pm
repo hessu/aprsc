@@ -127,7 +127,7 @@ sub start($)
 	}
 	
 	# let it start...
-	sleep(1);
+	sleep(0.4);
 	
 	my $kid = waitpid($pid, WNOHANG);
 	

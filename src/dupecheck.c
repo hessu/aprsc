@@ -684,6 +684,12 @@ static void dupecheck_thread(void)
 	int c, d;
 	int pb_out_count, pb_out_dupe_count;
 	time_t cleanup_tick = now;
+
+#ifndef USE_EVENTFD
+	struct timespec sleepspec;
+	sleepspec.tv_sec = 0;
+	sleepspec.tv_nsec = 30 * 1000 * 1000;
+#endif
 	
 	pthreads_profiling_reset("dupecheck");
 
@@ -821,7 +827,8 @@ static void dupecheck_thread(void)
 				//hlog(LOG_DEBUG, "dupecheck: eventfd read %d: %lu", p, u);
 			}
 #else
-			poll(NULL, 0, 20); // 20 ms
+			nanosleep(&sleepspec, NULL);
+			//poll(NULL, 0, 20); // 20 ms
 #endif
                 }
 	}

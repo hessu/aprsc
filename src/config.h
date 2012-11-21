@@ -35,6 +35,7 @@
 #endif
 #endif
 
+#undef HAVE_EVENTFD_H
 #ifdef HAVE_EVENTFD_H
 #include <sys/eventfd.h>
 #ifdef EFD_NONBLOCK

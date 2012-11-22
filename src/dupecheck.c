@@ -816,21 +816,18 @@ static void dupecheck_thread(void)
 
 		// if (n > 0)
 		//    hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
-		/* sleep a little, if there was nothing to do */
-		if (n == 0) {
+		/* sleep a little */
 #ifdef USE_EVENTFD
-			int p = poll(&dupecheck_eventfd_poll, 1, 1000);
-			//hlog(LOG_DEBUG, "dupecheck: poll returned %d", p);
-			if (p > 0) {
-				uint64_t u;
-				p = read(dupecheck_eventfd, &u, sizeof(uint64_t));
-				//hlog(LOG_DEBUG, "dupecheck: eventfd read %d: %lu", p, u);
-			}
+		int p = poll(&dupecheck_eventfd_poll, 1, 1000);
+		//hlog(LOG_DEBUG, "dupecheck: poll returned %d", p);
+		if (p > 0) {
+			uint64_t u;
+			p = read(dupecheck_eventfd, &u, sizeof(uint64_t));
+			//hlog(LOG_DEBUG, "dupecheck: eventfd read %d: %lu", p, u);
+		}
 #else
-			nanosleep(&sleepspec, NULL);
-			//poll(NULL, 0, 20); // 20 ms
+		nanosleep(&sleepspec, NULL);
 #endif
-                }
 	}
 	
 	hlog( LOG_INFO, "Dupecheck thread shut down; seqnum=%u/%u",

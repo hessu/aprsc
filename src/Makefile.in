@@ -152,7 +152,7 @@ clean:
 
 distclean: clean
 	rm -f aprsc
-	rm -r aprsc.8
+	rm -f aprsc.8
 	rm -f ac-hdrs.h Makefile config.log config.status
 	rm -rf autom4te.cache
 	rm -f build-stamp configure-stamp

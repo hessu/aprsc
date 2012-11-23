@@ -583,13 +583,17 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 			goto err;
 		}
 		
-		/* check that the address is not mine (loop!), and that we don't have
-		 * it configured already (dupes!)
+		/* Check that the address is not mine (loop!), and that we don't have
+		 * it configured already (dupes!). My address is ignored quietly, allowing symmetric
+		 * peer configs on all nodes.
 		 */
 		
 		if (ai_comp(ai, my_ai)) {
-			hlog(LOG_ERR, "PeerGroup: remote address %s is the same as my local address, would cause a loop!", fullhost);
-			goto err;
+			//hlog(LOG_DEBUG, "PeerGroup: Ignoring %s - it's me, my local address", fullhost);
+			hfree(fullhost);
+			hfree(peerid);
+			freeaddrinfo(ai);
+			continue;
 		}
 		
 		for (pe = *lq; (pe); pe = pe->next) {

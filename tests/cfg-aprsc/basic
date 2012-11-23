@@ -53,9 +53,11 @@ Uplink full1 full tcp 127.0.0.1 10153
 
 # UDP peering, first address is my local address, the rest are remote.
 PeerGroup TEST udp 127.0.0.1:16404 \
+	SELF 127.0.0.1:16404 \
 	PEER1 127.0.0.1:16405 \
 	PEER2 127.0.0.1:16406
 PeerGroup TEST6 udp [::1]:16504 \
+	SELF6 [::1]:16504 \
 	PEER61 [::1]:16505 \
 	PEER62 [::1]:16506
 

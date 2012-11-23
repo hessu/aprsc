@@ -550,7 +550,8 @@ if ($graph =~ /^memcell/) {
 	foreach my $k (sort keys %{ $j->{'peers'} }) {
 		push @ord, $k;
 		my $keytail = $gr->{'keytail'};
-		my $label = $j->{'peers'}->{$k}->{'addr_rem'};
+		my $label = ((defined $j->{'peers'}->{$k}->{'username'}) ? $j->{'peers'}->{$k}->{'username'} . ' ' : '')
+			. $j->{'peers'}->{$k}->{'addr_rem'};
 		if ($k eq 'out') {
 			$label = 'Packets out per peer';
 			$keytail = 'pkts_tx';	

@@ -353,6 +353,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		}
 	}
 	
+	/* clean up the filter string so that it doesn't contain invalid
+	 * UTF-8 or other binary stuff. */
+	sanitize_ascii_string(c->filter_s);
+	
 	/* ok, login succeeded, switch handler */
 	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
 	

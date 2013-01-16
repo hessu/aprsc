@@ -200,9 +200,9 @@ int parse_args_noshell(char *argv[],char *cmd)
 
 void sanitize_ascii_string(char *s)
 {
-	char *p;
+	unsigned char *p;
 	
-	for (p = s; *p; p++) {
+	for (p = (unsigned char *)s; *p; p++) {
 		if (iscntrl(*p) || !(isascii(*p)))
 			*p = '_';
 	}

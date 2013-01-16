@@ -51,7 +51,7 @@ pthread_mutex_t udpclient_mutex = PTHREAD_MUTEX_INITIALIZER;
 int workers_running;
 int sock_write_expire  = 25;    /* 25 seconds, smaller than the 30-second dupe check window. */
 int keepalive_interval = 20;    /* 20 seconds for individual socket, NOT all in sync! */
-int keepalive_poll_freq = 2;	/* keepalive analysis scan interval */
+#define KEEPALIVE_POLL_FREQ 2	/* keepalive analysis scan interval */
 int obuf_writes_threshold = 16;	/* This many writes per keepalive scan interval switch socket
 				   output to buffered. */
 int obuf_writes_threshold_hys = 6; /* Less than this, and switch back. */
@@ -830,7 +830,7 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	/* Count the number of writes towards this client,  the keepalive
 	   manager monitors this counter to determine if the socket should be
 	   kept in BUFFERED mode, or written immediately every time.
-	   Buffer flushing is done every keepalive_poll_freq (2) seconds.
+	   Buffer flushing is done every KEEPALIVE_POLL_FREQ (2) seconds.
 	*/
 	c->obuf_writes++;
 
@@ -1599,8 +1599,8 @@ void worker_thread(struct worker_t *self)
 		t5 = tick;
 
 		/* time of next keepalive broadcast ? */
-		if (tick >= next_keepalive) {
-			next_keepalive = tick + keepalive_poll_freq; /* Run them every 2 seconds */
+		if (tick >= next_keepalive || next_keepalive > tick + KEEPALIVE_POLL_FREQ*2) {
+			next_keepalive = tick + KEEPALIVE_POLL_FREQ; /* Run them every 2 seconds */
 			send_keepalives(self);
 			
 			/* time of daily worker cleanup? */

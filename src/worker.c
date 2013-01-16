@@ -1544,6 +1544,7 @@ void worker_thread(struct worker_t *self)
 {
 	sigset_t sigs_to_block;
 	time_t next_keepalive = tick + 2;
+	time_t next_24h_cleanup = tick + 86400;
 	char myname[20];
 	struct pbuf_t *p;
 #if 0
@@ -1601,6 +1602,14 @@ void worker_thread(struct worker_t *self)
 		if (tick >= next_keepalive) {
 			next_keepalive = tick + keepalive_poll_freq; /* Run them every 2 seconds */
 			send_keepalives(self);
+			
+			/* time of daily worker cleanup? */
+			if (tick >= next_24h_cleanup || tick < next_24h_cleanup - 100000) {
+				hlog(LOG_DEBUG, "worker %d: 24h clean up event", self->id);
+				/* currently the cleanup is pretty lean. */
+				self->internal_packet_drops = 0;
+				next_24h_cleanup = tick + 86400;
+			}
 		}
 		
 		t6 = tick;

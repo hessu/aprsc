@@ -447,6 +447,11 @@ struct worker_t {
 
 	uint32_t	last_pbuf_seqnum;
 	uint32_t	last_pbuf_dupe_seqnum;
+	
+	/* how many packets were dropped internally within this worker
+	 * (process hangs and time jumps)
+	 */
+	unsigned int internal_packet_drops;
 };
 
 extern cJSON *worker_shutdown_clients;

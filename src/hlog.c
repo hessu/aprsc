@@ -435,7 +435,8 @@ int writepid(char *name)
 	char s[32];
 	int l;
 	
-	if (!(f = open(name, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH))) {
+	f = open(name, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+	if (f < 0) {
 		hlog(LOG_CRIT, "Could not open %s for writing: %s",
 			name, strerror(errno));
 		return 0;

@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 26 + 4 };
+BEGIN { plan tests => 28 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -149,6 +149,17 @@ istest::should_drop(\&ok, $i_tx, $i_rx,
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:del   end",
 	"SRC>DST:del dummy2", 1); # will pass (helper packet)
+
+######
+# 27: send a really long packet, and then a dupe copy
+my $long = "SRC>LONG,qAR,$login:long ";
+$long .= "a" x (509-length($long));
+istest::txrx(\&ok, $i_tx, $i_rx, $long, $long);
+
+# 28: duplicate copy
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	$long,
+	"SRC>LONG:long dummy", 1); # will pass (helper packet)
 
 # disconnect
 

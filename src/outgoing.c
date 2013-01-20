@@ -25,14 +25,14 @@
  *	should have a copy
  */
 
-static inline void send_single(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+static inline void send_single(struct worker_t *self, struct client_t *c, char *data, int len)
 {
 	if (c->udp_port && c->udpclient)
 		clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0, 0);
 	else
 		clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0, 0);
 	
-	client_write(self, c, pb->data, pb->packet_len);
+	client_write(self, c, data, len);
 }
 
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
@@ -55,10 +55,20 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	
 	if (pb->flags & F_DUPE) {
 		/* Duplicate packet. Don't send, unless client especially wants! */
-		for (c = self->clients_dupe; (c); c = cnext) {
-			cnext = c->class_next; // client_write() MAY destroy the client object!
-			if (c->state == CSTATE_CONNECTED)
-				send_single(self, c, pb);
+		if (self->clients_dupe) {
+			/* if we have any dupe clients at all, generate a version with "dup\t"
+			 * prefix to avoid regular clients processing dupes
+			 */
+			char dupe_sendbuf[PACKETLEN_MAX+7];
+			memcpy(dupe_sendbuf, "dup\t", 4);
+			memcpy(dupe_sendbuf + 4, pb->data, pb->packet_len);
+			int dupe_len = pb->packet_len + 4;
+			
+			for (c = self->clients_dupe; (c); c = cnext) {
+				cnext = c->class_next; // client_write() MAY destroy the client object!
+				if (c->state == CSTATE_CONNECTED)
+					send_single(self, c, dupe_sendbuf, dupe_len);
+			}
 		}
 		
 		/* Check if I have the client which sent this dupe, and
@@ -80,7 +90,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		for (c = self->clients_ups; (c); c = cnext) {
 			cnext = c->class_next; // client_write() MAY destroy the client object!
 			if ((c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER) && c != origin)
-				send_single(self, c, pb);
+				send_single(self, c, pb->data, pb->packet_len);
 		}
 	}
 	
@@ -116,7 +126,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			continue;
 		}
 		
-		send_single(self, c, pb);
+		send_single(self, c, pb->data, pb->packet_len);
 	}
 }
 

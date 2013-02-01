@@ -487,6 +487,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	
 	if (parse_hostport(argv[3], &host_s, &port_s)) {
 		hlog(LOG_ERR, "PeerGroup: Invalid local host:port specification '%s'", fullhost);
+		hfree(fullhost);
 		return -2;
 	}
 	

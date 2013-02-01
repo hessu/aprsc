@@ -775,7 +775,9 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 		c->next->prevp = c->prevp;
 	*c->prevp = c->next;
 	
-	/* link the classified clients list together over this node */
+	/* link the classified clients list together over this node, but only if
+	 * the client has fully logged in and classification has been done
+	 */
 	if (c->class_prevp) {
 		*c->class_prevp = c->class_next;
 		if (c->class_next)
@@ -1265,6 +1267,58 @@ static int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 }
 
 /*
+ *	Classify a client and put it in the correct outgoing processor class
+ *	list. This will enable outgoing packet transmission for the client. 
+ */
+
+static void worker_classify_client(struct worker_t *self, struct client_t *c)
+{
+	struct client_t *class_next = NULL;
+	struct client_t **class_prevp = NULL;
+	
+	if (c->flags & CLFLAGS_PORT_RO) {
+		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified readonly", self->id, c->fd);
+		class_next = self->clients_ro;
+		class_prevp = &self->clients_ro;
+	} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified upstream/peer", self->id, c->fd);
+		class_next = self->clients_ups;
+		class_prevp = &self->clients_ups;
+	} else if (c->flags & CLFLAGS_DUPEFEED) {
+		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified dupefeed", self->id, c->fd);
+		class_next = self->clients_dupe;
+		class_prevp = &self->clients_dupe;
+	} else if (c->flags & CLFLAGS_INPORT) {
+		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified other", self->id, c->fd);
+		class_next = self->clients_other;
+		class_prevp = &self->clients_other;
+	} else {
+		hlog(LOG_ERR, "classify_client(worker %d): client fd %d NOT CLASSIFIED - will not get any packets", self->id, c->fd);
+	}
+	
+	c->class_next = class_next;
+	if (class_next)
+		class_next->class_prevp = &c->class_next;
+	*class_prevp = c;
+	c->class_prevp = class_prevp;
+}
+
+/*
+ *	Mark the client connected and do whatever processing is needed
+ *	to start transmitting data to it.
+ */
+
+void worker_mark_client_connected(struct worker_t *self, struct client_t *c)
+{
+	c->state = CSTATE_CONNECTED;
+	
+	/* classify the client and put it in the right list of clients for
+	 * outgoing data to start flowing.
+	 */
+	worker_classify_client(self, c);
+}
+
+/*
  *	move new clients from the new clients queue to the worker thread
  */
 
@@ -1313,32 +1367,12 @@ static void collect_new_clients(struct worker_t *self)
 			self->clients = c;
 			c->prevp = &self->clients;
 			
-			struct client_t *class_next = NULL;
-			struct client_t **class_prevp = NULL;
-			if (c->flags & CLFLAGS_PORT_RO) {
-				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified readonly", self->id, c->fd);
-				class_next = self->clients_ro;
-				class_prevp = &self->clients_ro;
-			} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
-				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified upstream/peer", self->id, c->fd);
-				class_next = self->clients_ups;
-				class_prevp = &self->clients_ups;
-			} else if (c->flags & CLFLAGS_DUPEFEED) {
-				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified dupefeed", self->id, c->fd);
-				class_next = self->clients_dupe;
-				class_prevp = &self->clients_dupe;
-			} else if (c->flags & CLFLAGS_INPORT) {
-				hlog(LOG_DEBUG, "collect_new_clients(worker %d): client fd %d classified other", self->id, c->fd);
-				class_next = self->clients_other;
-				class_prevp = &self->clients_other;
-			} else {
-				hlog(LOG_ERR, "collect_new_clients(worker %d): client fd %d NOT CLASSIFIED - will not get packets", self->id, c->fd);
-			}
-			c->class_next = class_next;
-			if (class_next)
-				class_next->class_prevp = &c->class_next;
-			*class_prevp = c;
-			c->class_prevp = class_prevp;
+			/* If this client is already in connected state, classify it
+			 * (live upgrading). Also, if it's a corepeer, it's not going to
+			 * "log in" later and it needs to be classified now.
+			 */
+			if (c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER)
+				worker_classify_client(self, c);
 		}
 		
 		/* If the new client is an UDP core peer, we will add it's FD to the

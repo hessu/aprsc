@@ -66,8 +66,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			
 			for (c = self->clients_dupe; (c); c = cnext) {
 				cnext = c->class_next; // client_write() MAY destroy the client object!
-				if (c->state == CSTATE_CONNECTED)
-					send_single(self, c, dupe_sendbuf, dupe_len);
+				send_single(self, c, dupe_sendbuf, dupe_len);
 			}
 		}
 		
@@ -89,7 +88,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		/* client is from downstream, send to upstreams and peers */
 		for (c = self->clients_ups; (c); c = cnext) {
 			cnext = c->class_next; // client_write() MAY destroy the client object!
-			if ((c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER) && c != origin)
+			if (c != origin)
 				send_single(self, c, pb->data, pb->packet_len);
 		}
 	}
@@ -99,12 +98,6 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	 */
 	for (c = self->clients_other; (c); c = cnext) {
 		cnext = c->class_next; // client_write() MAY destroy the client object!
-		
-		/* Do not send to clients that are not logged in. */
-		if (c->state != CSTATE_CONNECTED) {
-			//hlog(LOG_DEBUG, "%d/%s: not sending to client: not connected", c->fd, c->username);
-			continue;
-		}
 		
 		/* If not full feed, process filters to see if the packet should be sent. */
 		if (( (c->flags & CLFLAGS_FULLFEED) != CLFLAGS_FULLFEED) && filter_process(self, c, pb) < 1) {
@@ -118,7 +111,6 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		   recycled on a newly connected client, but if the new client
 		   is a long living one, all further packets will be accepted
 		   just fine.
-		   For packet history dumps this test shall be ignored!
 		   Very unlikely check, so check for this last.
 		 */
 		if (c == origin) {

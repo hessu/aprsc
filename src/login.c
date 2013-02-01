@@ -366,8 +366,6 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			    serverid );
 	if (rc < -2)
 		return rc; // The client probably got destroyed!
-
-	c->state = CSTATE_CONNECTED;
 	
 	hlog(LOG_DEBUG, "%s: login '%s'%s%s%s%s%s%s%s%s",
 	     c->addr_rem, username,
@@ -380,6 +378,9 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	     (c->app_version) ? " ver " : "",
 	     (c->app_version) ? c->app_version : ""
 	);
+	
+	/* mark as connected and classify */
+	worker_mark_client_connected(self, c);
 	
 	/* Add the client to the client list.
 	 *

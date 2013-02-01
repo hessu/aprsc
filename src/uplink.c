@@ -201,11 +201,13 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	c->username[sizeof(c->username)-1] = 0;
 #endif
 	
+	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
+	
 	c->handler = incoming_handler;
-	c->state   = CSTATE_CONNECTED;
 	c->validated = 1;
 	
-	hlog(LOG_INFO, "%s: Logged in to server %s", c->addr_rem, c->username);
+	/* mark as connected and classify */
+	worker_mark_client_connected(self, c);
 	
 	return 0;
 }

@@ -394,6 +394,7 @@ struct client_t {
 extern struct client_t *client_alloc(void);
 extern void client_free(struct client_t *c);
 extern int pass_client_to_worker(struct worker_t *wc, struct client_t *c);
+extern void worker_mark_client_connected(struct worker_t *self, struct client_t *c);
 extern struct client_t *pseudoclient_setup(int portnum);
 
 

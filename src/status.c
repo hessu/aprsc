@@ -643,6 +643,7 @@ int status_read_liveupgrade(void)
 	
 	if (fclose(fp)) {
 		hlog(LOG_ERR, "liveupgrade dump file read failed: close(%s): %s", path, strerror(errno));
+		hfree(s);
 		return -1;
 	}
 	
@@ -650,10 +651,12 @@ int status_read_liveupgrade(void)
 	cJSON *dec = cJSON_Parse(s);
 	if (!dec) {
 		hlog(LOG_ERR, "liveupgrade dump parsing failed");
+		hfree(s);
 		return -1;
 	}
 	
 	liveupgrade_status = dec;
+	hfree(s);
 	
 	return 0;
 }

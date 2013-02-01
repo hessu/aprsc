@@ -591,6 +591,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		if (ai_comp(ai, my_ai)) {
 			//hlog(LOG_DEBUG, "PeerGroup: Ignoring %s - it's me, my local address", fullhost);
 			hfree(fullhost);
+			fullhost = NULL;
 			hfree(peerid);
 			freeaddrinfo(ai);
 			continue;

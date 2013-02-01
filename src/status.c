@@ -208,6 +208,7 @@ char *status_json_string(int no_cache, int periodical)
 			out = hstrdup(status_json_cached);
 			if ((pe = pthread_mutex_unlock(&status_json_mt))) {
 				hlog(LOG_ERR, "status_json_string(): could not unlock status_json_mt: %s", strerror(pe));
+				hfree(out);
 				return NULL;
 			}
 			return out;

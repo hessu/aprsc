@@ -701,6 +701,8 @@ static void liveupgrade_exec(int argc, char **argv)
 	hlog(LOG_CRIT, "liveupgrade: exec failed, I'm still here! %s", strerror(errno));
 	
 	/* free resources in case we'd decide to continue anyway */
+	if (bin != argv[0])
+		hfree(bin);
 	if (need_live_flag)
 		hfree(nargv[i-1]);
 	hfree(nargv);

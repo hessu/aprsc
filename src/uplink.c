@@ -342,6 +342,12 @@ int make_uplink(struct uplink_config_t *l)
 	}
 	ap[addrc] = NULL;
 	
+	if (addrc == 0) {
+		hlog(LOG_INFO, "Uplink %s: address resolving of '%s' '%s': returned 0 addresses", l->name, l->host, l->port);
+		l->state = UPLINK_ST_NOT_LINKED;
+		return -2;
+	}
+	
 	/* Pick random address to start from */
 	i = random() % addrc;
 	

@@ -523,7 +523,11 @@ static void peerip_clients_close(void)
 	c->fd = -2; // Magic FD to close them all
 	c->state = CSTATE_COREPEER;
 	sprintf(c->filter_s, "peerip_clients_close"); // debugging
-	pass_client_to_worker(worker_threads, c);
+	
+	if (pass_client_to_worker(worker_threads, c)) {
+		hlog(LOG_ERR, "Failed to pass magic peerip_clients_close message pseudoclient to worker");
+		client_free(c);
+	}
 }
 
 /*

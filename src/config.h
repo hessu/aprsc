@@ -83,10 +83,12 @@ extern char *myemail;
 extern char *myadmin;
 extern char *http_status_options;
 
+extern char def_cfgfile[];
 extern char *cfgfile;
 extern char *pidfile;
 extern char *rundir;
 extern char *webdir;
+extern char def_logname[];
 extern char *logname;
 extern char *chrootdir;
 extern char *setuid_s;

@@ -84,21 +84,31 @@ void parse_cmdline(int argc, char *argv[])
 	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:DyZe:o:?h")) != -1) {
 	switch (s) {
 		case 'c':
+			if (cfgfile && cfgfile != def_cfgfile)
+				hfree(cfgfile);
 			cfgfile = hstrdup(optarg);
 			break;
 		case 'f':
 			fork_a_daemon = 1;
 			break;
 		case 't':
+			if (chrootdir)
+				hfree(chrootdir);
 			chrootdir = hstrdup(optarg);
 			break;
 		case 'u':
+			if (setuid_s)
+				hfree(setuid_s);
 			setuid_s = hstrdup(optarg);
 			break;
 		case 'n':
+			if (logname && logname != def_logname)
+				hfree(logname);
 			logname = hstrdup(optarg);
 			break;
 		case 'r':
+			if (log_dir)
+				hfree(log_dir);
 			log_dir = hstrdup(optarg);
 			break;
 		case 'd':
@@ -661,7 +671,7 @@ static void liveupgrade_exec(int argc, char **argv)
 	/* generate argument list for the new executable, it should be appended with
 	 * -Z (live upgrade startup flag) unless it's there already
 	 */
-	nargv = malloc(sizeof(char *) * (argc+2));
+	nargv = hmalloc(sizeof(char *) * (argc+2));
 	
 	for (i = 0; i < argc; i++) {
 		if (i == 0)
@@ -689,6 +699,11 @@ static void liveupgrade_exec(int argc, char **argv)
 	execv(bin, nargv);
 	
 	hlog(LOG_CRIT, "liveupgrade: exec failed, I'm still here! %s", strerror(errno));
+	
+	/* free resources in case we'd decide to continue anyway */
+	if (need_live_flag)
+		hfree(nargv[i-1]);
+	hfree(nargv);
 }
 
 

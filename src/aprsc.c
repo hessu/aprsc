@@ -662,7 +662,7 @@ static void liveupgrade_exec(int argc, char **argv)
 	
 	i = strlen(argv[0]);
 	if (chrootdir && strncmp(argv[0], chrootdir, strlen(chrootdir)) == 0) {
-		bin = hmalloc(i);
+		bin = hmalloc(i+1);
 		strncpy(bin, argv[0] + strlen(chrootdir), i);
 	}
 	

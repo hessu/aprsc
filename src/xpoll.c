@@ -63,7 +63,10 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
 		hlog(LOG_CRIT, "xpoll: epoll_create failed: %s", strerror(errno));
 		return NULL;
 	}
-	fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC);
+	
+	if (fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC) == -1) {
+		hlog(LOG_ERR, "xpoll: fnctl FD_CLOEXEC on epollfd failed: %s", strerror(errno));
+	}
 #else
 #ifdef XP_USE_POLL
 	//hlog(LOG_DEBUG, "xpoll: initializing %p using poll()", (void *)xp);

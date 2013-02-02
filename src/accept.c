@@ -856,7 +856,7 @@ static void do_accept(struct listen_t *l)
 			 * about ignoring the result value. We're really
 			 * disconnecting the client right now, so we don't care.
 			 */
-			if (write(fd, "# Server full\r\n", 15));
+			if (write(fd, "# Server full\r\n", 15)) {};
 		} else {
 			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients on Listener (%d)", l->addr_s, fd, s, l->portaccount->gauge);
 			if (write(fd, "# Port full\r\n", 13)) {};

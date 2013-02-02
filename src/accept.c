@@ -885,6 +885,7 @@ static void do_accept(struct listen_t *l)
 		close(fd);
 		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
+		return;
 	}
 
 	c->state   = CSTATE_LOGIN;

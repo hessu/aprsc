@@ -1294,6 +1294,7 @@ static void worker_classify_client(struct worker_t *self, struct client_t *c)
 		class_prevp = &self->clients_other;
 	} else {
 		hlog(LOG_ERR, "classify_client(worker %d): client fd %d NOT CLASSIFIED - will not get any packets", self->id, c->fd);
+		return;
 	}
 	
 	c->class_next = class_next;

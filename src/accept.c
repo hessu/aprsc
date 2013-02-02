@@ -657,6 +657,7 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 #else
 	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
 	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
+	hfree(s);
 #endif
 
 	/* text format of servers' connected IP address + port */

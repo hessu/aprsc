@@ -1676,7 +1676,7 @@ static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	/* source address  "addr">... */
 	memcpy( ref.callsign, pb->data, i);
-	memset( ref.callsign+i, 0, sizeof(ref)-i );
+	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }
@@ -1725,7 +1725,7 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 
 		/* digipeater address  ",addr," */
 		memcpy( ref.callsign, d, cl);
-		memset( ref.callsign+cl, 0, sizeof(ref)-cl );
+		memset( ref.callsign+cl, 0, sizeof(ref.callsign)-cl );
 
 		if (cl > CALLSIGNLEN_MAX) cl = CALLSIGNLEN_MAX;
 
@@ -2004,7 +2004,7 @@ static int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	/* source address  "addr">... */
 	memcpy( ref.callsign, pb->data, i);
-	memset( ref.callsign+i, 0, sizeof(ref)-i );
+	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchPrefix);
 }
@@ -2318,7 +2318,7 @@ static int filter_process_one_u(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	/* destination address  ">addr," */
 	memcpy( ref.callsign,   d, i);
-	memset( ref.callsign+i, 0, sizeof(ref)-i );
+	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }

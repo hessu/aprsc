@@ -1062,6 +1062,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	if (!l) {
 		hlog(LOG_ERR, "Live upgrade: Failed to find listener for fd %d (%s - local %s) - closing", fd->valueint, s, addr_loc->valuestring);
 		close(fd->valueint);
+		hfree(s);
 		return -1;
 	}
 	

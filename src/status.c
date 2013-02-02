@@ -404,6 +404,9 @@ char *status_json_string(int no_cache, int periodical)
 		struct cdata_list_t *cl;
 		for (cl = cdata_list; (cl); cl = cl->next) {
 			ct = cJSON_GetObjectItem(root, cl->tree);
+			if (!ct)
+				continue;
+				
 			cv = cJSON_GetObjectItem(ct, cl->name);
 			
 			/* cJSON's cv->valueint is just an integer, which will overflow

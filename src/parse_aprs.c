@@ -1058,11 +1058,15 @@ int parse_aprs(struct pbuf_t *pb)
 		}
 		return 0;
 
+	/* normal aprs plaintext packet types: !=/@
+	 * (! might also be a wx packet, so we check for it first and then fall through to
+	 * the position packet code)
 	case '!':
 		if (pb->info_start[1] == '!') { /* Ultimeter 2000 */
 			pb->packettype |= T_WX;
 			return 0;
 		}
+		/* intentionally missing break here */
 	case '=':
 	case '/':
 	case '@':

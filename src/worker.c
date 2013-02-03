@@ -705,10 +705,10 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 			  	c->localaccount.rxdrops,
 			  	c->fd,
 			  	self->id,
-			  	(c->app_name[0]) ? " app " : "",
-			  	(c->app_name[0]) ? c->app_name : "",
-			  	(c->app_version[0]) ? " ver " : "",
-			  	(c->app_version[0]) ? c->app_version : ""
+			  	(*c->app_name) ? " app " : "",
+			  	(*c->app_name) ? c->app_name : "",
+			  	(*c->app_version) ? " ver " : "",
+			  	(*c->app_version) ? c->app_version : ""
 			  	);
 			  	
 	if (c->localaccount.rxdrops) {

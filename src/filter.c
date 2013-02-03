@@ -1925,7 +1925,7 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
 		return 0;
 
-	if (!c->username) /* Should not happen... */
+	if (!*c->username) /* Should not happen... */
 		return 0;
 
 	if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {

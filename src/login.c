@@ -361,10 +361,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	     (!c->validated && given_passcode >= 0) ? " pass_invalid" : "",
 	     (given_passcode < 0) ? " pass_none" : "",
 	     (c->udp_port) ? " UDP" : "",
-	     (c->app_name) ? " app " : "",
-	     (c->app_name) ? c->app_name : "",
-	     (c->app_version) ? " ver " : "",
-	     (c->app_version) ? c->app_version : ""
+	     (*c->app_name) ? " app " : "",
+	     (*c->app_name) ? c->app_name : "",
+	     (*c->app_version) ? " ver " : "",
+	     (*c->app_version) ? c->app_version : ""
 	);
 	
 	/* mark as connected and classify */

@@ -645,7 +645,8 @@ void uplink_thread(void *asdf)
 		
 		/* sleep for 4 seconds between successful rounds */
 		for (rc = 0; (!uplink_shutting_down) && rc < 4000/200; rc++)
-			poll(NULL, 0, 200);
+			if (poll(NULL, 0, 200) == -1)
+				hlog(LOG_WARNING, "uplink: poll sleep failed: %s", strerror(errno));
 	}
 	
 	hlog(LOG_DEBUG, "Uplink thread shutting down uplinking sockets...");

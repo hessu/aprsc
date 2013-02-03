@@ -446,13 +446,28 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	
 	//hlog(LOG_DEBUG, "static file request %s", uri);
 	
-	if (stat(fname, &st) == -1) {
-		/* don't complain about missing motd.html - it's optional. */
-		int level = LOG_ERR;
-		if (strcmp(cmdp->filename, "motd.html") == 0)
-			level = LOG_DEBUG;
-		hlog(level, "http static file '%s' not found", fname);
-		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+	fd = open(fname, 0, O_RDONLY);
+	if (fd < 0) {
+		if (errno == ENOENT) {
+			/* don't complain about missing motd.html - it's optional. */
+			int level = LOG_ERR;
+			if (strcmp(cmdp->filename, "motd.html") == 0)
+				level = LOG_DEBUG;
+			hlog(level, "http static file '%s' not found", fname);
+			evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+			return;
+		}
+		
+		hlog(LOG_ERR, "http static file '%s' could not be opened for reading: %s", fname, strerror(errno));
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		return;
+	}
+	
+	if (fstat(fd, &st) == -1) {
+		hlog(LOG_ERR, "http static file '%s' could not fstat() after opening: %s", fname, strerror(errno));
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		if (close(fd) < 0)
+			hlog(LOG_ERR, "http static file '%s' could not be closed after failed stat: %s", fname, strerror(errno));
 		return;
 	}
 	
@@ -472,18 +487,14 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	if ((ims) && strcasecmp(ims, last_modified) == 0) {
 		hlog(LOG_DEBUG, "http static file '%s' IMS hit", fname);
 		evhttp_send_reply(r, HTTP_NOTMODIFIED, "Not modified", NULL);
+		if (close(fd) < 0)
+			hlog(LOG_ERR, "http static file '%s' could not be closed after failed stat: %s", fname, strerror(errno));
 		return;
 	}
 	
 	file_size = st.st_size;  
 	
-	fd = open(fname, 0, O_RDONLY);
-	if (fd < 0) {
-		hlog(LOG_ERR, "http static file '%s' could not be opened for reading: %s", fname, strerror(errno));
-		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
-		return;
-	}
-	
+	/* yes, we are not going to serve large files. */
 	buf = hmalloc(file_size);
 	int n = read(fd, buf, file_size);
 	

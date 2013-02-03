@@ -379,10 +379,7 @@ int make_uplink(struct uplink_config_t *l)
 				char *s = strsockaddr(srcaddr, srcaddr_len);
 				hlog(LOG_ERR, "Uplink %s: Failed to bind source address '%s': %s", l->name, s, strerror(errno));
 				hfree(s);
-				close(fd);
-				fd = -1;
-				hfree(addr_s);
-				continue;
+				goto connerr;
 			}
 		}
 		
@@ -391,10 +388,7 @@ int make_uplink(struct uplink_config_t *l)
 		 */
 		if (fcntl(fd, F_SETFL, O_NONBLOCK)) {
 			hlog(LOG_CRIT, "Uplink %s: Failed to set non-blocking mode on new socket: %s", l->name, strerror(errno));
-			close(fd);
-			fd = -1;
-			hfree(addr_s);
-			continue;
+			goto connerr;
 		}
 		
 		/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
@@ -408,10 +402,7 @@ int make_uplink(struct uplink_config_t *l)
 
 		if (connect(fd, a->ai_addr, a->ai_addrlen) && errno != EINPROGRESS) {
 			hlog(LOG_ERR, "Uplink %s: connect(%s) failed: %s", l->name, addr_s, strerror(errno));
-			close(fd);
-			fd = -1;
-			hfree(addr_s);
-			continue;
+			goto connerr;
 		}
 		
 		/* Only wait a few seconds for the connection to be created.
@@ -428,29 +419,26 @@ int make_uplink(struct uplink_config_t *l)
 		
 		if (r < 0) {
 			hlog(LOG_ERR, "Uplink %s: connect to %s: poll failed: %s", l->name, addr_s, strerror(errno));
-			close(fd);
-			fd = -1;
-			hfree(addr_s);
-			continue;
+			goto connerr;
 		}
 		
 		if (r < 1) {
 			hlog(LOG_ERR, "Uplink %s: connect to %s timed out", l->name, addr_s);
-			close(fd);
-			fd = -1;
-			hfree(addr_s);
-			continue;
+			goto connerr;
 		}
 		
 		socklen_t optlen = sizeof(arg);
-		getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&arg, &optlen);
-		if (arg == 0) {
+		if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&arg, &optlen) == -1) {
+			hlog(LOG_ERR, "Uplink %s: getsockopt() after connect failed: %s", l->name, strerror(errno));
+			goto connerr;
+		} else if (arg == 0) {
 			/* Successful connect! */
 			hlog(LOG_DEBUG, "Uplink %s: successful connect", l->name);
 			break;
 		}
 		
 		hlog(LOG_ERR, "Uplink %s: connect to %s failed: %s", l->name, addr_s, strerror(arg));
+connerr:
 		close(fd);
 		fd = -1;
 		hfree(addr_s);

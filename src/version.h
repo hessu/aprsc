@@ -12,9 +12,9 @@
  * If you're making modifications, put your own variant version
  * identification in version_branch.h. Thanks!
  */
-#define VERSION "1.7.7"
+#define VERSION "1.8.0"
 
-#define APRSC_TOCALL "APSC17"
+#define APRSC_TOCALL "APSC18"
 
 extern const char version_build[];
 extern const char verstr[];

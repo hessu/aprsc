@@ -644,7 +644,9 @@ void version_report(const char *state)
 	hints.ai_family = AF_INET;
 	
 	ai = NULL;
-	getaddrinfo(s, NULL, &hints, &ai);
+	i = getaddrinfo(s, NULL, &hints, &ai);
+	if (i != 0)
+		hlog(LOG_INFO, "DNS lookup of aprsc.he.fi failed: %s", gai_strerror(i));
 	if (ai)
 		freeaddrinfo(ai);
 }
@@ -1053,7 +1055,8 @@ int main(int argc, char **argv)
 
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
-		poll(NULL, 0, 300); // 0.300 sec -- or there abouts..
+		if (poll(NULL, 0, 300) == -1)
+			hlog(LOG_WARNING, "main: poll sleep failed: %s", strerror(errno));
 		
 		if (want_dbdump) {
 			dbdump_all();

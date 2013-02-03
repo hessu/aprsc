@@ -264,11 +264,16 @@ int historydb_load(FILE *fp)
 	int ok = 0;
 	char buf[32768];
 	
+	rwl_wrlock(&historydb_rwlock);
+	
 	while ((s = fgets(buf, sizeof(buf), fp))) {
 		if (historydb_load_entry(s) > 0)
 			ok++;
 		n++;
 	}
+	
+	rwl_wrunlock(&historydb_rwlock);
+	
 	hlog(LOG_INFO, "Loaded %d of %d historydb entries.", ok, n);
 	
 	return 0;

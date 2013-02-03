@@ -396,11 +396,6 @@ void client_free(struct client_t *c)
 #ifndef FIXED_IOBUFS
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
-	if (c->addr_rem) hfree(c->addr_rem);
-	if (c->addr_loc) hfree(c->addr_loc);
-	if (c->username) hfree(c->username);
-	if (c->app_name) hfree(c->app_name);
-	if (c->app_version) hfree(c->app_version);
 #endif
 
 	filter_free(c->posdefaultfilters);
@@ -710,10 +705,10 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 			  	c->localaccount.rxdrops,
 			  	c->fd,
 			  	self->id,
-			  	(c->app_name) ? " app " : "",
-			  	(c->app_name) ? c->app_name : "",
-			  	(c->app_version) ? " ver " : "",
-			  	(c->app_version) ? c->app_version : ""
+			  	(c->app_name[0]) ? " app " : "",
+			  	(c->app_name[0]) ? c->app_name : "",
+			  	(c->app_version[0]) ? " ver " : "",
+			  	(c->app_version[0]) ? c->app_version : ""
 			  	);
 			  	
 	if (c->localaccount.rxdrops) {

@@ -284,11 +284,7 @@ struct client_t {
 	union sockaddr_u udpaddr;	/* ready to use sockaddr data   */
 
 	int    fd;
-#ifndef FIXED_IOBUFS
-	char  *addr_rem;	/* remote IP address in text format */
-	char  *addr_hex;	/* remote IP address in hex format */
-	char  *addr_loc;	/* local IP address in text format */
-#endif
+	
 	int    uplink_index; /* uplink array index */
 	int    portnum;
 	int    listener_id;  /* which listener is this client connected to */
@@ -341,12 +337,6 @@ struct client_t {
 	char  failed_cmds;  /* how many login commands have failed */
 	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
 	
-#ifndef FIXED_IOBUFS
-	char *username;     /* The callsign */
-	char *app_name;     /* application name, from 'user' command */
-	char *app_version;  /* application version, from 'user' command */
-#endif
-
 	/* the current handler function for incoming lines */
 	int	(*handler)	(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 
@@ -376,7 +366,6 @@ struct client_t {
 	//uint32_t	last_pbuf_seqnum;
 	//uint32_t	last_pbuf_dupe_seqnum;
 
-#ifdef FIXED_IOBUFS
 	char  username[16];     /* The callsign */
 	char  app_name[32];     /* application name, from 'user' command */
 	char  app_version[32];  /* application version, from 'user' command */
@@ -385,6 +374,7 @@ struct client_t {
 	char  addr_hex[36];	    /* client IP address in hex format */
 	char  addr_loc[80];	    /* server IP address in text format */
 	
+#ifdef FIXED_IOBUFS
 	char	ibuf[IBUF_SIZE];
 	char	obuf[OBUF_SIZE];
 #endif

@@ -210,22 +210,14 @@ int pseudoclient_push_packet(struct worker_t *worker, struct client_t *pseudocli
 	/* fill the user's information in the pseudoclient's structure
 	 * for the q construct handler's viewing pleasure
 	 */
-#ifdef FIXED_IOBUFS
 	strncpy(pseudoclient->username, username, sizeof(pseudoclient->username));
 	pseudoclient->username[sizeof(pseudoclient->username)-1] = 0;
-#else
-	pseudoclient->username = username;
-#endif	
 	pseudoclient->username_len = strlen(pseudoclient->username);
 	
 	/* ok, try to digest the packet */
 	e = incoming_parse(worker, pseudoclient, packet, packet_len);
 
-#ifdef FIXED_IOBUFS
 	pseudoclient->username[0] = 0;
-#else
-	pseudoclient->username = NULL;
-#endif
 	pseudoclient->username_len = 0;
 	
 	if (e < 0)

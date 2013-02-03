@@ -192,14 +192,8 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	/* todo: validate server callsign with the q valid path algorithm */
 	
 	/* store the remote server's callsign as the "client username" */
-#ifndef FIXED_IOBUFS
-	if (c->username)
-		hfree(c->username);
-	c->username = hstrdup(argv[5]);
-#else
 	strncpy(c->username, argv[5], sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
-#endif
 	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
 	
@@ -224,13 +218,8 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	int argc;
 	char *argv[256];
 
-#ifndef FIXED_IOBUFS
-	if (!c->username)
-		c->username = hstrdup("simulator");
-#else
 	if (!*c->username)
 		strcpy(c->username, "simulator");
-#endif
 
 	hlog(LOG_INFO, "%s: Uplink server software: \"%.*s\"", c->addr_rem, len, s);
 	
@@ -245,15 +234,10 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	}
 	
 	if (argc >= 3) {
-#ifndef FIXED_IOBUFS
-		c->app_name = hstrdup(argv[1]);
-		c->app_version = hstrdup(argv[2]);
-#else
 		strncpy(c->app_name, argv[1], sizeof(c->app_name));
 		c->app_name[sizeof(c->app_name)-1] = 0;
 		strncpy(c->app_version, argv[2], sizeof(c->app_version));
 		c->app_version[sizeof(c->app_version)-1] = 0;
-#endif
 	}
 
 	// TODO: The uplink login command here could maybe be improved to send a filter command.
@@ -498,12 +482,8 @@ int make_uplink(struct uplink_config_t *l)
 	c->keepalive = tick;
 	c->connect_time = tick;
 	c->last_read = tick; /* not simulated time */
-#ifndef FIXED_IOBUFS
-	c->username = hstrdup(serverid);
-#else
 	strncpy(c->username, serverid, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
-#endif
 	c->username_len = strlen(c->username);
 
 	/* These peer/sock name calls can not fail -- or the socket closed
@@ -512,35 +492,23 @@ int make_uplink(struct uplink_config_t *l)
 	addr_len = sizeof(sa);
 	getpeername(fd, (struct sockaddr *)&sa, &addr_len);
 	//s = strsockaddr( &sa.sa, addr_len ); /* server side address */
-#ifndef FIXED_IOBUFS
-	c->addr_rem = addr_s;
-#else
 	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
 	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
 	hfree(addr_s);
-#endif
 
 	/* hex format of client's IP address + port */
 
 	char *s = hexsockaddr( &sa.sa, addr_len );
-#ifndef FIXED_IOBUFS
-	c->addr_hex = s;
-#else
 	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
 	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
 	hfree(s);
-#endif
 
 	addr_len = sizeof(sa);
 	getsockname(fd, (struct sockaddr *)&sa, &addr_len);
 	s = strsockaddr( &sa.sa, addr_len ); /* client side address */
-#ifndef FIXED_IOBUFS
-	c->addr_loc = s;
-#else
 	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
 	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
 	hfree(s);
-#endif
 
 	hlog(LOG_INFO, "Uplink %s: %s: Connection established on fd %d using source address %s", l->name, c->addr_rem, c->fd, c->addr_loc);
 

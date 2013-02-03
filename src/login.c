@@ -142,20 +142,12 @@ void login_set_app_name(struct client_t *c, const char *app_name, const char *ap
 {
 	int i;
 	
-#ifndef FIXED_IOBUFS
-	c->app_name = hstrdup(app_name);
-#else
 	strncpy(c->app_name, app_name, sizeof(c->app_name));
 	c->app_name[sizeof(c->app_name)-1] = 0;
-#endif
 	sanitize_ascii_string(c->app_name);
 			
-#ifndef FIXED_IOBUFS
-	c->app_version = hstrdup(app_ver);
-#else
 	strncpy(c->app_version, app_ver, sizeof(c->app_version));
 	c->app_version[sizeof(c->app_version)-1] = 0;
-#endif
 	sanitize_ascii_string(c->app_version);
 	
 	/* check the application name against a static list of broken apps */
@@ -237,12 +229,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		goto failed_login;
 	}
 	
-#ifndef FIXED_IOBUFS
-	c->username = hstrdup(username);
-#else
 	strncpy(c->username, username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
-#endif
 	c->username_len = strlen(c->username);
 	
 	/* check the username against a static list of disallowed usernames */

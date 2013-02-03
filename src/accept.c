@@ -454,36 +454,24 @@ static void peerip_clients_config(void)
 		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
 		
 		/* set up peer serverid to username */
-#ifndef FIXED_IOBUFS
-		c->username = hstrdup(pe->serverid);
-#else
 		strncpy(c->username, pe->serverid, sizeof(c->username));
 		c->username[sizeof(c->username)-1] = 0;
-#endif
 		c->username_len = strlen(c->username);
 		
 		/* convert client address to string */
 		s = strsockaddr( &c->udpaddr.sa, c->udpaddrlen );
 		
 		/* text format of client's IP address + port */
-#ifndef FIXED_IOBUFS
-		c->addr_rem = s;
-#else
 		strncpy(c->addr_rem, s, sizeof(c->addr_rem));
 		c->addr_rem[sizeof(c->addr_rem)-1] = 0;
 		hfree(s);
-#endif
 		
 		/* hex format of client's IP address + port */
 		s = hexsockaddr( &c->udpaddr.sa, c->udpaddrlen );
 		
-#ifndef FIXED_IOBUFS
-		c->addr_hex = s;
-#else
 		strncpy(c->addr_hex, s, sizeof(c->addr_hex));
 		c->addr_hex[sizeof(c->addr_hex)-1] = 0;
 		hfree(s);
-#endif
 
 		/* text format of servers' connected IP address + port */
 		addr_len = sizeof(sa);
@@ -494,13 +482,9 @@ static void peerip_clients_config(void)
 			hlog(LOG_ERR, "Peer config: getsockname on udpclient->fd failed: %s", strerror(errno));
 			s = hstrdup( "um" ); /* Server's bound IP address.. TODO: what? */
 		}
-#ifndef FIXED_IOBUFS
-		c->addr_loc = s;
-#else
 		strncpy(c->addr_loc, s, sizeof(c->addr_loc));
 		c->addr_loc[sizeof(c->addr_loc)-1] = 0;
 		hfree(s);
-#endif
 
 		/* pass the client to the first worker thread */
 		if (pass_client_to_worker(worker_threads, c)) {
@@ -650,23 +634,15 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 	inbound_connects_account(1, c->portaccount); /* account all ports + port-specifics */
 	
 	/* text format of client's IP address + port */
-#ifndef FIXED_IOBUFS
-	c->addr_rem = addr_s;
-#else
 	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
 	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
 	hfree(addr_s);
-#endif
 
 	/* hex format of client's IP address + port */
 	s = hexsockaddr( &sa->sa, addr_len );
-#ifndef FIXED_IOBUFS
-	c->addr_hex = s;
-#else
 	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
 	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
 	hfree(s);
-#endif
 
 	/* text format of servers' connected IP address + port */
 	if (getsockname(fd, &sa_loc.sa, &addr_len_loc) == 0) { /* Fails very rarely.. */
@@ -678,13 +654,9 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 		s = hstrdup( l->addr_s ); /* Server's bound IP address */
 		hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s failed: %s (using '%s' instead)", c->addr_rem, strerror(errno), s);
 	}
-#ifndef FIXED_IOBUFS
-	c->addr_loc = s;
-#else
 	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
 	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
 	hfree(s);
-#endif
 
 	/* apply predefined filters */
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
@@ -1087,12 +1059,8 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	if (strcmp(state->valuestring, "connected") == 0) {
 		c->state   = CSTATE_CONNECTED;
 		c->handler = &incoming_handler;
-#ifndef FIXED_IOBUFS
-		c->username = hstrdup(username->valuestring);
-#else
 		strncpy(c->username, username->valuestring, sizeof(c->username));
 		c->username[sizeof(c->username)-1] = 0;
-#endif
 		c->username_len = strlen(c->username);
 	} else if (strcmp(state->valuestring, "login") == 0) {
 		c->state   = CSTATE_LOGIN;

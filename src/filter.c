@@ -1725,11 +1725,11 @@ static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct fi
 		if (d[cl-1] == '*')
 			cl--;
 
+		if (cl > CALLSIGNLEN_MAX) cl = CALLSIGNLEN_MAX;
+		
 		/* digipeater address  ",addr," */
 		memcpy( ref.callsign, d, cl);
 		memset( ref.callsign+cl, 0, sizeof(ref.callsign)-cl );
-
-		if (cl > CALLSIGNLEN_MAX) cl = CALLSIGNLEN_MAX;
 
 		rc = filter_match_on_callsignset(&ref, cl, f, MatchWild);
 		if (rc) {

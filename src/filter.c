@@ -1800,7 +1800,7 @@ static int filter_process_one_e(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	/* entry station address  "qA*,addr," */
 	memcpy( ref.callsign, e, i);
-	memset( ref.callsign+i, 0, sizeof(ref)-i );
+	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }
@@ -1889,7 +1889,7 @@ static int filter_process_one_g(struct client_t *c, struct pbuf_t *pb, struct fi
 		return 0; /* Bad Entry-station callsign */
 
 	memcpy( ref.callsign, e, i);
-	memset( ref.callsign+i, 0, sizeof(ref)-i );
+	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }
@@ -1980,7 +1980,7 @@ static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	/* object name */
 	memcpy( ref.callsign, pb->info_start+1, i);
-	memset( ref.callsign+i, 0, sizeof(ref)-i );
+	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
 }

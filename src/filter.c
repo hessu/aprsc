@@ -934,6 +934,8 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	} else {
 		refbuf = hmalloc(sizeof(*refbuf)*refmax);
 		refcount = 0;
+		f0->h.refcallsigns = refbuf;
+		f0->h.numnames     = 0;
 	}
 
 	p = filt0;
@@ -985,8 +987,8 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		++refcount;
 	}
 
-	f0->h.refcallsigns = refbuf;
-	f0->h.numnames     = refcount;
+	f0->h.numnames = refcount;
+	
 	if (extend) {
 		char *s;
 		ff->h.numnames     = refcount;

@@ -1055,7 +1055,7 @@ int main(int argc, char **argv)
 
 	/* act as statistics and housekeeping thread from now on */
 	while (!shutting_down) {
-		if (poll(NULL, 0, 300) == -1)
+		if (poll(NULL, 0, 300) == -1 && errno != EINTR)
 			hlog(LOG_WARNING, "main: poll sleep failed: %s", strerror(errno));
 		
 		if (want_dbdump) {

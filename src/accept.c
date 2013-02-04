@@ -103,7 +103,6 @@ static void listener_free(struct listen_t *l)
 	hlog(LOG_DEBUG, "Freeing listener %d '%s': %s", l->id, l->name, l->addr_s);
 	
 	if (l->udp) {
-		l->udp->configured = 0;
 		l->fd = -1;
 
 		client_udp_free(l->udp);

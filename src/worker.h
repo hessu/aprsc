@@ -249,7 +249,6 @@ struct client_udp_t {			/* UDP services can be available at multiple
 	int    polled;			/* Is there a thread polling this? */
 	uint16_t af;			/* Address family */
 	uint16_t portnum;		/* Server UDP port */
-	char	configured;		/* if not zero, refcount == 0 will not kill this */
 };
 
 

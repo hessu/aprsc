@@ -245,8 +245,7 @@ void client_udp_free(struct client_udp_t *u)
 	if (u)
 		hlog(LOG_DEBUG, "client_udp_free %p port %d refcount now: %d", u, u->portnum, u->refcount);
 
-	if ( // u->configured == 0 &&
-	     u->refcount   == 0 ) {
+	if ( u->refcount   == 0 ) {
 		hlog(LOG_DEBUG, "client_udp_free %p port %d FREEING", u, u->portnum);
 		/* Unchain, and destroy.. */
 		if (u->next)
@@ -301,7 +300,6 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
 	}
 
 	c = hmalloc(sizeof(*c));
-	c->configured = 1;
 	c->polled     = 0;
 	c->fd         = fd;
 	c->refcount   = 1; /* One reference already on creation */

@@ -18,6 +18,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -617,6 +618,10 @@ void version_report(const char *state)
 	char n[32];
 	char s[300];
 	int i, l;
+	
+	/* don't send version reports during testing */
+	if (getenv("APRSC_NO_VERSION_REPORT"))
+		return;
 	
 	/* normalize version string to fit in a DNS label */
 	strncpy(v, version_build, sizeof(v));

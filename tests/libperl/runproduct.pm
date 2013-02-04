@@ -23,7 +23,8 @@ my %products = (
 		'stdargs' => '-e debug -o file -r logs',
 		'cfgfileargs' => '-c',
 		'cfgdir' => 'cfg-aprsc',
-		'pidfile' => 'logs/aprsc.pid'
+		'pidfile' => 'logs/aprsc.pid',
+		'env' => { 'APRSC_NO_VERSION_REPORT' => '1' }
 		
 	},
 	'javap' => {
@@ -110,6 +111,13 @@ sub start($)
 					sleep(1); # let it die
 				}
 			}
+		}
+	}
+	
+	if (defined $self->{'prod'}->{'env'}) {
+		my $e = $self->{'prod'}->{'env'};
+		foreach my $k (%{ $e }) {
+			$ENV{$k} = $e->{$k};
 		}
 	}
 	

@@ -102,11 +102,15 @@ void uplink_close(struct client_t *c, int errnum)
 	hlog(LOG_INFO, "%s: Uplink [%d] has been closed: %s", c->addr_rem, c->uplink_index, aprsc_strerror(errnum));
 
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
-		hlog(LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc));
+		hlog(LOG_ERR, "uplink_close(): could not lock uplink_client_mutex: %s", strerror(rc));
 		return;
 	}
 
+	if ((rc = pthread_mutex_lock(& uplink_connects.mutex )))
+		hlog(LOG_ERR, "uplink_close: could not lock uplink_connects: %s", strerror(rc));
 	-- uplink_connects.gauge;
+	if ((rc = pthread_mutex_unlock(& uplink_connects.mutex )))
+		hlog(LOG_ERR, "uplink_close: could not unlock uplink_connects: %s", strerror(rc));
 	
 	struct uplink_config_t *l = uplink_config;
 	for (; l; l = l->next) {
@@ -509,9 +513,13 @@ connerr:
 	if (pass_client_to_worker(worker_threads, c))
 		goto err;
 
+	if ((i = pthread_mutex_lock(& uplink_connects.mutex )))
+		hlog(LOG_ERR, "make_uplink: could not lock uplink_connects: %s", strerror(i));
 	++ uplink_connects.gauge;
 	++ uplink_connects.counter;
 	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */
+	if ((i = pthread_mutex_unlock(& uplink_connects.mutex )))
+		hlog(LOG_ERR, "make_uplink: could not unlock uplink_connects: %s", strerror(i));
 	
 	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
 	

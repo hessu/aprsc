@@ -923,6 +923,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* just try APRS parsing */
 	rc = parse_aprs(pb);
 	
+	if (rc < 0)
+		goto free_pb_ret;
+	
 	if (rc == 0 && (pb->packettype & T_MESSAGE) && pb->dstname_len == 6
 		&& strncasecmp(pb->dstname, "SERVER", 6) == 0) {
 		/* This is a message from a client destined to the local server.

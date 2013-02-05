@@ -1020,7 +1020,7 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 	/* look for the '>' */
 	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
 	if (!src_end)
-		return INERR_INV_3RD_PARTY;	// No ">" in packet start..
+		return 0;	// No ">" in packet start..
 	
 	path_start = src_end+1;
 	if (path_start >= body)	// We're already at the path end
@@ -1304,7 +1304,7 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 /*
  *	Try to parse an APRS packet.
  *	Returns 1 if position was parsed successfully,
- *	0 if parsing failed.
+ *	0 if parsing failed, < 0 if packet should be dropped.
  *
  *	Does also front-end part of the output filter's
  *	packet type classification job.

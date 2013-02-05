@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 8 + 3 };
+BEGIN { plan tests => 6 + 9 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -22,7 +22,7 @@ ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 # third for mic-e, fourth for prefix filter test.
 # The first and last one also test upper-case letters as filter keys.
 my $i_rx = new Ham::APRS::IS("localhost:55581", "N5CAL-2",
-	'filter' => 'r/60.228/24.8495/5 p/OG p/OI p/K2 b/BB7LZB');
+	'filter' => 'r/60.228/24.8495/5 p/OG p/OI p/K b/BB7LZB');
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;
@@ -67,6 +67,11 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 $tx = "KG4LAA>APWW08,TCPIP*,qAS,n3wax:}KB3ONM>APK102,KV3B-1::N3HEV-9  :ack26";
 $helper = "K2SRC>APRS,qAR,$login:>should pass 2";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+# Invalid 3rd-party header, only has the } marker, but is passed still
+# (needs to have }...>...: to be treated as 3rd-party)
+$tx = "K3SRC>APWW08,TCPIP*,qAR,IGA:}blah blah";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $tx);
 
 # disconnect #################################
 

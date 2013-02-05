@@ -633,6 +633,7 @@ void version_report(const char *state)
 	if (serverid) {
 		/* we're configured, include serverid and normalize it */
 		strncpy(n, serverid, sizeof(n));
+		n[sizeof(n)-1] = 0;
 		l = strlen(n);
 		for (i = 0; i < sizeof(n) && i < l; i++)
 			if (!isalnum(n[i]))

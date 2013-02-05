@@ -1952,6 +1952,7 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	if (c->state == CSTATE_COREPEER) {
 		/* cut out ports in the name of security by obscurity */
 		strncpy(addr_s, c->addr_rem, sizeof(addr_s));
+		addr_s[sizeof(addr_s)-1] = 0;
 		if ((s = strrchr(addr_s, ':')))
 			*s = 0;
 		cJSON_AddStringToObject(jc, "addr_rem", addr_s);

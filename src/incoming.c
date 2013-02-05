@@ -566,7 +566,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 	if (len > CALLSIGNLEN_MAX) {
 		// TODO: more specific test for IPv6 trace address
 		if (after_q && len == 32) {
-			hlog(LOG_DEBUG, "check_invalid_path_callsign: ipv6 address '%.*s'", len, call);
+			//hlog(LOG_DEBUG, "check_invalid_path_callsign: ipv6 address '%.*s'", len, call);
 			return 0;
 		}
 		
@@ -597,20 +597,20 @@ int check_path_calls(const char *via_start, const char *path_end)
 			
 		/* is this a q construct? */
 		if (*p == 'q' && e-p == 3) {
-			hlog(LOG_DEBUG, "check_path_calls found Q construct: '%.*s'", e-p, p);
+			//hlog(LOG_DEBUG, "check_path_calls found Q construct: '%.*s'", e-p, p);
 			after_q = 1;
 			p = e + 1;
 			continue;
 		}
 		
-		hlog(LOG_DEBUG, "check_path_calls: '%.*s'%s", e-p, p, (after_q) ? " after q" : "");
+		//hlog(LOG_DEBUG, "check_path_calls: '%.*s'%s", e-p, p, (after_q) ? " after q" : "");
 		if (check_invalid_path_callsign(p, e-p, after_q) != 0)
 			return -1;
 		
 		p = e + 1;
 	}
 	
-	hlog(LOG_DEBUG, "check_path_calls returning %d", calls);
+	//hlog(LOG_DEBUG, "check_path_calls returning %d", calls);
 	
 	return calls;
 }

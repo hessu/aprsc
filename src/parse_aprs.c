@@ -1040,7 +1040,12 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 	if (check_path_calls(dstcall_end, body) != 2)
 		return INERR_INV_3RD_PARTY;
 	
-	/* TODO: validate 3rd-party packet header */
+	/* Ok, fill "name" parameter in packet with the 3rd-party packet
+	 * srccall, so that filtering can match against it. This will be
+	 * overwritten by object/item names.
+	 */
+	pb->srcname = s;
+	pb->srcname_len = src_end - s;
 	
 	/* for now, just parse the inner packet content to learn it's type
 	 * and coordinates, etc

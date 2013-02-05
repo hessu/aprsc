@@ -1680,7 +1680,22 @@ static int filter_process_one_b(struct client_t *c, struct pbuf_t *pb, struct fi
 	memcpy( ref.callsign, pb->data, i);
 	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
-	return filter_match_on_callsignset(&ref, i, f, MatchWild);
+	int r = filter_match_on_callsignset(&ref, i, f, MatchWild);
+	
+	/* match 3rd-party packets based on their innermost srccall,
+	 * only works on non-object/item currently
+	 */
+	if (r == 0 && pb->srcname != pb->data && (pb->packettype & (T_OBJECT|T_ITEM)) == 0) {
+		i = pb->srcname_len;
+		if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+
+		memcpy( ref.callsign, pb->srcname, i);
+		memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
+
+		return filter_match_on_callsignset(&ref, i, f, MatchWild);
+	}
+	
+	return r;
 }
 
 static int filter_process_one_d(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)
@@ -1978,10 +1993,10 @@ static int filter_process_one_o(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	/* parse_aprs() has picked item/object name pointer and length.. */
 	i = pb->srcname_len;
-	if (i < 1) return 0; /* Bad object/item name */
+	if (i < 1 || i > CALLSIGNLEN_MAX) return 0; /* Bad object/item name */
 
 	/* object name */
-	memcpy( ref.callsign, pb->info_start+1, i);
+	memcpy( ref.callsign, pb->srcname, i);
 	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
 	return filter_match_on_callsignset(&ref, i, f, MatchWild);
@@ -2008,7 +2023,23 @@ static int filter_process_one_p(struct client_t *c, struct pbuf_t *pb, struct fi
 	memcpy( ref.callsign, pb->data, i);
 	memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
 
-	return filter_match_on_callsignset(&ref, i, f, MatchPrefix);
+	int r = filter_match_on_callsignset(&ref, i, f, MatchPrefix);
+	
+	/* match 3rd-party packets based on their innermost srccall,
+	 * only works on non-object/item currently
+	 */
+	if (r == 0 && pb->srcname != pb->data && (pb->packettype & (T_OBJECT|T_ITEM)) == 0) {
+		i = pb->srcname_len;
+
+		if (i > CALLSIGNLEN_MAX) i = CALLSIGNLEN_MAX;
+
+		memcpy( ref.callsign, pb->srcname, i);
+		memset( ref.callsign+i, 0, sizeof(ref.callsign)-i );
+
+		return filter_match_on_callsignset(&ref, i, f, MatchPrefix);
+	}
+	
+	return r;
 }
 
 static int filter_process_one_q(struct client_t *c, struct pbuf_t *pb, struct filter_t *f)

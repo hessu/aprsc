@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 3 + 3 };
+BEGIN { plan tests => 6 + 8 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -22,7 +22,7 @@ ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 # third for mic-e, fourth for prefix filter test.
 # The first and last one also test upper-case letters as filter keys.
 my $i_rx = new Ham::APRS::IS("localhost:55581", "N5CAL-2",
-	'filter' => 'r/60.228/24.8495/5 p/OG p/OI');
+	'filter' => 'r/60.228/24.8495/5 p/OG p/OI p/K2 b/BB7LZB');
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;
@@ -38,6 +38,10 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 $tx = $rx = "UU0AA>TEST,qAR,IGATE:}OG7LZB>DST,NET,GATE*:>should pass 3rd party inner prefix";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
+# check that 3rd party packet matches a B filter
+$tx = $rx = "UU0AA>TEST,qAR,IGATE:}BB7LZB>DST,NET,GATE*:>should pass 3rd party inner prefix with b filter";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
 # check that 3rd party packet matches a P filter
 $tx = $rx = "OI0AA>TEST,qAR,IGATE:}ZZ7LZB>DST,NET,GATE*:>should pass 3rd party outer prefix";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
@@ -46,6 +50,23 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 $tx = $rx = "UU1AA>TEST,qAR,IGATE:}OF7LZB>DST,NET,GATE:!6013.69NR02450.97E&";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
+# check that a nested 3rd party packet matches a coordinate filter
+$tx = $rx = "UU1AA>TEST,qAR,IGATE:}OF7LZB>DST,NET,GATE:}OF7LZC>DST,NET2,GATE2:!6013.69NR02450.97E&";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# check that a really nested 3rd party packet matches a coordinate filter
+$tx = $rx = "UU1AA>TEST,qAR,IGATE:}OF7LZB>DST,NET,GATE:}OF7LZC>DST,NET2,GATE2:}OF7LZD>DST,NET2,GATE2:}OF7LZE>DST,NET2,GATE2:!6013.69NR02450.97E&";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# Invalid 3rd-party header, does not have 2 hops
+$tx = "KG4LAA>APWW08,TCPIP*,qAS,n3wax:}KB3ONM>APK102,KV3B-1,WIDE1,WIDE2,KV3B-1,WIDE1,KG4LAA*::N3HEV-9  :ack26";
+$helper = "K2SRC>APRS,qAR,$login:>should pass 1";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+
+# Invalid 3rd-party header, does not have 2 hops
+$tx = "KG4LAA>APWW08,TCPIP*,qAS,n3wax:}KB3ONM>APK102,KV3B-1::N3HEV-9  :ack26";
+$helper = "K2SRC>APRS,qAR,$login:>should pass 2";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # disconnect #################################
 

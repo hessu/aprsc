@@ -1139,7 +1139,8 @@ int read_config(void)
 		if (!new_serverid) {
 			hlog(LOG_CRIT, "Config: serverid is not defined.");
 			failed = 1;
-		} else if (check_invalid_q_callsign(new_serverid, strlen(new_serverid)) != 0 || strlen(new_serverid) < 3) {
+		} else if (check_invalid_q_callsign(new_serverid, strlen(new_serverid)) != 0
+		   || strlen(new_serverid) < 3 || strlen(new_serverid) > CALLSIGNLEN_MAX) {
 			hlog(LOG_CRIT, "Config: serverid '%s' is not valid.", new_serverid);
 			failed = 1;
 		} else {

@@ -89,18 +89,15 @@ $tx = $rx = "JN2ESN-14>SUPTQ1,WIDE1-1,qAR,JA2PIT-10:`\@CioI}u/`\"4T}LPG Tanker_\
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # check that the P filter passes packets with the prefixes given
-$tx = "OG7LZB>$dstcall,OH2RDG*,WIDE:!6028.51N/02505.68E#PHG$phg should pass";
-$rx = "OG7LZB>$dstcall,OH2RDG*,WIDE,qAS,$login:!6028.51N/02505.68E#PHG$phg should pass";
+$tx = $rx = "OG7LZB>$dstcall,OH2RDG*,WIDE,qAR,$login:>should pass, prefix";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # check that the P filter passes packets with the prefixes given
-$tx = "OF3LZB>$dstcall,OH2RDG*,WIDE:!5028.51S/02505.68E#PHG$phg should pass";
-$rx = "OF3LZB>$dstcall,OH2RDG*,WIDE,qAS,$login:!5028.51S/02505.68E#PHG$phg should pass";
+$tx = $rx = "OF3LZB>$dstcall,OH2RDG*,WIDE,qAR,$login:>should pass, prefix";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # check that the P filter passes packets with the prefixes given
-$tx = "N1CAL>$dstcall,OH2RDG*,WIDE:!5028.51S/02505.68E#PHG$phg should pass";
-$rx = "N1CAL>$dstcall,OH2RDG*,WIDE,qAS,$login:!5028.51S/02505.68E#PHG$phg should pass";
+$tx = $rx = "N1CAL>$dstcall,OH2RDG*,WIDE,qAR,$login:>should pass, prefix";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # disconnect

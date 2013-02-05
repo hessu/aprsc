@@ -195,6 +195,7 @@ var rx_err_strings = {
 	"disallow_unverified_path": 'Packet from unverified client (TCPXX)',
 	"path_nogate": 'Packet with NOGATE/RFONLY in path',
 	"party_3rd": '3rd-party packet',
+	"party_3rd_inv": 'Invalid 3rd-party packet header',
 	"general_query": 'General query',
 	"aprsc_oom_pbuf": 'aprsc out of packet buffers',
 	"aprsc_class_fail": 'aprsc failed to classify packet',

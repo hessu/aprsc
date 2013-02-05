@@ -192,27 +192,28 @@ struct client_heard_t {
 #define INERR_DISALLOW_UNVERIFIED_PATH	-8	/* disallow_unverified = 1, TCPXX path */
 #define INERR_NOGATE			-9	/* packet path has NOGATE/RFONLY */
 #define INERR_3RD_PARTY			-10	/* 3rd-party packet dropped */
-#define INERR_GENERAL_QUERY		-11	/* general query ?APRS? dropped */
-#define INERR_OUT_OF_PBUFS		-12	/* aprsc ran out of packet buffers */
-#define INERR_CLASS_FAIL		-13	/* aprsc failed to classify packet */
-#define INERR_Q_BUG			-14	/* aprsc q construct code bugging */
-#define INERR_Q_DROP			-15	/* q construct drop */
-#define INERR_SHORT_PACKET		-16	/* too short packet */
-#define INERR_LONG_PACKET		-17	/* too long packet */
-#define INERR_INV_PATH_CALL		-18	/* invalid callsign in path */
-#define INERR_Q_QAX			-19
-#define INERR_Q_QAZ			-20
-#define INERR_Q_QPATH_MYCALL		-21
-#define INERR_Q_QPATH_CALL_TWICE	-22
-#define INERR_Q_PATH_LOGIN_NOT_LAST	-23
-#define INERR_Q_PATH_CALL_IS_LOCAL_CLIENT	-24
-#define INERR_Q_PATH_CALL_IS_INVALID		-25
-#define INERR_Q_QAU_PATH_CALL_IS_SRCCALL	-26
-#define INERR_Q_NEWQ_BUFFER_SMALL		-27
-#define INERR_Q_NONVAL_MULTI_Q_CALLS		-28
-#define INERR_Q_I_NO_VIACALL			-29
+#define INERR_INV_3RD_PARTY		-11	/* invalid 3rd-party packet header */
+#define INERR_GENERAL_QUERY		-12	/* general query ?APRS? dropped */
+#define INERR_OUT_OF_PBUFS		-13	/* aprsc ran out of packet buffers */
+#define INERR_CLASS_FAIL		-14	/* aprsc failed to classify packet */
+#define INERR_Q_BUG			-15	/* aprsc q construct code bugging */
+#define INERR_Q_DROP			-16	/* q construct drop */
+#define INERR_SHORT_PACKET		-17	/* too short packet */
+#define INERR_LONG_PACKET		-18	/* too long packet */
+#define INERR_INV_PATH_CALL		-19	/* invalid callsign in path */
+#define INERR_Q_QAX			-20
+#define INERR_Q_QAZ			-21
+#define INERR_Q_QPATH_MYCALL		-22
+#define INERR_Q_QPATH_CALL_TWICE	-23
+#define INERR_Q_PATH_LOGIN_NOT_LAST	-24
+#define INERR_Q_PATH_CALL_IS_LOCAL_CLIENT	-25
+#define INERR_Q_PATH_CALL_IS_INVALID		-26
+#define INERR_Q_QAU_PATH_CALL_IS_SRCCALL	-27
+#define INERR_Q_NEWQ_BUFFER_SMALL		-28
+#define INERR_Q_NONVAL_MULTI_Q_CALLS		-29
+#define INERR_Q_I_NO_VIACALL			-30
 
-#define INERR_MIN			-29	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-30	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

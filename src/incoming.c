@@ -55,6 +55,7 @@ const char *inerr_labels[] = {
 	"disallow_unverified_path",
 	"path_nogate",
 	"party_3rd", /* was 3rd_party, but labels starting with numbers collide with munin */
+	"party_3rd_inv",
 	"general_query",
 	"aprsc_oom_pbuf",
 	"aprsc_class_fail",
@@ -506,7 +507,7 @@ static int digi_path_drop(char *via_start, char *path_end)
  *	(valid APRS-IS callsign, * not allowed)
  */
 
-static int check_invalid_src_dst(const char *call, int len)
+int check_invalid_src_dst(const char *call, int len)
 {
 	const char *p = call;
 	const char *e = call + len;
@@ -532,7 +533,7 @@ static int check_invalid_src_dst(const char *call, int len)
  *	(valid APRS-IS callsign, * allowed in end)
  */
 
-static int check_invalid_path_callsign(const char *call, int len)
+static int check_invalid_path_callsign(const char *call, int len, int after_q)
 {
 	const char *p = call;
 	const char *e = call + len;
@@ -563,7 +564,13 @@ static int check_invalid_path_callsign(const char *call, int len)
 	
 	/* too long? */
 	if (len > CALLSIGNLEN_MAX) {
-		//hlog(LOG_DEBUG, "check_invalid_path_callsign: too long len %d", len);
+		// TODO: more specific test for IPv6 trace address
+		if (after_q && len == 32) {
+			hlog(LOG_DEBUG, "check_invalid_path_callsign: ipv6 address '%.*s'", len, call);
+			return 0;
+		}
+		
+		hlog(LOG_DEBUG, "check_invalid_path_callsign: too long len %d", len);
 		return -1;
 	}
 	
@@ -574,28 +581,38 @@ static int check_invalid_path_callsign(const char *call, int len)
  *	Check for invalid callsigns in path
  */
 
-static int check_path_calls(const char *via_start, const char *path_end)
+int check_path_calls(const char *via_start, const char *path_end)
 {
 	const char *p = via_start + 1;
 	const char *e;
+	int calls = 0;
+	int after_q = 0;
 	
 	while (p < path_end) {
+		calls++;
 		e = p;
 		/* find end of path callsign */
 		while (*e != ',' && e < path_end)
 			e++;
-		/* is this a q construct? bail out. */
+			
+		/* is this a q construct? */
 		if (*p == 'q' && e-p == 3) {
-			//hlog(LOG_DEBUG, "check_path_calls bail out at Q construct: '%.*s'", e-p, p);
-			return 0;
+			hlog(LOG_DEBUG, "check_path_calls found Q construct: '%.*s'", e-p, p);
+			after_q = 1;
+			p = e + 1;
+			continue;
 		}
-		//hlog(LOG_DEBUG, "check_path_calls: '%.*s'", e-p, p);
-		if (check_invalid_path_callsign(p, e-p) != 0)
+		
+		hlog(LOG_DEBUG, "check_path_calls: '%.*s'%s", e-p, p, (after_q) ? " after q" : "");
+		if (check_invalid_path_callsign(p, e-p, after_q) != 0)
 			return -1;
+		
 		p = e + 1;
 	}
 	
-	return 0;
+	hlog(LOG_DEBUG, "check_path_calls returning %d", calls);
+	
+	return calls;
 }
 
 /*
@@ -741,8 +758,6 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	/* where does the digipeater path start? */
 	via_start = dstcall_end;
-	while (via_start < path_end && (*via_start != ',' && *via_start != ':'))
-		via_start++;
 	
 	/* check if the srccall equals the client's login */
 	if (strlen(c->username) == src_end - s && memcmp(c->username, s, (int)(src_end - s)) == 0)
@@ -765,7 +780,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		return INERR_NOGATE;
 	
 	/* check if there are invalid callsigns in the digipeater path before Q */
-	if (check_path_calls(via_start, path_end) != 0)
+	if (check_path_calls(via_start, path_end) == -1)
 		return INERR_INV_PATH_CALL;
 	
 	/* check for 3rd party packets */

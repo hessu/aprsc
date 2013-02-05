@@ -17,6 +17,8 @@
 extern const char *inerr_labels[];
 
 extern char *memstr(char *needle, char *haystack, char *haystack_end);
+extern int check_invalid_src_dst(const char *call, int len);
+extern int check_path_calls(const char *via_start, const char *path_end);
 
 extern void incoming_flush(struct worker_t *self);
 extern int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);

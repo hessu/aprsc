@@ -27,6 +27,7 @@
 #include "hlog.h"
 #include "filter.h"
 #include "historydb.h"
+#include "incoming.h"
 
 //#define DEBUG_PARSE_APRS 1
 #ifdef DEBUG_PARSE_APRS
@@ -984,44 +985,80 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
 	return 0;
 }
 
+/* forward declaration to allow recursive calls */
+static int parse_aprs_body(struct pbuf_t *pb, const char *info_start);
 
 /*
- *	Try to parse an APRS packet.
- *	Returns 1 if position was parsed successfully,
- *	0 if parsing failed.
- *
- *	Does also front-end part of the output filter's
- *	packet type classification job.
- *
- * TODO: Recognize TELEM packets in !/=@ packets too!
- *
+ *	Parse a 3rd-party packet
  */
+ 
+static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
+{
+	const char *body;
+	const char *body_end;
+	const char *src_end;
+	const char *s;
+	const char *path_start;
+	const char *dstcall_end;
+	int pathlen;
+	
+	/* ignore the CRLF in the end of the body */
+	body_end = pb->data + pb->packet_len - 2;
+	s = info_start + 1;
+	
+	/* find the end of the third-party inner header */
+	body = s;
+	while (body < body_end && *body != ':')
+		body++;
+		
+	/* if not found, bail out */
+	if (*body != ':')
+		return 0;
+	
+	pathlen = body - s;
+	
+	/* look for the '>' */
+	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
+	if (!src_end)
+		return INERR_INV_3RD_PARTY;	// No ">" in packet start..
+	
+	path_start = src_end+1;
+	if (path_start >= body)	// We're already at the path end
+		return INERR_INV_3RD_PARTY;
+	
+	if (check_invalid_src_dst(s, src_end - s) != 0)
+		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
+	
+	dstcall_end = path_start;
+	while (dstcall_end < body && *dstcall_end != ',' && *dstcall_end != ':')
+		dstcall_end++;
+	
+	if (check_invalid_src_dst(path_start, dstcall_end - path_start))
+		return INERR_INV_DSTCALL; /* invalid or too long for destination callsign */
+	
+	/* check if there are invalid callsigns in the digipeater path before Q */
+	if (check_path_calls(dstcall_end, body) != 2)
+		return INERR_INV_3RD_PARTY;
+	
+	/* TODO: validate 3rd-party packet header */
+	
+	/* for now, just parse the inner packet content to learn it's type
+	 * and coordinates, etc
+	 */	
+	return parse_aprs_body(pb, body+1);
+}
 
-int parse_aprs(struct pbuf_t *pb)
+/*
+ *	Parse the body of an APRS packet
+ */
+ 
+static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 {
 	char packettype, poschar;
 	int paclen;
 	const char *body;
 	const char *body_end;
 	const char *pos_start;
-	
-	if (!pb->info_start)
-		return 0;
-
-	pb->packettype = T_ALL;
-
-	if (pb->data[0] == 'C' && /* Perhaps CWOP ? */
-	    pb->data[1] == 'W') {
-		const char *s  = pb->data + 2;
-		const char *pe = pb->data + pb->packet_len;
-		for ( ; *s && s < pe ; ++s ) {
-			int c = *s;
-			if (c < '0' || c > '9')
-				break;
-		}
-		if (*s == '>')
-			pb->packettype |= T_CWOP;
-	}
 
 	/* the following parsing logic has been translated from Ham::APRS::FAP
 	 * Perl module to C
@@ -1032,15 +1069,15 @@ int parse_aprs(struct pbuf_t *pb)
 	if (paclen < 1) return 0; /* Empty frame */
 
 	/* Check the first character of the packet and determine the packet type */
-	packettype = *pb->info_start;
+	packettype = *info_start;
 	
 	/* failed parsing */
 	// fprintf(stderr, "parse_aprs (%d):\n", paclen);
-	// fwrite(pb->info_start, paclen, 1, stderr);
+	// fwrite(info_start, paclen, 1, stderr);
 	// fprintf(stderr, "\n");
 	
 	/* body is right after the packet type character */
-	body = pb->info_start + 1;
+	body = info_start + 1;
 	/* ignore the CRLF in the end of the body */
 	body_end = pb->data + pb->packet_len - 2;
 	
@@ -1063,7 +1100,7 @@ int parse_aprs(struct pbuf_t *pb)
 	 * the position packet code)
 	 */
 	case '!':
-		if (pb->info_start[1] == '!') { /* Ultimeter 2000 */
+		if (info_start[1] == '!') { /* Ultimeter 2000 */
 			pb->packettype |= T_WX;
 			return 0;
 		}
@@ -1228,7 +1265,7 @@ int parse_aprs(struct pbuf_t *pb)
         
         case '}':
 		pb->packettype |= T_3RDPARTY;
-		return 0;
+		return parse_aprs_3rdparty(pb, info_start);
 
 	default:
 		break;
@@ -1255,6 +1292,46 @@ int parse_aprs(struct pbuf_t *pb)
 	}
 	
 	return 0;
+}
+
+
+
+/*
+ *	Try to parse an APRS packet.
+ *	Returns 1 if position was parsed successfully,
+ *	0 if parsing failed.
+ *
+ *	Does also front-end part of the output filter's
+ *	packet type classification job.
+ *
+ * TODO: Recognize TELEM packets in !/=@ packets too!
+ *
+ */
+
+int parse_aprs(struct pbuf_t *pb)
+{
+	if (!pb->info_start)
+		return 0;
+
+	pb->packettype = T_ALL;
+
+	/* T_CW detection - this is not really right, I think they're already
+	 * going with DW and EW prefixes
+	 */
+	if (pb->data[0] == 'C' && /* Perhaps CWOP ? */
+	    pb->data[1] == 'W') {
+		const char *s  = pb->data + 2;
+		const char *pe = pb->data + pb->packet_len;
+		for ( ; *s && s < pe ; ++s ) {
+			int c = *s;
+			if (c < '0' || c > '9')
+				break;
+		}
+		if (*s == '>')
+			pb->packettype |= T_CWOP;
+	}
+	
+	return parse_aprs_body(pb, pb->info_start);
 }
 
 /*

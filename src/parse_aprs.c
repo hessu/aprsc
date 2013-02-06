@@ -995,7 +995,6 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start);
 static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 {
 	const char *body;
-	const char *body_end;
 	const char *src_end;
 	const char *s;
 	const char *path_start;
@@ -1003,16 +1002,13 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 	int pathlen;
 	
 	/* ignore the CRLF in the end of the body */
-	body_end = pb->data + pb->packet_len - 2;
 	s = info_start + 1;
 	
 	/* find the end of the third-party inner header */
-	body = s;
-	while (body < body_end && *body != ':')
-		body++;
-		
+	body = memchr(s, ':', pb->packet_len - 2 - (s-pb->data));
+	
 	/* if not found, bail out */
-	if (*body != ':')
+	if (!body)
 		return 0;
 	
 	pathlen = body - s;

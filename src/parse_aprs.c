@@ -1038,9 +1038,9 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 		return INERR_INV_DSTCALL; /* invalid or too long for destination callsign */
 	
 	/* check if there are invalid callsigns in the digipeater path before Q,
-	 * require two elements to be present (network ID, gateway callsign)
+	 * require at least two elements to be present (network ID, gateway callsign)
 	 */
-	if (check_path_calls(dstcall_end, body) != 2)
+	if (check_path_calls(dstcall_end, body) < 2)
 		return INERR_INV_3RD_PARTY;
 	
 	/* Ok, fill "name" parameter in packet with the 3rd-party packet

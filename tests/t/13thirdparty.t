@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 9 + 3 };
+BEGIN { plan tests => 6 + 10 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -60,8 +60,7 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # Invalid 3rd-party header, does not have 2 hops
 $tx = "KG4LAA>APWW08,TCPIP*,qAS,n3wax:}KB3ONM>APK102,KV3B-1,WIDE1,WIDE2,KV3B-1,WIDE1,KG4LAA*::N3HEV-9  :ack26";
-$helper = "K2SRC>APRS,qAR,$login:>should pass 1";
-istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $tx);
 
 # Invalid 3rd-party header, does not have 2 hops
 $tx = "KG4LAA>APWW08,TCPIP*,qAS,n3wax:}KB3ONM>APK102,KV3B-1::N3HEV-9  :ack26";
@@ -71,6 +70,10 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 # Invalid 3rd-party header, only has the } marker, but is passed still
 # (needs to have }...>...: to be treated as 3rd-party)
 $tx = "K3SRC>APWW08,TCPIP*,qAR,IGA:}blah blah";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $tx);
+
+# Valid third-party header with a used digi
+$tx = "K3SRC>APWW09,TCPIP*,qAR,IGA:}KB3ONM>APK102,KV3B-1,FOO,BAR*:should pass";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $tx);
 
 # disconnect #################################

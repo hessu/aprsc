@@ -989,7 +989,12 @@ static int parse_aprs_item(struct pbuf_t *pb, const char *body, const char *body
 static int parse_aprs_body(struct pbuf_t *pb, const char *info_start);
 
 /*
- *	Parse a 3rd-party packet
+ *	Parse a 3rd-party packet.
+ *	Requires the } > : sequence from src>dst,network,gate: to
+ *	detect a packet as a 3rd-party packet. If the sequence is not found,
+ *	returns 0 for no match (but do not drop packet).
+ *	If the sequence is found, require the packet to match the 3rd-party
+ *	packet spec from APRS101.PDF, and validate callsigns too.
  */
  
 static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
@@ -1032,7 +1037,9 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 	if (check_invalid_src_dst(path_start, dstcall_end - path_start))
 		return INERR_INV_DSTCALL; /* invalid or too long for destination callsign */
 	
-	/* check if there are invalid callsigns in the digipeater path before Q */
+	/* check if there are invalid callsigns in the digipeater path before Q,
+	 * require two elements to be present (network ID, gateway callsign)
+	 */
 	if (check_path_calls(dstcall_end, body) != 2)
 		return INERR_INV_3RD_PARTY;
 	

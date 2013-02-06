@@ -83,7 +83,7 @@ foreach my $s (@pkts) {
 }
 
 # check that a packet passes at all and the previous packets were dropped
-$tx = "OH2SRC>APRS,OH2DIG-12*,OH2DIG-1*,qAR,200106F8020204020000000000000002,$login:}SRC2>DST:should pass";
+$tx = "OH2SRC>APRS,OH2DIG-12*,OH2DIG-1*,qAR,200106F8020204020000000000000002,$login:should pass";
 $i_tx->sendline($tx);
 
 my $fail = 0;

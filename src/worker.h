@@ -191,7 +191,7 @@ struct client_heard_t {
 #define INERR_DISALLOW_UNVERIFIED	-7	/* disallow_unverified = 1, unverified client */
 #define INERR_DISALLOW_UNVERIFIED_PATH	-8	/* disallow_unverified = 1, TCPXX path */
 #define INERR_NOGATE			-9	/* packet path has NOGATE/RFONLY */
-#define INERR_3RD_PARTY			-10	/* 3rd-party packet dropped */
+#define INERR_3RD_PARTY_IP		-10	/* 3rd-party packet dropped due to TCPIP/TCPXX in path */
 #define INERR_INV_3RD_PARTY		-11	/* invalid 3rd-party packet header */
 #define INERR_GENERAL_QUERY		-12	/* general query ?APRS? dropped */
 #define INERR_OUT_OF_PBUFS		-13	/* aprsc ran out of packet buffers */

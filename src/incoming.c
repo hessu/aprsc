@@ -54,7 +54,7 @@ const char *inerr_labels[] = {
 	"disallow_unverified",
 	"disallow_unverified_path",
 	"path_nogate",
-	"party_3rd", /* was 3rd_party, but labels starting with numbers collide with munin */
+	"party_3rd_ip", /* was 3rd_party, but labels starting with numbers collide with munin */
 	"party_3rd_inv",
 	"general_query",
 	"aprsc_oom_pbuf",
@@ -788,8 +788,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		/* if the 3rd-party packet's header has TCPIP or TCPXX, drop it */
 		char *party_hdr_end = memchr(data+2, ':', packet_end-data-2);
 		if (party_hdr_end) {
-			if ((memstr(",TCPXX", data+2, party_hdr_end)) || (memstr(",TCPIP", data+2, party_hdr_end)) )
-				return INERR_3RD_PARTY;
+			/* TCPIP is more likely, test for it first */
+			if ((memstr(",TCPIP", data+2, party_hdr_end)) || (memstr(",TCPXX", data+2, party_hdr_end)) )
+				return INERR_3RD_PARTY_IP;
 		}
 	}
 	

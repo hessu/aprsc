@@ -319,7 +319,7 @@ static int open_listener(struct listen_config_t *lc)
 	return 0;
 }
 
-struct listen_t *find_listener_id(int id)
+static struct listen_t *find_listener_random_id(int id)
 {
 	struct listen_t *l = listen_list;
 	
@@ -331,6 +331,63 @@ struct listen_t *find_listener_id(int id)
 	
 	return NULL;
 }
+
+static struct listen_t *find_listener_hash_id(int id)
+{
+	struct listen_t *l = listen_list;
+	
+	while (l) {
+		if (l->listener_id == id)
+			return l;
+		l = l->next;
+	}
+	
+	return NULL;
+}
+
+static int rescan_client_acls(void)
+{
+	struct worker_t *w = worker_threads;
+	struct client_t *c;
+	struct listen_t *l;
+	int pe;
+	
+	hlog(LOG_DEBUG, "Scanning old clients against new ACLs and listeners");
+	
+	while (w) {
+		if ((pe = pthread_mutex_lock(&w->clients_mutex))) {
+			hlog(LOG_ERR, "rescan_client_acls(worker %d): could not lock clients_mutex: %s", w->id, strerror(pe));
+			return -1;
+		}
+		
+		for (c = w->clients; (c); c = c->next) {
+			l = find_listener_hash_id(c->listener_id);
+			if (!l) {
+				/* listener is not there any more */
+				hlog(LOG_INFO, "%s - Closing client on fd %d from %s (listener has been removed)", c->addr_loc, c->fd, c->addr_rem);
+				shutdown(c->fd, SHUT_RDWR);
+				continue;
+			}
+			if (!acl_check(l->acl, (struct sockaddr *)&c->addr, sizeof(c->addr))) {
+				hlog(LOG_INFO, "%s - Denying client on fd %d from %s (new ACL)", c->addr_loc, c->fd, c->addr_rem);
+				shutdown(c->fd, SHUT_RDWR);
+				continue;
+			}
+		}
+		
+		if ((pe = pthread_mutex_unlock(&w->clients_mutex))) {
+			hlog(LOG_ERR, "rescan_client_acls(worker %d): could not unlock clients_mutex: %s", w->id, strerror(pe));
+			/* we'd going to deadlock here... */
+			exit(1);
+		}
+		
+		w = w->next;
+	}
+	
+
+	return 0;
+}
+
 
 static void listener_update_config(struct listen_t *l, struct listen_config_t *lc)
 {
@@ -345,13 +402,13 @@ static void listener_update_config(struct listen_t *l, struct listen_config_t *l
 	listener_copy_filters(l, lc);
 	
 	/* ACLs */
-	/* TODO: reconfiguration should scan old clients against ACL (in worker context, probably) */
 	if (l->acl) {
 		acl_free(l->acl);
 		l->acl = NULL;
 	}
-	if (lc->acl)
+	if (lc->acl) {
 		l->acl = acl_dup(lc->acl);
+	}
 	
 	/* Listen address change? Rebind? */
 }
@@ -363,7 +420,7 @@ static int open_missing_listeners(void)
 	int opened = 0;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
-		if ((l = find_listener_id(lc->id))) {
+		if ((l = find_listener_random_id(lc->id))) {
 			hlog(LOG_DEBUG, "open_missing_listeners: already listening %d '%s': %s:%d", lc->id, lc->name, lc->host, lc->portnum);
 			listener_update_config(l, lc);
 			continue;
@@ -1273,6 +1330,10 @@ void accept_thread(void *asdf)
 				exit(2);
 			}
 			
+			/* reconfiguration must scan old clients against ACL */
+			rescan_client_acls();
+			
+			/* how many are we polling */
 			poll_n = 0;
 			for (l = listen_list; (l); l = l->next)
 				if (!l->corepeer)

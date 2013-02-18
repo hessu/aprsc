@@ -1352,37 +1352,40 @@ static void collect_new_clients(struct worker_t *self)
 		c = new_clients;
 		new_clients = c->next;
 		
-		if (c->fd != -2) {
-			self->client_count++;
-			// hlog(LOG_DEBUG, "collect_new_clients(worker %d): got client fd %d", self->id, c->fd);
-			c->next = self->clients;
-			if (c->next)
-				c->next->prevp = &c->next;
-			self->clients = c;
-			c->prevp = &self->clients;
-			
-			/* If this client is already in connected state, classify it
-			 * (live upgrading). Also, if it's a corepeer, it's not going to
-			 * "log in" later and it needs to be classified now.
-			 */
-			if (c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER)
-				worker_classify_client(self, c);
-		}
-		
-		/* If the new client is an UDP core peer, we will add it's FD to the
-		 * polling list, but only once. There is only a single listener socket
-		 * for a single peer group.
-		 */
-		if (c->state == CSTATE_COREPEER) {
+		if (c->fd < 0) {
 			if (c->fd == -2) {
 				/* corepeer reconfig flag */
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): closing all existing peergroup peers", self->id);
 				corepeer_close_all(self);
-				client_free(c);
-				i--; /* don't count it in */
-				continue;
+			} else {
+				hlog(LOG_NOTICE, "collect_new_clients(worker %d): odd fd on new client: %d", self->id, c->fd);
 			}
 			
+			client_free(c);
+			i--; /* don't count it in */
+			continue;
+		}
+		
+		self->client_count++;
+		// hlog(LOG_DEBUG, "collect_new_clients(worker %d): got client fd %d", self->id, c->fd);
+		c->next = self->clients;
+		if (c->next)
+			c->next->prevp = &c->next;
+		self->clients = c;
+		c->prevp = &self->clients;
+		
+		/* If this client is already in connected state, classify it
+		 * (live upgrading). Also, if it's a corepeer, it's not going to
+		 * "log in" later and it needs to be classified now.
+		 */
+		if (c->state == CSTATE_CONNECTED || c->state == CSTATE_COREPEER)
+			worker_classify_client(self, c);
+		
+		/* If the new client is an UDP core peer, we will add its FD to the
+		 * polling list, but only once. There is only a single listener socket
+		 * for a single peer group.
+		 */
+		if (c->state == CSTATE_COREPEER) {
 			/* add to corepeer client list and polling list */
 			hlog(LOG_DEBUG, "collect_new_clients(worker %d): got core peergroup peer, UDP fd %d", self->id, c->udpclient->fd);
 			

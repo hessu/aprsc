@@ -732,7 +732,7 @@ static double timeval_diff(struct timespec start, struct timespec end)
 	return diff;
 }
 #else
-static double timeval_diff(struct timespec start, struct timespec end)
+static double timeval_diff(struct timeval start, struct timeval end)
 {
 	double diff;
 	

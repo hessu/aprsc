@@ -1352,7 +1352,7 @@ static void collect_new_clients(struct worker_t *self)
 		c = new_clients;
 		new_clients = c->next;
 		
-		if (c->fd < 0) {
+		if (c->fd < -1) {
 			if (c->fd == -2) {
 				/* corepeer reconfig flag */
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): closing all existing peergroup peers", self->id);

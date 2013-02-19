@@ -721,7 +721,18 @@ static void liveupgrade_exec(int argc, char **argv)
  *	Time-keeping thread
  */
 
-static double timeval_diff(struct timeval start, struct timeval end)
+#ifdef USE_CLOCK_GETTIME
+static double timeval_diff(struct timespec start, struct timespec end)
+{
+	double diff;
+	
+	diff = (end.tv_sec - start.tv_sec)
+		+ ((end.tv_nsec - start.tv_nsec) / 1000000000.0);
+	
+	return diff;
+}
+#else
+static double timeval_diff(struct timespec start, struct timespec end)
 {
 	double diff;
 	
@@ -730,13 +741,35 @@ static double timeval_diff(struct timeval start, struct timeval end)
 	
 	return diff;
 }
+#endif
+
+void time_set_tick_and_now(void)
+{
+#ifdef USE_CLOCK_GETTIME
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	tick = ts.tv_sec;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	now = ts.tv_sec;
+#else
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	tick = tv.tv_sec;
+	now = tv.tv_sec;
+#endif
+}
 
 void time_thread(void *asdf)
 {
 	sigset_t sigs_to_block;
 	time_t previous_tick;
 	struct timespec sleep_req;
+#ifdef USE_CLOCK_GETTIME
+	struct timespec sleep_start, sleep_end;
+	struct timespec ts;
+#else
 	struct timeval sleep_start, sleep_end;
+#endif
 
 	pthreads_profiling_reset("time");
 	
@@ -752,17 +785,27 @@ void time_thread(void *asdf)
 	sigaddset(&sigs_to_block, SIGUSR2);
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
-	time(&previous_tick);
+	time_set_tick_and_now();
+	previous_tick = tick;
 	
 	sleep_req.tv_sec = 0;
 	sleep_req.tv_nsec = 210 * 1000 * 1000; /* 210 ms */
 	
 	while (!accept_shutting_down) {
+#ifdef USE_CLOCK_GETTIME
+		clock_gettime(CLOCK_MONOTONIC, &sleep_start);
+		nanosleep(&sleep_req, NULL);
+		clock_gettime(CLOCK_MONOTONIC, &sleep_end);
+		tick = sleep_end.tv_sec;
+		clock_gettime(CLOCK_REALTIME, &ts);
+		now = ts.tv_sec;
+#else
 		gettimeofday(&sleep_start, NULL);
 		nanosleep(&sleep_req, NULL);
 		gettimeofday(&sleep_end, NULL);
-		time(&tick);
+		tick = sleep_end.tv_sec;
 		now = tick;
+#endif
 		
 		double slept = timeval_diff(sleep_start, sleep_end);
 		if (slept > 0.90)
@@ -813,15 +856,14 @@ int main(int argc, char **argv)
 	pthread_t time_th;
 	int e;
 	struct rlimit rlim;
-	time_t cleanup_tick;
-	time_t version_tick;
+	time_t cleanup_tick = 0;
+	time_t version_tick = 0;
 	int have_low_ports = 0;
 	
 	if (getuid() == 0)
 		set_initial_capabilities();
 	
-	time(&tick);
-	now = tick;
+	time_set_tick_and_now();
 	cleanup_tick = tick;
 	version_tick = tick + random() % 60; /* some load distribution */
 	startup_tick = tick;
@@ -1040,8 +1082,6 @@ int main(int argc, char **argv)
 		status_read_liveupgrade();
 	}
 	
-	time(&cleanup_tick);
-
 	pthread_attr_init(&pthr_attrs);
 	/* 128 kB stack is enough for each thread,
 	   default of 10 MB is way too much...*/

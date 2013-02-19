@@ -506,7 +506,6 @@ static void peerip_clients_config(void)
 		c->udpclient = udpclient;
 		//c->portaccount = l->portaccount;
 		c->keepalive = tick;
-		c->connect_time = tick;
 		c->last_read = tick; /* not simulated time */
 		
 		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
@@ -929,8 +928,7 @@ static void do_accept(struct listen_t *l)
 	c->state   = CSTATE_LOGIN;
 	/* use the default login handler */
 	c->handler = &login_handler;
-	c->keepalive = tick;
-	c->connect_time = tick;
+	c->keepalive = tick; /* monotonous time, for timed transmits */
 	
 	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
@@ -1022,7 +1020,7 @@ static void accept_rx_err_load(struct client_t *c, cJSON *rx_errs, int *rxerr_ma
 
 static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_map_len)
 {
-	cJSON *fd, *listener_id, *username, *t_connect;
+	cJSON *fd, *listener_id, *username, *t_connect, *t_connect_tick;
 	cJSON *state;
 	cJSON *addr_loc;
 	cJSON *udp_port;
@@ -1045,6 +1043,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	state = cJSON_GetObjectItem(client, "state");
 	username = cJSON_GetObjectItem(client, "username");
 	t_connect = cJSON_GetObjectItem(client, "t_connect");
+	t_connect_tick = cJSON_GetObjectItem(client, "t_connect_tick");
 	addr_loc = cJSON_GetObjectItem(client, "addr_loc");
 	udp_port = cJSON_GetObjectItem(client, "udp_port");
 	app_name = cJSON_GetObjectItem(client, "app_name");
@@ -1134,6 +1133,11 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	c->cleanup = tick + (random() % 120);
 	
 	c->connect_time = t_connect->valueint;
+	if (t_connect_tick && t_connect_tick->type == cJSON_Number)
+		c->connect_tick = t_connect_tick->valueint;
+	else
+		c->connect_tick = t_connect->valueint;
+	
 	c->validated = verified->valueint;
 	c->localaccount.rxbytes = bytes_rx->valuedouble;
 	c->localaccount.txbytes = bytes_tx->valuedouble;

@@ -358,7 +358,7 @@ static int filter_entrycall_insert(struct pbuf_t *pb)
 			if (f->len == keylen) {
 				int cmp = memcmp(f->callsign, uckey, keylen);
 				if (cmp == 0) { /* Have key match */
-					f->expirytime = now + filter_entrycall_maxage;
+					f->expirytime = tick + filter_entrycall_maxage;
 					f2 = f;
 					break;
 				}
@@ -380,7 +380,7 @@ static int filter_entrycall_insert(struct pbuf_t *pb)
 #endif
 		if (f) {
 			f->next  = *fp;
-			f->expirytime = now + filter_entrycall_maxage;
+			f->expirytime = tick + filter_entrycall_maxage;
 			f->hash  = hash;
 			f->len   = keylen;
 			memcpy(f->callsign, uckey, keylen);
@@ -431,7 +431,7 @@ static int filter_entrycall_lookup(const struct pbuf_t *pb)
 				int rc =  strncasecmp(f->callsign, key, keylen);
 				if (rc == 0) { /* Have key match, see if it is
 						  still valid entry ? */
-					if (f->expirytime < now - 60) {
+					if (f->expirytime < tick - 60) {
 						f2 = f;
 						break;
 					}
@@ -462,7 +462,7 @@ void filter_entrycall_cleanup(void)
 		fp = & filter_entrycall_hash[k];
 		while (( f = *fp )) {
 			/* Did it expire ? */
-			if (f->expirytime <= now) {
+			if (f->expirytime <= tick) {
 				*fp = f->next;
 				f->next = NULL;
 				filter_entrycall_free(f);
@@ -581,7 +581,7 @@ static int filter_wx_insert(struct pbuf_t *pb)
 			if (f->len == keylen) {
 				int cmp = memcmp(f->callsign, uckey, keylen);
 				if (cmp == 0) { /* Have key match */
-					f->expirytime = now + filter_wx_maxage;
+					f->expirytime = tick + filter_wx_maxage;
 					f2 = f;
 					break;
 				}
@@ -604,7 +604,7 @@ static int filter_wx_insert(struct pbuf_t *pb)
 		++filter_wx_cellgauge;
 		if (f) {
 			f->next  = *fp;
-			f->expirytime = now + filter_wx_maxage;
+			f->expirytime = tick + filter_wx_maxage;
 			f->hash  = hash;
 			f->len   = keylen;
 			memcpy(f->callsign, uckey, keylen);
@@ -641,7 +641,7 @@ static int filter_wx_lookup(const struct pbuf_t *pb)
 				int rc =  strncasecmp(f->callsign, key, keylen);
 				if (rc == 0) { /* Have key match, see if it is
 						  still valid entry ? */
-					if (f->expirytime < now - 60) {
+					if (f->expirytime < tick - 60) {
 						f2 = f;
 						break;
 					}
@@ -673,7 +673,7 @@ void filter_wx_cleanup(void)
 		fp = & filter_wx_hash[k];
 		while (( f = *fp )) {
 			/* Did it expire ? */
-			if (f->expirytime <= now) {
+			if (f->expirytime <= tick) {
 				*fp = f->next;
 				f->next = NULL;
 				filter_wx_free(f);
@@ -1857,10 +1857,10 @@ static int filter_process_one_f(struct client_t *c, struct pbuf_t *pb, struct fi
 		return 0; /* No position data... */
 
 	/* find friend's last location packet */
-	if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {
+	if (f->h.hist_age < tick || f->h.hist_age > tick + HIST_LOOKUP_INTERVAL) {
 		i = historydb_lookup( callsign, i, &history );
 		f->h.numnames = i;
-		f->h.hist_age = now + HIST_LOOKUP_INTERVAL;
+		f->h.hist_age = tick + HIST_LOOKUP_INTERVAL;
 		if (!i) return 0; /* no lookup result.. */
 		f->h.f_latN   = history->lat;
 		f->h.f_lonE   = history->lon;
@@ -1943,14 +1943,14 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 	if (!*c->username) /* Should not happen... */
 		return 0;
 
-	if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {
+	if (f->h.hist_age < tick || f->h.hist_age > tick + HIST_LOOKUP_INTERVAL) {
 		i = historydb_lookup( c->username, strlen(c->username), &history );
 		f->h.numnames = i;
 		if (!i) {
-			f->h.hist_age = now + HIST_LOOKUP_INTERVAL/2;
+			f->h.hist_age = tick + HIST_LOOKUP_INTERVAL/2;
 			return 0; /* no result */
 		}
-		f->h.hist_age = now + HIST_LOOKUP_INTERVAL;
+		f->h.hist_age = tick + HIST_LOOKUP_INTERVAL;
 		f->h.f_latN   = history->lat;
 		f->h.f_lonE   = history->lon;
 		f->h.f_coslat = history->coslat;
@@ -2290,7 +2290,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 		   Lets find callsign's location, and range to that item..
 		   .. 60-100 lookups per second. */
 
-		if (f->h.hist_age < now || f->h.hist_age > now + HIST_LOOKUP_INTERVAL) {
+		if (f->h.hist_age < tick || f->h.hist_age > tick + HIST_LOOKUP_INTERVAL) {
 			i = historydb_lookup( callsign, callsignlen, &history );
 			f->h.numnames = i;
 
@@ -2300,7 +2300,7 @@ static int filter_process_one_t(struct client_t *c, struct pbuf_t *pb, struct fi
 
 
 			if (!i) return 0; /* no lookup result.. */
-			f->h.hist_age = now + HIST_LOOKUP_INTERVAL;
+			f->h.hist_age = tick + HIST_LOOKUP_INTERVAL;
 			f->h.f_latN   = history->lat;
 			f->h.f_lonE   = history->lon;
 			f->h.f_coslat = history->coslat;

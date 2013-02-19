@@ -97,13 +97,13 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	int n, n1, n2, lag;
 	time_t lastage1 = 0, lastage2 = 0;
 
-	time_t expire2 = now - pbuf_global_dupe_expiration;
-	time_t expire1 = now - pbuf_global_expiration;
+	time_t expire2 = tick - pbuf_global_dupe_expiration;
+	time_t expire1 = tick - pbuf_global_expiration;
 
 	if (all) {
 		pbuf_global_count_limit       = 0;
 		pbuf_global_dupe_count_limit  = 0;
-		expire1  = expire2       = now+10;
+		expire1  = expire2       = tick+10;
 	}
 
 	pb = pbuf_global;
@@ -174,8 +174,8 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	//if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
 	//if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
 
-	if (lastage1 == 0) lastage1 = now+2; // makes printout of "-2" (or "-1")
-	if (lastage2 == 0) lastage2 = now+2;
+	if (lastage1 == 0) lastage1 = tick+2; // makes printout of "-2" (or "-1")
+	if (lastage2 == 0) lastage2 = tick+2;
 	
 	/*
 
@@ -187,7 +187,7 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		      "global_pbuf_purger()  freed %d/%d main pbufs, %d/%d dupe bufs, lags: %d/%d  Ages: %d/%d",
 		      n1, pbuf_global_count, n2, pbuf_global_dupe_count,
 		      pbuf_lag, pbuf_dupe_lag,
-		      (int)(now-lastage1), (int)(now-lastage2) );
+		      (int)(tick-lastage1), (int)(tick-lastage2) );
 
 		if (!(n1 || n2 || pbuf_lag || pbuf_dupe_lag))
 			show_zeros = 0;
@@ -277,8 +277,8 @@ static void dupecheck_db_free(struct dupe_record_t *dp)
 static void dupecheck_cleanup(void)
 {
 	struct dupe_record_t *dp, **dpp;
-	time_t expiretime = now - dupefilter_storetime;
-	time_t futuretime = now + dupefilter_storetime;
+	time_t expiretime = tick - dupefilter_storetime;
+	time_t futuretime = tick + dupefilter_storetime;
 	int cleancount = 0, i;
 
 	for (i = 0; i < DUPECHECK_DB_SIZE; ++i) {
@@ -317,7 +317,7 @@ static int dupecheck_append(struct dupe_record_t **dpp, uint32_t hash, int addrl
 	memcpy(dp->packet + addrlen, data, datalen);
 	//hlog(LOG_DEBUG, "dupecheck_append '%.*s'", addrlen+datalen, dp->packet);
 	dp->hash = hash;
-	dp->t   = now; /* Use the current timestamp instead of the arrival time.
+	dp->t   = tick; /* Use the current timestamp instead of the arrival time.
 			  If our incoming worker, or dupecheck, is lagging for
 			  reason or another (for example, a huge incoming burst
 			  of traffic), using the arrival time instead of current
@@ -356,7 +356,7 @@ static int dupecheck_add_buf(const char *s, int len, int dtype)
 			    memcmp(s, dp->packet, len) == 0) {
 				// PACKET MATCH!
 				//hlog(LOG_DEBUG, "dupecheck_add_buf got it already: %.*s", len, s);
-				dp->t = now;
+				dp->t = tick;
 				return 0; /* no need to add, we have it */
 			}
 			// no packet match.. check next
@@ -373,7 +373,7 @@ static int dupecheck_add_buf(const char *s, int len, int dtype)
 	memcpy(dp->packet, s, len);
 	//hlog(LOG_DEBUG, "dupecheck_add_buf appended '%.*s'", len, s);
 	dp->hash = hash;
-	dp->t = now;
+	dp->t = tick;
 	dp->dtype = dtype;
 	
 	return 0;
@@ -520,7 +520,7 @@ static int dupecheck(struct pbuf_t *pb)
 	const char *addr;
 	const char *data;
 	struct dupe_record_t **dpp, *dp;
-	time_t expiretime = now -  dupefilter_storetime;
+	time_t expiretime = tick -  dupefilter_storetime;
 
 	// 1) collect canonic rep of the packet
 	addr    = pb->data;
@@ -683,7 +683,7 @@ static void dupecheck_thread(void)
 	int e;
 	int c, d;
 	int pb_out_count, pb_out_dupe_count;
-	time_t cleanup_tick = now;
+	time_t cleanup_tick = tick;
 
 #ifndef USE_EVENTFD
 	struct timespec sleepspec;
@@ -774,8 +774,8 @@ static void dupecheck_thread(void)
 		dupecheck_outcount  += pb_out_count;
 		dupecheck_dupecount += pb_out_dupe_count;
 
-		if (cleanup_tick <= now) { // once in a (simulated) minute or so..
-			cleanup_tick = now + 10;
+		if (cleanup_tick <= tick) { // once in a (simulated) minute or so..
+			cleanup_tick = tick + 10;
 			
 			/*
 			if ((e = rwl_wrlock(&pbuf_global_rwlock))) {

@@ -9,6 +9,9 @@
 /* POSIX capabilities */
 #undef HAVE_CAPABILITY_H
 
+/* Have clock_gettime */
+#undef HAVE_CLOCK_GETTIME
+
 /* Linux event fd support */
 #undef HAVE_EVENTFD_H
 

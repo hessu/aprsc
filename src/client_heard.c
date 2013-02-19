@@ -324,7 +324,7 @@ int client_heard_json_load(struct client_t *c, cJSON *dump)
 {
 	int i, len;
 	cJSON *h;
-	time_t t = time(NULL);
+	time_t t = tick;
 	
 	len = cJSON_GetArraySize(dump);
 	

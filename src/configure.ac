@@ -80,11 +80,6 @@ AC_CHECK_HEADERS([sys/epoll.h], AC_DEFINE([HAVE_SYS_EPOLL_H]))
 
 dnl Checks for libraries.
 
-dnl RT library for some timekeeping functions
-AC_SUBST(LIBRT)
-AC_CHECK_LIB(rt, clock_gettime,
-			    [LIBRT="-lrt"])
-
 dnl Checks for library functions.
 AC_SUBST(LIBM)
 AC_CHECK_FUNCS(atan2f,,
@@ -218,6 +213,15 @@ if test "$ac_cv_func_sync_fetch_and_add" = yes; then
   AC_DEFINE(HAVE_SYNC_FETCH_AND_ADD,1,[Define if you have the __sync_fetch_and_add function])
 fi
 
+dnl Check for clock_gettime, and a library to have it
+AC_SUBST(LIBRT)
+AC_SEARCH_LIBS([clock_gettime], [rt], [
+  AC_DEFINE(HAVE_CLOCK_GETTIME, 1,[Have clock_gettime])
+])
+
+if test "$ac_cv_search_clock_gettime" = "-lrt"; then
+  LIBRT="-lrt"
+fi
 
 dnl Output files
 AC_CONFIG_FILES([Makefile])

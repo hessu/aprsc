@@ -29,12 +29,14 @@
 #include "netdb6.h"
 #endif
 
+/* do we use posix capabilities? */
 #ifdef HAVE_PRCTL_H
 #ifdef HAVE_CAPABILITY_H
 #define USE_POSIX_CAP
 #endif
 #endif
 
+/* do we use eventfd? No. */
 #undef HAVE_EVENTFD_H
 #ifdef HAVE_EVENTFD_H
 #include <sys/eventfd.h>
@@ -42,6 +44,14 @@
 #ifdef EFD_CLOEXEC
 #define USE_EVENTFD
 #endif
+#endif
+#endif
+
+/* do we use clock_gettime to get monotonic time? */
+#include <time.h>
+#ifdef HAVE_CLOCK_GETTIME
+#ifdef CLOCK_MONOTONIC
+#define USE_CLOCK_GETTIME
 #endif
 #endif
 

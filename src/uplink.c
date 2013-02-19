@@ -472,8 +472,8 @@ connerr:
 	c->handler  = & uplink_login_handler;
 	c->flags    = l->client_flags;
 	c->keepalive = tick;
-	c->connect_time = tick;
-	c->last_read = tick; /* not simulated time */
+	c->last_read = tick;
+	c->connect_time = now;
 	strncpy(c->username, serverid, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);

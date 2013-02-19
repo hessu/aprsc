@@ -153,7 +153,7 @@ static int historydb_load_entry(char *s)
 	struct history_cell_t *cp;
 	int keylen, packetlen;
 	uint32_t h1, h2, i;
-	time_t expirytime   = now - lastposition_storetime;
+	time_t expirytime   = tick - lastposition_storetime;
 	
 	j = cJSON_Parse(s);
 	if (!j) {
@@ -241,7 +241,7 @@ void historydb_dump(FILE *fp)
 	/* Dump the historydb out on text format */
 	int i;
 	struct history_cell_t *hp;
-	time_t expirytime   = now - lastposition_storetime;
+	time_t expirytime   = tick - lastposition_storetime;
 
 	/* multiple locks ? one for each bucket, or for a subset of buckets ? */
 	rwl_rdlock(&historydb_rwlock);
@@ -288,7 +288,7 @@ int historydb_insert(struct pbuf_t *pb)
 	int isdead = 0, keylen;
 	struct history_cell_t **hp, *cp, *cp1;
 
-	time_t expirytime   = now - lastposition_storetime;
+	time_t expirytime   = tick - lastposition_storetime;
 
 	char keybuf[CALLSIGNLEN_MAX+2];
 	char *s;
@@ -462,7 +462,7 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	struct history_cell_t *cp;
 
 	// validity is 5 minutes shorter than expiration time..
-	time_t validitytime   = now - lastposition_storetime + 5*60;
+	time_t validitytime   = tick - lastposition_storetime + 5*60;
 
 	++historydb_lookups;
 
@@ -515,7 +515,7 @@ void historydb_cleanup(void)
 	long cleaned = 0;
 
 	// validity is 5 minutes shorter than expiration time..
-	time_t expirytime   = now - lastposition_storetime;
+	time_t expirytime   = tick - lastposition_storetime;
 
 
 	for (i = 0; i < HISTORYDB_HASH_MODULO; ++i) {

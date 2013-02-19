@@ -36,8 +36,8 @@
 #include "version.h"
 #include "status.h"
 
-time_t now;	/* current time, updated by the main thread, MAY be spun around by the simulator */
-time_t tick;	/* real monotonous clock, may or may not be wallclock */
+time_t now;	/* current time, updated by the main thread, MAY be spun around by NTP */
+time_t tick;	/* monotonous clock, may or may not be wallclock */
 
 extern int ibuf_size;
 
@@ -381,6 +381,9 @@ struct client_t *client_alloc(void)
 	c->obuf      = hmalloc(c->obuf_size);
 #endif
 
+	c->connect_time = now;
+	c->connect_tick = tick;
+	
 	c->cleanup   = tick + 120;
 
 	return c;
@@ -435,7 +438,6 @@ struct client_t *pseudoclient_setup(int portnum)
 	c->validated = 1; // we will validate on every packet
 	//c->portaccount = l->portaccount;
 	c->keepalive = tick;
-	c->connect_time = tick;
 	c->last_read = tick;
 	
 	//hlog(LOG_DEBUG, "pseudoclient setup %p: fd %d name %s addr_loc %s udpclient %p", c, c->fd, c->username, c->addr_loc, c->udpclient);
@@ -694,7 +696,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 			  ? ((c->state == CSTATE_COREPEER) ? "Peer" : "Uplink") : "Client" ),
 			  	c->addr_rem,
 			  	((c->username[0]) ? c->username : "?"),
-			  	tick - c->connect_time,
+			  	tick - c->connect_tick,
 			  	((errnum >= 0) ? strerror(errnum) : aprsc_strerror(errnum)),
 			  	c->localaccount.txbytes,
 			  	c->localaccount.rxbytes,
@@ -1462,6 +1464,7 @@ static void send_keepalives(struct worker_t *self)
 
 	memset(&t, 0, sizeof(t));
 	gmtime_r(&now, &t);
+	
 	// s += strftime(s, 40, "%d %b %Y %T GMT", &t);
 	// However that depends upon LOCALE, thus following:
 	s += sprintf(s, "%d %s %d %02d:%02d:%02d GMT",
@@ -1510,7 +1513,7 @@ static void send_keepalives(struct worker_t *self)
 		 */
 		if (c->flags & CLFLAGS_INPORT) {
 			if (c->state != CSTATE_CONNECTED) {
-				if (c->connect_time <= tick - client_login_timeout) {
+				if (c->connect_tick <= tick - client_login_timeout) {
 					hlog(LOG_DEBUG, "%s: Closing client fd %d due to login timeout (%d s)",
 					      c->addr_rem, c->fd, client_login_timeout);
 					client_close(self, c, CLIERR_LOGIN_TIMEOUT);
@@ -1601,7 +1604,6 @@ void worker_thread(struct worker_t *self)
 	hlog(LOG_DEBUG, "Worker %d started.", self->id);
 	
 	while (!self->shutting_down) {
-		tick = now = time(NULL);
 		t1 = tick;
 		
 		/* if we have new stuff in the global packet buffer, process it */
@@ -1974,7 +1976,8 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 		cJSON_AddNumberToObject(jc, "udp_downstream", 1);
 	
 	cJSON_AddNumberToObject(jc, "t_connect", c->connect_time);
-	cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_time);
+	cJSON_AddNumberToObject(jc, "t_connect_tick", c->connect_tick);
+	cJSON_AddNumberToObject(jc, "since_connect", tick - c->connect_tick);
 	cJSON_AddNumberToObject(jc, "since_last_read", tick - c->last_read);
 	cJSON_AddStringToObject(jc, "username", c->username);
 	cJSON_AddStringToObject(jc, "app_name", c->app_name);

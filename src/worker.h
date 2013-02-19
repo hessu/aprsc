@@ -27,8 +27,8 @@
 #include "cJSON.h"
 #include "errno.h"
 
-extern time_t now;	/* current time - updated by the main thread, MAY be running under simulator */
-extern time_t tick;	/* clocktick - monotonously increasing, never in simulator */
+extern time_t now;	/* current wallclock time */
+extern time_t tick;	/* clocktick - monotonously increasing for timers, not affected by NTP et al */
 
 extern void pthreads_profiling_reset(const char *name);
 
@@ -288,7 +288,8 @@ struct client_t {
 	int    uplink_index; /* uplink array index */
 	int    portnum;
 	int    listener_id;  /* which listener is this client connected to */
-	time_t connect_time;/* Time of connection */
+	time_t connect_time;/* Time of connection, wallclock real time */
+	time_t connect_tick;/* Time of connection, monotonous */
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t cleanup;     /* Time of next cleanup */

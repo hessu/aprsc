@@ -87,15 +87,11 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 
 
 	if (bad || lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
-#ifdef DEBUG_PARSE_APRS
-		hlog(LOG_DEBUG, "\tposition out of range: lat %.5f lng %.5f", lat, lng);
-#endif
+		DEBUG_LOG("\tposition out of range: lat %.5f lng %.5f", lat, lng);
 		return 0; /* out of range */
 	}
 	
-#ifdef DEBUG_PARSE_APRS
-	hlog(LOG_DEBUG, "\tposition ok: lat %.5f lng %.5f", lat, lng);
-#endif
+	DEBUG_LOG("\tposition ok: lat %.5f lng %.5f", lat, lng);
 
 	/* Pre-calculations for A/R/F/M-filter tests */
 	pb->lat     = filter_lat2rad(lat);  /* deg-to-radians */
@@ -113,7 +109,7 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 
 static int get_symbol_from_dstcall_twochar(const char c1, const char c2, char *sym_table, char *sym_code)
 {
-	//hlog(LOG_DEBUG, "\ttwochar %c %c", c1, c2);
+	//DEBUG_LOG("\ttwochar %c %c", c1, c2);
 	if (c1 == 'B') {
 		if (c2 >= 'B' && c2 <= 'P') {
 			*sym_table = '/';
@@ -253,14 +249,12 @@ static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym
 	if (sublength > 3)
 		sublength = 3;
 	
-#ifdef DEBUG_PARSE_APRS
-	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s (%d)", (int)(pb->dstcall_end_or_ssid - d_start), d_start, sublength);
-#endif
+	DEBUG_LOG("get_symbol_from_dstcall: %.*s (%d)", (int)(pb->dstcall_end_or_ssid - d_start), d_start, sublength);
 	
 	if (strncmp(d_start, "GPS", 3) != 0 && strncmp(d_start, "SPC", 3) != 0 && strncmp(d_start, "SYM", 3) != 0)
 		return 0;
 	
-	// hlog(LOG_DEBUG, "\ttesting %c %c %c", d_start[3], d_start[4], d_start[5]);
+	// DEBUG_LOG("\ttesting %c %c %c", d_start[3], d_start[4], d_start[5]);
 	if (!isalnum(d_start[3]) || !isalnum(d_start[4]))
 		return 0;
 	
@@ -283,10 +277,9 @@ static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym
 			else
 				*sym_table = '\\';
 		
-#ifdef DEBUG_PARSE_APRS
-			hlog(LOG_DEBUG, "\tnumeric symbol id in dstcall: %.*s: table %c code %c",
+			DEBUG_LOG("\tnumeric symbol id in dstcall: %.*s: table %c code %c",
 				(int)(pb->dstcall_end_or_ssid - d_start - 3), d_start + 3, *sym_table, *sym_code);
-#endif
+				
 			return 1;
 		} else {
 			/* secondary symbol table, with overlay
@@ -322,10 +315,9 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	
 	// Parse symbol from destination callsign, first thing before any possible returns
 	get_symbol_from_dstcall(pb, &sym_table, &sym_code);
-#ifdef DEBUG_PARSE_APRS
-	hlog(LOG_DEBUG, "get_symbol_from_dstcall: %.*s => %c%c",
+	
+	DEBUG_LOG("get_symbol_from_dstcall: %.*s => %c%c",
 		 (int)(pb->dstcall_end_or_ssid - pb->srccall_end-1), pb->srccall_end+1, sym_table, sym_code);
-#endif
 
 	if (memcmp(body,"ULT",3) == 0) {
 		/* Ah..  "$ULT..." - that is, Ultimeter 2000 weather instrument */
@@ -521,8 +513,8 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		return 0; /* Well..  Not NMEA frame */
 	}
 
-	// hlog(LOG_DEBUG, "NMEA parsing: %.*s", (int)(body_end - body), body);
-	// hlog(LOG_DEBUG, "     lat=%.10s   lng=%.10s", latp, lngp);
+	// DEBUG_LOG("NMEA parsing: %.*s", (int)(body_end - body), body);
+	// DEBUG_LOG("     lat=%.10s   lng=%.10s", latp, lngp);
 
 	i = sscanf(latp, "%2d%f,%c,", &la, &lat, &lac);
 	if (i != 3)
@@ -537,7 +529,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	if (loc != 'E' && loc != 'W' && loc != 'e' && loc != 'w')
 		return 0; // bad indicator value
 		
-	// hlog(LOG_DEBUG, "   lat: %c %2d %7.4f   lng: %c %2d %7.4f",
+	// DEBUG_LOG("   lat: %c %2d %7.4f   lng: %c %2d %7.4f",
 	//                 lac, la, lat, loc, lo, lng);
 
 	lat = (float)la + lat/60.0;
@@ -1209,7 +1201,7 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 			}
 			//keybuf[i] = 0;
 			pb->dstname_len = p - body;
-			//hlog(LOG_DEBUG, "message: dstname len %d", pb->dstname_len);
+			//DEBUG_LOG("message: dstname len %d", pb->dstname_len);
 			
 			/*
 			 * This adds a position for a message based on the

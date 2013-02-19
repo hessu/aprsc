@@ -66,6 +66,8 @@ my @pkts = (
 	"SRC\x08>DST,DIGI,qAR,$login:>should drop ctrl-B in srccall",
 	" SRC>DST,DIGI,qAR,$login:>should drop, space in front of srccall",
 	"\x00SRC>DST,DIGI,qAR,$login:>should drop, null in front of srccall",
+	"S\\RC>DST,DIGI,qAR,$login:>should drop, backslash in srccall",
+	"S\xefRC>DST,DIGI,qAR,$login:>should drop, high byte in srccall",
 	"SRCXXXXXXX>APRS,qAR,$login:>should drop, too long srccall",
 	"SRC>APRSXXXXXX,qAR,$login:>should drop, too long dstcall",
 	"SRC>APRS,OH2DIGI-12,qAR,$login:>should drop, too long call in path",

@@ -479,7 +479,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				*new_q_start = q_start + 1;
 				add_qAO = 0;
 			} else if (pathlen > 2 && *(*path_end -1) == 'I' && *(*path_end -2) == ',') {
-				hlog(LOG_DEBUG, "path has ,I in the end: %s", pdata);
+				hlog_packet(LOG_DEBUG, pdata, pathlen, "path has ,I in the end: ");
 				/* the path is terminated with ,I - lookup previous callsign in path */
 				char *p = *path_end - 3;
 				while (p > via_start && *p != ',')
@@ -487,7 +487,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				if (*p == ',') {
 					const char *prevcall = p+1;
 					const char *prevcall_end = *path_end - 2;
-					hlog(LOG_DEBUG, "previous callsign is %.*s", (int)(prevcall_end - prevcall), prevcall);
+					//hlog(LOG_DEBUG, "previous callsign is %.*s", (int)(prevcall_end - prevcall), prevcall);
 					/* if the path is terminated with ,login,I */
 					// TODO: Should validate that prevcall is a nice callsign
 					if (1) {

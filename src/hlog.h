@@ -41,6 +41,7 @@ extern int pick_loglevel(char *s, char **names);
 extern int open_log(char *name, int reopen);
 extern int close_log(int reopen);
 extern int hlog(int priority, const char *fmt, ...);
+extern int hlog_packet(int priority, const char *packet, int packetlen, const char *fmt, ...);
 
 extern int accesslog_open(char *logd, int reopen);
 extern int accesslog_close(char *reopenpath);

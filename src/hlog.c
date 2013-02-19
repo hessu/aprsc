@@ -73,6 +73,46 @@ char *log_destnames[] = {
 	NULL
 };
 
+/*
+ *	Quote a string, C-style. dst will be null-terminated, always.
+ */
+
+static int str_quote(char *dst, int dst_len, const char *src, int src_len)
+{
+	int si;
+	int di = 0;
+	int dst_use_len = dst_len - 2; /* leave space for terminating NUL and escaping an escape  */
+	unsigned char c;
+	
+	for (si = 0; si < src_len; si++) {
+		if (di >= dst_use_len)
+			break;
+		
+		c = (unsigned char) src[si];
+		
+		/* printable ASCII */
+		if (c >= 0x20 && c < 0x7f) {
+			/* escape the escape (space reserved already) */
+			if (c == '\\')
+				dst[di++] = '\\';
+			
+			dst[di++] = c;
+			continue;
+		}
+		
+		/* hex escape, is going to take more space */
+		if (di >= dst_use_len - 4)
+			break;
+		
+		dst[di++] = '\\';
+		dst[di++] = 'x';
+		di += snprintf(dst + di, 3, "%.2X", c);
+	}
+	
+	dst[di++] = 0;
+	
+	return di;
+}
 
 /*
  *	Append a formatted string to a dynamically allocated string
@@ -264,31 +304,13 @@ int rotate_log(void)
 	return 0;
 }
 
-/*
- *	Log a message
- */
-
-int hlog(int priority, const char *fmt, ...)
+static int hlog_write(int priority, const char *s)
 {
-	va_list args;
-	char s[LOG_LEN];
-	char wb[LOG_LEN];
-	int len, w;
 	struct tm lt;
 	struct timeval tv;
+	char wb[LOG_LEN];
+	int len, w;
 	
-	if (priority > 7)
-		priority = 7;
-	else if (priority < 0)
-		priority = 0;
-	
-	if (priority > log_level)
-		return 0;
-	
-	va_start(args, fmt);
-	vsnprintf(s, LOG_LEN, fmt, args);
-	va_end(args);
-
 	gettimeofday(&tv, NULL);
 	gmtime_r(&tv.tv_sec, &lt);
 	
@@ -300,6 +322,7 @@ int hlog(int priority, const char *fmt, ...)
 		rwl_rdunlock(&log_file_lock);
 		
 	}
+	
 	if ((log_dest & L_FILE) && (log_file >= 0)) {
 		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
@@ -318,6 +341,7 @@ int hlog(int priority, const char *fmt, ...)
 		}
 		
 	}
+	
 	if (log_dest & L_SYSLOG) {
 		rwl_rdlock(&log_file_lock);
 		syslog(priority, "%s: %s", log_levelnames[priority], s);
@@ -327,6 +351,58 @@ int hlog(int priority, const char *fmt, ...)
 	return 1;
 }
 
+/*
+ *	Log a message with a packet (will be quoted)
+ */
+
+int hlog(int priority, const char *fmt, ...)
+{
+	va_list args;
+	char s[LOG_LEN];
+	
+	if (priority > 7)
+		priority = 7;
+	else if (priority < 0)
+		priority = 0;
+	
+	if (priority > log_level)
+		return 0;
+	
+	va_start(args, fmt);
+	vsnprintf(s, LOG_LEN, fmt, args);
+	va_end(args);
+	
+	return hlog_write(priority, s);
+}
+
+
+/*
+ *	Log a message, with a packet in the end.
+ *	Packet will be quoted.
+ */
+
+int hlog_packet(int priority, const char *packet, int packetlen, const char *fmt, ...)
+{
+	va_list args;
+	char s[LOG_LEN];
+	int l;
+	
+	if (priority > 7)
+		priority = 7;
+	else if (priority < 0)
+		priority = 0;
+	
+	if (priority > log_level)
+		return 0;
+	
+	va_start(args, fmt);
+	l = vsnprintf(s, LOG_LEN, fmt, args);
+	va_end(args);
+	
+	str_quote(s + l, LOG_LEN - l, packet, packetlen);
+	
+	return hlog_write(priority, s);
+}
 
 /*
  *	Open access log

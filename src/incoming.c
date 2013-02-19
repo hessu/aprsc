@@ -538,7 +538,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 	const char *p = call;
 	const char *e = call + len;
 	
-	//hlog(LOG_DEBUG, "check_invalid_path_callsign: '%.*s'", len, call);
+	//hlog_packet(LOG_DEBUG, call, len, "check_invalid_path_callsign: ");
 	
 	/* only check for minimum length first - max length depends on
 	 * if there's a * in the end
@@ -566,7 +566,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 	if (len > CALLSIGNLEN_MAX) {
 		// TODO: more specific test for IPv6 trace address
 		if (after_q && len == 32) {
-			//hlog(LOG_DEBUG, "check_invalid_path_callsign: ipv6 address '%.*s'", len, call);
+			//hlog_packet(LOG_DEBUG, call, len, "check_invalid_path_callsign: ipv6 address: ");
 			return 0;
 		}
 		
@@ -858,7 +858,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		 * would result in an error-type counter getting incremented.
 		 * This is slightly incorrect (perhaps the packet is not a
 		 * duplicate after all), probably there should be a separate
-		 * statistics counter for this. TODO: add a counter.
+		 * statistics counter for this. TODO: add a "looped" counter.
 		 */
 		//hlog(LOG_DEBUG, "%s/%s: dropping due to source call '%.*s' being logged in on another socket", c->addr_rem, c->username, src_end - s, s);
 		pb->flags |= F_DUPE;
@@ -919,7 +919,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	pb->dstcall_len = via_start - src_end - 1;
 	pb->info_start  = info_start;
 	
-	//hlog(LOG_DEBUG, "After parsing and Qc algorithm: %.*s", pb->packet_len-2, pb->data);
+	//hlog_packet(LOG_DEBUG, pb->data, pb->packet_len-2, "After parsing and Qc algorithm: ");
 	
 	/* just try APRS parsing */
 	rc = parse_aprs(pb);
@@ -995,7 +995,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 
 	/* starts with '#' => a comment packet, timestamp or something */
 	if (*s == '#') {
-		hlog(LOG_DEBUG, "%s/%s: #-in: '%.*s'", c->addr_rem, c->username, len, s);
+		hlog_packet(LOG_DEBUG, s, len, "%s/%s: #-in: ", c->addr_rem, c->username);
 		if (l4proto != IPPROTO_UDP && (c->flags & CLFLAGS_USERFILTEROK)) {
 			/* filter adjunct commands ? */
 			char *filtercmd = memcasestr("filter", s, s + len);
@@ -1010,11 +1010,11 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	/* parse and process the packet */
 	e = incoming_parse(self, c, s, len);
 
-in_drop:	
+in_drop:
 	if (e < 0) {
 		/* failed parsing */
-		hlog(LOG_DEBUG, "%s/%s: Dropped packet (%d: %s) len %d: %.*s",
-			c->addr_rem, c->username, e, incoming_strerror(e), len, len, s);
+		hlog_packet(LOG_DEBUG, s, len, "%s/%s: Dropped packet (%d: %s) len %d: ",
+			c->addr_rem, c->username, e, incoming_strerror(e), len);
 	}
 	
 	/* Account the one incoming packet.

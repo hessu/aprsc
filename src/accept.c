@@ -1305,7 +1305,7 @@ void accept_thread(void *asdf)
 	pthread_sigmask(SIG_BLOCK, &sigs_to_block, NULL);
 	
 	/* start the accept thread, which will start server threads */
-	hlog(LOG_INFO, "Accept_thread starting...");
+	hlog(LOG_INFO, "Accept thread starting...");
 	
 	/* we allocate a worker structure to be used within the accept thread
 	 * for parsing incoming UDP packets and passing them on to the dupecheck

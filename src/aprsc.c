@@ -767,8 +767,10 @@ void time_thread(void *asdf)
 #ifdef USE_CLOCK_GETTIME
 	struct timespec sleep_start, sleep_end;
 	struct timespec ts;
+	hlog(LOG_INFO, "Time thread starting: using clock_gettime");
 #else
 	struct timeval sleep_start, sleep_end;
+	hlog(LOG_INFO, "Time thread starting: using gettimeofday");
 #endif
 
 	pthreads_profiling_reset("time");

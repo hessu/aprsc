@@ -14,7 +14,7 @@
 #include <time.h>
 #include "cJSON.h"
 
-extern time_t startup_tick;
+extern time_t startup_tick, startup_time;
 extern cJSON *liveupgrade_status;
 
 extern void status_error(int ttl, const char *err);

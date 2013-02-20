@@ -869,6 +869,7 @@ int main(int argc, char **argv)
 	cleanup_tick = tick;
 	version_tick = tick + random() % 60; /* some load distribution */
 	startup_tick = tick;
+	startup_time = now;
 	setlinebuf(stderr);
 	
 	/* set locale to C so that isalnum(), isupper() etc don't do anything

@@ -1020,7 +1020,7 @@ static void accept_rx_err_load(struct client_t *c, cJSON *rx_errs, int *rxerr_ma
 
 static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_map_len)
 {
-	cJSON *fd, *listener_id, *username, *t_connect, *t_connect_tick;
+	cJSON *fd, *listener_id, *username, *time_connect, *tick_connect;
 	cJSON *state;
 	cJSON *addr_loc;
 	cJSON *udp_port;
@@ -1042,8 +1042,8 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	listener_id = cJSON_GetObjectItem(client, "listener_id");
 	state = cJSON_GetObjectItem(client, "state");
 	username = cJSON_GetObjectItem(client, "username");
-	t_connect = cJSON_GetObjectItem(client, "t_connect");
-	t_connect_tick = cJSON_GetObjectItem(client, "t_connect_tick");
+	time_connect = cJSON_GetObjectItem(client, "t_connect");
+	tick_connect = cJSON_GetObjectItem(client, "tick_connect");
 	addr_loc = cJSON_GetObjectItem(client, "addr_loc");
 	udp_port = cJSON_GetObjectItem(client, "udp_port");
 	app_name = cJSON_GetObjectItem(client, "app_name");
@@ -1065,7 +1065,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 		&& (listener_id) && listener_id->type == cJSON_Number
 		&& (state) && state->type == cJSON_String
 		&& (username) && username->type == cJSON_String
-		&& (t_connect) && t_connect->type == cJSON_Number
+		&& (time_connect) && time_connect->type == cJSON_Number
 		&& (addr_loc) && addr_loc->type == cJSON_String
 		&& (app_name) && app_name->type == cJSON_String
 		&& (app_version) && app_version->type == cJSON_String
@@ -1132,11 +1132,12 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	/* distribute cleanup intervals over the next 2 minutes */
 	c->cleanup = tick + (random() % 120);
 	
-	c->connect_time = t_connect->valueint;
-	if (t_connect_tick && t_connect_tick->type == cJSON_Number)
-		c->connect_tick = t_connect_tick->valueint;
-	else
-		c->connect_tick = t_connect->valueint;
+	c->connect_time = time_connect->valueint;
+	/* live upgrade / backward compatibility: upgrading from <= 1.8.2 requires the 'else' path' */
+	if (tick_connect && tick_connect->type == cJSON_Number)
+		c->connect_tick = tick_connect->valueint;
+	else /* convert to monotonic time */
+		c->connect_tick = tick - (now - c->connect_time);
 	
 	c->validated = verified->valueint;
 	c->localaccount.rxbytes = bytes_rx->valuedouble;

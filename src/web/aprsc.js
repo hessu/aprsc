@@ -223,7 +223,7 @@ var key_translate = {
 	'admin': 'Server admin',
 	'software': 'Server software',
 	'os': 'Operating system',
-	't_started': 'Server started',
+	'time_started': 'Server started',
 	'uptime': 'Uptime',
 	
 	// dupecheck block
@@ -279,7 +279,7 @@ var val_convert_c = {
 };
 
 var val_convert = {
-	't_started': timestr,
+	'time_started': timestr,
 	'uptime': dur_str,
 	't_connect': timestr,
 	'since_connect': dur_str,
@@ -603,7 +603,7 @@ function render_memory(element, d)
 	$(element).html(s);
 }
 
-var t_now;
+var tick_now;
 
 var rate_cache = {};
 function calc_rate(key, value, no_s)
@@ -611,7 +611,7 @@ function calc_rate(key, value, no_s)
 	var rate = '';
 	if (rate_cache[key]) {
 		// can calculate current rate
-		var t_dif = t_now - rate_cache[key][0];
+		var t_dif = tick_now - rate_cache[key][0];
 		var val_dif = value - rate_cache[key][1];
 		rate = val_dif / t_dif;
 		var prefix = '';
@@ -635,7 +635,7 @@ function calc_rate(key, value, no_s)
 		rate = prefix + rate;
 	}
 	
-	rate_cache[key] = [t_now, value];
+	rate_cache[key] = [tick_now, value];
 	return [ value, rate ];
 }
 
@@ -685,7 +685,7 @@ function render(d)
 		options_s = d['status_options'];
 		parse_options(options_s);
 	}
-	if (d['server'] && d['server']['t_now']) {
+	if (d['server'] && d['server']['tick_now']) {
 		var s = d['server'];
 		
 		if (s['server_id']) {
@@ -693,8 +693,8 @@ function render(d)
 			$('#serverid').html(htmlent(s['server_id']));
 		}
 		
-		if (s['t_now'])
-			$('#upt').html(' at ' + timestr(s['t_now']));
+		if (s['time_now'])
+			$('#upt').html(' at ' + timestr(s['time_now']));
 		
 		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
 			s['software'] = s['software'] + ' ' + s['software_version'];
@@ -704,7 +704,7 @@ function render(d)
 		return;
 	}
 	
-	t_now = d['server']['t_now'];
+	tick_now = d['server']['tick_now'];
 	rx_err_codes = d['rx_errs'];
 	
 	if (d['alarms']) {

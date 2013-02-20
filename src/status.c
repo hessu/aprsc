@@ -36,7 +36,7 @@
 #include "counterdata.h"
 #include "client_heard.h"
 
-time_t startup_tick;
+time_t startup_tick, startup_time;
 
 pthread_mutex_t status_json_mt = PTHREAD_MUTEX_INITIALIZER;
 char *status_json_cached = NULL;
@@ -234,8 +234,9 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddStringToObject(server, "software_build_time", verstr_build_time);
 	cJSON_AddStringToObject(server, "software_build_user", verstr_build_user);
 	cJSON_AddNumberToObject(server, "uptime", tick - startup_tick);
-	cJSON_AddNumberToObject(server, "t_started", startup_tick);
-	cJSON_AddNumberToObject(server, "t_now", tick);
+	cJSON_AddNumberToObject(server, "tick_now", tick);
+	cJSON_AddNumberToObject(server, "time_now", now);
+	cJSON_AddNumberToObject(server, "time_started", startup_time);
 	status_uname(server);
 	cJSON_AddItemToObject(root, "server", server);
 	

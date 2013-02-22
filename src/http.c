@@ -45,6 +45,16 @@
 #include "login.h"
 #include "counterdata.h"
 
+/* supported HTTP transfer-encoding methods */
+#define HTTP_COMPR_GZIP 1
+#define HTTP_COMPR_DEFLATE 2
+
+const char *compr_type_strings[] = {
+	"none",
+	"gzip",
+	"deflate"
+};
+
 int http_shutting_down;
 int http_reconfiguring;
 
@@ -352,6 +362,27 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 }
 
 /*
+ *	Check if the client will dig a compressed response
+ */
+
+static int http_check_req_compressed(struct evhttp_request *r)
+{
+	struct evkeyvalq *req_headers;
+	const char *accept_enc;
+	
+	req_headers = evhttp_request_get_input_headers(r);
+	accept_enc = evhttp_find_header(req_headers, "Accept-Encoding");
+	
+	if (!accept_enc)
+		return 0;
+	
+	if (strstr(accept_enc, "gzip") != NULL)
+		return HTTP_COMPR_GZIP;
+	
+	return 0;
+}
+
+/*
  *	Generate a status JSON response
  */
 
@@ -484,7 +515,13 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 		return;
 	}
 	
-	file_size = st.st_size;  
+	/* Consider returning a cached version */
+	int compr_type;
+	if ((compr_type = http_check_req_compressed(r))) {
+		//hlog(LOG_DEBUG, "http static file request, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
+	}
+	
+	file_size = st.st_size;
 	
 	/* yes, we are not going to serve large files. */
 	buf = hmalloc(file_size);

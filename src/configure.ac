@@ -223,6 +223,16 @@ if test "$ac_cv_search_clock_gettime" = "-lrt"; then
   LIBRT="-lrt"
 fi
 
+dnl Check for zlib
+AC_SUBST(LIBZ)
+AC_SEARCH_LIBS([deflate], [z], [
+  AC_CHECK_HEADERS([zlib.h], AC_DEFINE(HAVE_LIBZ, 1, [Have libz]))
+])
+
+if test "$ac_cv_search_deflate" = "-lz"; then
+  LIBZ="-lz"
+fi
+
 dnl Output files
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

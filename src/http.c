@@ -443,8 +443,8 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 		if (compr_type == HTTP_COMPR_GZIP) {
 			char *compr = hmalloc(len);
 			int olen = http_compress_gzip(data, len, compr, len);
-			/* if compression succeeded, replace buffer with the compressed one and free the
-			 * uncompressed one
+			/* If compression succeeded, replace buffer with the compressed one and free the
+			 * uncompressed one. Add HTTP header to indicate compressed response.
 			 */
 			if (olen > 0) {
 				data = compr;

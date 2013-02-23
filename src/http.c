@@ -429,10 +429,10 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
  *	Compress response, if possible.
  */
 
-static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len)
+static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len, int allow_compress)
 {
 #ifdef HAVE_LIBZ
-	if (len > 100) {
+	if (len > 100 && allow_compress) {
 		/* Consider returning a compressed version */
 		int compr_type;
 		if ((compr_type = http_check_req_compressed(r))) {
@@ -477,7 +477,7 @@ static void http_status(struct evhttp_request *r)
 	evhttp_add_header(headers, "Cache-Control", "max-age=9");
 	
 	json = status_json_string(0, 0);
-	http_send_reply_ok(r, headers, json, strlen(json));
+	http_send_reply_ok(r, headers, json, strlen(json), 1);
 	free(json);
 }
 
@@ -504,7 +504,7 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
 	evhttp_add_header(headers, "Cache-Control", "max-age=58");
 	
-	http_send_reply_ok(r, headers, json, strlen(json));
+	http_send_reply_ok(r, headers, json, strlen(json), 1);
 	hfree(json);
 }
 
@@ -607,8 +607,13 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 		return;
 	}
 	
-	http_send_reply_ok(r, headers, buf, n);
+	int allow_compress;
+	if (strncmp(contenttype, "image/", 6) == 0)
+		allow_compress = 0;
+	else
+		allow_compress = 1;
 	
+	http_send_reply_ok(r, headers, buf, n, allow_compress);
 	hfree(buf);
 }
 

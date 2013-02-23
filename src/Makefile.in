@@ -61,7 +61,7 @@ INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
 INSTALL_DIR=$(INSTALL)  -m 755 -d
 
-LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@ @LIBCAP@
+LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@ @LIBCAP@ @LIBZ@
 
 #LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
 #CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include

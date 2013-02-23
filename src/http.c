@@ -45,9 +45,12 @@
 #include "login.h"
 #include "counterdata.h"
 
+#ifdef HAVE_LIBZ
+#include <zlib.h>
+#endif
+
 /* supported HTTP transfer-encoding methods */
 #define HTTP_COMPR_GZIP 1
-#define HTTP_COMPR_DEFLATE 2
 
 const char *compr_type_strings[] = {
 	"none",
@@ -365,6 +368,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
  *	Check if the client will dig a compressed response
  */
 
+#ifdef HAVE_LIBZ
 static int http_check_req_compressed(struct evhttp_request *r)
 {
 	struct evkeyvalq *req_headers;
@@ -381,6 +385,44 @@ static int http_check_req_compressed(struct evhttp_request *r)
 	
 	return 0;
 }
+#endif
+
+#ifdef HAVE_LIBZ
+static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
+{
+	z_stream ctx;
+	
+	ctx.zalloc = Z_NULL;
+	ctx.zfree = Z_NULL;
+	ctx.opaque = Z_NULL;
+	
+	// TODO: set compression strategy based on file content-type
+	/* magic 15 bits + 16 enables gzip header generation */
+	if (deflateInit2(&ctx, 7, Z_DEFLATED, (15+16), MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
+		hlog(LOG_ERR, "http_compress_gzip: deflateInit2 failed");
+		return -1;
+	}
+	
+	ctx.next_in = (unsigned char *)in;
+	ctx.avail_in = ilen;
+	ctx.next_out = (unsigned char *)out;
+	ctx.avail_out = ospace;
+	
+	int ret = deflate(&ctx, Z_FINISH);
+	if (ret != Z_STREAM_END) {
+		hlog(LOG_ERR, "http_compress_gzip: deflate returned %d instead of Z_STREAM_END", ret);
+		(void)deflateEnd(&ctx);
+		return -1;
+	}
+	
+	int olen = ospace - ctx.avail_out;
+	hlog(LOG_DEBUG, "http_compress_gzip: compressed %d bytes to %d bytes: %.1f %%", ilen, olen, (float)olen / (float)ilen * 100.0);
+	
+	(void)deflateEnd(&ctx);
+	
+	return olen;
+}
+#endif
 
 /*
  *	Generate a status JSON response
@@ -515,12 +557,6 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 		return;
 	}
 	
-	/* Consider returning a cached version */
-	int compr_type;
-	if ((compr_type = http_check_req_compressed(r))) {
-		//hlog(LOG_DEBUG, "http static file request, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
-	}
-	
 	file_size = st.st_size;
 	
 	/* yes, we are not going to serve large files. */
@@ -540,6 +576,30 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 		hfree(buf);
 		return;
 	}
+	
+#ifdef HAVE_LIBZ
+	/* Consider returning a compressed version */
+	int compr_type;
+	if ((compr_type = http_check_req_compressed(r))) {
+		hlog(LOG_DEBUG, "http static file request, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
+	}
+	
+	/* compress */
+	if (compr_type == HTTP_COMPR_GZIP) {
+		char *compr = hmalloc(file_size);
+		int olen = http_compress_gzip(buf, file_size, compr, file_size);
+		/* if compression succeeded, replace buffer with the compressed one and free the
+		 * uncompressed one
+		 */
+		if (olen > 0) {
+			char *old = buf;
+			buf = compr;
+			n = olen;
+			hfree(old);
+			evhttp_add_header(headers, "Content-Encoding", "gzip");
+		}
+	}
+#endif
 	
 	buffer = evbuffer_new();
 	evbuffer_add(buffer, buf, n);

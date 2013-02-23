@@ -425,25 +425,60 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 #endif
 
 /*
+ *	Transmit an OK HTTP response, given headers and data.
+ *	Compress response, if possible.
+ */
+
+static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len)
+{
+#ifdef HAVE_LIBZ
+	if (len > 100) {
+		/* Consider returning a compressed version */
+		int compr_type;
+		if ((compr_type = http_check_req_compressed(r))) {
+			hlog(LOG_DEBUG, "http_send_reply_ok, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
+		}
+		
+		/* compress */
+		if (compr_type == HTTP_COMPR_GZIP) {
+			char *compr = hmalloc(len);
+			int olen = http_compress_gzip(data, len, compr, len);
+			/* if compression succeeded, replace buffer with the compressed one and free the
+			 * uncompressed one
+			 */
+			if (olen > 0) {
+				data = compr;
+				len = olen;
+				evhttp_add_header(headers, "Content-Encoding", "gzip");
+			}
+		}
+	}
+#endif
+	
+	struct evbuffer *buffer = evbuffer_new();
+	evbuffer_add(buffer, data, len);
+	
+	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
+	evbuffer_free(buffer);
+}
+
+
+/*
  *	Generate a status JSON response
  */
 
 static void http_status(struct evhttp_request *r)
 {
 	char *json;
-	struct evbuffer *buffer = evbuffer_new();
-	
-	json = status_json_string(0, 0);
-	evbuffer_add(buffer, json, strlen(json));
-	free(json);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
 	http_header_base(headers, tick);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
 	evhttp_add_header(headers, "Cache-Control", "max-age=9");
 	
-	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
-	evbuffer_free(buffer);
+	json = status_json_string(0, 0);
+	http_send_reply_ok(r, headers, json, strlen(json));
+	free(json);
 }
 
 /*
@@ -464,17 +499,13 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
 		return;
 	}
 	
-	struct evbuffer *buffer = evbuffer_new();
-	evbuffer_add(buffer, json, strlen(json));
-	free(json);
-	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
 	http_header_base(headers, tick);
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
 	evhttp_add_header(headers, "Cache-Control", "max-age=58");
 	
-	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
-	evbuffer_free(buffer);
+	http_send_reply_ok(r, headers, json, strlen(json));
+	hfree(json);
 }
 
 /*
@@ -493,7 +524,6 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	int fd;
 	int file_size;
 	char *buf;
-	struct evbuffer *buffer;
 	struct evkeyvalq *req_headers;
 	const char *ims;
 	
@@ -577,36 +607,9 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 		return;
 	}
 	
-#ifdef HAVE_LIBZ
-	/* Consider returning a compressed version */
-	int compr_type;
-	if ((compr_type = http_check_req_compressed(r))) {
-		hlog(LOG_DEBUG, "http static file request, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
-	}
+	http_send_reply_ok(r, headers, buf, n);
 	
-	/* compress */
-	if (compr_type == HTTP_COMPR_GZIP) {
-		char *compr = hmalloc(file_size);
-		int olen = http_compress_gzip(buf, file_size, compr, file_size);
-		/* if compression succeeded, replace buffer with the compressed one and free the
-		 * uncompressed one
-		 */
-		if (olen > 0) {
-			char *old = buf;
-			buf = compr;
-			n = olen;
-			hfree(old);
-			evhttp_add_header(headers, "Content-Encoding", "gzip");
-		}
-	}
-#endif
-	
-	buffer = evbuffer_new();
-	evbuffer_add(buffer, buf, n);
 	hfree(buf);
-	
-	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
-	evbuffer_free(buffer);
 }
 
 /*

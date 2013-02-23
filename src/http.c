@@ -432,6 +432,8 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len, int allow_compress)
 {
 #ifdef HAVE_LIBZ
+	char *compr = NULL;
+	
 	if (len > 100 && allow_compress) {
 		/* Consider returning a compressed version */
 		int compr_type;
@@ -441,7 +443,7 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 		
 		/* compress */
 		if (compr_type == HTTP_COMPR_GZIP) {
-			char *compr = hmalloc(len);
+			compr = hmalloc(len);
 			int olen = http_compress_gzip(data, len, compr, len);
 			/* If compression succeeded, replace buffer with the compressed one and free the
 			 * uncompressed one. Add HTTP header to indicate compressed response.
@@ -460,6 +462,11 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
 	evbuffer_free(buffer);
+
+#ifdef HAVE_LIBZ
+	if (compr)
+		hfree(compr);
+#endif
 }
 
 

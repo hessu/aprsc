@@ -387,6 +387,10 @@ static int http_check_req_compressed(struct evhttp_request *r)
 }
 #endif
 
+/*
+ *	gzip compress a buffer
+ */
+
 #ifdef HAVE_LIBZ
 static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 {
@@ -396,7 +400,6 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 	ctx.zfree = Z_NULL;
 	ctx.opaque = Z_NULL;
 	
-	// TODO: set compression strategy based on file content-type
 	/* magic 15 bits + 16 enables gzip header generation */
 	if (deflateInit2(&ctx, 7, Z_DEFLATED, (15+16), MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) != Z_OK) {
 		hlog(LOG_ERR, "http_compress_gzip: deflateInit2 failed");
@@ -436,12 +439,12 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 	
 	if (len > 100 && allow_compress) {
 		/* Consider returning a compressed version */
-		int compr_type;
-		if ((compr_type = http_check_req_compressed(r))) {
+		int compr_type = http_check_req_compressed(r);
+		/*
+		if (compr_type)
 			hlog(LOG_DEBUG, "http_send_reply_ok, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
-		}
+		*/
 		
-		/* compress */
 		if (compr_type == HTTP_COMPR_GZIP) {
 			compr = hmalloc(len);
 			int olen = http_compress_gzip(data, len, compr, len);

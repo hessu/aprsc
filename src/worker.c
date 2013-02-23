@@ -730,7 +730,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 
 	/* remove from polling list */
 	if (c->xfd) {
-		hlog(LOG_DEBUG, "client_close: xpoll_remove %p fd %d", c->xfd, c->xfd->fd);
+		//hlog(LOG_DEBUG, "client_close: xpoll_remove %p fd %d", c->xfd, c->xfd->fd);
 		xpoll_remove(&self->xp, c->xfd);
 	}
 	
@@ -787,7 +787,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	
 	if (c->portaccount) {
 		/* If port accounting is done, handle population accounting... */
-		hlog(LOG_DEBUG, "client_close dropping inbound_connects_account %p", c->portaccount);
+		//hlog(LOG_DEBUG, "client_close dropping inbound_connects_account %p", c->portaccount);
 		inbound_connects_account(0, c->portaccount);
 		c->portaccount = NULL;
 	} else {

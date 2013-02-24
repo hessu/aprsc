@@ -6,7 +6,7 @@
 use Test;
 
 BEGIN {
-	plan tests => (!defined $ENV{'TEST_PRODUCT'} || $ENV{'TEST_PRODUCT'} =~ /aprsc/) ? 2 + 3 + 1 : 0;
+	plan tests => (!defined $ENV{'TEST_PRODUCT'} || $ENV{'TEST_PRODUCT'} =~ /aprsc/) ? 2 + 6 + 1 : 0;
 };
 
 if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} !~ /aprsc/) {
@@ -37,17 +37,35 @@ $ua->agent(
 
 my($req, $res);
 
+# transfer-encodings that the client cant decode (compression)
+my $can_accept = HTTP::Message::decodable;
+
 $req = HTTP::Request::Common::GET("http://127.0.0.1:55501/");
 $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET of status server front page returned wrong response code, message: " . $res->message);
+
+$req->header('Accept-Encoding', $can_accept);
+$res = $ua->simple_request($req);
+ok($res->code, 200, "HTTP GET (compressed) of status server front page returned wrong response code, message: " . $res->message);
+
 
 $req = HTTP::Request::Common::GET("http://127.0.0.1:55501/status.json");
 $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET of status server status.json returned wrong response code, message: " . $res->message);
 
+$req->header('Accept-Encoding', $can_accept);
+$res = $ua->simple_request($req);
+ok($res->code, 200, "HTTP GET (compressed) of status server status.json returned wrong response code, message: " . $res->message);
+
+
 $req = HTTP::Request::Common::GET("http://127.0.0.1:55501/counterdata?totals.tcp_bytes_rx");
 $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET of status server /counterdata?totals.tcp_bytes_rx returned wrong response code, message: " . $res->message);
+
+$req->header('Accept-Encoding', $can_accept);
+$res = $ua->simple_request($req);
+ok($res->code, 200, "HTTP GET (compressed) of status server /counterdata?totals.tcp_bytes_rx returned wrong response code, message: " . $res->message);
+
 
 # stop
 

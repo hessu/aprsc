@@ -233,6 +233,7 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddStringToObject(server, "software_version", version_build);
 	cJSON_AddStringToObject(server, "software_build_time", verstr_build_time);
 	cJSON_AddStringToObject(server, "software_build_user", verstr_build_user);
+	cJSON_AddStringToObject(server, "software_build_features", verstr_features);
 	cJSON_AddNumberToObject(server, "uptime", tick - startup_tick);
 	cJSON_AddNumberToObject(server, "tick_now", tick);
 	cJSON_AddNumberToObject(server, "time_now", now);

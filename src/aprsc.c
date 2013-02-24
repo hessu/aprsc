@@ -151,7 +151,8 @@ void parse_cmdline(int argc, char *argv[])
 			break;
 		case '?':
 		case 'h':
-			fprintf(stderr, "%s\n", verstr);
+			fprintf(stderr, "%s\nBuilt at %s by %s\nBuilt with:%s\n",
+				verstr, verstr_build_time, verstr_build_user, verstr_features);
 			failed = 1;
 	}
 	}

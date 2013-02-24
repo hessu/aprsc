@@ -222,6 +222,7 @@ var key_translate = {
 	'server_id': 'Server ID',
 	'admin': 'Server admin',
 	'software': 'Server software',
+	'software_build_features': 'Software features',
 	'os': 'Operating system',
 	'time_started': 'Server started',
 	'uptime': 'Uptime',
@@ -698,7 +699,7 @@ function render(d)
 		
 		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
 			s['software'] = s['software'] + ' ' + s['software_version'];
-			
+		
 		render_block(0, server_table, s);
 	} else {
 		return;

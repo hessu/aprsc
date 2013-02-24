@@ -6,7 +6,7 @@
 use Test;
 
 BEGIN {
-	plan tests => (!defined $ENV{'TEST_PRODUCT'} || $ENV{'TEST_PRODUCT'} =~ /aprsc/) ? 2 + 10 + 1 : 0;
+	plan tests => (!defined $ENV{'TEST_PRODUCT'} || $ENV{'TEST_PRODUCT'} =~ /aprsc/) ? 2 + 16 + 1 : 0;
 };
 
 if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} !~ /aprsc/) {
@@ -66,12 +66,14 @@ $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET of status server status.json returned wrong response code, message: " . $res->message);
 $j = $json->decode($res->decoded_content(charset => 'none'));
 ok(defined $j, 1, "JSON decoding of status.json failed");
+ok(defined $j->{'server'}, 1, "status.json does not define 'server'");
 
 $req->header('Accept-Encoding', $can_accept);
 $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET (compressed) of status server status.json returned wrong response code, message: " . $res->message);
 $j = $json->decode($res->decoded_content(charset => 'none'));
 ok(defined $j, 1, "JSON decoding of (compressed) status.json failed");
+ok(defined $j->{'server'}, 1, "status.json (compressed) does not define 'server'");
 
 
 $req = HTTP::Request::Common::GET("http://127.0.0.1:55501/counterdata?totals.tcp_bytes_rx");
@@ -79,12 +81,16 @@ $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET of status server /counterdata?totals.tcp_bytes_rx returned wrong response code, message: " . $res->message);
 $j = $json->decode($res->decoded_content(charset => 'none'));
 ok(defined $j, 1, "JSON decoding of /counterdata?totals.tcp_bytes_rx failed");
+ok(defined $j->{'interval'}, 1, "counterdata json does not define 'interval'");
+ok(defined $j->{'values'}, 1, "counterdata json does not define 'values'");
 
 $req->header('Accept-Encoding', $can_accept);
 $res = $ua->simple_request($req);
 ok($res->code, 200, "HTTP GET (compressed) of status server /counterdata?totals.tcp_bytes_rx returned wrong response code, message: " . $res->message);
 $j = $json->decode($res->decoded_content(charset => 'none'));
 ok(defined $j, 1, "JSON decoding of (compressed) /counterdata?totals.tcp_bytes_rx failed");
+ok(defined $j->{'interval'}, 1, "counterdata json (compressed) does not define 'interval'");
+ok(defined $j->{'values'}, 1, "counterdata json (compressed) does not define 'values'");
 
 
 # stop

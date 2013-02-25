@@ -34,6 +34,7 @@ static const char *disallow_login_usernames[] = {
 static const char *quirks_mode_blacklist[] = {
 	"HR-IXPWIND", /* Haute Networks HauteWIND: transmits LF NUL for line termination */
 	"HR-IXP-WIND", /* Variation of Haute Networks HauteWIND */
+	"IXP-WIND", /* Variation of Haute Networks HauteWIND */
 	"Oww/", /* One-Wire Weather CWOP client sends a NUL byte in beginning of packet (in end of previous line) */
 	NULL
 };

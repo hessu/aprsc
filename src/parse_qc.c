@@ -324,7 +324,10 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			// where to replace from
 			*q_replace = via_start;
 			//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
-			return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
+			if (c->validated)
+				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
+			else
+				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s",  serverid);
 		}
 	}
 	

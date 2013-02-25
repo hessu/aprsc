@@ -227,7 +227,7 @@ char *cdata_json_string(const char *name)
 {
 	struct cdata_t *cd;
 	char *out = NULL;
-	int i, e;
+	int e;
 	
 	cd = cdata_find_and_lock(name);
 	
@@ -242,7 +242,9 @@ char *cdata_json_string(const char *name)
 	cJSON_AddItemToObject(root, "values", values);
 	
 	if (cd->last_index >= 0) {
-		i = cd->last_index + 1;
+		int i = cd->last_index + 1;
+		time_t tick_dif = now - tick; /* convert monotonic time to wallclock time */
+		
 		do {
 			if (i == CDATA_SAMPLES)
 				i = 0;
@@ -250,14 +252,14 @@ char *cdata_json_string(const char *name)
 			
 			if (cd->times[i] > 0) {
 				cJSON *val = cJSON_CreateArray();
-				cJSON_AddItemToArray(val, cJSON_CreateNumber(cd->times[i]));
+				cJSON_AddItemToArray(val, cJSON_CreateNumber(cd->times[i] + tick_dif));
 				cJSON_AddItemToArray(val, cJSON_CreateNumber(cd->values[i]));
 				cJSON_AddItemToArray(values, val);
 			}
 			
 			if (i == cd->last_index)
 				break;
-			i ++;
+			i++;
 		} while (1);
 	}
 	

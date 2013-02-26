@@ -693,11 +693,33 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	int originated_by_client = 0;
 	char *p;
 	
-	/* for quirky clients, trim spaces and NULs from beginning */
+	/* for quirky clients, do some special treatment */
 	if (c->quirks_mode) {
+		/* trim spaces and NULs from beginning */
 		while ((*s == ' ' || *s == 0) && len > 0) {
 			len--;
 			s++;
+		}
+		
+		/* look for the '>' */
+		src_end = memchr(s, '>', len < CALLSIGNLEN_MAX+1 ? len : CALLSIGNLEN_MAX+1);
+		if (!src_end)
+			return INERR_NO_DST;	// No ">" in packet start..
+		
+		/* trim spaces from end of srccall */
+		char *old_src_end = src_end;
+		while (src_end > s && *(src_end-1) == ' ')
+			src_end--;
+		
+		if (src_end == s)
+			return INERR_NO_DST; /* srccall was all spaces */
+		
+		if (src_end != old_src_end) {
+			int dist = old_src_end - src_end;
+			memmove(s + dist, s, src_end - s);
+			len -= dist;
+			s += dist;
+			hlog_packet(LOG_DEBUG, s, len, "quirks_mode trimmed %d spaces from srccall: ", dist);
 		}
 	}
 	

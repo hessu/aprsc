@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 2 + 3 };
+BEGIN { plan tests => 6 + 3 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -43,6 +43,12 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 # nulls in front of srccall
 $rx = "SRC>DST,qAR,$login:>nulls in beginning";
 $tx = "\x00$rx";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# spaces in end of srccall
+my $tail = ">DST,qAR,$login:>spaces in end of srccall";
+$tx = "SRC  $tail";
+$rx = "SRC$tail";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # disconnect

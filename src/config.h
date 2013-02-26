@@ -93,6 +93,7 @@ extern char *passcode;
 extern char *myemail;
 extern char *myadmin;
 extern char *http_status_options;
+extern char *fake_version;
 
 extern char def_cfgfile[];
 extern char *cfgfile;

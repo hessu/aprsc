@@ -51,10 +51,12 @@ char *serverid;
 char *passcode;
 char *myemail;
 char *myadmin;
+char *fake_version;
 char *new_serverid;
 char *new_passcode;
 char *new_myemail;
 char *new_myadmin;
+char *new_fake_version;
 
 int listen_low_ports = 0; /* do we have any < 1024 ports set? need POSIX capabilities? */
 
@@ -169,6 +171,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ "quirks_mode",	_CFUNC_ do_boolean,	&quirks_mode		},
+	{ "fake_version",	_CFUNC_ do_string,	&new_fake_version	},
 	{ NULL,			NULL,			NULL			}
 };
 
@@ -1210,6 +1213,18 @@ int read_config(void)
 		hfree(o);
 	}
 	
+	if (new_fake_version) {
+		char *o = fake_version;
+		fake_version = new_fake_version;
+		new_fake_version = NULL;
+		if (o)
+			hfree(o);
+	} else {
+		char *o = fake_version;
+		fake_version = NULL;
+		hfree(o);
+	}
+	
 	/* validate uplink config: if there is a single 'multiro' connection
 	 * configured, all of the uplinks must be 'multiro'
 	 */
@@ -1321,6 +1336,9 @@ void free_config(void)
 	hfree(myadmin);
 	serverid = passcode = myemail = myadmin = NULL;
 	logname = NULL;
+	if (fake_version)
+		hfree(fake_version);
+	fake_version = NULL;
 	free_listen_config(&listen_config);
 	free_peerip_config(&peerip_config);
 	free_http_config(&http_config);

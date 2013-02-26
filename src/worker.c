@@ -1426,7 +1426,7 @@ static void collect_new_clients(struct worker_t *self)
 		 * In case of a live upgrade, this should maybe be skipped, but
 		 * I'll leave it in for now.
 		 */
-		client_printf(self, c, "# %s\r\n", verstr_aprsis);
+		client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
 		
 		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */
 	}

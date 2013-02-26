@@ -84,6 +84,7 @@ extern int client_timeout;
 extern int client_login_timeout;
 
 extern int disallow_unverified;		/* don't allow unverified clients to transmit packets */
+extern int quirks_mode;
 
 extern int verbose;
 

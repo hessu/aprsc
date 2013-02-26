@@ -110,6 +110,7 @@ int client_timeout        = 48*60*60;	/* after N seconds of no input from a clie
 int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
 int disallow_unverified   = 1;		/* disallow packets from unverified clients */
+int quirks_mode           = 0;		/* enable quirks mode for all clients by default */
 
 int maxclients = 500;			/* maximum number of clients */
 
@@ -167,6 +168,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
+	{ "quirks_mode",	_CFUNC_ do_boolean,	&quirks_mode		},
 	{ NULL,			NULL,			NULL			}
 };
 

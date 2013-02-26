@@ -154,6 +154,11 @@ void login_set_app_name(struct client_t *c, const char *app_name, const char *ap
 	sanitize_ascii_string(c->app_version);
 	
 	/* check the application name against a static list of broken apps */
+	if (quirks_mode) {
+        	c->quirks_mode = 1;
+		return;
+	}
+	
 	c->quirks_mode = 0;
 	for (i = 0; (quirks_mode_blacklist[i]); i++) {
 		if (prefixmatch(c->app_name, quirks_mode_blacklist[i])) {

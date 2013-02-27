@@ -36,6 +36,9 @@
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
 
+/* Define to 1 if you have the <openssl/ssl.h> header file. */
+#undef HAVE_OPENSSL_SSL_H
+
 /* Define to 1 if you have the <poll.h> header file. */
 #undef HAVE_POLL_H
 
@@ -81,8 +84,14 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
+/* OpenSSL 0.9.7 or later */
+#undef HAVE_TLSV1_SERVER_METHOD
+
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
+
+/* OpenSSL 0.9.7 or later */
+#undef HAVE_X509_FREE
 
 /* Define to 1 if you have the <zlib.h> header file. */
 #undef HAVE_ZLIB_H

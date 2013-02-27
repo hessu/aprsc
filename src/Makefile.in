@@ -61,7 +61,7 @@ INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
 INSTALL_DIR=$(INSTALL)  -m 755 -d
 
-LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@ @LIBCAP@ @LIBZ@
+LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@ @LIBCAP@ @LIBZ@ @LIBCRYPTO@ @LIBSSL@
 
 #LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
 #CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include
@@ -143,7 +143,7 @@ OBJS = aprsc.o accept.o worker.o errno.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \
-	http.o version.o \
+	http.o ssl.o version.o \
 	@LIBOBJS@
 
 clean:

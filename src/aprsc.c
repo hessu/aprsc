@@ -37,6 +37,7 @@
 #include "hmalloc.h"
 #include "hlog.h"
 #include "config.h"
+#include "ssl.h"
 #include "accept.h"
 #include "uplink.h"
 #include "worker.h"
@@ -1078,6 +1079,7 @@ int main(int argc, char **argv)
 	client_init();
 	xpoll_init();
 	status_init();
+	ssl_init();
 
 	/* if live upgrading, load status file and database dumps */
 	if (liveupgrade_startup) {

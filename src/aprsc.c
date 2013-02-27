@@ -165,8 +165,7 @@ void parse_cmdline(int argc, char *argv[])
 	}
 	
 	if ((log_dest == L_FILE) && (!log_dir)) {
-		fprintf(stderr, "Log destination set to 'file' but no log directory specified!\n");
-		failed = 1;
+		log_dir = hstrdup("logs");
 	}
 	
 	if (failed) {

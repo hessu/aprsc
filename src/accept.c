@@ -44,6 +44,7 @@
 #include "clientlist.h"
 #include "client_heard.h"
 #include "keyhash.h"
+#include "ssl.h"
 
 /*
  *	The listen_t structure holds data for a currently open
@@ -66,6 +67,9 @@ struct listen_t {
 	struct client_udp_t *udp;
 	struct portaccount_t *portaccount;
 	struct acl_t *acl;
+#ifdef USE_SSL
+	struct ssl_t *ssl;
+#endif
 
 	char *name;
 	char *addr_s;
@@ -300,6 +304,27 @@ static int open_listener(struct listen_config_t *lc)
 	}
 	
 	hlog(LOG_DEBUG, "... ok, bound");
+	
+	/* Set up an SSL context if necessary */
+#ifdef USE_SSL
+	if (lc->keyfile && lc->certfile) {
+		l->ssl = ssl_alloc();
+		
+		if (ssl_create(l->ssl, (void *)l)) {
+			hlog(LOG_ERR, "Failed to create SSL context for '%s*': %s", lc->name, l->addr_s);
+			listener_free(l);
+			return -1;
+		}
+		
+		if (ssl_certificate(l->ssl, lc->certfile, lc->keyfile)) {
+			hlog(LOG_ERR, "Failed to load SSL certificates for '%s*': %s", lc->name, l->addr_s);
+			listener_free(l);
+			return -1;
+		}
+		
+		hlog(LOG_INFO, "SSL initialized for '%s': %s", lc->name, l->addr_s);
+	}
+#endif
 	
 	/* Copy access lists */
 	if (lc->acl)
@@ -929,6 +954,17 @@ static void do_accept(struct listen_t *l)
 	/* use the default login handler */
 	c->handler = &login_handler;
 	c->keepalive = tick; /* monotonous time, for timed transmits */
+
+#ifdef USE_SSL
+	if (l->ssl) {
+		if (ssl_create_connection(l->ssl, c, 0)) {
+			close(fd);
+			hfree(s);
+			inbound_connects_account(-1, l->portaccount); /* account rejected connection */
+			return;
+		}
+	}
+#endif
 	
 	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	

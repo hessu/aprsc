@@ -815,6 +815,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	self->client_count--;
 }
 
+
 /*
  *	write data to a client (well, at least put it in the output buffer)
  *	(this is also used with len=0 to flush current buffer)
@@ -874,52 +875,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		 * towards the beginning of the buffer?
 		 */
 		if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
-			/* Oh crap, the data will not fit even if we move stuff.
-			   Lets try writing.. */
-		write_retry:;
-			i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
-			e = errno;
-			if (i < 0 && (e == EINTR)) {
-				// retrying..
-				if (c->obuf_start > 0)
-					memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
-				c->obuf_end  -= c->obuf_start;
-				c->obuf_start = 0;
-				goto write_retry;
-			}
-			if (i < 0 && e == EPIPE) {
-				/* Remote socket closed.. */
-				hlog(LOG_DEBUG, "client_write(%s) fails/2 EPIPE; %s", c->addr_rem, strerror(e));
-				// WARNING: This also destroys the client object!
-				client_close(self, c, e);
-				return -9;
-			}
-			if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-				/* Kernel's transmit buffer is full. They're pretty
-				 * big, so we'll assume the client is dead and disconnect.
-				 * Use "buffer overflow" as error message.
-				 */
-				hlog(LOG_DEBUG, "client_write(%s) fails/2a; disconnecting; %s", c->addr_rem, strerror(e));
-				client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
-				return -10;
-			}
-			if (i < 0) {
-				hlog(LOG_DEBUG, "client_write(%s) fails/2b; disconnecting; %s", c->addr_rem, strerror(e));
-				client_close(self, c, e);
-				return -11;
-			}
-			if (i > 0) {
-				c->obuf_start += i;
-				c->obuf_wtime = tick;
-			}
-			/* Is it still out of space ? */
-			if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
-				/* Oh crap, the data will still not fit! */
-				hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
-				client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
-				return -12;
-			}
+			/* Oh crap, the data will not fit even if we move stuff. */
+			hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
+			client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
+			return -12;
 		}
+		
 		/* okay, move stuff to the beginning to make space in the end */
 		if (c->obuf_start > 0)
 			memmove((void *)c->obuf, (void *)c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
@@ -931,6 +892,12 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	if (len > 0)
 		memcpy((void *)c->obuf + c->obuf_end, p, len);
 	c->obuf_end += len;
+	
+	
+#ifdef USE_SSL
+	if (c->ssl_con)
+		return ssl_write(self, c);
+#endif
 	
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
@@ -1110,48 +1077,15 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	handle an event on an fd
+ *	Process incoming data from client after reading
  */
 
-static int handle_client_readable(struct worker_t *self, struct client_t *c)
+int client_postread(struct worker_t *self, struct client_t *c, int r)
 {
-	int r;
 	char *s;
 	char *ibuf_end;
 	char *row_start;
 	
-	/* Worker 0 takes care of reading corepeer UDP sockets and processes the incoming packets. */
-	if (c->state == CSTATE_COREPEER && c->udpclient) {
-		return handle_corepeer_readable(self, c);
-	}
-	
-	if (c->fd < 0) {
-		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_rem);
-		client_close(self, c, CLIERR_FD_NUM_INVALID);
-		return -1;
-	}
-	
-	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
-	
-	if (r == 0) {
-		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
-		      c->fd, c->addr_rem, c->addr_loc );
-		client_close(self, c, CLIERR_EOF);
-		return -1;
-	}
-	
-	if (r < 0) {
-		if (errno == EINTR || errno == EAGAIN)
-			return 0; /* D'oh..  return again later */
-
-		hlog( LOG_DEBUG, "read: Error from socket fd %d (%s): %s",
-		      c->fd, c->addr_rem, strerror(errno));
-		hlog( LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d",
-		      c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
-		client_close(self, c, errno);
-		return -1;
-	}
-
 	clientaccount_add(c, IPPROTO_TCP, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
 					     byte count is collected.
 					     The incoming_handler() will account
@@ -1204,10 +1138,63 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 	return 0;
 }
 
-static int handle_client_writeable(struct worker_t *self, struct client_t *c)
+/*
+ *	handle an event on an fd
+ */
+
+static int handle_client_readable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 	
+	/* Worker 0 takes care of reading corepeer UDP sockets and processes the incoming packets. */
+	if (c->state == CSTATE_COREPEER && c->udpclient) {
+		return handle_corepeer_readable(self, c);
+	}
+	
+	if (c->fd < 0) {
+		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_rem);
+		client_close(self, c, CLIERR_FD_NUM_INVALID);
+		return -1;
+	}
+	
+#ifdef USE_SSL
+	if (c->ssl_con)
+		return ssl_readable(self, c);
+#endif
+	
+	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
+	
+	if (r == 0) {
+		hlog( LOG_DEBUG, "read: EOF from socket fd %d (%s @ %s)",
+		      c->fd, c->addr_rem, c->addr_loc );
+		client_close(self, c, CLIERR_EOF);
+		return -1;
+	}
+	
+	if (r < 0) {
+		if (errno == EINTR || errno == EAGAIN)
+			return 0; /* D'oh..  return again later */
+
+		hlog( LOG_DEBUG, "read: Error from socket fd %d (%s): %s",
+		      c->fd, c->addr_rem, strerror(errno));
+		hlog( LOG_DEBUG, " .. ibuf=%p  ibuf_end=%d  ibuf_size=%d",
+		      c->ibuf, c->ibuf_end, c->ibuf_size-c->ibuf_end-1);
+		client_close(self, c, errno);
+		return -1;
+	}
+	
+	return client_postread(self, c, r);
+}
+
+static int handle_client_writeable(struct worker_t *self, struct client_t *c)
+{
+	int r;
+
+#ifdef USE_SSL
+	if (c->ssl_con)
+		return ssl_writeable(self, c);
+#endif
+
 	if (c->obuf_start == c->obuf_end) {
 		/* there is nothing to write any more */
 		//hlog(LOG_DEBUG, "writable: nothing to write on fd %d (%s)", c->fd, c->addr_rem);
@@ -1417,6 +1404,13 @@ static void collect_new_clients(struct worker_t *self)
 			shutdown(c->fd, SHUT_RDWR);
 			continue;
 		}
+
+#ifdef USE_SSL
+		if (c->ssl_con) {
+			hlog(LOG_DEBUG, "collect_new_clients(worker %d): fd %d uses SSL", self->id, c->fd);
+		}
+#endif
+	
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.
 		 */

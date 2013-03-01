@@ -31,6 +31,7 @@
 #include "worker.h"
 #include "filter.h"
 #include "parse_qc.h"
+#include "ssl.h"
 
 char def_cfgfile[] = "aprsc.conf";
 char def_webdir[] = "web";
@@ -235,6 +236,10 @@ void free_listen_config(struct listen_config_t **lc)
 		freeaddrinfo(this->ai);
 		if (this->acl)
 			acl_free(this->acl);
+		if (this->keyfile)
+			hfree((void *)this->keyfile);
+		if (this->certfile)
+			hfree((void *)this->certfile);
 		hfree(this);
 	}
 }
@@ -967,6 +972,50 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 				return -2;
 			}
 			
+		} else if (strcasecmp(argv[i], "sslkey") == 0) {
+#ifdef USE_SSL
+			/* SSL private key file */
+			i++;
+			if (i >= argc) {
+				hlog(LOG_ERR, "Listen: 'sslkey' argument is missing the file parameter for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			if (l->keyfile) {
+				hlog(LOG_ERR, "Listen: second 'sslkey' not allowed for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			l->keyfile = hstrdup(argv[i]);
+#else
+			hlog(LOG_ERR, "Listen: 'sslkey' not available for '%s' - server not built with OpenSSL", argv[1]);
+			free_listen_config(&l);
+			return -2;
+#endif			
+		} else if (strcasecmp(argv[i], "sslcert") == 0) {
+#ifdef USE_SSL
+			/* SSL cert file */
+			i++;
+			if (i >= argc) {
+				hlog(LOG_ERR, "Listen: 'sslcert' argument is missing the file parameter for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			if (l->certfile) {
+				hlog(LOG_ERR, "Listen: second 'sslcert' not allowed for '%s'", argv[1]);
+				free_listen_config(&l);
+				return -2;
+			}
+			
+			l->certfile = hstrdup(argv[i]);
+#else
+			hlog(LOG_ERR, "Listen: 'sslcert' not available for '%s' - server not built with OpenSSL", argv[1]);
+			free_listen_config(&l);
+			return -2;
+#endif
 		} else if (strcasecmp(argv[i], "hidden") == 0) {
 			/* Hide the listener from status view */
 			l->hidden = 1;
@@ -976,6 +1025,13 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 			return -2;
 		}
 		i++;
+	}
+	
+	/* SSL requires both a cert and a key */
+	if ((l->certfile && !l->keyfile) || (l->keyfile && !l->certfile)) {
+		hlog(LOG_ERR, "Listen: Only one of sslkey and sslcert defined for '%' - both needed for SSL", argv[1]);
+		free_listen_config(&l);
+		return -2;
 	}
 	
 	/* dupefeed port is always hidden */

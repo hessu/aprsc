@@ -26,6 +26,7 @@
 #include "rwlock.h"
 #include "cJSON.h"
 #include "errno.h"
+#include "ssl.h"
 
 extern time_t now;	/* current wallclock time */
 extern time_t tick;	/* clocktick - monotonously increasing for timers, not affected by NTP et al */
@@ -295,6 +296,10 @@ struct client_t {
 	time_t cleanup;     /* Time of next cleanup */
 
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
+	
+#ifdef USE_SSL
+	struct ssl_connection_t *ssl_con;
+#endif
 
 	/* first stage read buffer - used to crunch out lines to packet buffers */
 #ifndef FIXED_IOBUFS
@@ -455,6 +460,8 @@ extern void pbuf_free(struct worker_t *self, struct pbuf_t *p);
 extern void pbuf_free_many(struct pbuf_t **array, int numbufs);
 extern void pbuf_dump(FILE *fp);
 extern void pbuf_dupe_dump(FILE *fp);
+
+extern int client_postread(struct worker_t *self, struct client_t *c, int r);
 
 extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);

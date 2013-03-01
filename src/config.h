@@ -120,6 +120,9 @@ struct listen_config_t {
 	int   clients_max;
 	int   corepeer;			/* special listener for corepeer packets */
 	int   hidden;
+	
+	const char *keyfile;		/* SSL key file */
+	const char *certfile;		/* SSL certificate file */
 
 	struct addrinfo *ai;
 	struct acl_t *acl;

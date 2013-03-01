@@ -74,7 +74,8 @@ const char *inerr_labels[] = {
 	"q_qau_path_call_srccall",
 	"q_newq_buffer_small",
 	"q_nonval_multi_q_calls",
-	"q_i_no_viacall"
+	"q_i_no_viacall",
+	"inerr_empty"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -692,35 +693,74 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	int path_append_len;
 	int originated_by_client = 0;
 	char *p;
+	char quirked[PACKETLEN_MAX+2]; /* rewritten packet */
 	
-	/* for quirky clients, do some special treatment */
+	/* for quirky clients, do some special treatment: build a new copy of
+	 * the packet with extra spaces removed from packets
+	 */
 	if (c->quirks_mode) {
+		/* rewritten packet */
+		char *np = quirked;
+		
+		// Easy pointer for comparing against far end..
+		packet_end = s + len;
+		
 		/* trim spaces and NULs from beginning */
-		while ((*s == ' ' || *s == 0) && len > 0) {
-			len--;
-			s++;
+		p = s;
+		
+		while (p < packet_end && (*p == ' ' || *p == 0))
+			p++;
+		
+		if (p == packet_end)
+			return INERR_EMPTY;
+		
+		/* copy srccall, look for the '>' */
+		while (p < packet_end && *p != '>' && *p != ' ')
+			*np++ = *p++;
+		
+		/* skip spaces in end of srccall */
+		while (*p == ' ' && p < packet_end)
+			p++;
+		
+		if (*p != '>')
+			return INERR_NO_DST;
+		
+		/* copy path, removing trailing spaces from callsigns */
+		while (p < packet_end && *p != ':') {
+			/* copy path element */
+			while (p < packet_end && *p != ',' && *p != ':' && *p != ' ')
+				*np++ = *p++;
+			
+			/* if we found spaces, scan over them */
+			while (p < packet_end && *p == ' ')
+				p++;
+			
+			/* if the element ends with a comma, fine */
+			if (p < packet_end && *p == ',') {
+				*np++ = *p++;
+				continue;
+			}
+			
+			/* end of path? fine */
+			if (*p == ':')
+				continue;
+			
+			/* not fine. */
+			return INERR_INV_PATH_CALL;
 		}
 		
-		/* look for the '>' */
-		src_end = memchr(s, '>', len < CALLSIGNLEN_MAX+1 ? len : CALLSIGNLEN_MAX+1);
-		if (!src_end)
-			return INERR_NO_DST;	// No ">" in packet start..
+		/* copy rest of packet */
+		while (p < packet_end)
+			*(np++) = *(p++);
 		
-		/* trim spaces from end of srccall */
-		char *old_src_end = src_end;
-		while (src_end > s && *(src_end-1) == ' ')
-			src_end--;
-		
-		if (src_end == s)
-			return INERR_NO_DST; /* srccall was all spaces */
-		
-		if (src_end != old_src_end) {
-			int dist = old_src_end - src_end;
-			memmove(s + dist, s, src_end - s);
-			len -= dist;
-			s += dist;
-			hlog_packet(LOG_DEBUG, s, len, "quirks_mode trimmed %d spaces from srccall: ", dist);
+		*np = 0;
+		if (np - quirked != len) {
+			hlog_packet(LOG_DEBUG, s, len, "borrked packet: ");
+			hlog_packet(LOG_DEBUG, quirked, np - quirked, "quirked packet: ");
 		}
+		
+		s = quirked;
+		len = np - quirked;
 	}
 	
 	/* check for minimum length of packet */

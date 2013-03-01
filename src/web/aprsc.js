@@ -214,7 +214,8 @@ var rx_err_strings = {
 	"q_qau_path_call_srccall": 'qAU callsign in path equals srccall',
 	"q_newq_buffer_small": 'New Q construct too big',
 	"q_nonval_multi_q_calls": 'Multiple callsigns in Q path from unverified client',
-	"q_i_no_viacall": 'I path has no viacall'
+	"q_i_no_viacall": 'I path has no viacall',
+	"inerr_empty": 'Empty packet'
 };
 
 var key_translate = {

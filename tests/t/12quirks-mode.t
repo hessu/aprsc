@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 3 + 3 };
+BEGIN { plan tests => 6 + 5 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -50,6 +50,19 @@ my $tail = ">DST,qAR,$login:>spaces in end of srccall";
 $tx = "SRC  $tail";
 $rx = "SRC$tail";
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# spaces in path callsign
+$tail = ":>spaces in end of path element";
+$tx = "SRC>DST,qAR,$login $tail";
+$rx = "SRC>DST,qAR,$login$tail";
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# should drop with bad srccall
+$tx = 'default setting is>DST,qAR,FOO:bad srccall';
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	$tx,
+	"SRC>LONG:dummy", 1); # will pass (helper packet)
+
 
 # disconnect
 

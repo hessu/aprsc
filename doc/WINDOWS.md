@@ -6,7 +6,7 @@ This is a beta-level version of aprsc for Windows.  It appears to mostly
 work, but it's likely that something "interesting" will pop up.
 
 This build has been done using [Cygwin][cygwin], a collection of tools
-which enables you to compile and run Linux and Unix applications on Windows.
+which enable you to compile and run Linux and Unix applications on Windows.
 
 The aprsc for Windows package contains all the necessary Cygwin bits needed
 to run aprsc, so you don't need to install Cygwin first.
@@ -92,4 +92,21 @@ As usual, you don't need to type the .cmd file extension:
 
 After running aprsc-enable, you can also control the service using the Windows
 Services tool.
+
+
+Check the log file
+---------------------
+
+aprsc writes a log file to C:\aprsc\logs\aprsc.log.  Be sure to check it for
+any ERRORs and WARNINGs after installation *and* after every upgrade.
+
+
+Check the status page
+------------------------
+
+http://localhost:14501/ should open up aprsc's status web page.
+
+
+
+
 

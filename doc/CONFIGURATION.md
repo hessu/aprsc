@@ -178,9 +178,9 @@ The basic syntax is:
  
  *  address: the local address to listen on. "::" for IPv6 `IN6ADDR_ANY`
     (all local IPv6 addresses), "0.0.0.0" for IPv4 `INADDR_ANY` (all local
-    IPv4 addresses). On Linux and Solaris, just put "::" here and it will
-    handle both IPv6 and IPv4 connections with a single configuration
-    line! On FreeBSD, separate IPv4 and IPv6 listeners are needed.
+    IPv4 addresses).  On Linux and Solaris, just put "::" here and it will
+    handle both IPv6 and IPv4 connections with a single configuration line! 
+    On FreeBSD and Windows, separate IPv4 and IPv6 listeners are needed.
     
  *  port: the local TCP or UDP port to listen on. Must be larger than 1023.
     aprsc drops root privileges quickly after startup (if it has them), and

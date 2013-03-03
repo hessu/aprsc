@@ -18,7 +18,8 @@ installation to make sure both your cygwin and aprsc run the same version.
 
 aprsc for Windows requires an i686 (Pentium 2 class) CPU, or anything newer
 than that.  It has been (briefly) tested on Windows XP, Windows 7 and
-Windows 8.
+Windows 8.  It typically uses about 30-40 megabytes of RAM and very little
+CPU.
 
 [cygwin]: http://www.cygwin.com/
 
@@ -107,6 +108,15 @@ Check the status page
 http://localhost:14501/ should open up aprsc's status web page.
 
 
+Join the Group
+-----------------
 
+New versions of aprsc come out rather frequently, since it's a pretty new
+application.  Remember to upgrade in a timely manner.
+
+Please join the [aprsc discussion group][group] to keep posted about new
+versions.  Send any questions you may have to the group.
+
+[group]: https://groups.google.com/forum/#!forum/aprsc
 
 

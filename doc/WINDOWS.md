@@ -56,9 +56,13 @@ document for instructions.
 Run it
 ---------
 
-aprsc runs as a Windows service. When the service is set up, it will also
-start up automatically at boot. The windows installer .zip file comes with
-five CMD files to manage the service:
+aprsc runs as a Windows service.  When the service is set up, it will also
+start up automatically at boot.  The windows installer .zip file comes with
+five CMD files to manage the service.  They need to be executed as an user
+with Administrator privileges, so you need to either log in as an
+administrator user, or open a command promt as admin.  One way to do this is
+right-clicking cmd.exe (or a Shortcut pointing to it), and selecting "Run as
+Administrator".
 
 
 *   aprsc-enable.cmd
@@ -91,7 +95,7 @@ As usual, you don't need to type the .cmd file extension:
     C:\aprsc> aprsc-start
 
 
-After running aprsc-enable, you can also control the service using the Windows
+After running aprsc-enable you can also control the service using the Windows
 Services tool.
 
 

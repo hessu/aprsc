@@ -17,7 +17,11 @@
 #define L_SYSLOG        (1 << 1)	/* Log to syslog */
 #define L_FILE		(1 << 2)	/* Log to a file */
 
+#ifdef __CYGWIN__
 #define L_DEFDEST	L_FILE
+#else
+#define L_DEFDEST	L_STDERR
+#endif
 
 #define LOG_LEVELS "emerg alert crit err warning notice info debug"
 #define LOG_DESTS "syslog stderr file"

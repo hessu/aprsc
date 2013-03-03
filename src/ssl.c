@@ -297,6 +297,8 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	hlog(LOG_DEBUG, "ssl_write SSL_get_error: %d", sslerr);
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
+		hlog(LOG_INFO, "ssl_write: says SSL_ERROR_WANT_WRITE, marking socket for write events");
+		
 		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
 		
@@ -304,7 +306,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_INFO, "ssl_write: peer started SSL renegotiation, calling ssl_readable");
+		hlog(LOG_INFO, "ssl_write: says SSL_ERROR_WANT_READ, calling ssl_readable (peer started SSL renegotiation?)");
 		
 		return ssl_readable(self, c);
 	}
@@ -313,6 +315,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	c->ssl_con->no_send_shutdown = 1;
 	
 	hlog(LOG_DEBUG, "ssl_write: SSL_write() failed");
+	client_close(self, c, errno);
 	
 	return -1;
 }
@@ -347,13 +350,12 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	hlog(LOG_DEBUG, "ssl_readable: SSL_get_error: %d", sslerr);
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_DEBUG, "ssl_readable: SSL_read says SSL_ERROR_WANT_READ");
+		hlog(LOG_DEBUG, "ssl_readable: SSL_read says SSL_ERROR_WANT_READ, doing it later");
 		return 0;
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable: peer started SSL renegotiation");
-		
+		hlog(LOG_INFO, "ssl_readable: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable");
 		return ssl_writeable(self, c);
 	}
 	
@@ -362,11 +364,12 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	
 	if (sslerr == SSL_ERROR_ZERO_RETURN || ERR_peek_error() == 0) {
 		hlog(LOG_DEBUG, "ssl_readable: peer shutdown SSL cleanly");
+		client_close(self, c, CLIERR_EOF);
 		return -1;
 	}
 	
 	hlog(LOG_DEBUG, "ssl_readable: SSL_read() failed");
-	
+	client_close(self, c, errno);
 	return -1;
 }
 

@@ -71,6 +71,7 @@
 
 #ifdef USE_SSL
 
+#include <ctype.h>
 #include <pthread.h>
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
@@ -78,6 +79,17 @@
 
 #define SSL_DEFAULT_CIPHERS     "HIGH:!aNULL:!MD5"
 #define SSL_PROTOCOLS (NGX_SSL_SSLv3|NGX_SSL_TLSv1 |NGX_SSL_TLSv1_1|NGX_SSL_TLSv1_2)
+
+/* ssl error strings */
+#define SSL_VALIDATE_CLIENT_CERT_UNVERIFIED -1
+#define SSL_VALIDATE_NO_CLIENT_CERT -2
+#define SSL_VALIDATE_CERT_CALLSIGN_MISMATCH -3
+
+static const char *ssl_err_labels[][2] = {
+	{ "client_cert_unverified", "Client certificate is not valid" },
+	{ "no_client_cert", "Client did not present a certificate before login" },
+	{ "cert_callsign_mismatch", "Certificate callsign does not match login username" }
+};
 
 /* pthread wrapping for openssl */
 #define MUTEX_TYPE       pthread_mutex_t
@@ -91,7 +103,6 @@ int  ssl_available;
 int  ssl_connection_index;
 int  ssl_server_conf_index;
 int  ssl_session_cache_index;
-
 
 /* This array will store all of the mutexes available to OpenSSL. */
 static MUTEX_TYPE *mutex_buf= NULL;
@@ -145,6 +156,44 @@ static int ssl_thread_cleanup(void)
 	return 0;
 }
 
+/*
+ *	TrustedQSL custom X.509 certificate objects
+ */
+
+#define TRUSTEDQSL_OID				"1.3.6.1.4.1.12348.1."
+#define TRUSTEDQSL_OID_CALLSIGN			TRUSTEDQSL_OID "1"
+#define TRUSTEDQSL_OID_QSO_NOT_BEFORE		TRUSTEDQSL_OID "2"
+#define TRUSTEDQSL_OID_QSO_NOT_AFTER		TRUSTEDQSL_OID "3"
+#define TRUSTEDQSL_OID_DXCC_ENTITY		TRUSTEDQSL_OID "4"
+#define TRUSTEDQSL_OID_SUPERCEDED_CERT		TRUSTEDQSL_OID "5"
+#define TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATION	TRUSTEDQSL_OID "6"
+#define TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATIONAL_UNIT TRUSTEDQSL_OID "7"
+
+static const char *tqsl_NIDs[][3] = {
+	{ TRUSTEDQSL_OID_CALLSIGN, "AROcallsign" },
+	{ TRUSTEDQSL_OID_QSO_NOT_BEFORE, "QSONotBeforeDate" },
+	{ TRUSTEDQSL_OID_QSO_NOT_AFTER, "QSONotAfterDate" },
+	{ TRUSTEDQSL_OID_DXCC_ENTITY, "dxccEntity" },
+	{ TRUSTEDQSL_OID_SUPERCEDED_CERT, "supercededCertificate" },
+	{ TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATION, "tqslCRQIssuerOrganization" },
+	{ TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATIONAL_UNIT, "tqslCRQIssuerOrganizationalUnit" },
+};
+
+static int load_tqsl_custom_objects(void)
+{
+	int i;
+	
+	for (i = 0; i < (sizeof tqsl_NIDs / sizeof tqsl_NIDs[0]); ++i)
+		if (OBJ_create(tqsl_NIDs[i][0], tqsl_NIDs[i][1], NULL) == 0)
+			return -1;
+	
+	return 0;
+}
+
+/*
+ *	Initialize SSL
+ */
+
 int ssl_init(void)
 {
 	hlog(LOG_INFO, "Initializing OpenSSL...");
@@ -157,6 +206,8 @@ int ssl_init(void)
 	ssl_thread_setup();
 	
 	OpenSSL_add_all_algorithms();
+	
+	load_tqsl_custom_objects();
 	
 #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
 #ifndef SSL_OP_NO_COMPRESSION
@@ -453,6 +504,29 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	return 0;
 }
 
+int ssl_cert_callsign_match(const unsigned char *subj_call, const char *username)
+{
+	if (subj_call == NULL || username == NULL)
+		return 0;
+	
+	while (*username != '-' && *username != 0 && *subj_call != 0) {
+		if (toupper(*username) != toupper(*subj_call))
+			return 0; /* mismatch */
+		
+		subj_call++;
+		username++;
+	}
+	
+	if (*subj_call != 0)
+		return 0; /* if username is shorter than subject callsign, we fail */
+	
+	if (*username != '-' && *username != 0)
+		return 0; /* if we ran to end of subject callsign but not to end of username or start of SSID, we fail */
+	
+	return 1;
+}
+
+
 /*
  *	Validate client certificate
  */
@@ -460,13 +534,20 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 int ssl_validate_client_cert(struct client_t *c)
 {
 	long rc;
+	int ret = -1;
 	X509 *cert;
+	X509_NAME *sname, *iname;
+	char *subject, *issuer;
+	unsigned char *subj_cn, *subj_call;
+	int nid, idx;
+	X509_NAME_ENTRY *entry;
+	ASN1_STRING *edata;
 	
 	rc = SSL_get_verify_result(c->ssl_con->connection);
 	
 	if (rc != X509_V_OK) {
 		hlog(LOG_INFO, "%s/%s: client SSL certificate verify error: (%l:%s)", c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
-		return -1;
+		return SSL_VALIDATE_CLIENT_CERT_UNVERIFIED;
 	}
 	
 	
@@ -474,14 +555,47 @@ int ssl_validate_client_cert(struct client_t *c)
 	
 	if (cert == NULL) {
 		hlog(LOG_INFO, "%s/%s: client sent no required SSL certificate", c->addr_rem, c->username);
-		return -1;
+		return SSL_VALIDATE_NO_CLIENT_CERT;
 	}
 	
-	hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate");
+	subj_cn = NULL;
+	subj_call = NULL;
 	
+	/* ok, we have a cert, find subject */
+	sname = X509_get_subject_name(cert);
+	subject = sname ? X509_NAME_oneline(sname, NULL, 0) : "(none)";
+	
+	/* find tqsl callsign */
+	nid = OBJ_txt2nid("AROcallsign");
+	idx = X509_NAME_get_index_by_NID(sname, nid, -1);
+	entry = X509_NAME_get_entry(sname, idx);
+	edata = X509_NAME_ENTRY_get_data(entry);
+	ASN1_STRING_to_UTF8(&subj_call, edata);
+	
+	/* find CN of subject */
+	idx = X509_NAME_get_index_by_NID(sname, NID_commonName, -1);
+	entry = X509_NAME_get_entry(sname, idx);
+	edata = X509_NAME_ENTRY_get_data(entry);
+	ASN1_STRING_to_UTF8(&subj_cn, edata);
+	
+	if (!ssl_cert_callsign_match(subj_call, c->username)) {
+		ret = SSL_VALIDATE_CERT_CALLSIGN_MISMATCH;
+		goto fail;
+	}
+	
+	/* find issuer */
+	iname = X509_get_issuer_name(cert);
+	issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
+	
+	ret = 0;
+	hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
+		c->addr_rem, c->username, subject, subj_call, subj_cn, issuer);
+	
+	/* TODO: what else to free? There are memory leaks above. */
+fail:	
 	X509_free(cert);
 	
-	return 0;
+	return ret;
 }
 
 /*

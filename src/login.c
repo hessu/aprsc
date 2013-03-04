@@ -271,7 +271,6 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			c->failed_cmds = 10; /* bail out right away for a HTTP client */
 			goto failed_login;
 		}
-		hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate");
 		c->validated = 1;
 		ssl_validated = 1;
 	}

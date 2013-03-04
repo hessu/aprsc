@@ -1186,6 +1186,7 @@ int main(int argc, char **argv)
 	filter_wx_atend();
 	filter_entrycall_atend();
 	status_atend();
+	ssl_atend();
 	
 	hlog(LOG_NOTICE, "Shut down.");
 	close_log(0);

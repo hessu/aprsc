@@ -383,6 +383,7 @@ struct client_t *client_alloc(void)
 
 	c->connect_time = now;
 	c->connect_tick = tick;
+	c->obuf_wtime = tick;
 	
 	c->cleanup   = tick + 120;
 
@@ -895,12 +896,22 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 	
 	
 #ifdef USE_SSL
-	if (c->ssl_con)
-		return ssl_write(self, c);
+	if (c->ssl_con) {
+		if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start)))
+			return ssl_write(self, c);
+			
+		/* tell the poller that we have outgoing data */
+		xpoll_outgoing(&self->xp, c->xfd, 1);
+		
+		/* just buffer */
+		return len;
+	}
 #endif
 	
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
+		/* TODO: move this code to client_try_write and call it */
+		
 		/*if (c->obuf_end > c->obuf_flushsize)
 		 *	hlog(LOG_DEBUG, "flushing fd %d since obuf_end %d > %d", c->fd, c->obuf_end, c->obuf_flushsize);
 		 */
@@ -1190,11 +1201,6 @@ static int handle_client_writeable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 
-#ifdef USE_SSL
-	if (c->ssl_con)
-		return ssl_writeable(self, c);
-#endif
-
 	if (c->obuf_start == c->obuf_end) {
 		/* there is nothing to write any more */
 		//hlog(LOG_DEBUG, "writable: nothing to write on fd %d (%s)", c->fd, c->addr_rem);
@@ -1203,6 +1209,13 @@ static int handle_client_writeable(struct worker_t *self, struct client_t *c)
 		return 0;
 	}
 	
+	/* TODO: call client_try_write */
+	
+#ifdef USE_SSL
+	if (c->ssl_con)
+		return ssl_writeable(self, c);
+#endif
+
 	r = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 	if (r < 0) {
 		if (errno == EINTR || errno == EAGAIN) {

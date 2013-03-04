@@ -55,6 +55,7 @@ struct ssl_connection_t {
 
 /* initialize the library */
 extern int ssl_init(void);
+extern void ssl_atend(void);
 
 /* per-listener structure allocators */
 extern struct ssl_t *ssl_alloc(void);
@@ -79,6 +80,7 @@ struct ssl_t {
 
 
 #define ssl_init(...) { }
+#define ssl_atend(...) { }
 
 #endif /* USE_SSL */
 #endif /* SSL_H */

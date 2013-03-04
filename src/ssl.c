@@ -33,6 +33,36 @@
  * SUCH DAMAGE.
  */
 
+/*
+ *	OpenSSL thread-safe example code (ssl_thread_* functions) have been
+ *	proudly copied from the excellent CURL package, the original author
+ *	is Jeremy Brown.
+ *
+ *	https://github.com/bagder/curl/blob/master/docs/examples/opensslthreadlock.c
+ *
+ * COPYRIGHT AND PERMISSION NOTICE
+ * Copyright (c) 1996 - 2013, Daniel Stenberg, <daniel@haxx.se>.
+ *
+ * All rights reserved.
+ * 
+ * Permission to use, copy, modify, and distribute this software for any purpose
+ * with or without fee is hereby granted, provided that the above copyright
+ * notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN
+ * NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+ * OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * Except as contained in this notice, the name of a copyright holder shall not
+ * be used in advertising or otherwise to promote the sale, use or other dealings
+ * in this Software without prior written authorization of the copyright holder.
+ *	
+ */
+
 #include "config.h"
 #include "ssl.h"
 #include "hlog.h"
@@ -41,15 +71,79 @@
 
 #ifdef USE_SSL
 
+#include <pthread.h>
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 
-#define NGX_DEFAULT_CIPHERS     "HIGH:!aNULL:!MD5"
+#define SSL_DEFAULT_CIPHERS     "HIGH:!aNULL:!MD5"
 #define SSL_PROTOCOLS (NGX_SSL_SSLv3|NGX_SSL_TLSv1 |NGX_SSL_TLSv1_1|NGX_SSL_TLSv1_2)
+
+/* pthread wrapping for openssl */
+#define MUTEX_TYPE       pthread_mutex_t
+#define MUTEX_SETUP(x)   pthread_mutex_init(&(x), NULL)
+#define MUTEX_CLEANUP(x) pthread_mutex_destroy(&(x))
+#define MUTEX_LOCK(x)    pthread_mutex_lock(&(x))
+#define MUTEX_UNLOCK(x)  pthread_mutex_unlock(&(x))
+#define THREAD_ID        pthread_self(  )
+
 int  ssl_available;
 int  ssl_connection_index;
 int  ssl_server_conf_index;
 int  ssl_session_cache_index;
+
+
+/* This array will store all of the mutexes available to OpenSSL. */
+static MUTEX_TYPE *mutex_buf= NULL;
+
+static void ssl_thread_locking_function(int mode, int n, const char * file, int line)
+{
+	if (mode & CRYPTO_LOCK)
+		MUTEX_LOCK(mutex_buf[n]);
+	else
+		MUTEX_UNLOCK(mutex_buf[n]);
+}
+
+static unsigned long ssl_thread_id_function(void)
+{
+	return ((unsigned long)THREAD_ID);
+}
+
+static int ssl_thread_setup(void)
+{
+	int i;
+	
+	hlog(LOG_DEBUG, "Creating OpenSSL mutexes (%d)...", CRYPTO_num_locks());
+	
+	mutex_buf = hmalloc(CRYPTO_num_locks() * sizeof(MUTEX_TYPE));
+	
+	for (i = 0;  i < CRYPTO_num_locks();  i++)
+		MUTEX_SETUP(mutex_buf[i]);
+	
+	CRYPTO_set_id_callback(ssl_thread_id_function);
+	CRYPTO_set_locking_callback(ssl_thread_locking_function);
+	
+	return 0;
+}
+
+static int ssl_thread_cleanup(void)
+{
+	int i;
+	
+	if (!mutex_buf)
+		return 0;
+	
+	CRYPTO_set_id_callback(NULL);
+	CRYPTO_set_locking_callback(NULL);
+	
+	for (i = 0;  i < CRYPTO_num_locks(  );  i++)
+		MUTEX_CLEANUP(mutex_buf[i]);
+		
+	hfree(mutex_buf);
+	mutex_buf = NULL;
+	
+	return 0;
+}
 
 int ssl_init(void)
 {
@@ -59,6 +153,8 @@ int ssl_init(void)
 	
 	SSL_library_init();
 	SSL_load_error_strings();
+	
+	ssl_thread_setup();
 	
 	OpenSSL_add_all_algorithms();
 	
@@ -107,6 +203,11 @@ int ssl_init(void)
 	ssl_available = 1;
 	
 	return 0;
+}
+
+void ssl_atend(void)
+{
+	ssl_thread_cleanup();
 }
 
 struct ssl_t *ssl_alloc(void)
@@ -198,6 +299,14 @@ int ssl_create(struct ssl_t *ssl, void *data)
 	
 	//SSL_CTX_set_info_callback(ssl->ctx, ngx_ssl_info_callback);
 	
+	if (SSL_CTX_set_cipher_list(ssl->ctx, SSL_DEFAULT_CIPHERS) == 0) {
+		hlog(LOG_ERR, "SSL_CTX_set_cipher_list() failed");
+		return -1;
+	}
+	
+	/* prefer server-selected ciphers */
+	SSL_CTX_set_options(ssl->ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+	
 	return 0;
 }
 
@@ -234,12 +343,12 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	sc->connection = SSL_new(ssl->ctx);
 	
 	if (sc->connection == NULL) {
-		hlog(LOG_ERR, "SSL_new() failed");
+		hlog(LOG_ERR, "SSL_new() failed (fd %d)", c->fd);
 		return -1;
 	}
 	
 	if (SSL_set_fd(sc->connection, c->fd) == 0) {
-		hlog(LOG_ERR, "SSL_set_fd() failed");
+		hlog(LOG_ERR, "SSL_set_fd() failed (fd %d)", c->fd);
 		return -1;
 	}
 	
@@ -250,7 +359,7 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	}
 	
 	if (SSL_set_ex_data(sc->connection, ssl_connection_index, c) == 0) {
-		hlog(LOG_ERR, "SSL_set_ex_data() failed");
+		hlog(LOG_ERR, "SSL_set_ex_data() failed (fd %d)", c->fd);
 		return -1;
 	}
 	
@@ -263,14 +372,24 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 int ssl_write(struct worker_t *self, struct client_t *c)
 {
 	int n;
-	int sslerr;
+	unsigned long sslerr;
 	int err;
+	int to_write;
 	
-	hlog(LOG_DEBUG, "ssl_write");
+	to_write = c->obuf_end - c->obuf_start;
 	
-	n = SSL_write(c->ssl_con->connection, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+	/* SSL_write does not appreciate writing a 0-length buffer */
+	if (to_write == 0) {
+		/* tell the poller that we have no outgoing data */
+		xpoll_outgoing(&self->xp, c->xfd, 0);
+		return 0;
+	}
 	
-	hlog(LOG_DEBUG, "SSL_write returned %d", n);
+	//hlog(LOG_DEBUG, "ssl_write fd %d of %d bytes", c->fd, to_write);
+	
+	n = SSL_write(c->ssl_con->connection, c->obuf + c->obuf_start, to_write);
+	
+	//hlog(LOG_DEBUG, "SSL_write fd %d returned %d", c->fd, n);
 	
 	if (n > 0) {
 		/* ok, we wrote some */
@@ -279,13 +398,15 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 		
 		/* All done ? */
 		if (c->obuf_start >= c->obuf_end) {
-			hlog(LOG_DEBUG, "ssl_write(%s) obuf empty", c->addr_rem);
+			//hlog(LOG_DEBUG, "ssl_write fd %d (%s) obuf empty", c->fd, c->addr_rem);
 			c->obuf_start = 0;
 			c->obuf_end   = 0;
+			
+			/* tell the poller that we have no outgoing data */
+			xpoll_outgoing(&self->xp, c->xfd, 0);
 			return n;
 		}
 		
-		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
 		
 		return n;
@@ -294,10 +415,17 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	sslerr = SSL_get_error(c->ssl_con->connection, n);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
-	hlog(LOG_DEBUG, "ssl_write SSL_get_error: %d", sslerr);
+	if (err) {
+		hlog(LOG_DEBUG, "ssl_write fd %d: I/O syscall error: %s", c->fd, strerror(err));
+	} else {
+		char ebuf[255];
+		
+		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
+		hlog(LOG_DEBUG, "ssl_write fd %d: SSL_get_error %u: %s (%s)", c->fd, sslerr, ebuf, ERR_reason_error_string(sslerr));
+	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_write: says SSL_ERROR_WANT_WRITE, marking socket for write events");
+		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_WRITE, marking socket for write events", c->fd);
 		
 		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
@@ -306,23 +434,23 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_INFO, "ssl_write: says SSL_ERROR_WANT_READ, calling ssl_readable (peer started SSL renegotiation?)");
+		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_READ, returning 0", c->fd);
 		
-		return ssl_readable(self, c);
+		return 0;
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;
 	c->ssl_con->no_send_shutdown = 1;
 	
-	hlog(LOG_DEBUG, "ssl_write: SSL_write() failed");
+	hlog(LOG_DEBUG, "ssl_write fd %d: SSL_write() failed", c->fd);
 	client_close(self, c, errno);
 	
-	return -1;
+	return -13;
 }
 
 int ssl_writeable(struct worker_t *self, struct client_t *c)
 {
-	hlog(LOG_DEBUG, "ssl_writeable");
+	//hlog(LOG_DEBUG, "ssl_writeable fd %d", c->fd);
 	
 	return ssl_write(self, c);
 }
@@ -332,13 +460,13 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	int r;
 	int sslerr, err;
 	
-	hlog(LOG_DEBUG, "ssl_readable");
+	//hlog(LOG_DEBUG, "ssl_readable fd %d", c->fd);
 	
 	r = SSL_read(c->ssl_con->connection, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 	
 	if (r > 0) {
 		/* we got some data... process */
-		hlog(LOG_DEBUG, "SSL_read returned %d bytes of data", r);
+		//hlog(LOG_DEBUG, "SSL_read fd %d returned %d bytes of data", c->fd, r);
 		
 		/* TODO: whatever the client_readable does */
 		return client_postread(self, c, r);
@@ -347,15 +475,21 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	sslerr = SSL_get_error(c->ssl_con->connection, r);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
-	hlog(LOG_DEBUG, "ssl_readable: SSL_get_error: %d", sslerr);
+	hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_get_error: %d", c->fd, sslerr);
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_DEBUG, "ssl_readable: SSL_read says SSL_ERROR_WANT_READ, doing it later");
+		hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_READ, doing it later", c->fd);
+		
+		if (c->obuf_end - c->obuf_start > 0) {
+			/* tell the poller that we have outgoing data */
+			xpoll_outgoing(&self->xp, c->xfd, 1);
+		}
+		
 		return 0;
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable");
+		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable", c->fd);
 		return ssl_writeable(self, c);
 	}
 	
@@ -363,12 +497,12 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	c->ssl_con->no_send_shutdown = 1;
 	
 	if (sslerr == SSL_ERROR_ZERO_RETURN || ERR_peek_error() == 0) {
-		hlog(LOG_DEBUG, "ssl_readable: peer shutdown SSL cleanly");
+		hlog(LOG_DEBUG, "ssl_readable fd %d: peer shutdown SSL cleanly", c->fd);
 		client_close(self, c, CLIERR_EOF);
 		return -1;
 	}
 	
-	hlog(LOG_DEBUG, "ssl_readable: SSL_read() failed");
+	hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read() failed", c->fd);
 	client_close(self, c, errno);
 	return -1;
 }

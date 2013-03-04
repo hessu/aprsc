@@ -240,6 +240,10 @@ void free_listen_config(struct listen_config_t **lc)
 			hfree((void *)this->keyfile);
 		if (this->certfile)
 			hfree((void *)this->certfile);
+		if (this->cafile)
+			hfree((void *)this->cafile);
+		if (this->crlfile)
+			hfree((void *)this->crlfile);
 		hfree(this);
 	}
 }
@@ -828,6 +832,28 @@ int config_parse_listen_filter(struct listen_config_t *l, char *filt_string, cha
 	return 0;
 }
 
+int config_listen_ssl(char **argv, int argc, int *i, const char *key, char **dst)
+{
+#ifdef USE_SSL
+	(*i)++;
+	if (*i >= argc) {
+		hlog(LOG_ERR, "Listen: '%s' argument is missing the file parameter for '%s'", key, argv[1]);
+		return -2;
+	}
+	
+	if (*dst) {
+		hlog(LOG_ERR, "Listen: second '%s' not allowed for '%s'", key, argv[1]);
+		return -2;
+	}
+	
+	*dst = hstrdup(argv[*i]);
+	return 0;
+#else
+	hlog(LOG_ERR, "Listen: '%s' not available for '%s' - server not built with OpenSSL", key, argv[1]);
+	return -2;
+#endif
+}
+
 int do_listen(struct listen_config_t **lq, int argc, char **argv)
 {
 	int i, port;
@@ -971,51 +997,28 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 				free_listen_config(&l);
 				return -2;
 			}
+
 			
 		} else if (strcasecmp(argv[i], "sslkey") == 0) {
-#ifdef USE_SSL
-			/* SSL private key file */
-			i++;
-			if (i >= argc) {
-				hlog(LOG_ERR, "Listen: 'sslkey' argument is missing the file parameter for '%s'", argv[1]);
+			if (config_listen_ssl(argv, argc, &i, "sslkey", (char **)&l->keyfile)) {
 				free_listen_config(&l);
 				return -2;
 			}
-			
-			if (l->keyfile) {
-				hlog(LOG_ERR, "Listen: second 'sslkey' not allowed for '%s'", argv[1]);
-				free_listen_config(&l);
-				return -2;
-			}
-			
-			l->keyfile = hstrdup(argv[i]);
-#else
-			hlog(LOG_ERR, "Listen: 'sslkey' not available for '%s' - server not built with OpenSSL", argv[1]);
-			free_listen_config(&l);
-			return -2;
-#endif			
 		} else if (strcasecmp(argv[i], "sslcert") == 0) {
-#ifdef USE_SSL
-			/* SSL cert file */
-			i++;
-			if (i >= argc) {
-				hlog(LOG_ERR, "Listen: 'sslcert' argument is missing the file parameter for '%s'", argv[1]);
+			if (config_listen_ssl(argv, argc, &i, "sslcert", (char **)&l->certfile)) {
 				free_listen_config(&l);
 				return -2;
 			}
-			
-			if (l->certfile) {
-				hlog(LOG_ERR, "Listen: second 'sslcert' not allowed for '%s'", argv[1]);
+		} else if (strcasecmp(argv[i], "sslca") == 0) {
+			if (config_listen_ssl(argv, argc, &i, "sslca", (char **)&l->cafile)) {
 				free_listen_config(&l);
 				return -2;
 			}
-			
-			l->certfile = hstrdup(argv[i]);
-#else
-			hlog(LOG_ERR, "Listen: 'sslcert' not available for '%s' - server not built with OpenSSL", argv[1]);
-			free_listen_config(&l);
-			return -2;
-#endif
+		} else if (strcasecmp(argv[i], "sslcrl") == 0) {
+			if (config_listen_ssl(argv, argc, &i, "sslcrl", (char **)&l->crlfile)) {
+				free_listen_config(&l);
+				return -2;
+			}
 		} else if (strcasecmp(argv[i], "hidden") == 0) {
 			/* Hide the listener from status view */
 			l->hidden = 1;

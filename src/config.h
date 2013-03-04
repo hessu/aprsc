@@ -121,8 +121,10 @@ struct listen_config_t {
 	int   corepeer;			/* special listener for corepeer packets */
 	int   hidden;
 	
-	const char *keyfile;		/* SSL key file */
-	const char *certfile;		/* SSL certificate file */
+	const char *keyfile;		/* SSL server key file */
+	const char *certfile;		/* SSL server certificate file */
+	const char *cafile;		/* SSL ca certificate for validating client certs */
+	const char *crlfile;		/* SSL certificate revocation file */
 
 	struct addrinfo *ai;
 	struct acl_t *acl;

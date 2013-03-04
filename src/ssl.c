@@ -330,8 +330,91 @@ int ssl_certificate(struct ssl_t *ssl, const char *certfile, const char *keyfile
 	return 0;
 }
 
+static int ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
+{
+	hlog(LOG_DEBUG, "ssl_verify_callback, ok: %d", ok);
+	
+#if (NGX_DEBUG)
+    char              *subject, *issuer;
+    int                err, depth;
+    X509              *cert;
+    X509_NAME         *sname, *iname;
+    ngx_connection_t  *c;
+    ngx_ssl_conn_t    *ssl_conn;
+
+    ssl_conn = X509_STORE_CTX_get_ex_data(x509_store,
+                                          SSL_get_ex_data_X509_STORE_CTX_idx());
+
+    c = ngx_ssl_get_connection(ssl_conn);
+
+    cert = X509_STORE_CTX_get_current_cert(x509_store);
+    err = X509_STORE_CTX_get_error(x509_store);
+    depth = X509_STORE_CTX_get_error_depth(x509_store);
+
+    sname = X509_get_subject_name(cert);
+    subject = sname ? X509_NAME_oneline(sname, NULL, 0) : "(none)";
+
+    iname = X509_get_issuer_name(cert);
+    issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
+
+    ngx_log_debug5(NGX_LOG_DEBUG_EVENT, c->log, 0,
+                   "verify:%d, error:%d, depth:%d, "
+                   "subject:\"%s\",issuer: \"%s\"",
+                   ok, err, depth, subject, issuer);
+
+    if (sname) {
+        OPENSSL_free(subject);
+    }
+
+    if (iname) {
+        OPENSSL_free(issuer);
+    }
+#endif
+
+    return 1;
+}
+
+
 /*
- *	Create a connect */
+ *	Load trusted CA certs
+ */
+
+int ssl_ca_certificate(struct ssl_t *ssl, const char *cafile, int depth)
+{
+	STACK_OF(X509_NAME)  *list;
+	
+	SSL_CTX_set_verify(ssl->ctx, SSL_VERIFY_PEER, ssl_verify_callback);
+	SSL_CTX_set_verify_depth(ssl->ctx, depth);
+	
+	if (SSL_CTX_load_verify_locations(ssl->ctx, cafile, NULL) == 0) {
+		hlog(LOG_ERR, "SSL_CTX_load_verify_locations(\"%s\") failed", cafile);
+		return -1;
+	}
+	
+	list = SSL_load_client_CA_file(cafile);
+	
+	if (list == NULL) {
+		hlog(LOG_ERR, "SSL_load_client_CA_file(\"%s\") failed", cafile);
+		return -1;
+	}
+	
+	/*
+	 * before 0.9.7h and 0.9.8 SSL_load_client_CA_file()
+	 * always leaved an error in the error queue
+	 */
+	
+	ERR_clear_error();
+	
+	SSL_CTX_set_client_CA_list(ssl->ctx, list);
+	
+	ssl->validate = 1;
+	
+	return 0;
+}
+
+/*
+ *	Create a connect
+ */
 
 int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client)
 {
@@ -363,11 +446,47 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 		return -1;
 	}
 	
+	sc->validate = ssl->validate;
+	
 	c->ssl_con = sc;
 	
 	return 0;
 }
 
+/*
+ *	Validate client certificate
+ */
+
+int ssl_validate_client_cert(struct client_t *c)
+{
+	long rc;
+	X509 *cert;
+	
+	rc = SSL_get_verify_result(c->ssl_con->connection);
+	
+	if (rc != X509_V_OK) {
+		hlog(LOG_INFO, "%s/%s: client SSL certificate verify error: (%l:%s)", c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
+		return -1;
+	}
+	
+	
+	cert = SSL_get_peer_certificate(c->ssl_con->connection);
+	
+	if (cert == NULL) {
+		hlog(LOG_INFO, "%s/%s: client sent no required SSL certificate", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate");
+	
+	X509_free(cert);
+	
+	return 0;
+}
+
+/*
+ *	Write data to an SSL socket
+ */
 
 int ssl_write(struct worker_t *self, struct client_t *c)
 {

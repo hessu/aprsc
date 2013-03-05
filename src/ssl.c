@@ -81,13 +81,14 @@
 #define SSL_PROTOCOLS (NGX_SSL_SSLv3|NGX_SSL_TLSv1 |NGX_SSL_TLSv1_1|NGX_SSL_TLSv1_2)
 
 /* ssl error strings */
-#define SSL_VALIDATE_CLIENT_CERT_UNVERIFIED -1
-#define SSL_VALIDATE_NO_CLIENT_CERT -2
-#define SSL_VALIDATE_CERT_CALLSIGN_MISMATCH -3
-
+#define SSL_ERR_LABELS_COUNT 6
 static const char *ssl_err_labels[][2] = {
-	{ "client_cert_unverified", "Client certificate is not valid" },
-	{ "no_client_cert", "Client did not present a certificate before login" },
+	{ "invalid_err", "Invalid, unknown error" },
+	{ "internal_err", "Internal error" },
+	{ "client_cert_unverified", "Client certificate is not valid or not trusted" },
+	{ "no_client_cert", "Client did not present a certificate" },
+	{ "cert_no_subj", "Certificate does not contain a Subject field" },
+	{ "cert_no_callsign", "Certificate does not contain a TQSL callsign in CN - not a ham cert" },
 	{ "cert_callsign_mismatch", "Certificate callsign does not match login username" }
 };
 
@@ -157,6 +158,20 @@ static int ssl_thread_cleanup(void)
 }
 
 /*
+ *	string representations for error codes
+ */
+
+const char *ssl_strerror(int code)
+{
+	code *= -1;
+	
+	if (code >= 0 && code < (sizeof ssl_err_labels / sizeof ssl_err_labels[0]))
+		return ssl_err_labels[code][1];
+		
+	return ssl_err_labels[0][1];
+}
+
+/*
  *	TrustedQSL custom X.509 certificate objects
  */
 
@@ -169,7 +184,7 @@ static int ssl_thread_cleanup(void)
 #define TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATION	TRUSTEDQSL_OID "6"
 #define TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATIONAL_UNIT TRUSTEDQSL_OID "7"
 
-static const char *tqsl_NIDs[][3] = {
+static const char *tqsl_NIDs[][2] = {
 	{ TRUSTEDQSL_OID_CALLSIGN, "AROcallsign" },
 	{ TRUSTEDQSL_OID_QSO_NOT_BEFORE, "QSONotBeforeDate" },
 	{ TRUSTEDQSL_OID_QSO_NOT_AFTER, "QSONotAfterDate" },
@@ -504,7 +519,7 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	return 0;
 }
 
-int ssl_cert_callsign_match(const unsigned char *subj_call, const char *username)
+int ssl_cert_callsign_match(const char *subj_call, const char *username)
 {
 	if (subj_call == NULL || username == NULL)
 		return 0;
@@ -533,12 +548,13 @@ int ssl_cert_callsign_match(const unsigned char *subj_call, const char *username
 
 int ssl_validate_client_cert(struct client_t *c)
 {
-	long rc;
+	int rc;
 	int ret = -1;
 	X509 *cert;
 	X509_NAME *sname, *iname;
 	char *subject, *issuer;
-	unsigned char *subj_cn, *subj_call;
+	char *subj_cn = NULL;
+	char *subj_call = NULL;
 	int nid, idx;
 	X509_NAME_ENTRY *entry;
 	ASN1_STRING *edata;
@@ -546,37 +562,68 @@ int ssl_validate_client_cert(struct client_t *c)
 	rc = SSL_get_verify_result(c->ssl_con->connection);
 	
 	if (rc != X509_V_OK) {
-		hlog(LOG_INFO, "%s/%s: client SSL certificate verify error: (%l:%s)", c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
+		/* client gave a certificate, but it's not valid */
+		hlog(LOG_DEBUG, "%s/%s: client SSL certificate verification error %d: %s",
+			c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
+		c->ssl_con->ssl_err_code = rc;
 		return SSL_VALIDATE_CLIENT_CERT_UNVERIFIED;
 	}
-	
 	
 	cert = SSL_get_peer_certificate(c->ssl_con->connection);
 	
 	if (cert == NULL) {
-		hlog(LOG_INFO, "%s/%s: client sent no required SSL certificate", c->addr_rem, c->username);
+		/* client did not give a certificate */
 		return SSL_VALIDATE_NO_CLIENT_CERT;
 	}
 	
-	subj_cn = NULL;
-	subj_call = NULL;
-	
 	/* ok, we have a cert, find subject */
 	sname = X509_get_subject_name(cert);
-	subject = sname ? X509_NAME_oneline(sname, NULL, 0) : "(none)";
+	if (!sname) {
+		ret = SSL_VALIDATE_CERT_NO_SUBJECT;
+		goto fail;
+	}
+	subject = X509_NAME_oneline(sname, NULL, 0);
 	
 	/* find tqsl callsign */
 	nid = OBJ_txt2nid("AROcallsign");
+	if (nid == NID_undef) {
+		hlog(LOG_ERR, "OBJ_txt2nid could not find NID for AROcallsign");
+		ret = SSL_VALIDATE_INTERNAL_ERROR;
+		goto fail;
+	}
+	
 	idx = X509_NAME_get_index_by_NID(sname, nid, -1);
+	if (idx == -1) {
+		hlog(LOG_DEBUG, "%s/%s: client certificate has no callsign: %s", c->addr_rem, c->username, subject);
+		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
+		goto fail;
+	}
+	
 	entry = X509_NAME_get_entry(sname, idx);
-	edata = X509_NAME_ENTRY_get_data(entry);
-	ASN1_STRING_to_UTF8(&subj_call, edata);
+	if (entry != NULL) {
+		edata = X509_NAME_ENTRY_get_data(entry);
+		if (edata != NULL)
+			ASN1_STRING_to_UTF8((unsigned char **)&subj_call, edata);
+	}
 	
 	/* find CN of subject */
 	idx = X509_NAME_get_index_by_NID(sname, NID_commonName, -1);
-	entry = X509_NAME_get_entry(sname, idx);
-	edata = X509_NAME_ENTRY_get_data(entry);
-	ASN1_STRING_to_UTF8(&subj_cn, edata);
+	if (idx == -1) {
+		hlog(LOG_DEBUG, "%s/%s: client certificate has no CN: %s", c->addr_rem, c->username, subject);
+	} else {
+		entry = X509_NAME_get_entry(sname, idx);
+		if (entry != NULL) {
+			edata = X509_NAME_ENTRY_get_data(entry);
+			if (edata != NULL)
+				ASN1_STRING_to_UTF8((unsigned char **)&subj_cn, edata);
+		}
+	}
+	
+	if (!subj_call) {
+		hlog(LOG_DEBUG, "%s/%s: client certificate callsign conversion failed: %s", c->addr_rem, c->username, subject);
+		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
+		goto fail;
+	}
 	
 	if (!ssl_cert_callsign_match(subj_call, c->username)) {
 		ret = SSL_VALIDATE_CERT_CALLSIGN_MISMATCH;
@@ -589,11 +636,16 @@ int ssl_validate_client_cert(struct client_t *c)
 	
 	ret = 0;
 	hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
-		c->addr_rem, c->username, subject, subj_call, subj_cn, issuer);
+		c->addr_rem, c->username, subject, (subj_call) ? subj_call : "(none)", (subj_cn) ? subj_cn : "(none)", issuer);
 	
-	/* TODO: what else to free? There are memory leaks above. */
 fail:	
+	/* free up whatever we allocated */
 	X509_free(cert);
+	
+	if (subj_call)
+		OPENSSL_free(subj_call);
+	if (subj_cn)
+		OPENSSL_free(subj_cn);
 	
 	return ret;
 }

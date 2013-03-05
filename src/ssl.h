@@ -16,6 +16,14 @@
 #include <openssl/engine.h>
 #include <openssl/evp.h>
 
+/* ssl error codes, must match ssl_err_labels order */
+#define SSL_VALIDATE_INTERNAL_ERROR -1
+#define SSL_VALIDATE_CLIENT_CERT_UNVERIFIED -2
+#define SSL_VALIDATE_NO_CLIENT_CERT -3
+#define SSL_VALIDATE_CERT_NO_SUBJECT -4
+#define SSL_VALIDATE_CERT_NO_CALLSIGN -5
+#define SSL_VALIDATE_CERT_CALLSIGN_MISMATCH -6
+
 struct client_t;
 struct worker_t;
 
@@ -44,6 +52,7 @@ struct ssl_connection_t {
 	unsigned	no_send_shutdown:1;
 	
 	unsigned	validate;
+	int		ssl_err_code;
 };
 
 #define NGX_SSL_SSLv2    0x0002
@@ -58,7 +67,10 @@ struct ssl_connection_t {
 
 #define NGX_SSL_BUFSIZE  16384
 
-/* initialize the library */
+/* string representations for error codes */
+extern const char *ssl_strerror(int code);
+
+/* initialize and deinit the library */
 extern int ssl_init(void);
 extern void ssl_atend(void);
 

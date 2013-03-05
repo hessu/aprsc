@@ -265,14 +265,18 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	if (c->ssl_con && c->ssl_con->validate) {
 		hlog(LOG_DEBUG, "%s/%s: login: doing SSL client cert validation", c->addr_rem, c->username);
 		int ssl_res = ssl_validate_client_cert(c);
-		if (ssl_res) {
-			hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed", c->addr_rem, c->username);
-			rc = client_printf(self, c, "# Client certificate validation failed\r\n");
+		if (ssl_res == 0) {
+			c->validated = 1;
+			ssl_validated = 1;
+		} else {
+			hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			if (ssl_res == SSL_VALIDATE_CLIENT_CERT_UNVERIFIED)
+				rc = client_printf(self, c, "# Client certificate not accepted: %s\r\n", X509_verify_cert_error_string(c->ssl_con->ssl_err_code));
+			else
+				rc = client_printf(self, c, "# Client certificate authentication failed: %s\r\n", ssl_strerror(ssl_res));
 			c->failed_cmds = 10; /* bail out right away for a HTTP client */
 			goto failed_login;
 		}
-		c->validated = 1;
-		ssl_validated = 1;
 	}
 #endif
 	

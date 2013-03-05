@@ -164,9 +164,8 @@ void parse_cmdline(int argc, char *argv[])
 		setuid_s = NULL;
 	}
 	
-	if ((log_dest == L_FILE) && (!log_dir)) {
+	if (!log_dir)
 		log_dir = hstrdup("logs");
-	}
 	
 	if (failed) {
 		fputs(HELPS, stderr);

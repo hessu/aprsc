@@ -35,15 +35,7 @@ struct ssl_t {
 
 struct ssl_connection_t {
 	SSL             *connection;
-/*
-    ngx_int_t                   last;
-    ngx_buf_t                  *buf;
-
-    ngx_connection_handler_pt   handler;
-
-    ngx_event_handler_pt        saved_read_handler;
-    ngx_event_handler_pt        saved_write_handler;
-*/
+	
 	unsigned	handshaked:1;
 	
 	unsigned	renegotiation:1;

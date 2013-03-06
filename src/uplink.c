@@ -40,6 +40,7 @@
 #include "incoming.h"
 #include "outgoing.h"
 #include "filter.h"
+#include "ssl.h"
 
 #define MAX_UPLINKS 32
 
@@ -260,6 +261,42 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	return 0;
 }
 
+#ifdef USE_SSL
+int config_uplink_ssl_setup(struct uplink_config_t *l)
+{
+	l->ssl = ssl_alloc();
+	
+	if (ssl_create(l->ssl, (void *)l)) {
+		hlog(LOG_ERR, "Uplink: Failed to create SSL context for '%s*'", l->name);
+		return -1;
+	}
+	
+	/* optional client cert for server-side validation */
+	if (l->certfile && l->keyfile && 0) {
+		if (ssl_certificate(l->ssl, l->certfile, l->keyfile)) {
+			hlog(LOG_ERR, "Uplink '%s': Failed to load SSL certificatess", l->name);
+			return -1;
+		}
+	}
+	
+	/* optional server cert validation */
+	if (l->cafile && 0) {
+		if (ssl_ca_certificate(l->ssl, l->cafile, 2)) {
+			hlog(LOG_ERR, "Uplink '%s': Failed to load trusted SSL CA certificates", l->name);
+			return -1;
+		}
+	}
+	
+	hlog(LOG_INFO, "Uplink %s: SSL initialized%s%s",
+		l->name,
+		(l->cafile) ? ", server validated" : "",
+		(l->certfile) ? ", client cert loaded" : "");
+		
+	return 0;
+}
+#endif
+
+
 /*
  *	Uplink a single connection
  */
@@ -283,6 +320,24 @@ int make_uplink(struct uplink_config_t *l)
 	req.ai_protocol = IPPROTO_TCP;
 	req.ai_flags    = AI_ADDRCONFIG;
 	ai = NULL;
+	
+#ifdef USE_SSL	
+	/* SSL requires both a cert and a key, or none at all */
+	if ((l->certfile && !l->keyfile) || (l->keyfile && !l->certfile)) {
+		hlog(LOG_ERR, "Uplink %s: Only one of sslkey and sslcert defined - both needed for SSL authentication", l->name);
+		return -2;
+	}
+	
+	/* todo: allow triggering SSL without client auth */
+	if (l->keyfile && l->certfile) {
+		if (!l->ssl) {
+			if (config_uplink_ssl_setup(l)) {
+				hlog(LOG_ERR, "Uplink '%s': SSL setup failed", l->name);
+				return -2;
+			}
+		}
+	}
+#endif
 	
 	/* find a free uplink slot */
 	for (uplink_index = 0; uplink_index < MAX_UPLINKS; uplink_index++) {
@@ -506,6 +561,14 @@ connerr:
 
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;
+	
+	/* set up SSL if necessary */
+#ifdef USE_SSL
+	if (l->ssl) {
+		if (ssl_create_connection(l->ssl, c, 1))
+			goto err;
+	}
+#endif
 	
 	/* Push it on the first worker, which ever it is..
 	 */

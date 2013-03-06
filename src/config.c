@@ -331,6 +331,10 @@ void free_uplink_config(struct uplink_config_t **lc)
 		hfree((void*)this->certfile);
 		hfree((void*)this->cafile);
 		hfree((void*)this->crlfile);
+#ifdef USE_SSL
+		if (this->ssl)
+			ssl_free(this->ssl);
+#endif		
 		hfree(this);
 	}
 }
@@ -678,7 +682,6 @@ int config_uplink_ssl(char **argv, int argc, int *i, const char *key, char **dst
 #endif
 }
 
-
 /*
  *	Parse a uplink definition directive
  *
@@ -764,12 +767,12 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 				return -2;
 			}
 		} else {
-			hlog(LOG_ERR, "Uplink: Invalid parameter '%s'", argv[i]);
+			hlog(LOG_ERR, "Uplink %s: Invalid parameter '%s'", argv[1], argv[i]);
 			free_uplink_config(&l);
 			return -2;
 		}
 	}
-	
+
 	/* put in the end of the list */
 	while (*lq)
 		lq = &(*lq)->next;

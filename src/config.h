@@ -24,6 +24,7 @@
 
 #include "ac-hdrs.h"
 #include "acl.h"
+#include "ssl.h"
 
 #ifndef AI_PASSIVE
 #include "netdb6.h"
@@ -167,7 +168,11 @@ struct uplink_config_t {
 	const char *certfile;			/* SSL client certificate file */
 	const char *cafile;			/* SSL ca certificate for validating server certs */
 	const char *crlfile;			/* SSL certificate revocation file */
-	
+
+#ifdef USE_SSL
+	struct ssl_t *ssl;			/* SSL state */
+#endif
+
 	int client_flags;
 	int state;				/* the state of the uplink */
 	void *client_ptr;			/* pointer to the client structure for state matching */

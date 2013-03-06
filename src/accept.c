@@ -395,6 +395,10 @@ static int rescan_client_acls(void)
 		}
 		
 		for (c = w->clients; (c); c = c->next) {
+			/* do not disconnect uplinks at this point */
+			if (!(c->flags & CLFLAGS_INPORT))
+				continue;
+			
 			l = find_listener_hash_id(c->listener_id);
 			if (!l) {
 				/* listener is not there any more */

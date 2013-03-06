@@ -211,7 +211,7 @@ static int load_tqsl_custom_objects(void)
 
 int ssl_init(void)
 {
-	hlog(LOG_INFO, "Initializing OpenSSL...");
+	hlog(LOG_INFO, "Initializing OpenSSL, built against %s ...", OPENSSL_VERSION_TEXT);
 	
 	OPENSSL_config(NULL);
 	
@@ -720,6 +720,9 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
 		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_READ, returning 0", c->fd);
+		
+		/* tell the poller that we won't be writing now, until we've read... */
+		xpoll_outgoing(&self->xp, c->xfd, 0);
 		
 		return 0;
 	}

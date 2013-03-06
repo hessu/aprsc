@@ -33,6 +33,36 @@
  * SUCH DAMAGE.
  */
 
+/*
+ *	OpenSSL thread-safe example code (ssl_thread_* functions) have been
+ *	proudly copied from the excellent CURL package, the original author
+ *	is Jeremy Brown.
+ *
+ *	https://github.com/bagder/curl/blob/master/docs/examples/opensslthreadlock.c
+ *
+ * COPYRIGHT AND PERMISSION NOTICE
+ * Copyright (c) 1996 - 2013, Daniel Stenberg, <daniel@haxx.se>.
+ *
+ * All rights reserved.
+ * 
+ * Permission to use, copy, modify, and distribute this software for any purpose
+ * with or without fee is hereby granted, provided that the above copyright
+ * notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF THIRD PARTY RIGHTS. IN
+ * NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+ * OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * Except as contained in this notice, the name of a copyright holder shall not
+ * be used in advertising or otherwise to promote the sale, use or other dealings
+ * in this Software without prior written authorization of the copyright holder.
+ *	
+ */
+
 #include "config.h"
 #include "ssl.h"
 #include "hlog.h"
@@ -41,15 +71,143 @@
 
 #ifdef USE_SSL
 
+#include <ctype.h>
+#include <pthread.h>
 #include <openssl/conf.h>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 
-#define NGX_DEFAULT_CIPHERS     "HIGH:!aNULL:!MD5"
+#define SSL_DEFAULT_CIPHERS     "HIGH:!aNULL:!MD5"
 #define SSL_PROTOCOLS (NGX_SSL_SSLv3|NGX_SSL_TLSv1 |NGX_SSL_TLSv1_1|NGX_SSL_TLSv1_2)
+
+/* ssl error strings */
+#define SSL_ERR_LABELS_COUNT 6
+static const char *ssl_err_labels[][2] = {
+	{ "invalid_err", "Invalid, unknown error" },
+	{ "internal_err", "Internal error" },
+	{ "client_cert_unverified", "Client certificate is not valid or not trusted" },
+	{ "no_client_cert", "Client did not present a certificate" },
+	{ "cert_no_subj", "Certificate does not contain a Subject field" },
+	{ "cert_no_callsign", "Certificate does not contain a TQSL callsign in CN - not a ham cert" },
+	{ "cert_callsign_mismatch", "Certificate callsign does not match login username" }
+};
+
+/* pthread wrapping for openssl */
+#define MUTEX_TYPE       pthread_mutex_t
+#define MUTEX_SETUP(x)   pthread_mutex_init(&(x), NULL)
+#define MUTEX_CLEANUP(x) pthread_mutex_destroy(&(x))
+#define MUTEX_LOCK(x)    pthread_mutex_lock(&(x))
+#define MUTEX_UNLOCK(x)  pthread_mutex_unlock(&(x))
+#define THREAD_ID        pthread_self(  )
+
 int  ssl_available;
 int  ssl_connection_index;
 int  ssl_server_conf_index;
 int  ssl_session_cache_index;
+
+/* This array will store all of the mutexes available to OpenSSL. */
+static MUTEX_TYPE *mutex_buf= NULL;
+
+static void ssl_thread_locking_function(int mode, int n, const char * file, int line)
+{
+	if (mode & CRYPTO_LOCK)
+		MUTEX_LOCK(mutex_buf[n]);
+	else
+		MUTEX_UNLOCK(mutex_buf[n]);
+}
+
+static unsigned long ssl_thread_id_function(void)
+{
+	return ((unsigned long)THREAD_ID);
+}
+
+static int ssl_thread_setup(void)
+{
+	int i;
+	
+	hlog(LOG_DEBUG, "Creating OpenSSL mutexes (%d)...", CRYPTO_num_locks());
+	
+	mutex_buf = hmalloc(CRYPTO_num_locks() * sizeof(MUTEX_TYPE));
+	
+	for (i = 0;  i < CRYPTO_num_locks();  i++)
+		MUTEX_SETUP(mutex_buf[i]);
+	
+	CRYPTO_set_id_callback(ssl_thread_id_function);
+	CRYPTO_set_locking_callback(ssl_thread_locking_function);
+	
+	return 0;
+}
+
+static int ssl_thread_cleanup(void)
+{
+	int i;
+	
+	if (!mutex_buf)
+		return 0;
+	
+	CRYPTO_set_id_callback(NULL);
+	CRYPTO_set_locking_callback(NULL);
+	
+	for (i = 0;  i < CRYPTO_num_locks(  );  i++)
+		MUTEX_CLEANUP(mutex_buf[i]);
+		
+	hfree(mutex_buf);
+	mutex_buf = NULL;
+	
+	return 0;
+}
+
+/*
+ *	string representations for error codes
+ */
+
+const char *ssl_strerror(int code)
+{
+	code *= -1;
+	
+	if (code >= 0 && code < (sizeof ssl_err_labels / sizeof ssl_err_labels[0]))
+		return ssl_err_labels[code][1];
+		
+	return ssl_err_labels[0][1];
+}
+
+/*
+ *	TrustedQSL custom X.509 certificate objects
+ */
+
+#define TRUSTEDQSL_OID				"1.3.6.1.4.1.12348.1."
+#define TRUSTEDQSL_OID_CALLSIGN			TRUSTEDQSL_OID "1"
+#define TRUSTEDQSL_OID_QSO_NOT_BEFORE		TRUSTEDQSL_OID "2"
+#define TRUSTEDQSL_OID_QSO_NOT_AFTER		TRUSTEDQSL_OID "3"
+#define TRUSTEDQSL_OID_DXCC_ENTITY		TRUSTEDQSL_OID "4"
+#define TRUSTEDQSL_OID_SUPERCEDED_CERT		TRUSTEDQSL_OID "5"
+#define TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATION	TRUSTEDQSL_OID "6"
+#define TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATIONAL_UNIT TRUSTEDQSL_OID "7"
+
+static const char *tqsl_NIDs[][2] = {
+	{ TRUSTEDQSL_OID_CALLSIGN, "AROcallsign" },
+	{ TRUSTEDQSL_OID_QSO_NOT_BEFORE, "QSONotBeforeDate" },
+	{ TRUSTEDQSL_OID_QSO_NOT_AFTER, "QSONotAfterDate" },
+	{ TRUSTEDQSL_OID_DXCC_ENTITY, "dxccEntity" },
+	{ TRUSTEDQSL_OID_SUPERCEDED_CERT, "supercededCertificate" },
+	{ TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATION, "tqslCRQIssuerOrganization" },
+	{ TRUSTEDQSL_OID_CRQ_ISSUER_ORGANIZATIONAL_UNIT, "tqslCRQIssuerOrganizationalUnit" },
+};
+
+static int load_tqsl_custom_objects(void)
+{
+	int i;
+	
+	for (i = 0; i < (sizeof tqsl_NIDs / sizeof tqsl_NIDs[0]); ++i)
+		if (OBJ_create(tqsl_NIDs[i][0], tqsl_NIDs[i][1], NULL) == 0)
+			return -1;
+	
+	return 0;
+}
+
+/*
+ *	Initialize SSL
+ */
 
 int ssl_init(void)
 {
@@ -60,7 +218,11 @@ int ssl_init(void)
 	SSL_library_init();
 	SSL_load_error_strings();
 	
+	ssl_thread_setup();
+	
 	OpenSSL_add_all_algorithms();
+	
+	load_tqsl_custom_objects();
 	
 #if OPENSSL_VERSION_NUMBER >= 0x0090800fL
 #ifndef SSL_OP_NO_COMPRESSION
@@ -107,6 +269,11 @@ int ssl_init(void)
 	ssl_available = 1;
 	
 	return 0;
+}
+
+void ssl_atend(void)
+{
+	ssl_thread_cleanup();
 }
 
 struct ssl_t *ssl_alloc(void)
@@ -198,6 +365,14 @@ int ssl_create(struct ssl_t *ssl, void *data)
 	
 	//SSL_CTX_set_info_callback(ssl->ctx, ngx_ssl_info_callback);
 	
+	if (SSL_CTX_set_cipher_list(ssl->ctx, SSL_DEFAULT_CIPHERS) == 0) {
+		hlog(LOG_ERR, "SSL_CTX_set_cipher_list() failed");
+		return -1;
+	}
+	
+	/* prefer server-selected ciphers */
+	SSL_CTX_set_options(ssl->ctx, SSL_OP_CIPHER_SERVER_PREFERENCE);
+	
 	return 0;
 }
 
@@ -221,8 +396,91 @@ int ssl_certificate(struct ssl_t *ssl, const char *certfile, const char *keyfile
 	return 0;
 }
 
+static int ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
+{
+	hlog(LOG_DEBUG, "ssl_verify_callback, ok: %d", ok);
+	
+#if (NGX_DEBUG)
+    char              *subject, *issuer;
+    int                err, depth;
+    X509              *cert;
+    X509_NAME         *sname, *iname;
+    ngx_connection_t  *c;
+    ngx_ssl_conn_t    *ssl_conn;
+
+    ssl_conn = X509_STORE_CTX_get_ex_data(x509_store,
+                                          SSL_get_ex_data_X509_STORE_CTX_idx());
+
+    c = ngx_ssl_get_connection(ssl_conn);
+
+    cert = X509_STORE_CTX_get_current_cert(x509_store);
+    err = X509_STORE_CTX_get_error(x509_store);
+    depth = X509_STORE_CTX_get_error_depth(x509_store);
+
+    sname = X509_get_subject_name(cert);
+    subject = sname ? X509_NAME_oneline(sname, NULL, 0) : "(none)";
+
+    iname = X509_get_issuer_name(cert);
+    issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
+
+    ngx_log_debug5(NGX_LOG_DEBUG_EVENT, c->log, 0,
+                   "verify:%d, error:%d, depth:%d, "
+                   "subject:\"%s\",issuer: \"%s\"",
+                   ok, err, depth, subject, issuer);
+
+    if (sname) {
+        OPENSSL_free(subject);
+    }
+
+    if (iname) {
+        OPENSSL_free(issuer);
+    }
+#endif
+
+    return 1;
+}
+
+
 /*
- *	Create a connect */
+ *	Load trusted CA certs
+ */
+
+int ssl_ca_certificate(struct ssl_t *ssl, const char *cafile, int depth)
+{
+	STACK_OF(X509_NAME)  *list;
+	
+	SSL_CTX_set_verify(ssl->ctx, SSL_VERIFY_PEER, ssl_verify_callback);
+	SSL_CTX_set_verify_depth(ssl->ctx, depth);
+	
+	if (SSL_CTX_load_verify_locations(ssl->ctx, cafile, NULL) == 0) {
+		hlog(LOG_ERR, "SSL_CTX_load_verify_locations(\"%s\") failed", cafile);
+		return -1;
+	}
+	
+	list = SSL_load_client_CA_file(cafile);
+	
+	if (list == NULL) {
+		hlog(LOG_ERR, "SSL_load_client_CA_file(\"%s\") failed", cafile);
+		return -1;
+	}
+	
+	/*
+	 * before 0.9.7h and 0.9.8 SSL_load_client_CA_file()
+	 * always leaved an error in the error queue
+	 */
+	
+	ERR_clear_error();
+	
+	SSL_CTX_set_client_CA_list(ssl->ctx, list);
+	
+	ssl->validate = 1;
+	
+	return 0;
+}
+
+/*
+ *	Create a connect
+ */
 
 int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client)
 {
@@ -234,12 +492,12 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	sc->connection = SSL_new(ssl->ctx);
 	
 	if (sc->connection == NULL) {
-		hlog(LOG_ERR, "SSL_new() failed");
+		hlog(LOG_ERR, "SSL_new() failed (fd %d)", c->fd);
 		return -1;
 	}
 	
 	if (SSL_set_fd(sc->connection, c->fd) == 0) {
-		hlog(LOG_ERR, "SSL_set_fd() failed");
+		hlog(LOG_ERR, "SSL_set_fd() failed (fd %d)", c->fd);
 		return -1;
 	}
 	
@@ -250,27 +508,173 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	}
 	
 	if (SSL_set_ex_data(sc->connection, ssl_connection_index, c) == 0) {
-		hlog(LOG_ERR, "SSL_set_ex_data() failed");
+		hlog(LOG_ERR, "SSL_set_ex_data() failed (fd %d)", c->fd);
 		return -1;
 	}
+	
+	sc->validate = ssl->validate;
 	
 	c->ssl_con = sc;
 	
 	return 0;
 }
 
+int ssl_cert_callsign_match(const char *subj_call, const char *username)
+{
+	if (subj_call == NULL || username == NULL)
+		return 0;
+	
+	while (*username != '-' && *username != 0 && *subj_call != 0) {
+		if (toupper(*username) != toupper(*subj_call))
+			return 0; /* mismatch */
+		
+		subj_call++;
+		username++;
+	}
+	
+	if (*subj_call != 0)
+		return 0; /* if username is shorter than subject callsign, we fail */
+	
+	if (*username != '-' && *username != 0)
+		return 0; /* if we ran to end of subject callsign but not to end of username or start of SSID, we fail */
+	
+	return 1;
+}
+
+
+/*
+ *	Validate client certificate
+ */
+
+int ssl_validate_client_cert(struct client_t *c)
+{
+	int rc;
+	int ret = -1;
+	X509 *cert;
+	X509_NAME *sname, *iname;
+	char *subject, *issuer;
+	char *subj_cn = NULL;
+	char *subj_call = NULL;
+	int nid, idx;
+	X509_NAME_ENTRY *entry;
+	ASN1_STRING *edata;
+	
+	rc = SSL_get_verify_result(c->ssl_con->connection);
+	
+	if (rc != X509_V_OK) {
+		/* client gave a certificate, but it's not valid */
+		hlog(LOG_DEBUG, "%s/%s: client SSL certificate verification error %d: %s",
+			c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
+		c->ssl_con->ssl_err_code = rc;
+		return SSL_VALIDATE_CLIENT_CERT_UNVERIFIED;
+	}
+	
+	cert = SSL_get_peer_certificate(c->ssl_con->connection);
+	
+	if (cert == NULL) {
+		/* client did not give a certificate */
+		return SSL_VALIDATE_NO_CLIENT_CERT;
+	}
+	
+	/* ok, we have a cert, find subject */
+	sname = X509_get_subject_name(cert);
+	if (!sname) {
+		ret = SSL_VALIDATE_CERT_NO_SUBJECT;
+		goto fail;
+	}
+	subject = X509_NAME_oneline(sname, NULL, 0);
+	
+	/* find tqsl callsign */
+	nid = OBJ_txt2nid("AROcallsign");
+	if (nid == NID_undef) {
+		hlog(LOG_ERR, "OBJ_txt2nid could not find NID for AROcallsign");
+		ret = SSL_VALIDATE_INTERNAL_ERROR;
+		goto fail;
+	}
+	
+	idx = X509_NAME_get_index_by_NID(sname, nid, -1);
+	if (idx == -1) {
+		hlog(LOG_DEBUG, "%s/%s: client certificate has no callsign: %s", c->addr_rem, c->username, subject);
+		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
+		goto fail;
+	}
+	
+	entry = X509_NAME_get_entry(sname, idx);
+	if (entry != NULL) {
+		edata = X509_NAME_ENTRY_get_data(entry);
+		if (edata != NULL)
+			ASN1_STRING_to_UTF8((unsigned char **)&subj_call, edata);
+	}
+	
+	/* find CN of subject */
+	idx = X509_NAME_get_index_by_NID(sname, NID_commonName, -1);
+	if (idx == -1) {
+		hlog(LOG_DEBUG, "%s/%s: client certificate has no CN: %s", c->addr_rem, c->username, subject);
+	} else {
+		entry = X509_NAME_get_entry(sname, idx);
+		if (entry != NULL) {
+			edata = X509_NAME_ENTRY_get_data(entry);
+			if (edata != NULL)
+				ASN1_STRING_to_UTF8((unsigned char **)&subj_cn, edata);
+		}
+	}
+	
+	if (!subj_call) {
+		hlog(LOG_DEBUG, "%s/%s: client certificate callsign conversion failed: %s", c->addr_rem, c->username, subject);
+		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
+		goto fail;
+	}
+	
+	if (!ssl_cert_callsign_match(subj_call, c->username)) {
+		ret = SSL_VALIDATE_CERT_CALLSIGN_MISMATCH;
+		goto fail;
+	}
+	
+	/* find issuer */
+	iname = X509_get_issuer_name(cert);
+	issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
+	
+	ret = 0;
+	hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
+		c->addr_rem, c->username, subject, (subj_call) ? subj_call : "(none)", (subj_cn) ? subj_cn : "(none)", issuer);
+	
+fail:	
+	/* free up whatever we allocated */
+	X509_free(cert);
+	
+	if (subj_call)
+		OPENSSL_free(subj_call);
+	if (subj_cn)
+		OPENSSL_free(subj_cn);
+	
+	return ret;
+}
+
+/*
+ *	Write data to an SSL socket
+ */
 
 int ssl_write(struct worker_t *self, struct client_t *c)
 {
 	int n;
-	int sslerr;
+	unsigned long sslerr;
 	int err;
+	int to_write;
 	
-	hlog(LOG_DEBUG, "ssl_write");
+	to_write = c->obuf_end - c->obuf_start;
 	
-	n = SSL_write(c->ssl_con->connection, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+	/* SSL_write does not appreciate writing a 0-length buffer */
+	if (to_write == 0) {
+		/* tell the poller that we have no outgoing data */
+		xpoll_outgoing(&self->xp, c->xfd, 0);
+		return 0;
+	}
 	
-	hlog(LOG_DEBUG, "SSL_write returned %d", n);
+	//hlog(LOG_DEBUG, "ssl_write fd %d of %d bytes", c->fd, to_write);
+	
+	n = SSL_write(c->ssl_con->connection, c->obuf + c->obuf_start, to_write);
+	
+	//hlog(LOG_DEBUG, "SSL_write fd %d returned %d", c->fd, n);
 	
 	if (n > 0) {
 		/* ok, we wrote some */
@@ -279,13 +683,15 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 		
 		/* All done ? */
 		if (c->obuf_start >= c->obuf_end) {
-			hlog(LOG_DEBUG, "ssl_write(%s) obuf empty", c->addr_rem);
+			//hlog(LOG_DEBUG, "ssl_write fd %d (%s) obuf empty", c->fd, c->addr_rem);
 			c->obuf_start = 0;
 			c->obuf_end   = 0;
+			
+			/* tell the poller that we have no outgoing data */
+			xpoll_outgoing(&self->xp, c->xfd, 0);
 			return n;
 		}
 		
-		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
 		
 		return n;
@@ -294,10 +700,17 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	sslerr = SSL_get_error(c->ssl_con->connection, n);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
-	hlog(LOG_DEBUG, "ssl_write SSL_get_error: %d", sslerr);
+	if (err) {
+		hlog(LOG_DEBUG, "ssl_write fd %d: I/O syscall error: %s", c->fd, strerror(err));
+	} else {
+		char ebuf[255];
+		
+		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
+		hlog(LOG_DEBUG, "ssl_write fd %d: SSL_get_error %u: %s (%s)", c->fd, sslerr, ebuf, ERR_reason_error_string(sslerr));
+	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_write: says SSL_ERROR_WANT_WRITE, marking socket for write events");
+		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_WRITE, marking socket for write events", c->fd);
 		
 		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
@@ -306,23 +719,23 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_INFO, "ssl_write: says SSL_ERROR_WANT_READ, calling ssl_readable (peer started SSL renegotiation?)");
+		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_READ, returning 0", c->fd);
 		
-		return ssl_readable(self, c);
+		return 0;
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;
 	c->ssl_con->no_send_shutdown = 1;
 	
-	hlog(LOG_DEBUG, "ssl_write: SSL_write() failed");
+	hlog(LOG_DEBUG, "ssl_write fd %d: SSL_write() failed", c->fd);
 	client_close(self, c, errno);
 	
-	return -1;
+	return -13;
 }
 
 int ssl_writeable(struct worker_t *self, struct client_t *c)
 {
-	hlog(LOG_DEBUG, "ssl_writeable");
+	//hlog(LOG_DEBUG, "ssl_writeable fd %d", c->fd);
 	
 	return ssl_write(self, c);
 }
@@ -332,13 +745,13 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	int r;
 	int sslerr, err;
 	
-	hlog(LOG_DEBUG, "ssl_readable");
+	//hlog(LOG_DEBUG, "ssl_readable fd %d", c->fd);
 	
 	r = SSL_read(c->ssl_con->connection, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 	
 	if (r > 0) {
 		/* we got some data... process */
-		hlog(LOG_DEBUG, "SSL_read returned %d bytes of data", r);
+		//hlog(LOG_DEBUG, "SSL_read fd %d returned %d bytes of data", c->fd, r);
 		
 		/* TODO: whatever the client_readable does */
 		return client_postread(self, c, r);
@@ -347,15 +760,21 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	sslerr = SSL_get_error(c->ssl_con->connection, r);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
-	hlog(LOG_DEBUG, "ssl_readable: SSL_get_error: %d", sslerr);
+	hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_get_error: %d", c->fd, sslerr);
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_DEBUG, "ssl_readable: SSL_read says SSL_ERROR_WANT_READ, doing it later");
+		hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_READ, doing it later", c->fd);
+		
+		if (c->obuf_end - c->obuf_start > 0) {
+			/* tell the poller that we have outgoing data */
+			xpoll_outgoing(&self->xp, c->xfd, 1);
+		}
+		
 		return 0;
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable");
+		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable", c->fd);
 		return ssl_writeable(self, c);
 	}
 	
@@ -363,12 +782,12 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	c->ssl_con->no_send_shutdown = 1;
 	
 	if (sslerr == SSL_ERROR_ZERO_RETURN || ERR_peek_error() == 0) {
-		hlog(LOG_DEBUG, "ssl_readable: peer shutdown SSL cleanly");
+		hlog(LOG_DEBUG, "ssl_readable fd %d: peer shutdown SSL cleanly", c->fd);
 		client_close(self, c, CLIERR_EOF);
 		return -1;
 	}
 	
-	hlog(LOG_DEBUG, "ssl_readable: SSL_read() failed");
+	hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read() failed", c->fd);
 	client_close(self, c, errno);
 	return -1;
 }

@@ -322,7 +322,16 @@ static int open_listener(struct listen_config_t *lc)
 			return -1;
 		}
 		
-		hlog(LOG_INFO, "SSL initialized for '%s': %s", lc->name, l->addr_s);
+		/* optional client cert validation */
+		if (lc->cafile) {
+			if (ssl_ca_certificate(l->ssl, lc->cafile, 2)) {
+				hlog(LOG_ERR, "Failed to load trusted SSL CA certificates for '%s*': %s", lc->name, l->addr_s);
+				listener_free(l);
+				return -1;
+			}
+		}
+		
+		hlog(LOG_INFO, "SSL initialized for '%s': %s%s", lc->name, l->addr_s, (lc->cafile) ? " (client validation enabled)" : "");
 	}
 #endif
 	

@@ -16,11 +16,21 @@
 #include <openssl/engine.h>
 #include <openssl/evp.h>
 
+/* ssl error codes, must match ssl_err_labels order */
+#define SSL_VALIDATE_INTERNAL_ERROR -1
+#define SSL_VALIDATE_CLIENT_CERT_UNVERIFIED -2
+#define SSL_VALIDATE_NO_CLIENT_CERT -3
+#define SSL_VALIDATE_CERT_NO_SUBJECT -4
+#define SSL_VALIDATE_CERT_NO_CALLSIGN -5
+#define SSL_VALIDATE_CERT_CALLSIGN_MISMATCH -6
+
 struct client_t;
 struct worker_t;
 
 struct ssl_t {
 	SSL_CTX *ctx;
+	
+	unsigned	validate;
 };
 
 struct ssl_connection_t {
@@ -34,11 +44,15 @@ struct ssl_connection_t {
     ngx_event_handler_pt        saved_read_handler;
     ngx_event_handler_pt        saved_write_handler;
 */
-    unsigned                    handshaked:1;
-    unsigned                    renegotiation:1;
-    unsigned                    buffer:1;
-    unsigned                    no_wait_shutdown:1;
-    unsigned                    no_send_shutdown:1;
+	unsigned	handshaked:1;
+	
+	unsigned	renegotiation:1;
+	unsigned	buffer:1;
+	unsigned	no_wait_shutdown:1;
+	unsigned	no_send_shutdown:1;
+	
+	unsigned	validate;
+	int		ssl_err_code;
 };
 
 #define NGX_SSL_SSLv2    0x0002
@@ -53,8 +67,12 @@ struct ssl_connection_t {
 
 #define NGX_SSL_BUFSIZE  16384
 
-/* initialize the library */
+/* string representations for error codes */
+extern const char *ssl_strerror(int code);
+
+/* initialize and deinit the library */
 extern int ssl_init(void);
+extern void ssl_atend(void);
 
 /* per-listener structure allocators */
 extern struct ssl_t *ssl_alloc(void);
@@ -63,9 +81,13 @@ extern void ssl_free(struct ssl_t *ssl);
 /* create context for listener, load certs */
 extern int ssl_create(struct ssl_t *ssl, void *data);
 extern int ssl_certificate(struct ssl_t *ssl, const char *certfile, const char *keyfile);
+extern int ssl_ca_certificate(struct ssl_t *ssl, const char *cafile, int depth);
 
 /* create / free connection */
 extern int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client);
+
+/* validate a client certificate */
+extern int ssl_validate_client_cert(struct client_t *c);
 
 extern int ssl_write(struct worker_t *self, struct client_t *c);
 extern int ssl_writeable(struct worker_t *self, struct client_t *c);
@@ -79,6 +101,7 @@ struct ssl_t {
 
 
 #define ssl_init(...) { }
+#define ssl_atend(...) { }
 
 #endif /* USE_SSL */
 #endif /* SSL_H */

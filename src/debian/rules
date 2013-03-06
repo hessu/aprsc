@@ -21,7 +21,8 @@ configure-stamp:
 		CFLAGS="${CFLAGS}" \
 		AFLAGS="${CFLAGS} --noexecstack" \
 		LDFLAGS="${CFLAGS} -z noexecstack" \
-		--enable-static-libevent=/usr/local/lib/libevent.a
+		--enable-static-libevent=/usr/local/lib/libevent.a \
+		--with-openssl
 	touch configure-stamp
 
 

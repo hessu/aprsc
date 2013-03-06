@@ -26,6 +26,7 @@ cd src
 ./configure --sbindir=/usr/sbin --sysconfdir=/etc \
 	--localstatedir=/var --mandir=/usr/share/man \
 	--enable-static-libevent=/usr/local/lib/libevent.a \
+	--with-openssl \
 	CC="gcc" \
 	CFLAGS="-g ${RPM_OPT_FLAGS}" \
 	AFLAGS="-g ${RPM_OPT_FLAGS} --noexecstack" \

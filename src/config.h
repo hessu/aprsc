@@ -162,9 +162,12 @@ struct uplink_config_t {
 	const char *proto;
 	const char *host;			/* hostname or dotted-quad IP to bind the UDP socket to, default INADDR_ANY */
 	const char *port;
-
-	const char *filters[LISTEN_MAX_FILTERS];	/* up to 10 filters, NULL when not defined */
-
+	
+	const char *keyfile;			/* SSL client key file */
+	const char *certfile;			/* SSL client certificate file */
+	const char *cafile;			/* SSL ca certificate for validating server certs */
+	const char *crlfile;			/* SSL certificate revocation file */
+	
 	int client_flags;
 	int state;				/* the state of the uplink */
 	void *client_ptr;			/* pointer to the client structure for state matching */

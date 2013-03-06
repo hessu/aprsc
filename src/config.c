@@ -317,7 +317,6 @@ void free_http_config(struct http_config_t **lc)
 void free_uplink_config(struct uplink_config_t **lc)
 {
 	struct uplink_config_t *this;
-	int i;
 
 	while (*lc) {
 		this = *lc;
@@ -328,9 +327,10 @@ void free_uplink_config(struct uplink_config_t **lc)
 		hfree((void*)this->proto);
 		hfree((void*)this->host);
 		hfree((void*)this->port);
-		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
-			if (this->filters[i])
-				hfree((void*)this->filters[i]);
+		hfree((void*)this->keyfile);
+		hfree((void*)this->certfile);
+		hfree((void*)this->cafile);
+		hfree((void*)this->crlfile);
 		hfree(this);
 	}
 }
@@ -653,6 +653,33 @@ err:
 }
 
 /*
+ *	Uplink ssl string option handler
+ */
+
+int config_uplink_ssl(char **argv, int argc, int *i, const char *key, char **dst)
+{
+#ifdef USE_SSL
+	(*i)++;
+	if (*i >= argc) {
+		hlog(LOG_ERR, "Uplink: '%s' argument is missing the file parameter for '%s'", key, argv[1]);
+		return -2;
+	}
+	
+	if (*dst) {
+		hlog(LOG_ERR, "Uplink: second '%s' not allowed for '%s'", key, argv[1]);
+		return -2;
+	}
+	
+	*dst = hstrdup(argv[*i]);
+	return 0;
+#else
+	hlog(LOG_ERR, "Uplink: '%s' not available for '%s' - server not built with OpenSSL", key, argv[1]);
+	return -2;
+#endif
+}
+
+
+/*
  *	Parse a uplink definition directive
  *
  *	uplink <label> <token> {tcp|udp|sctp} <hostname> <portnum> [<filter> [..<more_filters>]]
@@ -664,6 +691,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	struct uplink_config_t *l;
 	int port;
 	int clflags = CLFLAGS_UPLINKPORT;
+	int i;
 
 	if (argc < 5)
 		return -1;
@@ -714,18 +742,33 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	l->client_flags = clflags;
 	l->state = UPLINK_ST_UNKNOWN;
 	
-	/* Hmm, no? Filters are sent to the upstream.
-	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-		l->filters[i] = NULL;
-		if (argc - 6 > i) {
-			if (filter_parse(NULL,argv[i+6],0) < 0) {
-			  hlog( LOG_ERR,"Bad filter definition on '%s' port %s: '%s'",
-				argv[1],argv[5],argv[i+6] );
-			  continue;
+	for (i = 6; i < argc; i++) {
+		if (strcasecmp(argv[i], "sslkey") == 0) {
+			if (config_uplink_ssl(argv, argc, &i, "sslkey", (char **)&l->keyfile)) {
+				free_uplink_config(&l);
+				return -2;
 			}
-			l->filters[i] = hstrdup(argv[i+6]);
+		} else if (strcasecmp(argv[i], "sslcert") == 0) {
+			if (config_uplink_ssl(argv, argc, &i, "sslcert", (char **)&l->certfile)) {
+				free_uplink_config(&l);
+				return -2;
+			}
+		} else if (strcasecmp(argv[i], "sslca") == 0) {
+			if (config_uplink_ssl(argv, argc, &i, "sslca", (char **)&l->cafile)) {
+				free_uplink_config(&l);
+				return -2;
+			}
+		} else if (strcasecmp(argv[i], "sslcrl") == 0) {
+			if (config_uplink_ssl(argv, argc, &i, "sslcrl", (char **)&l->crlfile)) {
+				free_uplink_config(&l);
+				return -2;
+			}
+		} else {
+			hlog(LOG_ERR, "Uplink: Invalid parameter '%s'", argv[i]);
+			free_uplink_config(&l);
+			return -2;
 		}
-	}*/
+	}
 	
 	/* put in the end of the list */
 	while (*lq)

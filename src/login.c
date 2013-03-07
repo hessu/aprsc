@@ -264,7 +264,10 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
 		hlog(LOG_DEBUG, "%s/%s: login: doing SSL client cert validation", c->addr_rem, c->username);
-		int ssl_res = ssl_validate_client_cert(c);
+		int ssl_res = ssl_validate_peer_cert_phase1(c);
+		if (ssl_res == 0)
+			ssl_res = ssl_validate_peer_cert_phase2(c);
+		
 		if (ssl_res == 0) {
 			c->validated = 1;
 			ssl_validated = 1;

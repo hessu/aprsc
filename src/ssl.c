@@ -85,8 +85,8 @@
 static const char *ssl_err_labels[][2] = {
 	{ "invalid_err", "Invalid, unknown error" },
 	{ "internal_err", "Internal error" },
-	{ "client_cert_unverified", "Client certificate is not valid or not trusted" },
-	{ "no_client_cert", "Client did not present a certificate" },
+	{ "peer_cert_unverified", "Peer certificate is not valid or not trusted" },
+	{ "no_peer_cert", "Peer did not present a certificate" },
 	{ "cert_no_subj", "Certificate does not contain a Subject field" },
 	{ "cert_no_callsign", "Certificate does not contain a TQSL callsign in CN - not a ham cert" },
 	{ "cert_callsign_mismatch", "Certificate callsign does not match login username" }
@@ -552,9 +552,34 @@ int ssl_cert_callsign_match(const char *subj_call, const char *username)
  *	Validate client certificate
  */
 
-int ssl_validate_client_cert(struct client_t *c)
+int ssl_validate_peer_cert_phase1(struct client_t *c)
 {
-	int rc;
+	X509 *cert;
+	
+	int rc = SSL_get_verify_result(c->ssl_con->connection);
+	
+	if (rc != X509_V_OK) {
+		/* client gave a certificate, but it's not valid */
+		hlog(LOG_DEBUG, "%s/%s: Peer SSL certificate verification error %d: %s",
+			c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
+		c->ssl_con->ssl_err_code = rc;
+		return SSL_VALIDATE_CLIENT_CERT_UNVERIFIED;
+	}
+	
+	cert = SSL_get_peer_certificate(c->ssl_con->connection);
+	
+	if (cert == NULL) {
+		/* client did not give a certificate */
+		return SSL_VALIDATE_NO_CLIENT_CERT;
+	}
+	
+	X509_free(cert);
+	
+	return 0;
+}
+
+int ssl_validate_peer_cert_phase2(struct client_t *c)
+{
 	int ret = -1;
 	X509 *cert;
 	X509_NAME *sname, *iname;
@@ -564,16 +589,6 @@ int ssl_validate_client_cert(struct client_t *c)
 	int nid, idx;
 	X509_NAME_ENTRY *entry;
 	ASN1_STRING *edata;
-	
-	rc = SSL_get_verify_result(c->ssl_con->connection);
-	
-	if (rc != X509_V_OK) {
-		/* client gave a certificate, but it's not valid */
-		hlog(LOG_DEBUG, "%s/%s: client SSL certificate verification error %d: %s",
-			c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
-		c->ssl_con->ssl_err_code = rc;
-		return SSL_VALIDATE_CLIENT_CERT_UNVERIFIED;
-	}
 	
 	cert = SSL_get_peer_certificate(c->ssl_con->connection);
 	
@@ -600,7 +615,7 @@ int ssl_validate_client_cert(struct client_t *c)
 	
 	idx = X509_NAME_get_index_by_NID(sname, nid, -1);
 	if (idx == -1) {
-		hlog(LOG_DEBUG, "%s/%s: client certificate has no callsign: %s", c->addr_rem, c->username, subject);
+		hlog(LOG_DEBUG, "%s/%s: peer certificate has no callsign: %s", c->addr_rem, c->username, subject);
 		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
 		goto fail;
 	}
@@ -615,7 +630,7 @@ int ssl_validate_client_cert(struct client_t *c)
 	/* find CN of subject */
 	idx = X509_NAME_get_index_by_NID(sname, NID_commonName, -1);
 	if (idx == -1) {
-		hlog(LOG_DEBUG, "%s/%s: client certificate has no CN: %s", c->addr_rem, c->username, subject);
+		hlog(LOG_DEBUG, "%s/%s: peer certificate has no CN: %s", c->addr_rem, c->username, subject);
 	} else {
 		entry = X509_NAME_get_entry(sname, idx);
 		if (entry != NULL) {
@@ -626,7 +641,7 @@ int ssl_validate_client_cert(struct client_t *c)
 	}
 	
 	if (!subj_call) {
-		hlog(LOG_DEBUG, "%s/%s: client certificate callsign conversion failed: %s", c->addr_rem, c->username, subject);
+		hlog(LOG_DEBUG, "%s/%s: peer certificate callsign conversion failed: %s", c->addr_rem, c->username, subject);
 		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
 		goto fail;
 	}
@@ -641,7 +656,7 @@ int ssl_validate_client_cert(struct client_t *c)
 	issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
 	
 	ret = 0;
-	hlog(LOG_INFO, "%s/%s: Login validated using SSL client certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
+	hlog(LOG_INFO, "%s/%s: Peer validated using SSL certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
 		c->addr_rem, c->username, subject, (subj_call) ? subj_call : "(none)", (subj_cn) ? subj_cn : "(none)", issuer);
 	
 fail:	

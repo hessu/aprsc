@@ -200,6 +200,20 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	strncpy(c->username, argv[5], sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	
+	/* check the server name against certificate */
+#ifdef USE_SSL
+	if (c->ssl_con && c->ssl_con->validate) {
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert subject", c->addr_rem, c->username);
+		int ssl_res = ssl_validate_peer_cert_phase2(c);
+		
+		if (ssl_res != 0) {
+			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
+			return 0;
+		}
+	}
+#endif
+	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
 	
 	c->handler = incoming_handler;
@@ -227,6 +241,19 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 		strcpy(c->username, "simulator");
 
 	hlog(LOG_INFO, "%s: Uplink server software: \"%.*s\"", c->addr_rem, len, s);
+	
+#ifdef USE_SSL
+	if (c->ssl_con && c->ssl_con->validate) {
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert against CA", c->addr_rem, c->username);
+		int ssl_res = ssl_validate_peer_cert_phase1(c);
+		
+		if (ssl_res != 0) {
+			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
+			return 0;
+		}
+	}
+#endif
 	
 	/* parse to arguments */
 	/* make it null-terminated for our string processing */
@@ -280,7 +307,7 @@ int config_uplink_ssl_setup(struct uplink_config_t *l)
 	}
 	
 	/* optional server cert validation */
-	if (l->cafile && 0) {
+	if (l->cafile) {
 		if (ssl_ca_certificate(l->ssl, l->cafile, 2)) {
 			hlog(LOG_ERR, "Uplink '%s': Failed to load trusted SSL CA certificates", l->name);
 			return -1;

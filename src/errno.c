@@ -30,7 +30,8 @@ const char *aprsc_errs[] = {
 	"Uplink server says we're not verified",
 	"Client login retry count exceeded",
 	"Client login timed out",
-	"Inactivity timeout"
+	"Inactivity timeout",
+	"Uplink server certificate validation failed"
 };
 
 const char *aprsc_strerror(int er)

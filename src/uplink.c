@@ -272,7 +272,7 @@ int config_uplink_ssl_setup(struct uplink_config_t *l)
 	}
 	
 	/* optional client cert for server-side validation */
-	if (l->certfile && l->keyfile && 0) {
+	if (l->certfile && l->keyfile) {
 		if (ssl_certificate(l->ssl, l->certfile, l->keyfile)) {
 			hlog(LOG_ERR, "Uplink '%s': Failed to load SSL certificatess", l->name);
 			return -1;

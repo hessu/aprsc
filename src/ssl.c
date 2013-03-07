@@ -393,6 +393,12 @@ int ssl_certificate(struct ssl_t *ssl, const char *certfile, const char *keyfile
 		return -1;
 	}
 	
+	if (!SSL_CTX_check_private_key(ssl->ctx)) {
+		hlog(LOG_ERR, "SSL private key does (%s) not work with this certificate (%s)", keyfile, certfile);
+		return -1;
+	}
+	
+	
 	return 0;
 }
 
@@ -442,7 +448,7 @@ static int ssl_verify_callback(int ok, X509_STORE_CTX *x509_store)
 
 
 /*
- *	Load trusted CA certs
+ *	Load trusted CA certs for verifying our peers
  */
 
 int ssl_ca_certificate(struct ssl_t *ssl, const char *cafile, int depth)

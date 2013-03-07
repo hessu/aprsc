@@ -6,7 +6,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 11 };
+BEGIN { plan tests => 12 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -51,6 +51,13 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 # 10: should drop, wrong position and symbol
 $tx = "OH3XYZ>GPSMW:\$GPRMC,212052,A,4609.1157,N,12258.8145,W,0.168,13.4,130909,17.9,E*6B";
 my $dummy = "OH4XYZ>GPSMV:\$GPRMC,212052,A,4609.1157,N,12258.8145,W,0.168,13.4,130909,17.9,E*6B";
+istest::should_drop(\&ok, $i_tx, $i_rx,
+        $tx, # should drop
+        $dummy, 1, 1); # will pass (helper packet)
+
+# 11: should drop, invalid char in coordinates
+$tx = "OH4XYZ>GPSMW:\$GPRMO,182051.\xf000,A,6039.8655,N,01708.3799,E,20.07,243.41,070313,,,A*5A";
+$dummy = "OH5XYZ>GPSMV:\$GPRMC,212052,A,4609.1157,N,12258.8145,W,0.168,13.4,130909,17.9,E*6B";
 istest::should_drop(\&ok, $i_tx, $i_rx,
         $tx, # should drop
         $dummy, 1, 1); # will pass (helper packet)

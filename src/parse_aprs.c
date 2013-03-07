@@ -509,7 +509,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 	}
 	
 	if (!latp || !lngp) {
-		hlog(LOG_DEBUG, "Unknown NMEA: '%.11s' %.*s", pb->data, (int)(body_end - body), body);
+		hlog_packet(LOG_DEBUG, pb->data, pb->packet_len-2, "Unknown NMEA: ");
 		return 0; /* Well..  Not NMEA frame */
 	}
 

@@ -302,6 +302,8 @@ int config_uplink_ssl_setup(struct uplink_config_t *l)
 	if (l->certfile && l->keyfile) {
 		if (ssl_certificate(l->ssl, l->certfile, l->keyfile)) {
 			hlog(LOG_ERR, "Uplink '%s': Failed to load SSL certificatess", l->name);
+			ssl_free(l->ssl);
+			l->ssl = NULL;
 			return -1;
 		}
 	}
@@ -310,6 +312,8 @@ int config_uplink_ssl_setup(struct uplink_config_t *l)
 	if (l->cafile) {
 		if (ssl_ca_certificate(l->ssl, l->cafile, 2)) {
 			hlog(LOG_ERR, "Uplink '%s': Failed to load trusted SSL CA certificates", l->name);
+			ssl_free(l->ssl);
+			l->ssl = NULL;
 			return -1;
 		}
 	}

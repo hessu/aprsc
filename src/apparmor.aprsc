@@ -19,5 +19,7 @@
   /opt/aprsc/lib/** rm,
   /opt/aprsc/lib64/** rm,
   /opt/aprsc/var/core/* rwk,
+
   /dev/urandom r,
+  /opt/aprsc/dev/urandom r,
 }

@@ -19,3 +19,5 @@ fi
 
 umount /opt/aprsc/lib 2>/dev/null || true
 umount /opt/aprsc/lib64 2>/dev/null || true
+umount /opt/aprsc/usr/lib 2>/dev/null || true
+umount /opt/aprsc/usr/lib64 2>/dev/null || true

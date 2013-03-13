@@ -406,6 +406,12 @@ static int rescan_client_acls(void)
 				shutdown(c->fd, SHUT_RDWR);
 				continue;
 			}
+			
+			/* is there an acl? */
+			if (!l->acl)
+				continue;
+				
+			/* there is, check */
 			if (!acl_check(l->acl, (struct sockaddr *)&c->addr, sizeof(c->addr))) {
 				hlog(LOG_INFO, "%s - Denying client on fd %d from %s (new ACL)", c->addr_loc, c->fd, c->addr_rem);
 				shutdown(c->fd, SHUT_RDWR);

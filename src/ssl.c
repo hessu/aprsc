@@ -493,17 +493,18 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	struct ssl_connection_t  *sc;
 	
 	sc = hmalloc(sizeof(*sc));
-	
-	//sc->buffer = ((flags & NGX_SSL_BUFFER) != 0);
 	sc->connection = SSL_new(ssl->ctx);
 	
 	if (sc->connection == NULL) {
 		hlog(LOG_ERR, "SSL_new() failed (fd %d)", c->fd);
+		hfree(sc);
 		return -1;
 	}
 	
 	if (SSL_set_fd(sc->connection, c->fd) == 0) {
 		hlog(LOG_ERR, "SSL_set_fd() failed (fd %d)", c->fd);
+		SSL_free(sc->connection);
+		hfree(sc);
 		return -1;
 	}
 	
@@ -515,14 +516,25 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	
 	if (SSL_set_ex_data(sc->connection, ssl_connection_index, c) == 0) {
 		hlog(LOG_ERR, "SSL_set_ex_data() failed (fd %d)", c->fd);
+		SSL_free(sc->connection);
+		hfree(sc);
 		return -1;
 	}
 	
 	sc->validate = ssl->validate;
-	
 	c->ssl_con = sc;
 	
 	return 0;
+}
+
+void ssl_free_connection(struct client_t *c)
+{
+	if (!c->ssl_con)
+		return;
+		
+	SSL_free(c->ssl_con->connection);
+	hfree(c->ssl_con);
+	c->ssl_con = NULL;
 }
 
 int ssl_cert_callsign_match(const char *subj_call, const char *username)

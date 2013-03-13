@@ -410,6 +410,11 @@ void client_free(struct client_t *c)
 	client_udp_free(c->udpclient);
 	clientlist_remove(c);
 
+#ifdef USE_SSL
+	if (c->ssl_con)
+		ssl_free_connection(c);
+#endif
+
 	memset(c, 0, sizeof(*c));
 
 #ifndef _FOR_VALGRIND_

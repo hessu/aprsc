@@ -77,6 +77,7 @@ extern int ssl_ca_certificate(struct ssl_t *ssl, const char *cafile, int depth);
 
 /* create / free connection */
 extern int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client);
+extern void ssl_free_connection(struct client_t *c);
 
 /* validate a client certificate */
 extern int ssl_validate_peer_cert_phase1(struct client_t *c);

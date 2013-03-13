@@ -27,6 +27,10 @@ fix_permissions() {
 	setcap cap_net_bind_service=+eip /opt/aprsc/sbin/aprsc || true
 }
 
+setup_chroot_devices() {
+	( cd /opt/aprsc/dev && cp -a /dev/urandom /dev/random /dev/null /dev/zero . )
+}
+
 apparmor_config() {
 	# Reload AppArmor profile
 	APP_PROFILE="/etc/apparmor.d/opt.aprsc.sbin.aprsc"
@@ -47,6 +51,7 @@ munin_config() {
 
 setup_aprsc_user
 fix_permissions
+setup_chroot_devices
 apparmor_config
 munin_config
 

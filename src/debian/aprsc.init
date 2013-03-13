@@ -16,6 +16,8 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 BASEDIR=/opt/aprsc
 DAEMON=$BASEDIR/sbin/aprsc
 NAME=aprsc
+DIRNAME=aprsc
+PIDNAME=aprsc
 DESC="APRS-IS server"
 
 test -x $DAEMON || exit 0
@@ -39,13 +41,21 @@ prepare_chroot () {
 	/bin/cp -p /etc/resolv.conf /etc/nsswitch.conf /etc/hosts /etc/gai.conf $BASEDIR/etc/
 	# live upgrade requires libraries to be visible within chroot, so
 	# set up a read-only bind mount of /lib
-	grep -q "aprsc/lib " /proc/mounts || \
+	grep -q "$DIRNAME/lib " /proc/mounts || \
 		( mount --bind /lib $BASEDIR/lib \
 		&& mount -o remount,ro,bind $BASEDIR/lib )
 	if [ -e /lib64 ]; then
-		grep -q "aprsc/lib64 " /proc/mounts || \
+		grep -q "$DIRNAME/lib64 " /proc/mounts || \
 			( mount --bind /lib64 $BASEDIR/lib64 \
 			&& mount -o remount,ro,bind $BASEDIR/lib64 )
+	fi
+	grep -q "$DIRNAME/usr/lib " /proc/mounts || \
+		( mount --bind /usr/lib $BASEDIR/usr/lib \
+		&& mount -o remount,ro,bind $BASEDIR/usr/lib )
+	if [ -e /usr/lib64 ]; then
+		grep -q "$DIRNAME/usr/lib64 " /proc/mounts || \
+			( mount --bind /usr/lib64 $BASEDIR/usr/lib64 \
+			&& mount -o remount,ro,bind $BASEDIR/usr/lib64 )
 	fi
 	log_end_msg 0
 }
@@ -65,7 +75,7 @@ case "$1" in
 	prepare_chroot
   	check_configuration
   	log_daemon_msg "Starting $DESC:" "aprsc"
-	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
+	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -74,7 +84,7 @@ case "$1" in
   stop)
   	log_daemon_msg "Stopping $DESC:" "aprsc"
 	#set -e  # don't upset if it fails..
-	if start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON --oknodo --retry 15; then
+	if start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON --oknodo --retry 15; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -83,7 +93,7 @@ case "$1" in
   graceful | reload )
   	check_configuration
   	log_daemon_msg "Reloading $DESC configuration files:" "aprsc"
-	if start-stop-daemon --stop --signal USR1 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
+	if start-stop-daemon --stop --signal USR1 --quiet --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -93,7 +103,7 @@ case "$1" in
 	prepare_chroot
   	check_configuration
   	log_daemon_msg "Performing $DESC live upgrade:" "aprsc"
-	if start-stop-daemon --stop --signal USR2 --quiet --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON; then
+	if start-stop-daemon --stop --signal USR2 --quiet --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -110,7 +120,7 @@ case "$1" in
 	# check wether $DAEMON is running. If so, restart
 	set -e
 	start-stop-daemon --stop --test --quiet --pidfile \
-		$BASEDIR/logs/$NAME.pid --retry 15 --exec $DAEMON \
+		$BASEDIR/logs/$PIDNAME.pid --retry 15 --exec $DAEMON \
 	&& $0 restart \
 	|| exit 0
 	;;
@@ -118,7 +128,7 @@ case "$1" in
   	check_configuration
   	log_daemon_msg "Stopping $DESC:" "aprsc"
 	#set -e  # don't upset if it fails..
-	if start-stop-daemon --stop --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON --retry 15; then
+	if start-stop-daemon --stop --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON --retry 15; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -127,7 +137,7 @@ case "$1" in
 	prepare_chroot
   	log_daemon_msg "Starting $DESC:" "aprsc"
 	set -e
-	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$NAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
+	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0
 	else
 		log_end_msg 1

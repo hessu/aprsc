@@ -47,6 +47,7 @@ mkdir -p $RPM_BUILD_ROOT/opt/aprsc/sbin
 mkdir -p $RPM_BUILD_ROOT/opt/aprsc/data
 mkdir -p $RPM_BUILD_ROOT/opt/aprsc/web
 mkdir -p $RPM_BUILD_ROOT/opt/aprsc/logs
+mkdir -p $RPM_BUILD_ROOT/opt/aprsc/dev
 mkdir -p $RPM_BUILD_ROOT/etc/init.d
 mkdir -p $RPM_BUILD_ROOT/etc/sysconfig
 mkdir -p $RPM_BUILD_ROOT%{_mandir}/man8
@@ -100,6 +101,10 @@ fix_permissions() {
 	setcap cap_net_bind_service=+eip /opt/aprsc/sbin/aprsc || true
 }
 
+setup_chroot_devices() {
+	( cd /opt/aprsc/dev && cp -a /dev/urandom /dev/random /dev/null /dev/zero . )
+}
+
 apparmor_config() {
 	# Reload AppArmor profile
 	APP_PROFILE="/etc/apparmor.d/opt.aprsc.sbin.aprsc"
@@ -120,25 +125,25 @@ init_chkconf() {
 	chkconfig aprsc on
 }
 
-create_lib_mountpoint() {
-	if [ ! -d /opt/aprsc/lib ]; then
-		mkdir /opt/aprsc/lib
-	fi
+create_lib_mountpoints() {
 	if [ -h /opt/aprsc/lib64 ]; then
 		rm /opt/aprsc/lib64
 	fi
-	if [ ! -d /opt/aprsc/lib64 ]; then
-		mkdir /opt/aprsc/lib64
-	fi
+	for i in lib lib64 usr/lib usr/lib64; do
+		if [ ! -d /opt/aprsc/$i ]; then
+			mkdir /opt/aprsc/$i
+		fi
+	done
 }
 
 # main
 
 setup_aprsc_user
 fix_permissions
+setup_chroot_devices
 #apparmor_config
 munin_config
-create_lib_mountpoint
+create_lib_mountpoints
 init_chkconf
 
 

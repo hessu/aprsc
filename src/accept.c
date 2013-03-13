@@ -731,7 +731,6 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 	/* text format of client's IP address + port */
 	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
 	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
-	hfree(addr_s);
 
 	/* hex format of client's IP address + port */
 	s = hexsockaddr( &sa->sa, addr_len );
@@ -955,10 +954,10 @@ static void do_accept(struct listen_t *l)
 	
 	
 	c = accept_client_for_listener(l, fd, s, &sa, addr_len);
+	hfree(s);
 	if (!c) {
 		hlog(LOG_ERR, "%s - client_alloc returned NULL, too many clients. Denied client on fd %d from %s", l->addr_s, fd, s);
 		close(fd);
-		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 		return;
 	}
@@ -972,7 +971,6 @@ static void do_accept(struct listen_t *l)
 	if (l->ssl) {
 		if (ssl_create_connection(l->ssl, c, 0)) {
 			close(fd);
-			hfree(s);
 			inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 			return;
 		}

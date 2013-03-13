@@ -270,7 +270,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	}
 
 	// TODO: The uplink login command here could maybe be improved to send a filter command.
-	len = sprintf(buf, "user %s pass %s vers %s\r\n", c->username, passcode, verstr_aprsis);
+	len = sprintf(buf, "user %s pass %s vers %s\r\n", serverid, passcode, verstr_aprsis);
 
 	hlog(LOG_DEBUG, "%s: my login string: \"%.*s\"", c->addr_rem, len-2, buf, len);
 

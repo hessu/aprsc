@@ -1142,24 +1142,28 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	}
 	
 	/* convert client address to string */
-	char *s = strsockaddr( &sa.sa, addr_len );
+	char *client_addr_s = strsockaddr( &sa.sa, addr_len );
 	
 	/* find the right listener for this client, for configuration and accounting */
 	struct listen_t *l = liveupgrade_find_listener(listener_id->valueint);
 	if (!l) {
-		hlog(LOG_ERR, "Live upgrade: Failed to find listener for fd %d (%s - local %s) - closing", fd->valueint, s, addr_loc->valuestring);
+		hlog(LOG_ERR, "Live upgrade: Failed to find listener for fd %d (%s - local %s) - closing",
+			fd->valueint, client_addr_s, addr_loc->valuestring);
 		close(fd->valueint);
-		hfree(s);
+		hfree(client_addr_s);
 		return -1;
 	}
 	
-	struct client_t *c = accept_client_for_listener(l, fd->valueint, s, &sa, addr_len);
+	struct client_t *c = accept_client_for_listener(l, fd->valueint, client_addr_s, &sa, addr_len);
 	if (!c) {
-		hlog(LOG_ERR, "Live upgrade - client_alloc returned NULL, too many clients. Denied client on fd %d from %s", l->addr_s, fd->valueint, s);
+		hlog(LOG_ERR, "Live upgrade - client_alloc returned NULL, too many clients. Denied client on fd %d from %s",
+			l->addr_s, fd->valueint, client_addr_s);
 		close(fd->valueint);
-		hfree(s);
+		hfree(client_addr_s);
 		return -1;
 	}
+	
+	hfree(client_addr_s);
 	
 	if (strcmp(state->valuestring, "connected") == 0) {
 		c->state   = CSTATE_CONNECTED;

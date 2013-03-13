@@ -237,9 +237,6 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	int argc;
 	char *argv[256];
 
-	if (!*c->username)
-		strcpy(c->username, "simulator");
-
 	hlog(LOG_INFO, "%s: Uplink server software: \"%.*s\"", c->addr_rem, len, s);
 	
 #ifdef USE_SSL
@@ -560,7 +557,7 @@ connerr:
 	c->keepalive = tick;
 	c->last_read = tick;
 	c->connect_time = now;
-	strncpy(c->username, serverid, sizeof(c->username));
+	strncpy(c->username, l->name, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);
 

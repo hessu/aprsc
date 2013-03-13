@@ -657,7 +657,7 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	
 	ret = 0;
 	hlog(LOG_INFO, "%s/%s: Peer validated using SSL certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
-		c->addr_rem, c->username, subject, (subj_call) ? subj_call : "(none)", (subj_cn) ? subj_cn : "(none)", issuer);
+		c->addr_rem, c->username, subject, subj_call, (subj_cn) ? subj_cn : "(none)", issuer);
 	
 fail:	
 	/* free up whatever we allocated */

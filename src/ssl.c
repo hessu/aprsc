@@ -796,8 +796,6 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	sslerr = SSL_get_error(c->ssl_con->connection, r);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
-	hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_get_error: %d", c->fd, sslerr);
-	
 	if (sslerr == SSL_ERROR_WANT_READ) {
 		hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_READ, doing it later", c->fd);
 		
@@ -823,8 +821,8 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 	
-	hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read() failed", c->fd);
-	client_close(self, c, errno);
+	hlog(LOG_INFO, "ssl_readable fd %d failed with ret %d: SSL_get_error: sslerr %d errno %d (%s)", c->fd, r, sslerr, err, strerror(err));
+	client_close(self, c, err);
 	return -1;
 }
 

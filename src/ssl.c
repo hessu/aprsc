@@ -764,7 +764,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	c->ssl_con->no_send_shutdown = 1;
 	
 	hlog(LOG_DEBUG, "ssl_write fd %d: SSL_write() failed", c->fd);
-	client_close(self, c, errno);
+	client_close(self, c, err);
 	
 	return -13;
 }

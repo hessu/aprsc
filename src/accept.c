@@ -954,13 +954,14 @@ static void do_accept(struct listen_t *l)
 	
 	
 	c = accept_client_for_listener(l, fd, s, &sa, addr_len);
-	hfree(s);
 	if (!c) {
 		hlog(LOG_ERR, "%s - client_alloc returned NULL, too many clients. Denied client on fd %d from %s", l->addr_s, fd, s);
 		close(fd);
+		hfree(s);
 		inbound_connects_account(-1, l->portaccount); /* account rejected connection */
 		return;
 	}
+	hfree(s);
 
 	c->state   = CSTATE_LOGIN;
 	/* use the default login handler */

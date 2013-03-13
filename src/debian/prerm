@@ -17,6 +17,10 @@ if [ -x "/etc/init.d/aprsc" ]; then
 	fi
 fi
 
+# delete device files from chroot
+rm -f /opt/aprsc/dev/*
+
+# unmount bind mounts
 umount /opt/aprsc/lib 2>/dev/null || true
 umount /opt/aprsc/lib64 2>/dev/null || true
 umount /opt/aprsc/usr/lib 2>/dev/null || true

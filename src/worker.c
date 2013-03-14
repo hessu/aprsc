@@ -441,7 +441,7 @@ struct client_t *pseudoclient_setup(int portnum)
 	c->portnum = portnum;
 	c->state = CSTATE_CONNECTED;
 	c->flags = CLFLAGS_INPORT|CLFLAGS_CLIENTONLY;
-	c->validated = 1; // we will validate on every packet
+	c->validated = VALIDATED_WEAK; // we will validate on every packet
 	//c->portaccount = l->portaccount;
 	c->keepalive = tick;
 	c->last_read = tick;
@@ -1677,8 +1677,17 @@ void worker_thread(struct worker_t *self)
 	
 	if (self->shutting_down == 2) {
 		/* live upgrade: must free all UDP client structs - we need to close the UDP listener fd. */
-		struct client_t *c;
-		for (c = self->clients; (c); c = c->next) {
+		/* Must also disconnect all SSL clients - the SSL crypto state cannot be moved over. */
+		struct client_t *c, *next;
+		for (c = self->clients; (c); c = next) {
+			next = c->next;
+#ifdef USE_SSL
+			/* SSL client? */
+			if (c->ssl_con) {
+				client_close(self, c, CLIOK_THREAD_SHUTDOWN);
+				continue;
+			}
+#endif
 			/* collect client state first before closing or freeing anything */
 			if (worker_shutdown_clients) {
 				cJSON *jc = worker_client_json(c, 1);
@@ -2025,6 +2034,13 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 			
 		cJSON_AddStringToObject(jc, "mode", mode);
 	}
+	
+#ifdef USE_SSL
+	if (c->cert_subject[0])
+		cJSON_AddStringToObject(jc, "cert_subject", c->cert_subject);
+	if (c->cert_issuer[0])
+		cJSON_AddStringToObject(jc, "cert_issuer", c->cert_issuer);
+#endif
 	
 	return jc;
 }

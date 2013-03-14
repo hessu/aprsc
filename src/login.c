@@ -259,6 +259,13 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		goto failed_login;
 	}
 	
+	/* make sure the callsign is OK on the APRS-IS */
+	if (strcasecmp(c->username, serverid) == 0) {
+		hlog(LOG_WARNING, "%s: Invalid login string, username equals our serverid: '%s'", c->addr_rem, c->username);
+		rc = client_printf(self, c, "# Login by user not allowed (our serverid)\r\n");
+		goto failed_login;
+	}
+	
 	/* if SSL client cert verification is enabled, check it */
 	int ssl_validated = 0;
 #ifdef USE_SSL
@@ -269,7 +276,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			ssl_res = ssl_validate_peer_cert_phase2(c);
 		
 		if (ssl_res == 0) {
-			c->validated = 1;
+			c->validated = VALIDATED_STRONG;
 			ssl_validated = 1;
 		} else {
 			hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
@@ -297,7 +304,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				given_passcode = atoi(argv[i]);
 				if (given_passcode >= 0)
 					if (given_passcode == aprs_passcode(c->username))
-						c->validated = 1;
+						c->validated = VALIDATED_WEAK;
 			}
 		} else if (strcasecmp(argv[i], "vers") == 0) {
 			/* Collect application name and version separately.
@@ -420,6 +427,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	 
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {
+		/* TODO: If old connection is SSL validated, and this one is not, do not disconnect it. */
 		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, username);
 		/* The other client may be on another thread, so cannot client_close() it.
 		 * There is a small potential race here, if the old client disconnected and

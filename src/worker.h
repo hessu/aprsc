@@ -336,6 +336,9 @@ struct client_t {
 #define CLFLAGS_IGATE          0x1000 /* Igate port */
 #define CLFLAGS_UPLINKMULTI    0x2000 /* Allow multiple parallel outgoing connections */
 
+#define VALIDATED_WEAK         1 /* client validated with passcode */
+#define VALIDATED_STRONG       3 /* client validated with SSL certificate */
+
 	CStateEnum state;   /* state of the client... one of CSTATE_* */
 	char  warned;       /* the client has been warned that it has bad filter definition */
 	char  validated;    /* did the client provide a valid passcode */
@@ -381,6 +384,12 @@ struct client_t {
 	char  addr_hex[36];	    /* client IP address in hex format */
 	char  addr_loc[80];	    /* server IP address in text format */
 	
+#ifdef USE_SSL
+	/* for SSL cert auth, store SSL certificate subject and issuer */
+	char cert_subject[256];
+	char cert_issuer[256];
+#endif
+
 #ifdef FIXED_IOBUFS
 	char	ibuf[IBUF_SIZE];
 	char	obuf[OBUF_SIZE];

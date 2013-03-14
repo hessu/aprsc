@@ -540,7 +540,7 @@ static void peerip_clients_config(void)
 		c->fd = -1; // Right, this client will never have a socket of it's own.
 		c->portnum = pe->local_port; // local port
 		c->state = CSTATE_COREPEER;
-		c->validated = 1;
+		c->validated = VALIDATED_WEAK;
 		c->flags = CLFLAGS_UPLINKPORT;
 		c->handler = &incoming_handler;
 		memcpy((void *)&c->udpaddr.sa, (void *)pe->ai->ai_addr, pe->ai->ai_addrlen);
@@ -1274,6 +1274,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	/* Add the client to the client list. */
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {
+		/* TODO: If old connection is SSL validated, and this one is not, do not disconnect it. */
 		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, c->username);
 		shutdown(old_fd, SHUT_RDWR);
 	}

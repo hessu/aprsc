@@ -65,9 +65,12 @@ function username_link(s)
 	return '<a href="http://aprs.fi/?call=' + s + '" target="_blank">' + htmlent(s) + "</a>";
 }
 
-function conv_verified(i)
+function conv_verified(c, k)
 {
-	if (i)
+	if (c['verified'] == 3)
+		return '<span class="link" onclick="return cert_popup(event, ' + c['fd'] + ');">Cert</span>';
+		
+	if (c['verified'])
 		return 'Yes';
 	
 	return '<span class="red">No</span>';
@@ -277,7 +280,8 @@ var key_tooltips = {
 var val_convert_c = {
 	'bytes_rates': client_bytes_rates,
 	'pkts_rx': client_pkts_rx,
-	'connects_rates': port_conn_rates
+	'connects_rates': port_conn_rates,
+	'verified': conv_verified
 };
 
 var val_convert = {
@@ -288,8 +292,7 @@ var val_convert = {
 	'since_last_read': dur_str,
 	'addr_rem_shown': conv_none,
 	'username': username_link,
-	'addr_loc': addr_loc_port,
-	'verified': conv_verified
+	'addr_loc': addr_loc_port
 };
 
 var listener_cols = {
@@ -430,6 +433,41 @@ function rx_err_popup(e, fd)
 	var co = event_click_coordinates(e);
 	
 	ttip_show(function() { return rx_err_contents(fd); }, co);
+	
+	return false;
+}
+
+function cert_contents(fd)
+{
+	if (isUndefined(fd_clients[fd]))
+		return 'No client on fd ' + fd;
+		
+	var subj = fd_clients[fd]['cert_subject'];
+	var iss = fd_clients[fd]['cert_issuer'];
+	
+	if (isUndefined(subj) && isUndefined(iss))
+		return 'Client on fd ' + fd + ' has no certificate';
+	
+	var s = '';
+	
+	if (!isUndefined(subj))
+		s += '<b>Subject:</b><br />' + htmlent(subj) + '<br />';
+	if (!isUndefined(iss))
+		s += '<b>Issuer:</b><br />' + htmlent(iss) + '<br />';
+		
+	return s;
+}
+
+function cert_popup(e, fd)
+{
+	cancel_events(e);
+	
+	if (isUndefined(fd_clients[fd]))
+		return;
+	
+	var co = event_click_coordinates(e);
+	
+	ttip_show(function() { return cert_contents(fd); }, co);
 	
 	return false;
 }

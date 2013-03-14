@@ -194,11 +194,20 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 		return 0;
 	}
 	
+	if (strcasecmp(argv[5], serverid) == 0) {
+		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, argv[5]);
+		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+		return 0;
+	}
+	
 	/* todo: validate server callsign with the q valid path algorithm */
 	
 	/* store the remote server's callsign as the "client username" */
 	strncpy(c->username, argv[5], sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
+	
+	/* uplink servers are always "validated" */
+	c->validated = VALIDATED_WEAK;
 	
 	/* check the server name against certificate */
 #ifdef USE_SSL
@@ -211,13 +220,14 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
 			return 0;
 		}
+		
+		c->validated = VALIDATED_STRONG;
 	}
 #endif
 	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
 	
 	c->handler = incoming_handler;
-	c->validated = 1;
 	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);

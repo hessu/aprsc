@@ -236,17 +236,29 @@ void pthreads_profiling_reset(const char *name)
 }
 
 #define PATHLEN 500
-static void dbdump_historydb(void)
+static int dbdump_historydb(void)
 {
 	FILE *fp;
 	char path[PATHLEN+1];
+	int ret = 0;
 	
 	snprintf(path, PATHLEN, "%s/historydb.json", rundir);
 	fp = fopen(path,"w");
-	if (fp) {
-		historydb_dump(fp);
-		fclose(fp);
+	if (!fp) {
+		hlog(LOG_ERR, "dbdump historydb failed to open %s for writing: %s", path, strerror(errno));
+		return -1;
 	}
+	
+	if (historydb_dump(fp)) {
+		ret = -1;
+	}
+	
+	if (fclose(fp)) {
+		hlog(LOG_ERR, "dbdump historydb failed to close %s after writing: %s", path, strerror(errno));
+		return -1;
+	}
+	
+	return ret;
 }
 
 static void dbdump_all(void)
@@ -1148,9 +1160,6 @@ int main(int argc, char **argv)
 	if (liveupgrade_fired)
 		hlog(LOG_INFO, "Shutdown for LIVE UPGRADE!");
 	
-	hlog(LOG_DEBUG, "Dumping status to file");
-	status_dump_file();
-	
 	hlog(LOG_INFO, "Signalling threads to shut down...");
 	accept_shutting_down = (liveupgrade_fired) ? 2 : 1;
 	
@@ -1173,8 +1182,10 @@ int main(int argc, char **argv)
 
 	if (liveupgrade_fired) {
 		hlog(LOG_INFO, "Live upgrade: Dumping state to files...");
-		dbdump_historydb();
-		status_dump_liveupgrade();
+		if (dbdump_historydb() || status_dump_liveupgrade()) {
+			hlog(LOG_ERR, "Live upgrade: Dumps failed - cannot continue!");
+			return 1;
+		}
 		hlog(LOG_INFO, "Live upgrade: Dumps completed.");
 		liveupgrade_exec(argc, argv);
 	}

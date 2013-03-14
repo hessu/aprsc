@@ -115,7 +115,7 @@ void historydb_atend(void)
 	}
 }
 
-static void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
+static int historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
 	int klen;
 	char key[CALLSIGNLEN_MAX+1];
@@ -142,8 +142,13 @@ static void historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 	/* the tree is built, print it out to a malloc'ed string */
 	char *out = cJSON_PrintUnformatted(js);
 	cJSON_Delete(js);
-	fprintf(fp, "%s\n", out);
+	klen = fprintf(fp, "%s\n", out);
 	hfree(out);
+	
+	if (klen < 0)
+		hlog(LOG_ERR, "historydb_dump_entry failed to write entry: %s", strerror(errno));
+		
+	return klen;
 }
 
 static int historydb_load_entry(char *s)
@@ -236,12 +241,13 @@ fail:
 	return 0;
 }
 
-void historydb_dump(FILE *fp)
+int historydb_dump(FILE *fp)
 {
 	/* Dump the historydb out on text format */
 	int i;
 	struct history_cell_t *hp;
 	time_t expirytime   = tick - lastposition_storetime;
+	int ret = 0;
 
 	/* multiple locks ? one for each bucket, or for a subset of buckets ? */
 	rwl_rdlock(&historydb_rwlock);
@@ -249,12 +255,19 @@ void historydb_dump(FILE *fp)
 	for ( i = 0; i < HISTORYDB_HASH_MODULO; ++i ) {
 		hp = historydb_hash[i];
 		for ( ; hp ; hp = hp->next )
-			if (hp->arrivaltime > expirytime)
-				historydb_dump_entry(fp, hp);
+			if (hp->arrivaltime > expirytime) {
+				if (historydb_dump_entry(fp, hp) < 0) {
+					ret = -1;
+					goto fail;
+				}
+			}
 	}
 	
+fail:	
 	/* Free the lock */
 	rwl_rdunlock(&historydb_rwlock);
+	
+	return ret;
 }
 
 int historydb_load(FILE *fp)

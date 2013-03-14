@@ -259,7 +259,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		goto failed_login;
 	}
 	
-	/* make sure the callsign is OK on the APRS-IS */
+	/* make sure the client's callsign is not my Server ID */
 	if (strcasecmp(c->username, serverid) == 0) {
 		hlog(LOG_WARNING, "%s: Invalid login string, username equals our serverid: '%s'", c->addr_rem, c->username);
 		rc = client_printf(self, c, "# Login by user not allowed (our serverid)\r\n");

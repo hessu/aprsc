@@ -733,15 +733,6 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	sslerr = SSL_get_error(c->ssl_con->connection, n);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
-	if (err) {
-		hlog(LOG_DEBUG, "ssl_write fd %d: I/O syscall error: %s", c->fd, strerror(err));
-	} else {
-		char ebuf[255];
-		
-		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
-		hlog(LOG_DEBUG, "ssl_write fd %d: SSL_get_error %u: %s (%s)", c->fd, sslerr, ebuf, ERR_reason_error_string(sslerr));
-	}
-	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
 		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_WRITE, marking socket for write events", c->fd);
 		
@@ -758,6 +749,15 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 		xpoll_outgoing(&self->xp, c->xfd, 0);
 		
 		return 0;
+	}
+	
+	if (err) {
+		hlog(LOG_DEBUG, "ssl_write fd %d: I/O syscall error: %s", c->fd, strerror(err));
+	} else {
+		char ebuf[255];
+		
+		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
+		hlog(LOG_INFO, "ssl_write fd %d failed with ret %d sslerr %u errno %d: %s (%s)", c->fd, n, sslerr, ebuf, err, ERR_reason_error_string(sslerr));
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;
@@ -821,7 +821,15 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 		return -1;
 	}
 	
-	hlog(LOG_INFO, "ssl_readable fd %d failed with ret %d: SSL_get_error: sslerr %d errno %d (%s)", c->fd, r, sslerr, err, strerror(err));
+	if (err) {
+		hlog(LOG_DEBUG, "ssl_readable fd %d: I/O syscall error: %s", c->fd, strerror(err));
+	} else {
+		char ebuf[255];
+		
+		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
+		hlog(LOG_INFO, "ssl_readable fd %d failed with ret %d sslerr %u errno %d: %s (%s)", c->fd, r, sslerr, ebuf, err, ERR_reason_error_string(sslerr));
+	}
+	
 	client_close(self, c, err);
 	return -1;
 }

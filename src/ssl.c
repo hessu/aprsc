@@ -205,6 +205,23 @@ static int load_tqsl_custom_objects(void)
 	return 0;
 }
 
+static void ssl_info_callback(SSL *ssl, int where, int ret)
+{
+	struct client_t *c = SSL_get_ex_data(ssl, ssl_connection_index);
+	struct ssl_connection_t *ssl_conn = c->ssl_con;
+	
+	if (where & SSL_CB_HANDSHAKE_START) {
+		hlog(LOG_INFO, "%s/%d: SSL handshake start", c->addr_rem, c->fd);
+		if (ssl_conn->handshaked) {
+			ssl_conn->renegotiation = 1;
+		}
+	}
+	
+	if (where & SSL_CB_HANDSHAKE_DONE) {
+		hlog(LOG_INFO, "%s/%d: SSL handshake done", c->addr_rem, c->fd);
+	}
+}
+
 /*
  *	Initialize SSL
  */
@@ -360,10 +377,12 @@ int ssl_create(struct ssl_t *ssl, void *data)
 #ifdef SSL_MODE_RELEASE_BUFFERS
 	SSL_CTX_set_mode(ssl->ctx, SSL_MODE_RELEASE_BUFFERS);
 #endif
+
+	SSL_CTX_set_mode(ssl->ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
 	
 	SSL_CTX_set_read_ahead(ssl->ctx, 1);
 	
-	//SSL_CTX_set_info_callback(ssl->ctx, ngx_ssl_info_callback);
+	SSL_CTX_set_info_callback(ssl->ctx, (void *)ssl_info_callback);
 	
 	if (SSL_CTX_set_cipher_list(ssl->ctx, SSL_DEFAULT_CIPHERS) == 0) {
 		hlog(LOG_ERR, "SSL_CTX_set_cipher_list() failed");
@@ -702,13 +721,6 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	
 	to_write = c->obuf_end - c->obuf_start;
 	
-	/* SSL_write does not appreciate writing a 0-length buffer */
-	if (to_write == 0) {
-		/* tell the poller that we have no outgoing data */
-		xpoll_outgoing(&self->xp, c->xfd, 0);
-		return 0;
-	}
-	
 	//hlog(LOG_DEBUG, "ssl_write fd %d of %d bytes", c->fd, to_write);
 	
 	n = SSL_write(c->ssl_con->connection, c->obuf + c->obuf_start, to_write);
@@ -777,7 +789,18 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 
 int ssl_writeable(struct worker_t *self, struct client_t *c)
 {
-	//hlog(LOG_DEBUG, "ssl_writeable fd %d", c->fd);
+	int to_write;
+	
+	to_write = c->obuf_end - c->obuf_start;
+	
+	//hlog(LOG_DEBUG, "ssl_writeable fd %d, %d available for writing", c->fd, to_write);
+	
+	/* SSL_write does not appreciate writing a 0-length buffer */
+	if (to_write == 0) {
+		/* tell the poller that we have no outgoing data */
+		xpoll_outgoing(&self->xp, c->xfd, 0);
+		return 0;
+	}
 	
 	return ssl_write(self, c);
 }
@@ -815,7 +838,7 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
 		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable", c->fd);
-		return ssl_writeable(self, c);
+		return ssl_write(self, c);
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;

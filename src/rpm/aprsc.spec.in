@@ -129,7 +129,7 @@ create_lib_mountpoints() {
 	if [ -h /opt/aprsc/lib64 ]; then
 		rm /opt/aprsc/lib64
 	fi
-	for i in lib lib64 usr/lib usr/lib64; do
+	for i in lib lib64 usr usr/lib usr/lib64; do
 		if [ ! -d /opt/aprsc/$i ]; then
 			mkdir /opt/aprsc/$i
 		fi

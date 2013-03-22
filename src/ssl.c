@@ -752,7 +752,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_WRITE, marking socket for write events", c->fd);
+		hlog(LOG_INFO, "ssl_write fd %d: SSL_write wants to write again, marking socket for write events", c->fd);
 		
 		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
@@ -761,7 +761,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_INFO, "ssl_write fd %d: says SSL_ERROR_WANT_READ, returning 0", c->fd);
+		hlog(LOG_INFO, "ssl_write fd %d: SSL_write wants to read, returning 0", c->fd);
 		
 		/* tell the poller that we won't be writing now, until we've read... */
 		xpoll_outgoing(&self->xp, c->xfd, 0);
@@ -826,7 +826,7 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_READ, doing it later", c->fd);
+		hlog(LOG_DEBUG, "ssl_readable fd %d: SSL_read wants to read again, doing it later", c->fd);
 		
 		if (c->obuf_end - c->obuf_start > 0) {
 			/* tell the poller that we have outgoing data */
@@ -837,7 +837,7 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read says SSL_ERROR_WANT_WRITE (peer starts SSL renegotiation?), calling ssl_writeable", c->fd);
+		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts SSL renegotiation?), calling ssl_write", c->fd);
 		return ssl_write(self, c);
 	}
 	

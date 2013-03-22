@@ -94,7 +94,10 @@ void status_error(int ttl, const char *err)
 	struct status_error_t *e;
 	int pe;
 	
-	hlog(LOG_INFO, "status_error: setting error flag %s ttl %d", err, ttl);
+	if (ttl == -1)
+		hlog(LOG_INFO, "status: clearing error flag %s", err);
+	else
+		hlog(LOG_INFO, "status: setting error flag %s ttl %d", err, ttl);
 	
 	if ((pe = pthread_mutex_lock(&status_errs_mt))) {
 		hlog(LOG_ERR, "status_error(): could not lock status_errs_mt: %s", strerror(pe));

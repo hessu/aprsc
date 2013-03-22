@@ -208,7 +208,18 @@ static int load_tqsl_custom_objects(void)
 static void ssl_info_callback(SSL *ssl, int where, int ret)
 {
 	struct client_t *c = SSL_get_ex_data(ssl, ssl_connection_index);
+	
+	if (!c) {
+		hlog(LOG_ERR, "ssl_info_callback: no application data for connection");
+		return;
+	}
+	
 	struct ssl_connection_t *ssl_conn = c->ssl_con;
+	
+	if (!ssl_conn) {
+		hlog(LOG_ERR, "ssl_info_callback: no ssl_conn for connection");
+		return;
+	}
 	
 	if (where & SSL_CB_HANDSHAKE_START) {
 		hlog(LOG_INFO, "%s/%d: SSL handshake start", c->addr_rem, c->fd);

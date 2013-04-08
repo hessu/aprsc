@@ -8,6 +8,8 @@
  *	
  */
 
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>

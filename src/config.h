@@ -56,6 +56,13 @@
 #endif
 #endif
 
+/* SCTP? */
+#ifdef HAVE_NETINET_SCTP_H
+#if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
+#define USE_SCTP
+#endif
+#endif
+
 extern int fork_a_daemon;	/* fork a daemon */
 
 extern int dump_requests;	/* print requests */

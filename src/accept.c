@@ -46,6 +46,10 @@
 #include "keyhash.h"
 #include "ssl.h"
 
+#ifdef USE_SCTP
+#include <netinet/sctp.h>
+#endif
+
 /*
  *	The listen_t structure holds data for a currently open
  *	listener. It's allocated when a listener is created
@@ -158,12 +162,12 @@ static void listener_copy_filters(struct listen_t *l, struct listen_config_t *lc
  *	Open the TCP/SCTP listening socket
  */
 
-static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai)
+static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char *which)
 {
 	int arg;
 	int f;
 	
-	hlog(LOG_INFO, "Binding listening TCP socket: %s", l->addr_s);
+	hlog(LOG_INFO, "Binding listening %s socket: %s", which, l->addr_s);
 	
 	if ((f = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
 		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
@@ -193,6 +197,23 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai)
 	l->fd = f;
 	
 	return f;
+}
+
+static int set_sctp_params(struct listen_t *l)
+{
+	struct sctp_event_subscribe subscribe;
+	
+	memset(&subscribe, 0, sizeof(subscribe));
+	
+	subscribe.sctp_data_io_event = 1;
+	subscribe.sctp_association_event = 1;
+	
+	if (setsockopt(l->fd, SOL_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", l->addr_s, strerror(errno));
+		return -1;
+	}
+	
+	return l->fd;
 }
 
 /*
@@ -292,9 +313,20 @@ static int open_listener(struct listen_config_t *lc)
 	    lc->ai->ai_protocol == IPPROTO_UDP) {
 		/* UDP listenting is not quite same as TCP listening.. */
 		i = open_udp_listener(l, lc->ai);
-	} else {
+	} else if (lc->ai->ai_socktype == SOCK_STREAM && lc->ai->ai_protocol == IPPROTO_TCP) {
 		/* TCP listenting... */
-		i = open_tcp_listener(l, lc->ai);
+		i = open_tcp_listener(l, lc->ai, "TCP");
+#ifdef USE_SCTP
+	} else if (lc->ai->ai_socktype == SOCK_SEQPACKET &&
+		   lc->ai->ai_protocol == IPPROTO_SCTP) {
+		i = open_tcp_listener(l, lc->ai, "SCTP");
+		if (i >= 0)
+			i = set_sctp_params(l);
+#endif
+	} else {
+		hlog(LOG_ERR, "Unsupported listener protocol for '%s'", l->name);
+		listener_free(l);
+		return -1;
 	}
 	
 	if (i < 0) {

@@ -948,7 +948,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	} else if (strcasecmp(proto, "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
-#if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
+#ifdef USE_SCTP
 	} else if (strcasecmp(proto, "sctp") == 0) {
 		req.ai_socktype = SOCK_SEQPACKET;
 		req.ai_protocol = IPPROTO_SCTP;

@@ -7,6 +7,7 @@ aprsc is "officially" "supported" on the following platforms:
 * Debian stable (6.0, "squeeze"): i386 and x86_64
 * Ubuntu LTS (10.04, 12.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
+* Debian testing (7.0, "wheezy"): armhf Raspberry Pi (armv6l)
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
 anything newer than that.
@@ -49,6 +50,7 @@ You'll need to figure out the codename of your distribution.  The command
 versions and their codenames:
 
 * Debian 6.0: squeeze
+* Debian 7.0: wheezy
 * Ubuntu 12.04 LTS: precise
 * Ubuntu 10.04 LTS: lucid
 

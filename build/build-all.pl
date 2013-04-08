@@ -15,11 +15,16 @@ my @platforms = (
 	'debian-60-amd64',
 	'debian-70-i386',
 	'debian-70-amd64',
+	'debian-70-armhf',
 	'centos-63-i686',
 	'centos-63-x86_64',
 );
 
 my %platconf = (
+	'debian-70-armhf' => {
+		'novm' => 1,
+		'port' => 10022
+	},
 	'centos-63-i686' => {
 		'dest' => 'centos/6/i386'
 	},
@@ -72,9 +77,12 @@ sub tcp_wait($$)
 	return 0;
 }
 
-sub vm_state($)
+sub vm_state($$)
 {
-	my($vm) = @_;
+	my($dist, $vm) = @_;
+	
+	my $pconf = (defined $platconf{$dist}) ? $platconf{$dist} : {};
+	return "running" if ($pconf->{'novm'});
 	
 	my $state = `$virsh domstate $vm`;
 	
@@ -85,11 +93,14 @@ sub vm_state($)
 	return $state;
 }
 
-sub vm_up($)
+sub vm_up($$)
 {
-	my($vm) = @_;
+	my($dist, $vm) = @_;
 	
-	my $state = vm_state($vm);
+	my $pconf = (defined $platconf{$dist}) ? $platconf{$dist} : {};
+	return if ($pconf->{'novm'});
+	
+	my $state = vm_state($dist, $vm);
 	
 	if ($state eq "shut off") {
 		system "$virsh start $vm";
@@ -110,7 +121,11 @@ sub vm_build($$$)
 	
 	sleep(2);
 	
-	tcp_wait("$vm:22", 30) || die "vm $vm ssh is not accepting connections\n";
+	my $pconf = (defined $platconf{$distr}) ? $platconf{$distr} : {};
+	my $port = 22;
+	$port = $pconf->{'port'} if (defined $pconf->{'port'});
+	
+	tcp_wait("$vm:$port", 30) || die "vm $vm ssh is not accepting connections\n";
 	
 	my $d_tgz = $tgz;
 	$d_tgz =~ s/.*\///;
@@ -192,11 +207,14 @@ sub vm_build_rpm($$$)
 	#system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
 }
 
-sub vm_shutdown($)
+sub vm_shutdown($$)
 {
-	my($vm) = @_;
+	my($dist, $vm) = @_;
 	
-	my $state = vm_state($vm);
+	my $pconf = (defined $platconf{$dist}) ? $platconf{$dist} : {};
+	return if ($pconf->{'novm'});
+	
+	my $state = vm_state($dist, $vm);
 	
 	if ($state eq "running") {
 		system "$virsh shutdown $vm";
@@ -221,13 +239,13 @@ sub build($$)
 	
 	print "Building $plat on $vm:\n";
 	
-	vm_up($vm);
+	vm_up($plat, $vm);
 	if ($plat =~ /centos/) {
 		vm_build_rpm($vm, $plat, $tgz);
 	} else {
 		vm_build($vm, $plat, $tgz);
 	}
-	vm_shutdown($vm);
+	vm_shutdown($plat, $vm);
 }
 
 # main

@@ -392,9 +392,9 @@ int make_uplink(struct uplink_config_t *l)
 	} else if (strcasecmp(l->proto, "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
-#if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
+#ifdef USE_SCTP
 	} else if (strcasecmp(l->proto, "sctp") == 0) {
-		req.ai_socktype = SOCK_SEQPACKET;
+		req.ai_socktype = SOCK_STREAM;
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
@@ -492,9 +492,11 @@ int make_uplink(struct uplink_config_t *l)
 		 * the dupe filters.
 		 */
 #ifdef TCP_NODELAY
-		int arg = 1;
-		if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
-			hlog(LOG_ERR, "Uplink %s: %s: setsockopt(TCP_NODELAY, %d) failed: %s", l->name, addr_s, arg, strerror(errno));
+		if (a->ai_protocol == IPPROTO_TCP) {
+			int arg = 1;
+			if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
+				hlog(LOG_ERR, "Uplink %s: %s: setsockopt(TCP_NODELAY, %d) failed: %s", l->name, addr_s, arg, strerror(errno));
+		}
 #endif
 
 		if (connect(fd, a->ai_addr, a->ai_addrlen) && errno != EINPROGRESS) {

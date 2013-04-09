@@ -829,7 +829,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 #ifdef USE_SCTP
 int client_write_sctp(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	hlog_packet(LOG_DEBUG, p, len, "client_write_sctp %d bytes: ", len);
+	//hlog_packet(LOG_DEBUG, p, len, "client_write_sctp %d bytes: ", len);
 	
 	if (len == 0)
 		return 0;
@@ -837,13 +837,13 @@ int client_write_sctp(struct worker_t *self, struct client_t *c, char *p, int le
 	int i = send(c->fd, p, len-2, 0);
 	
 	if (i < 0) {
-		hlog(LOG_ERR, "SCTP transmit error to %s: %s",
-			c->addr_rem, strerror(errno));
+		hlog(LOG_ERR, "SCTP transmit error to fd %d / %s: %s",
+			c->fd, c->addr_rem, strerror(errno));
 	} else if (i != len -2) {
-		hlog(LOG_ERR, "SCTP transmit incomplete to %s: wrote %d of %d bytes, errno: %s",
-				c->addr_rem, i, len-2, strerror(errno));
+		hlog(LOG_ERR, "SCTP transmit incomplete to fd %d / %s: wrote %d of %d bytes, errno: %s",
+			c->fd, c->addr_rem, i, len-2, strerror(errno));
 	} else {
-		hlog(LOG_DEBUG, "SCTP transmit ok to %s: %d bytes", c->addr_rem, i);
+		//hlog(LOG_DEBUG, "SCTP transmit ok to %s: %d bytes", c->addr_rem, i);
 		c->obuf_wtime = tick;
 	}
 	
@@ -1281,7 +1281,7 @@ static int sctp_readable(struct worker_t *self, struct client_t *c)
 	/* space to receive data */
 	c->ibuf_end = 0;
 	iov.iov_base = c->ibuf;
-	iov.iov_len = c->ibuf_size - 1;
+	iov.iov_len = c->ibuf_size - 3;
 	inmsg.msg_iov = &iov;
 	inmsg.msg_iovlen = 1;
 	/* or control messages */
@@ -1314,9 +1314,11 @@ static int sctp_readable(struct worker_t *self, struct client_t *c)
 		hlog(LOG_DEBUG, "sctp_readable: got MSG_NOTIFICATION");
 		int associd = sctp_rx_notification(c, &inmsg);
 		return 0;
-	} else {
-		hlog_packet(LOG_DEBUG, iov.iov_base, e, "sctp_readable: got data: ");
 	}
+	
+	//hlog_packet(LOG_DEBUG, iov.iov_base, e, "sctp_readable: got data: ");
+	c->ibuf[e++] = '\r';
+	c->ibuf[e++] = '\n';
 	
 	return client_postread(self, c, e);
 }
@@ -1611,7 +1613,8 @@ static void collect_new_clients(struct worker_t *self)
 		 * In case of a live upgrade, this should maybe be skipped, but
 		 * I'll leave it in for now.
 		 */
-		client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
+		if (c->flags & CLFLAGS_INPORT)
+			client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
 		
 		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */
 	}
@@ -1639,7 +1642,6 @@ static void send_keepalives(struct worker_t *self)
 	int len0, len, rc;
 	static const char *monthname[12] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"};
 	time_t w_expire    = tick - sock_write_expire;
-	time_t w_keepalive = tick - keepalive_interval;
 
 	// Example message:
 	// # javAPRSSrvr 3.12b12 1 Mar 2008 15:11:20 GMT T2FINLAND 85.188.1.32:14580
@@ -1675,7 +1677,7 @@ static void send_keepalives(struct worker_t *self)
 		}
 		
 		/* Is it time for keepalive? Also send a keepalive if clock jumped backwards. */
-		if ((c->keepalive <= tick && c->obuf_wtime < w_keepalive)
+		if ((c->keepalive <= tick)
 		    || (c->keepalive > tick + keepalive_interval)) {
 			int flushlevel = c->obuf_flushsize;
 			c->keepalive = tick + keepalive_interval;

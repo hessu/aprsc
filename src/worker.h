@@ -283,6 +283,8 @@ struct client_t {
 	union sockaddr_u addr;
 	struct portaccount_t *portaccount; /* port specific global account accumulator */
 	struct portaccount_t localaccount; /* client connection specific account accumulator */
+	
+	int	ai_protocol;	/* IPPROTO_SCTP, UDP, TCP */
 
 	struct client_udp_t *udpclient;	/* pointer to udp service socket, if available */
 	int    udp_port;		/* client udp port - if client has requested it */

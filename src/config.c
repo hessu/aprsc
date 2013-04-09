@@ -491,9 +491,9 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	if (strcasecmp(argv[2], "udp") == 0) {
 		req.ai_socktype = SOCK_DGRAM;
 		req.ai_protocol = IPPROTO_UDP;
-#if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
+#ifdef USE_SCTP
 	} else if (strcasecmp(argv[2], "sctp") == 0) {
-		req.ai_socktype = SOCK_SEQPACKET;
+		req.ai_socktype = SOCK_STREAM;
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {
@@ -715,7 +715,7 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	if (strcasecmp(argv[3], "tcp") == 0) {
 		// well, do nothing for now.
 	} else if (strcasecmp(argv[3], "udp") == 0) {
-#if defined(SOCK_SEQPACKET) && defined(IPPROTO_SCTP)
+#ifdef USE_SCTP
 	} else if (strcasecmp(argv[3], "sctp") == 0) {
 #endif
 	} else {
@@ -950,7 +950,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		req.ai_protocol = IPPROTO_UDP;
 #ifdef USE_SCTP
 	} else if (strcasecmp(proto, "sctp") == 0) {
-		req.ai_socktype = SOCK_SEQPACKET;
+		req.ai_socktype = SOCK_STREAM;
 		req.ai_protocol = IPPROTO_SCTP;
 #endif
 	} else {

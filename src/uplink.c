@@ -560,6 +560,7 @@ connerr:
 	c->uplink_index = uplink_index;
 	c->fd    = fd;
 	c->addr  = sa;
+	c->ai_protocol = req.ai_protocol;
 	c->state = CSTATE_INIT;
 	/* use the default login handler */
 	c->handler  = & uplink_login_handler;

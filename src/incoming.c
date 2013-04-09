@@ -510,20 +510,41 @@ static int digi_path_drop(char *via_start, char *path_end)
 
 int check_invalid_src_dst(const char *call, int len)
 {
-	const char *p = call;
-	const char *e = call + len;
-	
 	//hlog(LOG_DEBUG, "check_invalid_src_dst: '%.*s'", len, call);
 	
 	if (len < 1 || len > CALLSIGNLEN_MAX)
 		return -1;
 	
-	while (p < e) {
-		/* alphanumeric and - */
-		if ((!isalnum(*p)) && *p != '-')
+	int i = 0;
+	
+	/* go through callsign body */
+	while (i < len && call[i] != '-') {
+		/* alphanumeric */
+		if (!isalnum(call[i]))
 			return -1;
-			
-		p++;
+		
+		i++;
+	}
+	
+	/* we're at end? */
+	if (i == len)
+		return 0;
+	
+	/* We have an SSID. */
+	i++;
+	
+	/* Check SSID length to be between 1 and 2 */
+	if (len - i > 2 || len == i)
+		return -1;
+	
+	/* SSID of 0? */
+	if (call[i] == '0')
+		return -1;
+	
+	while (i < len) {
+		if (!isalnum(call[i]))
+			return -1;
+		i++;
 	}
 	
 	return 0;
@@ -536,43 +557,48 @@ int check_invalid_src_dst(const char *call, int len)
 
 static int check_invalid_path_callsign(const char *call, int len, int after_q)
 {
-	const char *p = call;
-	const char *e = call + len;
+	//hlog(LOG_DEBUG, "check_invalid_src_dst: '%.*s'", len, call);
 	
-	//hlog_packet(LOG_DEBUG, call, len, "check_invalid_path_callsign: ");
+	/* allow a '*' in the end, and don't check for it */
+	if (len > 1 && call[len-1] == '*')
+		len--;
 	
-	/* only check for minimum length first - max length depends on
-	 * if there's a * in the end
-	 */
 	if (len < 1)
 		return -1;
-	
-	while (p < e) {
-		/* alphanumeric and - */
-		/* AND '*' is allowed in the end */
-		if ((!isalnum(*p)) && *p != '-' && !(*p == '*' && p == e-1)) {
-			//hlog(LOG_DEBUG, "check_invalid_path_callsign: invalid char '%c'", *p);
-			return -1;
-		}
 		
-		p++;
-	}
-	
-	if (*(p-1) == '*' && len <= CALLSIGNLEN_MAX+1) {
-		//hlog(LOG_DEBUG, "check_invalid_path_callsign: allowing len %d due to last *", len);
-		return 0;
-	}
-	
-	/* too long? */
-	if (len > CALLSIGNLEN_MAX) {
-		// TODO: more specific test for IPv6 trace address
-		if (after_q && len == 32) {
-			//hlog_packet(LOG_DEBUG, call, len, "check_invalid_path_callsign: ipv6 address: ");
-			return 0;
-		}
-		
-		hlog(LOG_DEBUG, "check_invalid_path_callsign: too long len %d", len);
+	if (len > CALLSIGNLEN_MAX && !(len == 32 && after_q))
 		return -1;
+	
+	int i = 0;
+	
+	/* go through callsign body */
+	while (i < len && call[i] != '-') {
+		/* alphanumeric */
+		if (!isalnum(call[i]))
+			return -1;
+		
+		i++;
+	}
+	
+	/* we're at end? */
+	if (i == len)
+		return 0;
+	
+	/* We have an SSID. */
+	i++;
+	
+	/* Check SSID length to be between 1 and 2 */
+	if (len - i > 2 || len == i)
+		return -1;
+	
+	/* SSID of 0? */
+	if (call[i] == '0')
+		return -1;
+	
+	while (i < len) {
+		if (!isalnum(call[i]))
+			return -1;
+		i++;
 	}
 	
 	return 0;

@@ -77,6 +77,11 @@ my @pkts = (
 	"SRC2>DST,DIGI,qAX,$login:>Packet from unverified login according to qAX",
 	"SRC2>DST,DIGI,TCPXX,qAR,$login:>Packet from unverified login according to TCPXX in path",
 	"SRC2>DST,DIGI,TCPXX*,qAR,$login:>Packet from unverified login according to TCPXX* in path",
+	"SRC-0>DST,DIGI,qAR,$login:>should drop, -0 SSID in srccall",
+	"SRC->DST,DIGI-0,qAR,$login:>should drop, too short SSID in srccall",
+	"SRC-111>DST,DIGI-0,qAR,$login:>should drop, too long SSID in srccall",
+	"SRC>DST-0,DIGI,qAR,$login:>should drop, -0 SSID in dstcall",
+	"SRC>DST,DIGI-0,qAR,$login:>should drop, -0 SSID in viacall",
 );
 
 # send the packets

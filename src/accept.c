@@ -201,6 +201,8 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char
 	return f;
 }
 
+#ifdef USE_SCTP
+
 static int set_sctp_params(struct listen_t *l)
 {
 	struct sctp_event_subscribe subscribe;
@@ -217,6 +219,8 @@ static int set_sctp_params(struct listen_t *l)
 	
 	return l->fd;
 }
+
+#endif
 
 /*
  *	Open the UDP receiving socket

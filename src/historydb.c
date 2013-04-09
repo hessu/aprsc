@@ -12,6 +12,7 @@
 #include <strings.h>
 #include <ctype.h>
 #include <math.h>
+#include <errno.h>
 
 #include "hlog.h"
 #include "worker.h"

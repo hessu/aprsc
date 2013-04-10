@@ -172,6 +172,37 @@ const char *ssl_strerror(int code)
 }
 
 /*
+ *	Clear OpenSSL error queue
+ */
+
+static void ssl_error(void)
+{
+	unsigned long n;
+	char errstr[512];
+	
+	for ( ;; ) {
+		n = ERR_get_error();
+		
+		if (n == 0)
+			break;
+		
+		ERR_error_string_n(n, errstr, sizeof(errstr));
+		errstr[sizeof(errstr)-1] = 0;
+		
+		hlog(LOG_INFO, "Ignoring stale SSL error %d: %s", n, errstr);
+	}
+}
+
+static void ssl_clear_error(void)
+{
+	while (ERR_peek_error()) {
+		ssl_error();
+	}
+	
+	ERR_clear_error();
+}
+
+/*
  *	TrustedQSL custom X.509 certificate objects
  */
 
@@ -733,6 +764,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	to_write = c->obuf_end - c->obuf_start;
 	
 	//hlog(LOG_DEBUG, "ssl_write fd %d of %d bytes", c->fd, to_write);
+	ssl_clear_error();
 	
 	n = SSL_write(c->ssl_con->connection, c->obuf + c->obuf_start, to_write);
 	
@@ -822,6 +854,8 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	int sslerr, err;
 	
 	//hlog(LOG_DEBUG, "ssl_readable fd %d", c->fd);
+	
+	ssl_clear_error();
 	
 	r = SSL_read(c->ssl_con->connection, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 	

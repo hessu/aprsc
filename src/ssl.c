@@ -867,7 +867,8 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 		char ebuf[255];
 		
 		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
-		hlog(LOG_INFO, "ssl_readable fd %d failed with ret %d sslerr %u errno %d: %s (%s)", c->fd, r, sslerr, ebuf, err, ERR_reason_error_string(sslerr));
+		hlog(LOG_INFO, "ssl_readable fd %d failed with ret %d sslerr %d errno %d: %s (%s)",
+			c->fd, r, sslerr, err, ebuf, ERR_reason_error_string(sslerr));
 	}
 	
 	client_close(self, c, err);

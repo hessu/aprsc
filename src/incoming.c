@@ -538,8 +538,10 @@ int check_invalid_src_dst(const char *call, int len)
 		return -1;
 	
 	/* SSID of 0? */
+	/* Is allowed in javaprssrvr
 	if (call[i] == '0')
 		return -1;
+	*/
 	
 	while (i < len) {
 		if (!isalnum(call[i]))

@@ -175,7 +175,7 @@ const char *ssl_strerror(int code)
  *	Clear OpenSSL error queue
  */
 
-static void ssl_error(void)
+static void ssl_error(const char *msg)
 {
 	unsigned long n;
 	char errstr[512];
@@ -189,14 +189,14 @@ static void ssl_error(void)
 		ERR_error_string_n(n, errstr, sizeof(errstr));
 		errstr[sizeof(errstr)-1] = 0;
 		
-		hlog(LOG_INFO, "Ignoring stale SSL error %d: %s", n, errstr);
+		hlog(LOG_INFO, "%s (%d): %s", msg, n, errstr);
 	}
 }
 
 static void ssl_clear_error(void)
 {
 	while (ERR_peek_error()) {
-		ssl_error();
+		ssl_error("Ignoring stale SSL error");
 	}
 	
 	ERR_clear_error();
@@ -757,7 +757,7 @@ fail:
 int ssl_write(struct worker_t *self, struct client_t *c)
 {
 	int n;
-	unsigned long sslerr;
+	int sslerr;
 	int err;
 	int to_write;
 	
@@ -818,7 +818,8 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 		char ebuf[255];
 		
 		ERR_error_string_n(sslerr, ebuf, sizeof(ebuf));
-		hlog(LOG_INFO, "ssl_write fd %d failed with ret %d sslerr %u errno %d: %s (%s)", c->fd, n, sslerr, ebuf, err, ERR_reason_error_string(sslerr));
+		hlog(LOG_INFO, "ssl_write fd %d failed with ret %d sslerr %u errno %d: %s (%s)",
+			c->fd, n, sslerr, err, ebuf, ERR_reason_error_string(sslerr));
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;

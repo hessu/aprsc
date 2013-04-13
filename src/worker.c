@@ -1173,26 +1173,6 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 	
-	/* Worker 0 takes care of reading corepeer UDP sockets and processes the incoming packets. */
-	if (c->state == CSTATE_COREPEER && c->udpclient) {
-		return handle_corepeer_readable(self, c);
-	}
-	
-	if (c->fd < 0) {
-		hlog(LOG_DEBUG, "socket no longer alive, closing (%s)", c->fd, c->addr_rem);
-		client_close(self, c, CLIERR_FD_NUM_INVALID);
-		return -1;
-	}
-	
-#ifdef USE_SCTP
-	if (c->ai_protocol == IPPROTO_SCTP)
-		return sctp_readable(self, c);
-#endif
-#ifdef USE_SSL
-	if (c->ssl_con)
-		return ssl_readable(self, c);
-#endif
-	
 	r = read(c->fd, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
 	
 	if (r == 0) {
@@ -1283,9 +1263,17 @@ static int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 	}
 
 	if (xfd->result & XP_IN) {  /* .. before doing input */
+		/* Is this really necessary any more?
+		if (c->fd < 0) {
+			hlog(LOG_DEBUG, "fd %d: socket no longer alive, closing (%s)", c->fd, c->addr_rem);
+			client_close(self, c, CLIERR_FD_NUM_INVALID);
+			return -1;
+		}
+		*/
+	
 		/* ok, read */
-		if (handle_client_readable(self, c) < 0)
-			return 0;
+		c->handler_client_readable(self, c);
+		/* c might be invalid now, don't touch it */
 	}
 	
 	return 0;
@@ -1436,6 +1424,8 @@ static void collect_new_clients(struct worker_t *self)
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d xfd %p", self->id, c->udpclient->fd, c->xfd);
 			}
 			
+			c->handler_client_readable = &handle_corepeer_readable;
+			
 			continue;
 		}
 		
@@ -1447,13 +1437,22 @@ static void collect_new_clients(struct worker_t *self)
 			shutdown(c->fd, SHUT_RDWR);
 			continue;
 		}
-
+		
+#ifdef USE_SCTP
+		if (c->ai_protcol == IPPROTO_SCTP) {
+			c->handler_client_readable = &sctp_readablee;
+		} else
+#endif
 #ifdef USE_SSL
 		if (c->ssl_con) {
 			hlog(LOG_DEBUG, "collect_new_clients(worker %d): fd %d uses SSL", self->id, c->fd);
-		}
+			c->handler_client_readable = &ssl_readable;
+		} else
 #endif
-	
+		{
+			c->handler_client_readable = &handle_client_readable;
+		}
+
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.
 		 */

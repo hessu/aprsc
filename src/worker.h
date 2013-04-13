@@ -354,7 +354,7 @@ struct client_t {
 	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
 	
 	/* the current handler function for incoming lines */
-	int	(*handler)	(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
+	int	(*handler_line_in)	(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 
 	/* outbound filter chain head */
 	struct filter_t *posdefaultfilters;

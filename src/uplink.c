@@ -227,7 +227,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
 	
-	c->handler = incoming_handler;
+	c->handler_line_in = incoming_handler;
 	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);
@@ -287,7 +287,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	rc = client_write(self, c, buf, len);
 	if (rc < -2) return rc; // the client was destroyed by client_write, don't touch it
 
-	c->handler = uplink_logresp_handler;
+	c->handler_line_in = uplink_logresp_handler;
 	c->state   = CSTATE_LOGRESP;
 	
 	hlog(LOG_INFO, "%s: Connected to server, logging in", c->addr_rem);
@@ -565,7 +565,7 @@ connerr:
 	c->ai_protocol = req.ai_protocol;
 	c->state = CSTATE_INIT;
 	/* use the default login handler */
-	c->handler  = & uplink_login_handler;
+	c->handler_line_in = &uplink_login_handler;
 	c->flags    = l->client_flags;
 	c->keepalive = tick;
 	c->last_read = tick;

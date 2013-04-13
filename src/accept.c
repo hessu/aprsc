@@ -580,7 +580,7 @@ static void peerip_clients_config(void)
 		c->state = CSTATE_COREPEER;
 		c->validated = VALIDATED_WEAK;
 		c->flags = CLFLAGS_UPLINKPORT;
-		c->handler = &incoming_handler;
+		c->handler_line_in = &incoming_handler;
 		memcpy((void *)&c->udpaddr.sa, (void *)pe->ai->ai_addr, pe->ai->ai_addrlen);
 		c->udpaddrlen = pe->ai->ai_addrlen;
 		c->udp_port = pe->remote_port; // remote port
@@ -1131,7 +1131,7 @@ static void do_accept(struct listen_t *l)
 
 	c->state   = CSTATE_LOGIN;
 	/* use the default login handler */
-	c->handler = &login_handler;
+	c->handler_line_in = &login_handler;
 	c->keepalive = tick; /* monotonous time, for timed transmits */
 
 #ifdef USE_SSL
@@ -1333,13 +1333,13 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	
 	if (strcmp(state->valuestring, "connected") == 0) {
 		c->state   = CSTATE_CONNECTED;
-		c->handler = &incoming_handler;
+		c->handler_line_in = &incoming_handler;
 		strncpy(c->username, username->valuestring, sizeof(c->username));
 		c->username[sizeof(c->username)-1] = 0;
 		c->username_len = strlen(c->username);
 	} else if (strcmp(state->valuestring, "login") == 0) {
 		c->state   = CSTATE_LOGIN;
-		c->handler = &login_handler;
+		c->handler_line_in = &login_handler;
 	} else {
 		hlog(LOG_ERR, "Live upgrade: Client %s is in invalid state '%s' (fd %d)", l->addr_s, state->valuestring, l->fd);
 		goto err;

@@ -1094,7 +1094,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		}
 	}
 	
-	c->handler(self, rc, IPPROTO_UDP, c->ibuf, r);
+	c->handler_line_in(self, rc, IPPROTO_UDP, c->ibuf, r);
 	
 	return 0;
 }
@@ -1136,7 +1136,7 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 			  // *s = ch;
 
 			  /* NOTE: handler call CAN destroy the c-> object ! */
-			  if (c->handler(self, c, IPPROTO_TCP, row_start, s - row_start) < 0)
+			  if (c->handler_line_in(self, c, IPPROTO_TCP, row_start, s - row_start) < 0)
 			    return -1;
 			}
 			/* skip the first, just-found part of EOL, which might have been

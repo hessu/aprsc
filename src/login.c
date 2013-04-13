@@ -392,7 +392,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	sanitize_ascii_string(c->filter_s);
 	
 	/* ok, login succeeded, switch handler */
-	c->handler = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
+	c->handler_line_in = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
 	
 	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
 			    username,

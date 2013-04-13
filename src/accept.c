@@ -587,7 +587,7 @@ static void peerip_clients_config(void)
 		c->addr = c->udpaddr;
 		c->udpclient = udpclient;
 		//c->portaccount = l->portaccount;
-		c->keepalive = tick;
+		c->keepalive = tick + keepalive_interval;
 		c->last_read = tick; /* not simulated time */
 		
 		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
@@ -1133,7 +1133,7 @@ static void do_accept(struct listen_t *l)
 	c->state   = CSTATE_LOGIN;
 	/* use the default login handler */
 	c->handler_line_in = &login_handler;
-	c->keepalive = tick; /* monotonous time, for timed transmits */
+	c->keepalive = tick + keepalive_interval;
 
 #ifdef USE_SSL
 	if (l->ssl) {

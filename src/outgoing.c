@@ -32,7 +32,7 @@ static inline void send_single(struct worker_t *self, struct client_t *c, char *
 	else
 		clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0, 0);
 	
-	client_write(self, c, data, len);
+	c->write(self, c, data, len);
 }
 
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)

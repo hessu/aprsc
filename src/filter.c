@@ -2588,7 +2588,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, int in_message, c
 		}
 		p += sprintf(p, "\r\n");
 		/* client can be destroyed here.. */
-		return client_write(self, c, b, (int)(p-b));
+		return c->write(self, c, b, (int)(p-b));
 	}
 	if (*s != ' ') {
 		return filter_command_reply(self, c, in_message, "Filter: Bad input, no space character after filter command");

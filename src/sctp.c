@@ -160,6 +160,8 @@ int sctp_client_write(struct worker_t *self, struct client_t *c, char *p, int le
 	if (len == 0)
 		return 0;
 		
+	clientaccount_add( c, IPPROTO_SCTP, 0, 0, len, 0, 0, 0);
+	
 	int i = send(c->fd, p, len-2, 0);
 	
 	if (i < 0) {

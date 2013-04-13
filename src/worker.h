@@ -355,6 +355,7 @@ struct client_t {
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
+	int	(*write) (struct worker_t *self, struct client_t *c, char *p, int len);
 	
 	int	(*handler_client_readable) (struct worker_t *self, struct client_t *c);
 	int	(*handler_client_writable) (struct worker_t *self, struct client_t *c);

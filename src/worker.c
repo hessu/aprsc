@@ -827,7 +827,7 @@ int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len
 {
 	/* Every packet ends with CRLF, but they are not sent over UDP ! */
 	/* Existing system doesn't send keepalives via UDP.. */
-	var i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
+	int i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
 		    &c->udpaddr.sa, c->udpaddrlen );
 		    
 	if (i < 0) {
@@ -847,41 +847,11 @@ int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len
 }
 
 /*
- *	write data to a client (well, at least put it in the output buffer)
- *	(this is also used with len=0 to flush current buffer)
+ *	Put outgoing data in obuf
  */
 
-int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
+static int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	int i, e;
-
-	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
-	
-	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
-		return udp_client_write(self, c, p, len);
-	}
-	
-	/* Count the number of writes towards this client,  the keepalive
-	   manager monitors this counter to determine if the socket should be
-	   kept in BUFFERED mode, or written immediately every time.
-	   Buffer flushing is done every KEEPALIVE_POLL_FREQ (2) seconds.
-	*/
-	c->obuf_writes++;
-
-	if (len > 0) {
-		/* Here, we only increment the bytes counter. Packets counter
-		 * will be incremented only when we actually transmit a packet
-		 * instead of a keepalive.
-		 */
-		clientaccount_add( c, c->ai_protocol, 0, 0, len, 0, 0, 0);
-	}
-
-#ifdef USE_SCTP
-	if (c->ai_protocol == IPPROTO_SCTP) {
-		return sctp_client_write(self, c, p, len);
-	}
-#endif
-	
 	if (c->obuf_end + len > c->obuf_size) {
 		/* Oops, cannot append the data to the output buffer.
 		 * Check if we can make space for it by moving data
@@ -906,19 +876,64 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 		memcpy((void *)c->obuf + c->obuf_end, p, len);
 	c->obuf_end += len;
 	
-	
+	return 0;
+}
+
+/*
+ *	write data to a client (well, at least put it in the output buffer)
+ *	(this is also used with len=0 to flush current buffer)
+ */
+
 #ifdef USE_SSL
-	if (c->ssl_con) {
-		if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start)))
-			return ssl_write(self, c);
-			
-		/* tell the poller that we have outgoing data */
-		xpoll_outgoing(&self->xp, c->xfd, 1);
-		
-		/* just buffer */
-		return len;
-	}
+static int ssl_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	c->obuf_writes++;
+	
+	if (len > 0)
+		clientaccount_add( c, c->ai_protocol, 0, 0, len, 0, 0, 0);
+	
+	if (client_buffer_outgoing_data(self, c, p, len) == -12)
+		return -12;
+	
+	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start)))
+		return ssl_write(self, c);
+	
+	/* tell the poller that we have outgoing data */
+	xpoll_outgoing(&self->xp, c->xfd, 1);
+	
+	/* just buffer */
+	return len;
+}
 #endif
+
+static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	int i, e;
+	
+	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
+	
+	/* a TCP client with a udp downstream socket? */
+	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
+		return udp_client_write(self, c, p, len);
+	}
+	
+	/* Count the number of writes towards this client,  the keepalive
+	   manager monitors this counter to determine if the socket should be
+	   kept in BUFFERED mode, or written immediately every time.
+	   Buffer flushing is done every KEEPALIVE_POLL_FREQ (2) seconds.
+	*/
+	c->obuf_writes++;
+	
+	if (len > 0) {
+		/* Here, we only increment the bytes counter. Packets counter
+		 * will be incremented only when we actually transmit a packet
+		 * instead of a keepalive.
+		 */
+		clientaccount_add( c, c->ai_protocol, 0, 0, len, 0, 0, 0);
+	}
+	
+	if (client_buffer_outgoing_data(self, c, p, len) == -12)
+		return -12;
 	
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
@@ -994,7 +1009,7 @@ int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ..
 		return -1;
 	}
 	
-	return client_write(self, c, s, i);
+	return c->write(self, c, s, i);
 }
 
 /*
@@ -1278,19 +1293,19 @@ static void worker_classify_client(struct worker_t *self, struct client_t *c)
 	struct client_t **class_prevp = NULL;
 	
 	if (c->flags & CLFLAGS_PORT_RO) {
-		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified readonly", self->id, c->fd);
+		//hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified readonly", self->id, c->fd);
 		class_next = self->clients_ro;
 		class_prevp = &self->clients_ro;
 	} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
-		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified upstream/peer", self->id, c->fd);
+		//hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified upstream/peer", self->id, c->fd);
 		class_next = self->clients_ups;
 		class_prevp = &self->clients_ups;
 	} else if (c->flags & CLFLAGS_DUPEFEED) {
-		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified dupefeed", self->id, c->fd);
+		//hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified dupefeed", self->id, c->fd);
 		class_next = self->clients_dupe;
 		class_prevp = &self->clients_dupe;
 	} else if (c->flags & CLFLAGS_INPORT) {
-		hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified other", self->id, c->fd);
+		//hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified other", self->id, c->fd);
 		class_next = self->clients_other;
 		class_prevp = &self->clients_other;
 	} else {
@@ -1413,6 +1428,7 @@ static void collect_new_clients(struct worker_t *self)
 			}
 			
 			c->handler_client_readable = &handle_corepeer_readable;
+			c->write = &udp_client_write;
 			
 			continue;
 		}
@@ -1430,6 +1446,7 @@ static void collect_new_clients(struct worker_t *self)
 		if (c->ai_protcol == IPPROTO_SCTP) {
 			c->handler_client_readable = &sctp_readable;
 			c->handler_client_writable = &sctp_writable;
+			c->write = &sctp_client_write;
 		} else
 #endif
 #ifdef USE_SSL
@@ -1437,11 +1454,13 @@ static void collect_new_clients(struct worker_t *self)
 			hlog(LOG_DEBUG, "collect_new_clients(worker %d): fd %d uses SSL", self->id, c->fd);
 			c->handler_client_readable = &ssl_readable;
 			c->handler_client_writable = &ssl_writable;
+			c->write = &ssl_client_write;
 		} else
 #endif
 		{
 			c->handler_client_readable = &handle_client_readable;
 			c->handler_client_writable = &handle_client_writable;
+			c->write = &tcp_client_write;
 		}
 
 		/* The new client may end up destroyed right away, never mind it here.
@@ -1526,13 +1545,13 @@ static void send_keepalives(struct worker_t *self)
 
 			c->obuf_flushsize = 0;
 			/* Write out immediately */
-			rc = client_write(self, c, buf, len);
+			rc = c->write(self, c, buf, len);
 			if (rc < -2) continue; // destroyed
 			c->obuf_flushsize = flushlevel;
 		} else {
 			/* just fush if there was anything to write */
 			if (c->ai_protocol == IPPROTO_TCP) {
-				rc = client_write(self, c, buf, 0);
+				rc = c->write(self, c, buf, 0);
 				if (rc < -2) continue; // destroyed..
 			}
 		}

@@ -823,6 +823,29 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	self->client_count--;
 }
 
+int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	/* Every packet ends with CRLF, but they are not sent over UDP ! */
+	/* Existing system doesn't send keepalives via UDP.. */
+	var i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
+		    &c->udpaddr.sa, c->udpaddrlen );
+		    
+	if (i < 0) {
+		hlog(LOG_ERR, "UDP transmit error to %s udp port %d: %s",
+			c->addr_rem, c->udp_port, strerror(errno));
+	} else if (i != len -2) {
+		hlog(LOG_ERR, "UDP transmit incomplete to %s udp port %d: wrote %d of %d bytes, errno: %s",
+			c->addr_rem, c->udp_port, i, len-2, strerror(errno));
+	}
+
+	// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
+
+	if (i > 0)
+		clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0, 0);
+		
+	return i;
+}
+
 /*
  *	write data to a client (well, at least put it in the output buffer)
  *	(this is also used with len=0 to flush current buffer)
@@ -832,41 +855,18 @@ int client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
 	int i, e;
 
+	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
+	
+	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
+		return udp_client_write(self, c, p, len);
+	}
+	
 	/* Count the number of writes towards this client,  the keepalive
 	   manager monitors this counter to determine if the socket should be
 	   kept in BUFFERED mode, or written immediately every time.
 	   Buffer flushing is done every KEEPALIVE_POLL_FREQ (2) seconds.
 	*/
 	c->obuf_writes++;
-
-	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
-
-	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
-		/* Every packet ends with CRLF, but they are not sent over UDP ! */
-		/* Existing system doesn't send keepalives via UDP.. */
-		i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
-			    &c->udpaddr.sa, c->udpaddrlen );
-			    
-		if (i < 0) {
-			hlog(LOG_ERR, "UDP transmit error to %s udp port %d: %s",
-				c->addr_rem, c->udp_port, strerror(errno));
-		} else if (i != len -2) {
-			hlog(LOG_ERR, "UDP transmit incomplete to %s udp port %d: wrote %d of %d bytes, errno: %s",
-				c->addr_rem, c->udp_port, i, len-2, strerror(errno));
-		}
-
-		// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
-
-		if (i > 0)
-			clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0, 0);
-			
-		return i;
-	}
-	
-	// Should this return happen already in the previous block?
-	// Is this a leftover from times before UDP support?
-	if (c->state == CSTATE_UDP || c->state == CSTATE_COREPEER)
-		return 0;
 
 	if (len > 0) {
 		/* Here, we only increment the bytes counter. Packets counter

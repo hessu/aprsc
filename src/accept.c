@@ -202,8 +202,7 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char
 }
 
 #ifdef USE_SCTP
-
-static int set_sctp_params(struct listen_t *l)
+static int sctp_set_listen_params(struct listen_t *l)
 {
 	struct sctp_event_subscribe subscribe;
 	
@@ -219,7 +218,6 @@ static int set_sctp_params(struct listen_t *l)
 	
 	return l->fd;
 }
-
 #endif
 
 /*
@@ -328,7 +326,7 @@ static int open_listener(struct listen_config_t *lc)
 		   lc->ai->ai_protocol == IPPROTO_SCTP) {
 		i = open_tcp_listener(l, lc->ai, "SCTP");
 		if (i >= 0)
-			i = set_sctp_params(l);
+			i = sctp_set_listen_params(l);
 #endif
 	} else {
 		hlog(LOG_ERR, "Unsupported listener protocol for '%s'", l->name);

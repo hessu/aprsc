@@ -837,7 +837,7 @@ int ssl_writable(struct worker_t *self, struct client_t *c)
 	
 	to_write = c->obuf_end - c->obuf_start;
 	
-	//hlog(LOG_DEBUG, "ssl_writeable fd %d, %d available for writing", c->fd, to_write);
+	//hlog(LOG_DEBUG, "ssl_writable fd %d, %d available for writing", c->fd, to_write);
 	
 	/* SSL_write does not appreciate writing a 0-length buffer */
 	if (to_write == 0) {

@@ -139,12 +139,12 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	SCTP socket is now writeable, but we really don't do SCTP buffering yet...
+ *	SCTP socket is now writable, but we really don't do SCTP buffering yet...
  */
 
-int sctp_writeable(struct worker_t *self, struct client_t *c)
+int sctp_writable(struct worker_t *self, struct client_t *c)
 {
-	hlog(LOG_INFO, "sctp_writeable: SCTP tx buffering not implemented, closing socket");
+	hlog(LOG_INFO, "sctp_writable: SCTP tx buffering not implemented, closing socket");
 	client_close(self, c, errno);
 	return -1;
 }

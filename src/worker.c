@@ -1443,7 +1443,7 @@ static void collect_new_clients(struct worker_t *self)
 		}
 		
 #ifdef USE_SCTP
-		if (c->ai_protcol == IPPROTO_SCTP) {
+		if (c->ai_protocol == IPPROTO_SCTP) {
 			c->handler_client_readable = &sctp_readable;
 			c->handler_client_writable = &sctp_writable;
 			c->write = &sctp_client_write;

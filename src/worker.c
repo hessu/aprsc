@@ -1180,8 +1180,6 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 
 /*
  *	handle an event on an fd
- *
- *	TODO: replace the conditional jumping with a 'readable' handler pointer
  */
 
 static int handle_client_readable(struct worker_t *self, struct client_t *c)
@@ -1219,7 +1217,7 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 static int handle_client_writable(struct worker_t *self, struct client_t *c)
 {
 	int r;
-
+	
 	/* TODO: call client_try_write */
 	r = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 	if (r < 0) {

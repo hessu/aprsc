@@ -97,6 +97,7 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 	c->ibuf_end = 0;
 	iov.iov_base = c->ibuf;
 	iov.iov_len = c->ibuf_size - 3;
+	inmsg.msg_flags = 0;
 	inmsg.msg_iov = &iov;
 	inmsg.msg_iovlen = 1;
 	/* or control messages */

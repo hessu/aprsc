@@ -835,7 +835,8 @@ static void accept_sctp(struct listen_t *l)
 	
 	/* space to receive data */
 	iov.iov_base = buf;
-	iov.iov_len = sizeof(buf-1);
+	iov.iov_len = sizeof(buf);
+	inmsg.msg_flags = 0;
 	inmsg.msg_iov = &iov;
 	inmsg.msg_iovlen = 1;
 	/* or control messages */

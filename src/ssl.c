@@ -831,7 +831,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	return -13;
 }
 
-int ssl_writeable(struct worker_t *self, struct client_t *c)
+int ssl_writable(struct worker_t *self, struct client_t *c)
 {
 	int to_write;
 	

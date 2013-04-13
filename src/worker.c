@@ -1198,26 +1198,14 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	client fd is now writeable
- *
- *	TODO: replace ssl/sctp conditional calls with a 'writable' handler pointer
+ *	client fd is now writaable
  */
 
-static int handle_client_writeable(struct worker_t *self, struct client_t *c)
+static int handle_client_writable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 
 	/* TODO: call client_try_write */
-	
-#ifdef USE_SCTP
-	if (c->ai_protocol == IPPROTO_SCTP)
-		return sctp_writeable(self, c);
-#endif
-#ifdef USE_SSL
-	if (c->ssl_con)
-		return ssl_writeable(self, c);
-#endif
-
 	r = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
 	if (r < 0) {
 		if (errno == EINTR || errno == EAGAIN) {
@@ -1257,7 +1245,7 @@ static int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 			xpoll_outgoing(&self->xp, c->xfd, 0);
 			c->obuf_start = c->obuf_end = 0;
 		} else {
-			if (handle_client_writeable(self, c) < 0)
+			if (c->handler_client_writable(self, c) < 0)
 				return 0;
 		}
 	}
@@ -1440,17 +1428,20 @@ static void collect_new_clients(struct worker_t *self)
 		
 #ifdef USE_SCTP
 		if (c->ai_protcol == IPPROTO_SCTP) {
-			c->handler_client_readable = &sctp_readablee;
+			c->handler_client_readable = &sctp_readable;
+			c->handler_client_writable = &sctp_writable;
 		} else
 #endif
 #ifdef USE_SSL
 		if (c->ssl_con) {
 			hlog(LOG_DEBUG, "collect_new_clients(worker %d): fd %d uses SSL", self->id, c->fd);
 			c->handler_client_readable = &ssl_readable;
+			c->handler_client_writable = &ssl_writable;
 		} else
 #endif
 		{
 			c->handler_client_readable = &handle_client_readable;
+			c->handler_client_writable = &handle_client_writable;
 		}
 
 		/* The new client may end up destroyed right away, never mind it here.

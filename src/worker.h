@@ -357,6 +357,7 @@ struct client_t {
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 	
 	int	(*handler_client_readable) (struct worker_t *self, struct client_t *c);
+	int	(*handler_client_writable) (struct worker_t *self, struct client_t *c);
 
 	/* outbound filter chain head */
 	struct filter_t *posdefaultfilters;

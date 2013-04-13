@@ -84,7 +84,7 @@ extern int ssl_validate_peer_cert_phase1(struct client_t *c);
 extern int ssl_validate_peer_cert_phase2(struct client_t *c);
 
 extern int ssl_write(struct worker_t *self, struct client_t *c);
-extern int ssl_writeable(struct worker_t *self, struct client_t *c);
+extern int ssl_writable(struct worker_t *self, struct client_t *c);
 extern int ssl_readable(struct worker_t *self, struct client_t *c);
 
 

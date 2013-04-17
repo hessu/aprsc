@@ -78,7 +78,7 @@ start()
 	[ -x $APRSC ] || exit 5
 	[ -f /opt/aprsc/etc/aprsc.conf ] || exit 6
 	prepare_chroot
-  	ulimit -c unlimited
+	ulimit -c unlimited
 
 	echo -n $"Starting $prog: "
 	$APRSC $DAEMON_OPTS && success || failure

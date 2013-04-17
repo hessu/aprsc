@@ -74,6 +74,7 @@ case "$1" in
 	set -e
 	prepare_chroot
   	check_configuration
+  	ulimit -c unlimited
   	log_daemon_msg "Starting $DESC:" "aprsc"
 	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0

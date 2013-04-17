@@ -980,8 +980,9 @@ function motd_success(data)
 		motd_last = data;
 		$('#motd').html(data);
 		$('#motd').show('fast');
-	} else
+	} else {
 		motd_hide();
+	}
 }
 
 function motd_check()
@@ -994,9 +995,10 @@ function motd_check()
 			success: motd_success,
 			error: motd_hide
 		});
+	} else {
+		motd_hide();
 	}
-		motd_hide();		
-	
+		
 	setTimeout(motd_check, 61000);
 }
 

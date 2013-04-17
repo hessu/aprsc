@@ -41,4 +41,7 @@ const char verstr_features[] =
 #ifdef USE_SSL
 	" ssl"
 #endif
+#ifdef USE_SCTP
+	" sctp"
+#endif
 ;

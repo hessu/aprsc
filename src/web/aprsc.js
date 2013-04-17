@@ -65,7 +65,7 @@ function username_link(s)
 	return '<a href="http://aprs.fi/?call=' + s + '" target="_blank">' + htmlent(s) + "</a>";
 }
 
-function conv_verified(c, k)
+function conv_verified(c)
 {
 	if (c['verified'] == 3)
 		return '<span class="link" onclick="return cert_popup(event, ' + c['fd'] + ');">Cert</span>';
@@ -132,6 +132,9 @@ function lz(i)
 
 function timestr(i)
 {
+	if (i === undefined)
+		 return '';
+	
 	var D = new Date(i*1000);
 	return D.getUTCFullYear() + '-' + lz(D.getUTCMonth()+1) + '-' + lz(D.getUTCDate())
 		+ ' ' + lz(D.getUTCHours()) + ':' + lz(D.getUTCMinutes()) + ':' + lz(D.getUTCSeconds())
@@ -140,6 +143,9 @@ function timestr(i)
 
 function dur_str(i)
 {
+	if (i === undefined)
+		 return '';
+	
 	var t;
 	var s = '';
 	var c = 0;
@@ -219,6 +225,17 @@ var rx_err_strings = {
 	"q_nonval_multi_q_calls": 'Multiple callsigns in Q path from unverified client',
 	"q_i_no_viacall": 'I path has no viacall',
 	"inerr_empty": 'Empty packet'
+};
+
+var keys_server = {
+	// server block
+	'server_id': 'Server ID',
+	'admin': 'Server admin',
+	'software': 'Server software',
+	'software_build_features': 'Software features',
+	'os': 'Operating system',
+	'time_started': 'Server started',
+	'uptime': 'Uptime'
 };
 
 var key_translate = {
@@ -1025,5 +1042,61 @@ function init()
 	update_status();
 	gr_switch('totals.tcp_bytes_rx');
 }
+
+/*
+ *	give a go at using AngularJS
+ */
+
+var app = angular.module('aprsc', []).
+	config(function() {
+		console.log('aprsc module config');
+	}).
+	run(function() {
+		console.log('aprsc module run');
+	});
+
+app.filter('duration', function() { return dur_str; });
+app.filter('datetime', function() { return timestr; });
+app.filter('addr_port', function() {
+	return function (s) {
+		if (s === undefined)
+			return '';
+		
+		return s.substr(s.lastIndexOf(':') + 1);;
+	};
+});
+app.filter('client_verified', function() {
+	return function (c) {
+		if (c === undefined)
+			return '';
+			
+		if (c['verified'] == 3)
+			return 'Cert';
+			
+		if (c['verified'])
+			return 'Yes';
+		
+		return 'No';
+	};
+});
+
+app.controller('aprscCtrl', [ '$scope', '$http', function($scope, $http) {
+	console.log('aprscCtrl init');
+	
+	var order_server = [];
+	for (var i in keys_server)
+		order_server.push(i);
+	$scope.order_server = order_server;
+	$scope.keys_server = keys_server;
+	
+	$http.get('/status.json').success(function(d) {
+		console.log('NG got status');
+		
+		if (d['server'] && d['server']['tick_now'])
+			$scope.server = d['server'];
+			
+		$scope.clients = d['clients'];
+	});
+}]);
 
 //-->

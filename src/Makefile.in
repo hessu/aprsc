@@ -108,7 +108,8 @@ WEBFILES = \
 	src/web/index.html \
 	src/web/favicon.ico \
 	src/web/aprsc-logo2.png \
- 	src/web/excanvas.min.js src/web/jquery.flot.min.js
+ 	src/web/excanvas.min.js src/web/jquery.flot.min.js \
+ 	src/web/angular.min.js
  	
 testinstall:
 	mkdir -p ../tests/web

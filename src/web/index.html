@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html ng-app='aprsc'>
 <head>
 <title>aprsc status</title>
 <meta name="lang" content="en" />
@@ -7,9 +7,10 @@
 <link rel="stylesheet" type="text/css" href="/aprsc.css" />
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 <link rel="shortcut" href="/favicon.ico" type="image/x-icon" />
+<script src="angular.min.js"></script>
 </head>
 
-<body onclick='ttip_hide();'>
+<body onclick='ttip_hide();' ng-controller="aprscCtrl">
 
 <div style='float: right;'><img src="/aprsc-logo2.png" /></div>
 <div class="page_title" id="title"><span id='serverid'></span> aprsc status <span id='upt'></span></div>
@@ -19,6 +20,18 @@
 
 <h3>Server</h3>
 <div id='server'></div>
+
+<h3>NG Server</h3>
+<table ng-show="server.uptime">
+<tr><td>{{ keys_server.server_id }}</td><td>{{ server.server_id }}</td></tr>
+<tr><td>{{ keys_server.admin }}</td><td>{{ server.admin }}</td></tr>
+<tr><td>{{ keys_server.software }}</td><td>{{ server.software }} {{ server.software_version }}</td></tr>
+<tr><td>{{ keys_server.software_build_features }}</td><td>{{ server.software_build_features }}</td></tr>
+<tr><td>{{ keys_server.os }}</td><td>{{ server.os }}</td></tr>
+<tr><td>{{ keys_server.time_started }}</td><td>{{ server.time_started|datetime }}</td></tr>
+<tr><td>{{ keys_server.uptime }}</td><td>{{ server.uptime|duration }}</td></tr>
+</table>
+</div>
 
 <h3>Totals</h3>
 <div style='float: right; clear: right; height: 230px; width: 600px;' id='graph'></div> 
@@ -46,6 +59,20 @@
 <h3>Peers</h3>
 <div id='peers'></div>
 </div>
+
+<h3>NG Clients</h3>
+<table>
+<tr><th>Port</th> <th>Callsign</th> <th>Address</th> <th>Verified</th> <th>Up</th> <th>Last in</th>
+	<th>Software</th> <th>Packets Tx</th> <th>Packets Rx</th>
+	<th>Bytes Tx</th> <th>Bytes Rx</th> <th>Tx/Rx bytes/s</th> <th>OutQ</th>
+	<th>MsgRcpts</th> <th>Filter</th>
+	</tr>
+<tr ng-repeat="c in clients"><td>{{ c.addr_loc|addr_port }}</td>
+	<td>{{ c.username }}</td>
+	<td>{{ c.addr_rem }}</td>
+	<td ng-class="{'0':'red', '1':'green', '2':'green'}[c.verified]">{{ c|client_verified }}</td>
+	</tr>
+</table>
 
 <h3>Clients</h3>
 <div id='clients'></div>

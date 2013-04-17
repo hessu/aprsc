@@ -87,6 +87,7 @@ static struct http_static_t http_static_files[] = {
 	{ "/aprsc-logo2.png", "aprsc-logo2.png" },
 	{ "/excanvas.min.js", "excanvas.min.js" },
 	{ "/jquery.flot.min.js", "jquery.flot.min.js" },
+	{ "/angular.min.js", "angular.min.js" },
 	{ "/motd.html", "motd.html" },
 	{ NULL, NULL }
 };

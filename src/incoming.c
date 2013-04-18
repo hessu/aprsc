@@ -534,7 +534,12 @@ int check_invalid_src_dst(const char *call, int len)
 	i++;
 	
 	/* Check SSID length to be between 1 and 2 */
+	/* javap4 drops these, javap3 allows, consider to drop later
 	if (len - i > 2 || len == i)
+		return -1;
+	*/
+	/* Check SSID length to be at least 1 */
+	if (len == i)
 		return -1;
 	
 	/* SSID of 0? */

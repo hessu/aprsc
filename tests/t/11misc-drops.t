@@ -78,9 +78,10 @@ my @pkts = (
 	"SRC2>DST,DIGI,TCPXX,qAR,$login:>Packet from unverified login according to TCPXX in path",
 	"SRC2>DST,DIGI,TCPXX*,qAR,$login:>Packet from unverified login according to TCPXX* in path",
 	"SRC->DST,DIGI-0,qAR,$login:>should drop, too short SSID in srccall",
-	"SRC-111>DST,DIGI-0,qAR,$login:>should drop, too long SSID in srccall",
-	"EL-DH5FFL>DST,DIGI-0,qAR,$login:>should drop, much too long SSID in srccall",
 	"SRC>DST,DIGI-0,qAR,$login:>should drop, -0 SSID in viacall",
+# javap4 drops these, javap3 allows
+#	"SRC-111>DST,DIGI-0,qAR,$login:>should drop, too long SSID in srccall",
+#	"EL-DH5FFL>DST,DIGI-0,qAR,$login:>should drop, much too long SSID in srccall",
 );
 
 # send the packets

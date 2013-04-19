@@ -12,6 +12,7 @@
  *	parse_qc.c: Process the APRS-IS Q construct
  */
 
+#define _GNU_SOURCE
 #include <string.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -62,7 +63,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	char *qcallv[MAX_Q_CALLS+1];
 	int qcallc;
 	char *p;
-	int serverid_len, username_len;
+	int username_len;
 	int login_in_path = 0;
 	int i, j, l;
 	
@@ -117,8 +118,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 */
 	
 	if (q_start) {
-		serverid_len = strlen(serverid);
-		p = memstr(serverid, q_start+4, path_end);
+		p = memmem(q_start+4, path_end-q_start-4, serverid, serverid_len);
 		if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
 			/* TODO: The reject log should really log the offending packet */
 			hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
@@ -286,7 +286,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	*/
 	
 	// fprintf(stderr, "q_process\n");
-	q_start = memstr(",q", via_start, *path_end);
+	q_start = memmem(via_start, *path_end - via_start, ",q", 2);
 	if (q_start) {
 		// fprintf(stderr, "\tfound existing q construct\n");
 		/* there is an existing Q construct, check for a callsign after it */

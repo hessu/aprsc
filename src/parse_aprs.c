@@ -880,13 +880,13 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	DEBUG_LOG("parse_aprs_object");
 	
 	/* check that the object name ends with either * or _ */
-	if (*(body + 9) != '*' && *(body + 9) != '_') {
+	if (body[9] != '*' && body[9] != '_') {
 		DEBUG_LOG("\tinvalid object kill character");
 		return 0;
 	}
 	
 	/* check that the timestamp ends with a z */
-	if (*(body + 16) != 'z' && *(body + 16) != 'Z') {
+	if (body[16] != 'z' && body[16] != 'Z') {
 		// fprintf(stderr, "\tinvalid object timestamp z character\n");
 		return 0;
 	}
@@ -1155,12 +1155,12 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
                 
 		// Is it perhaps TELEMETRY related "message" ?
 		if ( body[9] == ':' &&
-		     ( memcmp( body+9, ":PARM.", 6 ) == 0 ||
-		       memcmp( body+9, ":UNIT.", 6 ) == 0 ||
-		       memcmp( body+9, ":EQNS.", 6 ) == 0 ||
-		       memcmp( body+9, ":BITS.", 6 ) == 0    )) {
+		     ( memcmp( body+10, "PARM.", 5 ) == 0 ||
+		       memcmp( body+10, "UNIT.", 5 ) == 0 ||
+		       memcmp( body+10, "EQNS.", 5 ) == 0 ||
+		       memcmp( body+10, "BITS.", 5 ) == 0    )) {
 			pb->packettype &= ~T_MESSAGE;
-			pb->packettype |=  T_TELEMETRY;
+			pb->packettype |= T_TELEMETRY;
 			// Fall through to recipient location lookup
 		}
 		
@@ -1178,48 +1178,19 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 		}
 		*/
 
-		// Now find out if the message RECIPIENT address is known
-		// to have some location data ?  Because then we can treat
-		// them the same way in filters as we do those with real
-		// positions..
+		/* Collect message recipient */
 		{
-			/* collect destination callsign of the message */
-			//char keybuf[CALLSIGNLEN_MAX+1];
-			const char *p;
 			int i;
-			//struct history_cell_t *history;
 
-			pb->dstname = body;
-			p = body;
 			for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
-				//keybuf[i] = *p;
 				// the recipient address is space padded
 				// to 9 chars, while our historydb is not.
-				if (*p == 0 || *p == ' ' || *p == ':')
+				if (body[i] == ' ' || body[i] == ':' || body[i] == 0)
 					break;
-				p++;
 			}
-			//keybuf[i] = 0;
-			pb->dstname_len = p - body;
-			//DEBUG_LOG("message: dstname len %d", pb->dstname_len);
 			
-			/*
-			 * This adds a position for a message based on the
-			 * recipient, causing it to match an area filter.
-			 * This is not what javAPRSSrvr does, so let's not do it
-			 * quite yet. Compatibility first, at first.
-			 */
-			/*
-			i = historydb_lookup( keybuf, i, &history );
-			if (i > 0) {
-				pb->lat     = history->lat;
-				pb->lng     = history->lon;
-				pb->cos_lat = history->coslat;
-
-				pb->flags  |= F_HASPOS;
-				return 1;
-			}
-			*/
+			pb->dstname = body;
+			pb->dstname_len = i;
 		}
 		return 0;
 
@@ -1315,19 +1286,17 @@ int parse_aprs(struct pbuf_t *pb)
 
 	pb->packettype = T_ALL;
 
-	/* T_CW detection - this is not really right, I think they're already
-	 * going with DW and EW prefixes
+	/* T_CW detection - CW\d+, DW\d+, EW\d+ callsigns
+	 * only used for our custom t/c CWOP filter which nobody uses
 	 */
-	if (pb->data[0] == 'C' && /* Perhaps CWOP ? */
-	    pb->data[1] == 'W') {
-		const char *s  = pb->data + 2;
-		const char *pe = pb->data + pb->packet_len;
-		for ( ; *s && s < pe ; ++s ) {
-			int c = *s;
-			if (c < '0' || c > '9')
+	const char *d  = pb->data;
+	if (d[1] == 'W' && (d[0] >= 'C' && d[0] <= 'E')) {
+		int i;
+		for (i = 2; i < pb->packet_len; i++) {
+			if (d[i] < '0' || d[i] > '9')
 				break;
 		}
-		if (*s == '>')
+		if (d[i] == '>')
 			pb->packettype |= T_CWOP;
 	}
 	

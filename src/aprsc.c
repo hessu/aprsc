@@ -129,7 +129,7 @@ void parse_cmdline(int argc, char *argv[])
 		case 'y':
 			quit_after_config = 1;
 			break;
-		case 'Z':
+		case 'Z': /* Can be removed in 2.2 or so, switched to an env var */
 			liveupgrade_startup = 1;
 			break;
 		case 'e':
@@ -677,7 +677,6 @@ static void liveupgrade_exec(int argc, char **argv)
 {
 	char **nargv;
 	int i;
-	int need_live_flag = 1;
 	char *bin = argv[0];
 	
 	i = strlen(argv[0]);
@@ -688,26 +687,32 @@ static void liveupgrade_exec(int argc, char **argv)
 	
 	hlog(LOG_NOTICE, "Live upgrade: Executing the new me: %s", bin);
 	
-	/* generate argument list for the new executable, it should be appended with
-	 * -Z (live upgrade startup flag) unless it's there already
-	 */
-	nargv = hmalloc(sizeof(char *) * (argc+2));
+	/* generate argument list for the new executable */
+	nargv = hmalloc(sizeof(char *) * (argc+1));
 	
-	for (i = 0; i < argc; i++) {
-		if (i == 0)
-			nargv[i] = bin;
-		else
-			nargv[i] = argv[i];
-		
-		/* check if the live upgrade flag is already present */
-		if (strcmp(argv[i], "-Z") == 0)
-			need_live_flag = 0;
-	}
+	nargv[0] = bin;
+	for (i = 1; i < argc; i++)
+		nargv[i] = argv[i];
 	
-	if (need_live_flag)
-		nargv[i++] = hstrdup("-Z");
-		
 	nargv[i++] = NULL;
+	
+	/* new method of signalling live upgrade, less confusion */
+#ifdef HAVE_SETENV
+	if (setenv("APRSC_LIVE_UPGRADE", "1", 1) != 0) {
+		hlog(LOG_CRIT, "Live upgrade: setenv(APRSC_LIVE_UPGRADE) failed: %s", strerror(errno));
+		goto err;
+	}
+#else
+#ifdef HAVE_PUTENV
+	if (putenv("APRSC_LIVE_UPGRADE=1") != 0) {
+		hlog(LOG_CRIT, "Live upgrade: putenv(APRSC_LIVE_UPGRADE) failed: %s", strerror(errno));
+		goto err;
+	}
+#else
+	hlog(LOG_CRIT, "Live upgrade: no putenv/setenv available, live upgrade does not work");
+	goto err;
+#endif
+#endif
 	
 	/* close pid file and free the lock on it */
 	closepid();
@@ -719,12 +724,11 @@ static void liveupgrade_exec(int argc, char **argv)
 	execv(bin, nargv);
 	
 	hlog(LOG_CRIT, "liveupgrade: exec failed, I'm still here! %s", strerror(errno));
-	
+
+err:
 	/* free resources in case we'd decide to continue anyway */
 	if (bin != argv[0])
 		hfree(bin);
-	if (need_live_flag)
-		hfree(nargv[i-1]);
 	hfree(nargv);
 }
 
@@ -918,6 +922,12 @@ int main(int argc, char **argv)
 	}
 
 	getitimer(ITIMER_PROF, &itv);
+	
+	/* check if we're doing a live upgrade - need to know this in the
+	 * command line parser already
+	 */
+	if (getenv("APRSC_LIVE_UPGRADE"))
+		liveupgrade_startup = 1;
 	
 	/* command line */
 	parse_cmdline(argc, argv);

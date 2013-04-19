@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 16 + 3 };
+BEGIN { plan tests => 6 + 18 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -68,7 +68,7 @@ $drop = "ST10>APRS,qAR,$login:\@100857z5241.73N/00611.14E_086/002g008t064r000p00
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 # set a filter for second half of the types
-$i_rx->sendline("#filter t/stunw");
+$i_rx->sendline("#filter t/stunwc");
 sleep(0.5);
 
 # status pass, position drop
@@ -89,6 +89,15 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 # message drop, weather pass
 $drop = sprintf("ST17>APRS,qAR,%s::%-9.9s:normal message again{ff", $login, 'DSTC');
 $pass = "ST18>APRS,qAR,$login:\@100857z5241.73N/00611.14E_086/002g008t064r000p000P000h63b10102L810.DsIP-VP";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+# CWOP pass, position drop
+$pass = "CW1234>APRS,qAR,$login:!6028.51N/02505.68E# CWOP pass";
+$drop = "XW1AA>APRS,qAR,$login:!6028.51N/02505.68E# pos drop";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+$pass = "EW1234>APRS,qAR,$login:!6028.51N/02505.68E# CWOP pass";
+$drop = "FW1AB>APRS,qAR,$login:!6028.51N/02505.68E# pos drop";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 ##############################################

@@ -16,7 +16,6 @@
 
 extern const char *inerr_labels[];
 
-extern char *memstr(char *needle, char *haystack, char *haystack_end);
 extern int check_invalid_src_dst(const char *call, int len);
 extern int check_path_calls(const char *via_start, const char *path_end);
 

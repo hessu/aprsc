@@ -14,6 +14,7 @@
 
 #include "ac-hdrs.h"
 
+#define _GNU_SOURCE
 #include <string.h>
 #include <strings.h>
 #include <ctype.h>
@@ -418,45 +419,10 @@ void incoming_flush(struct worker_t *self)
 }
 
 /*
- *	Find a string in a binary buffer
- */
-
-char *memstr(char *needle, char *haystack, char *haystack_end)
-{
-	char *hp = haystack;
-	char *np = needle;
-	char *match_start = NULL;
-	
-	while (hp < haystack_end) {
-		if (*hp == *np) {
-			/* matching... is this the start of a new match? */
-			if (match_start == NULL)
-				match_start = hp;
-			/* increase needle pointer, so we'll check the next char */
-			np++;
-		} else {
-			/* not matching... clear state */
-			match_start = NULL;
-			np = needle;
-		}
-		
-		/* if we've reached the end of the needle, and we have found a match,
-		 * return a pointer to it
-		 */
-		if (*np == 0 && (match_start))
-			return match_start;
-		hp++;
-	}
-	
-	/* out of luck */
-	return NULL;
-}
-
-/*
  *	Find a string in a binary buffer, case insensitive
  */
 
-char *memcasestr(char *needle, char *haystack, char *haystack_end)
+static char *memcasestr(char *needle, char *haystack, char *haystack_end)
 {
 	char *hp = haystack;
 	char *np = needle;
@@ -492,12 +458,12 @@ char *memcasestr(char *needle, char *haystack, char *haystack_end)
  *	packet should be dropped.
  */
 
-static int digi_path_drop(char *via_start, char *path_end)
+static int digi_path_drop(char *via_start, int via_len)
 {
-	if (memstr(",NOGATE", via_start, path_end))
+	if (memmem(via_start, via_len, ",NOGATE", 7))
 		return 1;
 		
-	if (memstr(",RFONLY", via_start, path_end))
+	if (memmem(via_start, via_len, ",RFONLY", 7))
 		return 1;
 		
 	return 0;
@@ -861,17 +827,18 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* if disallow_unverified is enabled, don't allow unverified clients
 	 * to send any packets
 	 */
+	int via_len = path_end - via_start;
 	if (disallow_unverified) {
 		if (!c->validated)
 			return INERR_DISALLOW_UNVERIFIED;
-		if (memstr(",TCPXX", via_start, path_end))
+		if (memmem(via_start, via_len, ",TCPXX", 6))
 			return INERR_DISALLOW_UNVERIFIED_PATH;
 	}
 	
 	/* check if the path contains NOGATE or other signs which tell the
 	 * packet should be dropped
 	 */
-	if (digi_path_drop(via_start, path_end))
+	if (digi_path_drop(via_start, via_len))
 		return INERR_NOGATE;
 	
 	/* check if there are invalid callsigns in the digipeater path before Q */
@@ -881,10 +848,13 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* check for 3rd party packets */
 	if (*(data + 1) == '}') {
 		/* if the 3rd-party packet's header has TCPIP or TCPXX, drop it */
+		/* TODO: only scan against the path, not src/dst */
 		char *party_hdr_end = memchr(data+2, ':', packet_end-data-2);
 		if (party_hdr_end) {
 			/* TCPIP is more likely, test for it first */
-			if ((memstr(",TCPIP", data+2, party_hdr_end)) || (memstr(",TCPXX", data+2, party_hdr_end)) )
+			char *party_path = data + 2;
+			int party_path_len = party_hdr_end - party_path;
+			if ((memmem(party_path, party_path_len, ",TCPIP", 6)) || (memmem(party_path, party_path_len, ",TCPXX", 6)) )
 				return INERR_3RD_PARTY_IP;
 		}
 	}

@@ -49,6 +49,7 @@ char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */
 
 char *serverid;
+int serverid_len;
 char *passcode;
 char *myemail;
 char *myadmin;
@@ -1256,6 +1257,7 @@ int read_config(void)
 		} else {
 			strupr(new_serverid);
 			serverid = new_serverid;
+			serverid_len = strlen(serverid);
 			new_serverid = NULL;
 		}
 	}

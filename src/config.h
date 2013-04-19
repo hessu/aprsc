@@ -97,6 +97,7 @@ extern int quirks_mode;
 extern int verbose;
 
 extern char *serverid;
+extern int serverid_len;
 extern char *passcode;
 extern char *myemail;
 extern char *myadmin;

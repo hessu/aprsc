@@ -226,6 +226,9 @@ if test "$ac_cv_search_clock_gettime" = "-lrt"; then
   LIBRT="-lrt"
 fi
 
+dnl Check for setenv and putenv, some might not have one
+AC_CHECK_FUNCS(setenv putenv)
+
 dnl Check for zlib
 AC_SUBST(LIBZ)
 AC_SEARCH_LIBS([deflate], [z], [

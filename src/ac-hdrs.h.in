@@ -48,6 +48,12 @@
 /* Linux process control prctl.h */
 #undef HAVE_PRCTL_H
 
+/* Define to 1 if you have the `putenv' function. */
+#undef HAVE_PUTENV
+
+/* Define to 1 if you have the `setenv' function. */
+#undef HAVE_SETENV
+
 /* Define to 1 if you have the `socket' function. */
 #undef HAVE_SOCKET
 

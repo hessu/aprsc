@@ -76,7 +76,7 @@ $tx = "$msg_dst-2>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass
 $rx = "$msg_dst-2>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
-sleep(3);
+sleep(1);
 
 # now, transmit a position packet on the receiving filtered port
 $tx = "$msg_dst>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
@@ -102,7 +102,7 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # Another message! With high-value binary content.
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:binary ", $login_tx, $msg_dst);
-for (my $d = 127; $d < 255; $d++) {
+for (my $d = 127; $d <= 255; $d++) {
 	$tx .= chr($d);
 }
 $rx = $tx;

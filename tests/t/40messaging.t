@@ -18,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 9 + 1 + 2 + 2 + 1 + 6 + 4 };
+BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 1 + 6 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -98,6 +98,14 @@ $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:Blää  blåå 日本語{
 $rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:Blää  blåå 日本語{1d", $login_tx, $msg_dst);
 $tx = $enc_utf8->encode($tx);
 $rx = $enc_utf8->encode($rx);
+istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# Another message! With high-value binary content.
+$tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:binary ", $login_tx, $msg_dst);
+for (my $d = 127; $d < 255; $d++) {
+	$tx .= chr($d);
+}
+$rx = $tx;
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # Also, it should pass to another SSID!

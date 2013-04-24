@@ -208,7 +208,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	/* TODO: do not modify incoming stream - make s a const char! */
 	char *e = s + len;
 	*e = 0;
-	hlog(LOG_DEBUG, "%s: login string: '%s' (%d)", c->addr_rem, s, len);
+	hlog_packet(LOG_DEBUG, s, len, "%s: login string: ", c->addr_rem);
 	
 	/* parse to arguments */
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] == '#')

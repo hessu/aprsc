@@ -142,7 +142,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	char *argv[256];
 	char *p;
 	
-	hlog(LOG_INFO, "%s: Uplink server login response: \"%.*s\"", c->addr_rem, len, s);
+	hlog_packet(LOG_INFO, s, len, "%s: Uplink server login response: ", c->addr_rem);
 	
 	/* parse to arguments */
 	/* make it null-terminated for our string processing */
@@ -247,7 +247,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	int argc;
 	char *argv[256];
 
-	hlog(LOG_INFO, "%s: Uplink server software: \"%.*s\"", c->addr_rem, len, s);
+	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {

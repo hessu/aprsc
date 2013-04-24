@@ -307,21 +307,21 @@ int ssl_init(void)
 	ssl_connection_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 	
 	if (ssl_connection_index == -1) {
-		hlog(LOG_ERR, "SSL_get_ex_new_index() failed");
+		ssl_error(LOG_ERR, "SSL_get_ex_new_index for connection");
 		return -1;
 	}
 	
 	ssl_server_conf_index = SSL_CTX_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 	
 	if (ssl_server_conf_index == -1) {
-		hlog(LOG_ERR, "SSL_CTX_get_ex_new_index() failed");
+		ssl_error(LOG_ERR, "SSL_CTX_get_ex_new_index for conf");
 		return -1;
 	}
 	
 	ssl_session_cache_index = SSL_CTX_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 	
 	if (ssl_session_cache_index == -1) {
-		hlog(LOG_ERR, "SSL_CTX_get_ex_new_index() failed");
+		ssl_error(LOG_ERR, "SSL_CTX_get_ex_new_index for session cache");
 		return -1;
 	}
 	
@@ -358,12 +358,12 @@ int ssl_create(struct ssl_t *ssl, void *data)
 	ssl->ctx = SSL_CTX_new(SSLv23_method());
 	
 	if (ssl->ctx == NULL) {
-		hlog(LOG_ERR, "SSL_CTX_new() failed");
+		ssl_error(LOG_ERR, "ssl_create SSL_CTX_new failed");
 		return -1;
 	}
 	
 	if (SSL_CTX_set_ex_data(ssl->ctx, ssl_server_conf_index, data) == 0) {
-		hlog(LOG_ERR, "SSL_CTX_set_ex_data() failed");
+		ssl_error(LOG_ERR, "ssl_create SSL_CTX_set_ex_data failed");
 		return -1;
 	}
 	
@@ -427,7 +427,7 @@ int ssl_create(struct ssl_t *ssl, void *data)
 	SSL_CTX_set_info_callback(ssl->ctx, (void *)ssl_info_callback);
 	
 	if (SSL_CTX_set_cipher_list(ssl->ctx, SSL_DEFAULT_CIPHERS) == 0) {
-		hlog(LOG_ERR, "SSL_CTX_set_cipher_list() failed");
+		ssl_error(LOG_ERR, "ssl_create SSL_CTX_set_cipher_list failed");
 		return -1;
 	}
 	
@@ -523,14 +523,16 @@ int ssl_ca_certificate(struct ssl_t *ssl, const char *cafile, int depth)
 	SSL_CTX_set_verify_depth(ssl->ctx, depth);
 	
 	if (SSL_CTX_load_verify_locations(ssl->ctx, cafile, NULL) == 0) {
-		hlog(LOG_ERR, "SSL_CTX_load_verify_locations(\"%s\") failed", cafile);
+		hlog(LOG_ERR, "Failed to load trusted CA list from \"%s\"", cafile);
+		ssl_error(LOG_ERR, "SSL_CTX_load_verify_locations");
 		return -1;
 	}
 	
 	list = SSL_load_client_CA_file(cafile);
 	
 	if (list == NULL) {
-		hlog(LOG_ERR, "SSL_load_client_CA_file(\"%s\") failed", cafile);
+		hlog(LOG_ERR, "Failed to load client CA file from \"%s\"", cafile);
+		ssl_error(LOG_ERR, "SSL_load_client_CA_file");
 		return -1;
 	}
 	
@@ -560,13 +562,13 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	sc->connection = SSL_new(ssl->ctx);
 	
 	if (sc->connection == NULL) {
-		hlog(LOG_ERR, "SSL_new() failed (fd %d)", c->fd);
+		ssl_error(LOG_ERR, "SSL_new failed");
 		hfree(sc);
 		return -1;
 	}
 	
 	if (SSL_set_fd(sc->connection, c->fd) == 0) {
-		hlog(LOG_ERR, "SSL_set_fd() failed (fd %d)", c->fd);
+		ssl_error(LOG_ERR, "SSL_set_fd failed");
 		SSL_free(sc->connection);
 		hfree(sc);
 		return -1;
@@ -579,7 +581,7 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	}
 	
 	if (SSL_set_ex_data(sc->connection, ssl_connection_index, c) == 0) {
-		hlog(LOG_ERR, "SSL_set_ex_data() failed (fd %d)", c->fd);
+		ssl_error(LOG_ERR, "SSL_set_ex_data failed");
 		SSL_free(sc->connection);
 		hfree(sc);
 		return -1;

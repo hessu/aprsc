@@ -354,7 +354,7 @@ static int open_listener(struct listen_config_t *lc)
 		}
 		
 		if (ssl_certificate(l->ssl, lc->certfile, lc->keyfile)) {
-			hlog(LOG_ERR, "Failed to load SSL certificates for '%s*': %s", lc->name, l->addr_s);
+			hlog(LOG_ERR, "Failed to load SSL key and certificates for '%s*': %s", lc->name, l->addr_s);
 			listener_free(l);
 			return -1;
 		}

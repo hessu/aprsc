@@ -175,7 +175,7 @@ const char *ssl_strerror(int code)
  *	Clear OpenSSL error queue
  */
 
-static void ssl_error(const char *msg)
+static void ssl_error(int level, const char *msg)
 {
 	unsigned long n;
 	char errstr[512];
@@ -189,14 +189,14 @@ static void ssl_error(const char *msg)
 		ERR_error_string_n(n, errstr, sizeof(errstr));
 		errstr[sizeof(errstr)-1] = 0;
 		
-		hlog(LOG_INFO, "%s (%d): %s", msg, n, errstr);
+		hlog(level, "%s (%d): %s", msg, n, errstr);
 	}
 }
 
 static void ssl_clear_error(void)
 {
 	while (ERR_peek_error()) {
-		ssl_error("Ignoring stale SSL error");
+		ssl_error(LOG_INFO, "Ignoring stale SSL error");
 	}
 	
 	ERR_clear_error();
@@ -444,18 +444,21 @@ int ssl_create(struct ssl_t *ssl, void *data)
 int ssl_certificate(struct ssl_t *ssl, const char *certfile, const char *keyfile)
 {
 	if (SSL_CTX_use_certificate_chain_file(ssl->ctx, certfile) == 0) {
-		hlog(LOG_ERR, "SSL_CTX_use_certificate_chain_file(\"%s\") failed", certfile);
+		hlog(LOG_ERR, "Error while loading SSL certificate chain file \"%s\"", certfile);
+		ssl_error(LOG_ERR, "SSL_CTX_use_certificate_chain_file");
 		return -1;
 	}
 	
 	
 	if (SSL_CTX_use_PrivateKey_file(ssl->ctx, keyfile, SSL_FILETYPE_PEM) == 0) {
-		hlog(LOG_ERR, "SSL_CTX_use_PrivateKey_file(\"%s\") failed", keyfile);
+		hlog(LOG_ERR, "Error while loading SSL private key file \"%s\"", keyfile);
+		ssl_error(LOG_ERR, "SSL_CTX_use_PrivateKey_file");
 		return -1;
 	}
 	
 	if (!SSL_CTX_check_private_key(ssl->ctx)) {
-		hlog(LOG_ERR, "SSL private key does (%s) not work with this certificate (%s)", keyfile, certfile);
+		hlog(LOG_ERR, "SSL private key (%s) does not work with this certificate (%s)", keyfile, certfile);
+		ssl_error(LOG_ERR, "SSL_CTX_check_private_key");
 		return -1;
 	}
 	

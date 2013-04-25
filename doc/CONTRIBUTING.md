@@ -104,10 +104,13 @@ Ideas that need some working on
 ----------------------------------
 
 * Getting SCTP support fully functional
-  * Start with client listeners, and client-side perl test cases, Matti
-    will be happy to add support in the aprx igate I'm sure
-* Getting on-line reconfiguration fully functional
-  * Hessu is already working on that, pretty close to completion
+  * Better SCTP parameters like unordered delivery and retry timers
+  * SCTP-specific statistics, including metrics only available for DTLS like packet loss
+  * Peergroups are not done yet
+  * DTLS support
+* Improving SSL support
+  * CRL support, automatic updates of CRLs
+  * SSL-specific statistics
 
 The Issues listed in the github issue tracker are one place to start.
 

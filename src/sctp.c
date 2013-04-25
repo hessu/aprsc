@@ -12,6 +12,48 @@
 
 #include <netinet/sctp.h>
 
+int sctp_set_client_sockopt(struct listen_t *l, struct client_t *c)
+{
+	struct sctp_sndrcvinfo sri;
+	socklen_t len;
+	
+	len = sizeof(sri);
+	if (getsockopt(c->fd, SOL_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, &len) == -1) {
+		hlog(LOG_ERR, "getsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	sri.sinfo_flags = SCTP_UNORDERED;
+	
+	if (setsockopt(c->fd, SOL_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, len) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	return 0;
+}
+
+/*
+ *	Set parameters for a listener socket
+ */
+
+int sctp_set_listen_params(struct listen_t *l)
+{
+	struct sctp_event_subscribe subscribe;
+	
+	memset(&subscribe, 0, sizeof(subscribe));
+	
+	subscribe.sctp_data_io_event = 1;
+	subscribe.sctp_association_event = 1;
+	
+	if (setsockopt(l->fd, SOL_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", l->addr_s, strerror(errno));
+		return -1;
+	}
+	
+	return l->fd;
+}
+
 /*
  *	SCTP notification received
  */
@@ -83,7 +125,6 @@ typedef union {
 /*
  *	handle a readable event on SCTP socket
  */
-
 
 int sctp_readable(struct worker_t *self, struct client_t *c)
 {
@@ -178,5 +219,124 @@ int sctp_client_write(struct worker_t *self, struct client_t *c, char *p, int le
 	
 	return i;
 }
+
+
+#if 0
+
+
+/*
+ *	SCTP notification received
+ */
+
+static int sctp_rx_assoc_change(struct listen_t *l, union sctp_notification *sn)
+{
+	switch (sn->sn_assoc_change.sac_state) {
+	case SCTP_COMM_UP:
+		hlog(LOG_DEBUG, "Received SCTP_COMM_UP");
+		break;
+	case SCTP_COMM_LOST:
+		hlog(LOG_DEBUG, "Received SCTP_COMM_LOST");
+		break;
+	case SCTP_RESTART:
+		hlog(LOG_DEBUG, "Received SCTP_RESTART");
+		break;
+	case SCTP_SHUTDOWN_COMP:
+		hlog(LOG_DEBUG, "Received SCTP_SHUTDOWN_COMP");
+		break;
+	case SCTP_CANT_STR_ASSOC:
+		hlog(LOG_DEBUG, "Received SCTP_CANT_STR_ASSOC");
+		break;
+	default:
+		hlog(LOG_DEBUG, "Received assoc_change %d", sn->sn_assoc_change.sac_state);
+		break;
+	}
+	
+	if (sn->sn_assoc_change.sac_state == SCTP_COMM_UP)
+		return sn->sn_assoc_change.sac_assoc_id;
+	
+	return 0;
+	
+}
+
+static int sctp_rx_notification(struct listen_t *l, struct msghdr *m)
+{
+	union sctp_notification *sn;
+	
+	sn = (union sctp_notification *)m->msg_iov->iov_base;
+	
+	switch(sn->sn_header.sn_type) {
+	case SCTP_SHUTDOWN_EVENT: {
+		struct sctp_shutdown_event *shut;
+		shut = (struct sctp_shutdown_event *)m->msg_iov->iov_base; 
+		hlog(LOG_INFO, "SCTP shutdown on assoc id %d",  shut->sse_assoc_id); 
+		break; 
+	}
+	case SCTP_ASSOC_CHANGE:
+		return sctp_rx_assoc_change(l, sn);
+	};
+	
+	hlog(LOG_ERR, "sctp_rx_notification: Received unexpected notification: %d", sn->sn_header.sn_type);
+	
+	return -1;
+}
+
+/*
+ *	Receive something on an SCTP socket
+ */
+
+
+typedef union {
+	struct sctp_initmsg init;
+	struct sctp_sndrcvinfo sndrcvinfo;
+} _sctp_cmsg_data_t;
+
+typedef union {
+	struct sockaddr_storage ss;
+	struct sockaddr_in v4;
+	struct sockaddr_in6 v6;
+	struct sockaddr sa;
+} sockaddr_storage_t;
+
+static void accept_sctp(struct listen_t *l)
+{
+	int e;
+	struct msghdr inmsg;
+	char incmsg[CMSG_SPACE(sizeof(_sctp_cmsg_data_t))];
+	sockaddr_storage_t msgname;
+	struct iovec iov;
+	char buf[2000];
+	
+	/* space to receive data */
+	iov.iov_base = buf;
+	iov.iov_len = sizeof(buf);
+	inmsg.msg_flags = 0;
+	inmsg.msg_iov = &iov;
+	inmsg.msg_iovlen = 1;
+	/* or control messages */
+	inmsg.msg_control = incmsg;
+	inmsg.msg_controllen = sizeof(incmsg);
+	inmsg.msg_name = &msgname;
+	inmsg.msg_namelen = sizeof(msgname);
+	
+	e = recvmsg(l->fd, &inmsg, MSG_WAITALL);
+	if (e < 0) {
+		if (errno == EAGAIN) {
+			hlog(LOG_DEBUG, "accept_sctp: EAGAIN");
+			return;
+		}
+		
+		hlog(LOG_INFO, "accept_sctp: recvmsg returned %d: %s", e, strerror(errno));
+	}
+	
+	if (inmsg.msg_flags & MSG_NOTIFICATION) {
+		hlog(LOG_DEBUG, "accept_sctp: got MSG_NOTIFICATION");
+		int associd = sctp_rx_notification(l, &inmsg);
+	} else {
+		hlog_packet(LOG_DEBUG, iov.iov_base, e, "accept_sctp: got data: ");
+	}
+	
+}
+#endif
+
 
 #endif

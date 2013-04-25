@@ -45,42 +45,11 @@
 #include "client_heard.h"
 #include "keyhash.h"
 #include "ssl.h"
+#include "sctp.h"
 
 #ifdef USE_SCTP
 #include <netinet/sctp.h>
 #endif
-
-/*
- *	The listen_t structure holds data for a currently open
- *	listener. It's allocated when a listener is created
- *	based on the configuration (listen_config_t).
- */
-
-struct listen_t {
-	struct listen_t *next;
-	struct listen_t **prevp;
-	
-	int id; /* random id */
-	int listener_id; /* hash of protocol and local bound address */
-	int fd;
-	int client_flags;
-	int portnum;
-	int clients_max;
-	int corepeer;
-	int hidden;
-	int ai_protocol;
-
-	struct client_udp_t *udp;
-	struct portaccount_t *portaccount;
-	struct acl_t *acl;
-#ifdef USE_SSL
-	struct ssl_t *ssl;
-#endif
-
-	char *name;
-	char *addr_s;
-	char *filters[10]; // up to 10 filter definitions
-};
 
 static struct listen_t *listen_list;
 
@@ -200,25 +169,6 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char
 	
 	return f;
 }
-
-#ifdef USE_SCTP
-static int sctp_set_listen_params(struct listen_t *l)
-{
-	struct sctp_event_subscribe subscribe;
-	
-	memset(&subscribe, 0, sizeof(subscribe));
-	
-	subscribe.sctp_data_io_event = 1;
-	subscribe.sctp_association_event = 1;
-	
-	if (setsockopt(l->fd, SOL_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
-		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", l->addr_s, strerror(errno));
-		return -1;
-	}
-	
-	return l->fd;
-}
-#endif
 
 /*
  *	Open the UDP receiving socket
@@ -749,121 +699,9 @@ static void accept_udp_recv(struct listen_t *l)
 	}
 }
 
-#ifdef USE_SCTP
-
 /*
- *	SCTP notification received
+ *	Accept a single client
  */
-
-static int sctp_rx_assoc_change(struct listen_t *l, union sctp_notification *sn)
-{
-	switch (sn->sn_assoc_change.sac_state) {
-	case SCTP_COMM_UP:
-		hlog(LOG_DEBUG, "Received SCTP_COMM_UP");
-		break;
-	case SCTP_COMM_LOST:
-		hlog(LOG_DEBUG, "Received SCTP_COMM_LOST");
-		break;
-	case SCTP_RESTART:
-		hlog(LOG_DEBUG, "Received SCTP_RESTART");
-		break;
-	case SCTP_SHUTDOWN_COMP:
-		hlog(LOG_DEBUG, "Received SCTP_SHUTDOWN_COMP");
-		break;
-	case SCTP_CANT_STR_ASSOC:
-		hlog(LOG_DEBUG, "Received SCTP_CANT_STR_ASSOC");
-		break;
-	default:
-		hlog(LOG_DEBUG, "Received assoc_change %d", sn->sn_assoc_change.sac_state);
-		break;
-	}
-	
-	if (sn->sn_assoc_change.sac_state == SCTP_COMM_UP)
-		return sn->sn_assoc_change.sac_assoc_id;
-	
-	return 0;
-	
-}
-
-static int sctp_rx_notification(struct listen_t *l, struct msghdr *m)
-{
-	union sctp_notification *sn;
-	
-	sn = (union sctp_notification *)m->msg_iov->iov_base;
-	
-	switch(sn->sn_header.sn_type) {
-	case SCTP_SHUTDOWN_EVENT: {
-		struct sctp_shutdown_event *shut;
-		shut = (struct sctp_shutdown_event *)m->msg_iov->iov_base; 
-		hlog(LOG_INFO, "SCTP shutdown on assoc id %d",  shut->sse_assoc_id); 
-		break; 
-	}
-	case SCTP_ASSOC_CHANGE:
-		return sctp_rx_assoc_change(l, sn);
-	};
-	
-	hlog(LOG_ERR, "sctp_rx_notification: Received unexpected notification: %d", sn->sn_header.sn_type);
-	
-	return -1;
-}
-
-/*
- *	Receive something on an SCTP socket
- */
-
-
-typedef union {
-	struct sctp_initmsg init;
-	struct sctp_sndrcvinfo sndrcvinfo;
-} _sctp_cmsg_data_t;
-
-typedef union {
-	struct sockaddr_storage ss;
-	struct sockaddr_in v4;
-	struct sockaddr_in6 v6;
-	struct sockaddr sa;
-} sockaddr_storage_t;
-
-static void accept_sctp(struct listen_t *l)
-{
-	int e;
-	struct msghdr inmsg;
-	char incmsg[CMSG_SPACE(sizeof(_sctp_cmsg_data_t))];
-	sockaddr_storage_t msgname;
-	struct iovec iov;
-	char buf[2000];
-	
-	/* space to receive data */
-	iov.iov_base = buf;
-	iov.iov_len = sizeof(buf);
-	inmsg.msg_flags = 0;
-	inmsg.msg_iov = &iov;
-	inmsg.msg_iovlen = 1;
-	/* or control messages */
-	inmsg.msg_control = incmsg;
-	inmsg.msg_controllen = sizeof(incmsg);
-	inmsg.msg_name = &msgname;
-	inmsg.msg_namelen = sizeof(msgname);
-	
-	e = recvmsg(l->fd, &inmsg, MSG_WAITALL);
-	if (e < 0) {
-		if (errno == EAGAIN) {
-			hlog(LOG_DEBUG, "accept_sctp: EAGAIN");
-			return;
-		}
-		
-		hlog(LOG_INFO, "accept_sctp: recvmsg returned %d: %s", e, strerror(errno));
-	}
-	
-	if (inmsg.msg_flags & MSG_NOTIFICATION) {
-		hlog(LOG_DEBUG, "accept_sctp: got MSG_NOTIFICATION");
-		int associd = sctp_rx_notification(l, &inmsg);
-	} else {
-		hlog_packet(LOG_DEBUG, iov.iov_base, e, "accept_sctp: got data: ");
-	}
-	
-}
-#endif
 
 struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *addr_s, union sockaddr_u *sa, unsigned addr_len)
 {
@@ -937,10 +775,9 @@ static int set_client_sockopt(struct listen_t *l, struct client_t *c)
 	}
 
 #ifdef USE_SCTP
-	/* for SCTP clients, no socket options for now */
-	if (l->ai_protocol == IPPROTO_SCTP) {
-		return 0;
-	}
+	/* set socket options specific to SCTP clients */
+	if (l->ai_protocol == IPPROTO_SCTP)
+		return sctp_set_client_sockopt(l, c);
 #endif
 	
 	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past

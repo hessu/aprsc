@@ -82,10 +82,12 @@ struct portaccount_t client_connects_udp = {
   .mutex    = PTHREAD_MUTEX_INITIALIZER,
   .refcount = 99,	/* Global static blocks have extra-high initial refcount */
 };
+#ifdef USE_SCTP
 struct portaccount_t client_connects_sctp = {
   .mutex    = PTHREAD_MUTEX_INITIALIZER,
   .refcount = 99,	/* Global static blocks have extra-high initial refcount */
 };
+#endif
 
 int worker_corepeer_client_count = 0;
 struct client_t *worker_corepeer_clients[MAX_COREPEERS];
@@ -645,50 +647,67 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 		}
 #endif
 	}
-
-	if (l4proto == IPPROTO_UDP) {
-#ifdef HAVE_SYNC_FETCH_AND_ADD
-		__sync_fetch_and_add(&client_connects_udp.rxbytes, rxbytes);
-		__sync_fetch_and_add(&client_connects_udp.txbytes, txbytes);
-		__sync_fetch_and_add(&client_connects_udp.rxpackets, rxpackets);
-		__sync_fetch_and_add(&client_connects_udp.txpackets, txpackets);
-		if (rxdrops) {
-			__sync_fetch_and_add(&client_connects_udp.rxdrops, 1);
-			__sync_fetch_and_add(&client_connects_udp.rxerrs[rxerr], 1);
-		}
-#else
-		// FIXME: MUTEX !! -- this may or may not need locks..
-		client_connects_udp.rxbytes   += rxbytes;
-		client_connects_udp.txbytes   += txbytes;
-		client_connects_udp.rxpackets += rxpackets;
-		client_connects_udp.txpackets += txpackets;
-		if (rxdrops) {
-			client_connects_udp.rxdrops += 1;
-			client_connects_udp.rxerrs[rxerr] += 1;
-		}
+	
+	struct portaccount_t *proto;
+	
+	if (l4proto == IPPROTO_TCP)
+		proto = &client_connects_tcp;
+	else if (l4proto == IPPROTO_UDP)
+		proto = &client_connects_udp;
+#ifdef USE_SCTP
+	else if (l4proto == IPPROTO_SCTP)
+		proto = &client_connects_sctp;
 #endif
-	} else {
+	else
+		return;
+	
 #ifdef HAVE_SYNC_FETCH_AND_ADD
-		__sync_fetch_and_add(&client_connects_tcp.rxbytes, rxbytes);
-		__sync_fetch_and_add(&client_connects_tcp.txbytes, txbytes);
-		__sync_fetch_and_add(&client_connects_tcp.rxpackets, rxpackets);
-		__sync_fetch_and_add(&client_connects_tcp.txpackets, txpackets);
-		if (rxdrops) {
-			__sync_fetch_and_add(&client_connects_tcp.rxdrops, 1);
-			__sync_fetch_and_add(&client_connects_tcp.rxerrs[rxerr], 1);
-		}
-#else
-		// FIXME: MUTEX !! -- this may or may not need locks..
-		client_connects_tcp.rxbytes   += rxbytes;
-		client_connects_tcp.txbytes   += txbytes;
-		client_connects_tcp.rxpackets += rxpackets;
-		client_connects_tcp.txpackets += txpackets;
-		if (rxdrops) {
-			client_connects_tcp.rxdrops += 1;
-			client_connects_tcp.rxerrs[rxerr] += 1;
-		}
-#endif
+	__sync_fetch_and_add(&proto->rxbytes, rxbytes);
+	__sync_fetch_and_add(&proto->txbytes, txbytes);
+	__sync_fetch_and_add(&proto->rxpackets, rxpackets);
+	__sync_fetch_and_add(&proto->txpackets, txpackets);
+	if (rxdrops) {
+		__sync_fetch_and_add(&proto->rxdrops, 1);
+		__sync_fetch_and_add(&proto->rxerrs[rxerr], 1);
 	}
+#else
+	// FIXME: MUTEX !! -- this may or may not need locks..
+	proto->rxbytes   += rxbytes;
+	proto->txbytes   += txbytes;
+	proto->rxpackets += rxpackets;
+	proto->txpackets += txpackets;
+	if (rxdrops) {
+		proto->rxdrops += 1;
+		proto->rxerrs[rxerr] += 1;
+	}
+#endif
+}
+
+static const char *protocol_str(struct client_t *c)
+{
+	static const char unknown[] = "UNKNOWN-PROTOCOL";
+	static const char tcp[] = "TCP";
+	static const char tcp_udp[] = "TCP+UDP";
+	static const char udp[] = "UDP";
+	
+	if (c->ai_protocol == IPPROTO_TCP) {
+		if (c->udp_port)
+			return tcp_udp;
+		
+		return tcp;
+	}
+	
+	if (c->ai_protocol == IPPROTO_UDP)
+		return udp;
+	
+#ifdef USE_SCTP
+	static const char sctp[] = "SCTP";
+	
+	if (c->ai_protocol == IPPROTO_SCTP)
+		return sctp;
+#endif
+	
+	return unknown;
 }
 
 /*
@@ -699,9 +718,12 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
-	hlog( LOG_INFO, "%s %s (%s) closed after %d s: %s, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, worker %d%s%s%s%s",
+	// TODO: log validation status, ssl status, ssl cert info, tcp/sctp
+	
+	hlog( LOG_INFO, "%s %s %s (%s) closed after %d s: %s, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, worker %d%s%s%s%s",
 	      ( (c->flags & CLFLAGS_UPLINKPORT)
 			  ? ((c->state == CSTATE_COREPEER) ? "Peer" : "Uplink") : "Client" ),
+			  	protocol_str(c),
 			  	c->addr_rem,
 			  	((c->username[0]) ? c->username : "?"),
 			  	tick - c->connect_tick,
@@ -1124,7 +1146,7 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 	char *ibuf_end;
 	char *row_start;
 	
-	clientaccount_add(c, IPPROTO_TCP, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
+	clientaccount_add(c, c->ai_protocol, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
 					     byte count is collected.
 					     The incoming_handler() will account
 					     packets. */
@@ -2136,16 +2158,24 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	
 	cJSON_AddNumberToObject(totals, "tcp_bytes_rx", client_connects_tcp.rxbytes);
 	cJSON_AddNumberToObject(totals, "tcp_bytes_tx", client_connects_tcp.txbytes);
-	cJSON_AddNumberToObject(totals, "udp_bytes_rx", client_connects_udp.rxbytes);
-	cJSON_AddNumberToObject(totals, "udp_bytes_tx", client_connects_udp.txbytes);
 	cJSON_AddNumberToObject(totals, "tcp_pkts_rx", client_connects_tcp.rxpackets);
 	cJSON_AddNumberToObject(totals, "tcp_pkts_tx", client_connects_tcp.txpackets);
+	cJSON_AddNumberToObject(totals, "tcp_pkts_ign", client_connects_tcp.rxdrops);
+	cJSON_AddNumberToObject(totals, "udp_bytes_rx", client_connects_udp.rxbytes);
+	cJSON_AddNumberToObject(totals, "udp_bytes_tx", client_connects_udp.txbytes);
 	cJSON_AddNumberToObject(totals, "udp_pkts_rx", client_connects_udp.rxpackets);
 	cJSON_AddNumberToObject(totals, "udp_pkts_tx", client_connects_udp.txpackets);
-	cJSON_AddNumberToObject(totals, "tcp_pkts_ign", client_connects_tcp.rxdrops);
 	cJSON_AddNumberToObject(totals, "udp_pkts_ign", client_connects_udp.rxdrops);
 	json_add_rxerrs(totals, "tcp_rx_errs", client_connects_tcp.rxerrs);
 	json_add_rxerrs(totals, "udp_rx_errs", client_connects_udp.rxerrs);
+#ifdef USE_SCTP
+	cJSON_AddNumberToObject(totals, "sctp_bytes_rx", client_connects_sctp.rxbytes);
+	cJSON_AddNumberToObject(totals, "sctp_bytes_tx", client_connects_sctp.txbytes);
+	cJSON_AddNumberToObject(totals, "sctp_pkts_rx", client_connects_sctp.rxpackets);
+	cJSON_AddNumberToObject(totals, "sctp_pkts_tx", client_connects_sctp.txpackets);
+	cJSON_AddNumberToObject(totals, "sctp_pkts_ign", client_connects_sctp.rxdrops);
+	json_add_rxerrs(totals, "sctp_rx_errs", client_connects_sctp.rxerrs);
+#endif
 
 #ifndef _FOR_VALGRIND_
 	struct cellstatus_t cellst;

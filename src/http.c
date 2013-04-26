@@ -412,7 +412,7 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 	ctx.avail_out = ospace;
 	
 	int ret = deflate(&ctx, Z_FINISH);
-	if (ret != Z_STREAM_END) {
+	if (ret != Z_STREAM_END && ret != Z_OK) {
 		hlog(LOG_ERR, "http_compress_gzip: deflate returned %d instead of Z_STREAM_END", ret);
 		(void)deflateEnd(&ctx);
 		return -1;

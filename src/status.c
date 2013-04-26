@@ -681,11 +681,17 @@ void status_init(void)
 		{ "totals", "tcp_bytes_rx", "c" },
 		{ "totals", "tcp_bytes_tx", "c" },
 		{ "totals", "udp_bytes_rx", "c" },
-		{ "totals", "udp_bytes_tx", "c" }, 
+		{ "totals", "udp_bytes_tx", "c" },
 		{ "totals", "tcp_pkts_rx", "c" },
 		{ "totals", "tcp_pkts_tx", "c" },
 		{ "totals", "udp_pkts_rx", "c" },
 		{ "totals", "udp_pkts_tx", "c" }, 
+#ifdef USE_SCTP		
+		{ "totals", "sctp_bytes_rx", "c" },
+		{ "totals", "sctp_bytes_tx", "c" },
+		{ "totals", "sctp_pkts_rx", "c" },
+		{ "totals", "sctp_pkts_tx", "c" }, 
+#endif
 		{ "dupecheck", "dupes_dropped", "c" },
 		{ "dupecheck", "uniques_out", "c" },
 		{ NULL, NULL }

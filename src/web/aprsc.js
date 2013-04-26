@@ -256,7 +256,11 @@ var key_translate = {
 	'udp_pkts_tx': 'Packets Tx UDP',
 	'udp_pkts_rx': 'Packets Rx UDP',
 	'udp_bytes_tx': 'Bytes Tx UDP',
-	'udp_bytes_rx': 'Bytes Rx UDP'
+	'udp_bytes_rx': 'Bytes Rx UDP',
+	'sctp_pkts_tx': 'Packets Tx SCTP',
+	'sctp_pkts_rx': 'Packets Rx SCTP',
+	'sctp_bytes_tx': 'Bytes Tx SCTP',
+	'sctp_bytes_rx': 'Bytes Rx SCTP'
 };
 
 var key_tooltips = {
@@ -274,7 +278,11 @@ var key_tooltips = {
 	'udp_pkts_tx': 'APRS-IS packets transmitted over UDP',
 	'udp_pkts_rx': 'APRS-IS packets received over UDP',
 	'udp_bytes_tx': 'APRS-IS data transmitted over UDP',
-	'udp_bytes_rx': 'APRS-IS data received over UDP'
+	'udp_bytes_rx': 'APRS-IS data received over UDP',
+	'sctp_pkts_tx': 'APRS-IS packets transmitted over SCTP',
+	'sctp_pkts_rx': 'APRS-IS packets received over SCTP',
+	'sctp_bytes_tx': 'APRS-IS data transmitted over SCTP',
+	'sctp_bytes_rx': 'APRS-IS data received over SCTP'
 };
 
 var val_convert_c = {
@@ -682,7 +690,8 @@ function calc_rate(key, value, no_s)
 var totals_keys = [
 	'clients', 'connects',
 	'tcp_bytes_tx', 'tcp_bytes_rx', 'tcp_pkts_tx', 'tcp_pkts_rx',
-	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx'
+	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx',
+	'sctp_bytes_tx', 'sctp_bytes_rx', 'sctp_pkts_tx', 'sctp_pkts_rx'
 ];
 
 var alarms_visible = 0;
@@ -905,10 +914,14 @@ var graphs = {
 	'totals.tcp_bytes_tx': { 'label': 'Bytes/s Tx, TCP', 'div' : 60 },
 	'totals.udp_bytes_rx': { 'label': 'Bytes/s Rx, UDP', 'div' : 60 },
 	'totals.udp_bytes_tx': { 'label': 'Bytes/s Tx, UDP', 'div' : 60 },
+	'totals.sctp_bytes_rx': { 'label': 'Bytes/s Rx, SCTP', 'div' : 60 },
+	'totals.sctp_bytes_tx': { 'label': 'Bytes/s Tx, SCTP', 'div' : 60 },
 	'totals.tcp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, TCP', 'div' : 60 },
 	'totals.tcp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, TCP', 'div' : 60 },
 	'totals.udp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, UDP', 'div' : 60 },
 	'totals.udp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, UDP', 'div' : 60 },
+	'totals.sctp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, SCTP', 'div' : 60 },
+	'totals.sctp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, SCTP', 'div' : 60 },
 	'dupecheck.dupes_dropped': { 'label': 'Duplicate packets dropped/s', 'div' : 60 },
 	'dupecheck.uniques_out': { 'label': 'Unique packets/s', 'div' : 60 }
 };

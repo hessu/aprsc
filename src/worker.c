@@ -1167,14 +1167,14 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 		if (*s == '\r' || *s == '\n') {
 			/* found EOL */
 			if (s - row_start > 0) {
-			  // int ch = *s;
-			  // *s = 0;
-			  // hlog( LOG_DEBUG, "got: %s\n", row_start );
-			  // *s = ch;
-
-			  /* NOTE: handler call CAN destroy the c-> object ! */
-			  if (c->handler_line_in(self, c, c->ai_protocol, row_start, s - row_start) < 0)
-			    return -1;
+				// int ch = *s;
+				// *s = 0;
+				// hlog( LOG_DEBUG, "got: %s\n", row_start );
+				// *s = ch;
+				
+				/* NOTE: handler call CAN destroy the c-> object ! */
+				if (c->handler_line_in(self, c, c->ai_protocol, row_start, s - row_start) < 0)
+					return -1;
 			}
 			/* skip the first, just-found part of EOL, which might have been
 			 * NULled by the login handler (TODO: make it not NUL it) */

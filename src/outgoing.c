@@ -27,10 +27,13 @@
 
 static inline void send_single(struct worker_t *self, struct client_t *c, char *data, int len)
 {
+	/* if we're going to use the UDP sidechannel, account for UDP, otherwise
+	 * its TCP or SCTP or something.
+	 */
 	if (c->udp_port && c->udpclient)
 		clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0, 0);
 	else
-		clientaccount_add( c, IPPROTO_TCP, 0, 0, 0, 1, 0, 0);
+		clientaccount_add( c, c->ai_protocol, 0, 0, 0, 1, 0, 0);
 	
 	c->write(self, c, data, len);
 }

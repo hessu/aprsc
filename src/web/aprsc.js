@@ -777,7 +777,8 @@ function render(d)
 	if (d['totals']) {
 		var u = d['totals'];
 		for (var i in totals_keys) {
-			u[totals_keys[i]] = calc_rate('totals.' + totals_keys[i], u[totals_keys[i]]);
+			if (u[totals_keys[i]] !== undefined)
+				u[totals_keys[i]] = calc_rate('totals.' + totals_keys[i], u[totals_keys[i]]);
 		}
 		render_block('totals', totals_table, u);
 	}

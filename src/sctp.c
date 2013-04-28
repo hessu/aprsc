@@ -169,7 +169,7 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 	
 	if (inmsg.msg_flags & MSG_NOTIFICATION) {
 		hlog(LOG_DEBUG, "sctp_readable: got MSG_NOTIFICATION");
-		int associd = sctp_rx_notification(c, &inmsg);
+		sctp_rx_notification(c, &inmsg);
 		return 0;
 	}
 	

@@ -17,6 +17,7 @@ int sctp_set_client_sockopt(struct listen_t *l, struct client_t *c)
 	struct sctp_sndrcvinfo sri;
 	socklen_t len;
 	
+	/* default sendmsg() parameters */
 	len = sizeof(sri);
 	if (getsockopt(c->fd, SOL_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, &len) == -1) {
 		hlog(LOG_ERR, "getsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
@@ -27,6 +28,21 @@ int sctp_set_client_sockopt(struct listen_t *l, struct client_t *c)
 	
 	if (setsockopt(c->fd, SOL_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, len) == -1) {
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	/* which notifications do we want? */
+	struct sctp_event_subscribe subscribe;
+	
+	memset(&subscribe, 0, sizeof(subscribe));
+	
+	subscribe.sctp_address_event = 1;
+	subscribe.sctp_send_failure_event = 1;
+	subscribe.sctp_peer_error_event = 1;
+	subscribe.sctp_partial_delivery_event = 1;
+	
+	if (setsockopt(c->fd, SOL_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
 	

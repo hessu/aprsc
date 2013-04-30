@@ -1,5 +1,6 @@
 
 #include "config.h"
+#include "hmalloc.h"
 #include "hlog.h"
 #include "sctp.h"
 #include "worker.h"
@@ -12,7 +13,7 @@
 
 #include <netinet/sctp.h>
 
-int sctp_set_client_sockopt(struct listen_t *l, struct client_t *c)
+int sctp_set_client_sockopt(struct client_t *c)
 {
 	struct sctp_sndrcvinfo sri;
 	socklen_t len;
@@ -36,6 +37,7 @@ int sctp_set_client_sockopt(struct listen_t *l, struct client_t *c)
 	
 	memset(&subscribe, 0, sizeof(subscribe));
 	
+	subscribe.sctp_association_event = 1;
 	subscribe.sctp_address_event = 1;
 	subscribe.sctp_send_failure_event = 1;
 	subscribe.sctp_peer_error_event = 1;
@@ -93,12 +95,46 @@ static int sctp_rx_assoc_change(struct client_t *c, union sctp_notification *sn)
 		hlog(LOG_DEBUG, "Received SCTP_CANT_STR_ASSOC");
 		break;
 	default:
-		hlog(LOG_DEBUG, "Received assoc_change %d", sn->sn_assoc_change.sac_state);
+		hlog(LOG_DEBUG, "SCTP Received unexpected assoc_change %d", sn->sn_assoc_change.sac_state);
 		break;
 	}
 	
 	if (sn->sn_assoc_change.sac_state == SCTP_COMM_UP)
 		return sn->sn_assoc_change.sac_assoc_id;
+	
+	return 0;
+	
+}
+
+static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification *sn)
+{
+	char *addr_s = strsockaddr((struct sockaddr *)&sn->sn_paddr_change.spc_aaddr, sizeof(sn->sn_paddr_change.spc_aaddr));
+	
+	switch (sn->sn_paddr_change.spc_state) {
+	case SCTP_ADDR_AVAILABLE:
+		hlog(LOG_DEBUG, "Received SCTP_ADDR_AVAILABLE: %s", addr_s);
+		break;
+	case SCTP_ADDR_UNREACHABLE:
+		hlog(LOG_DEBUG, "Received SCTP_ADDR_UNREACHABLE: %s", addr_s);
+		break;
+	case SCTP_ADDR_REMOVED:
+		hlog(LOG_DEBUG, "Received SCTP_ADDR_REMOVED: %s", addr_s);
+		break;
+	case SCTP_ADDR_ADDED:
+		hlog(LOG_DEBUG, "Received SCTP_ADDR_ADDED: %s", addr_s);
+		break;
+	case SCTP_ADDR_MADE_PRIM:
+		hlog(LOG_DEBUG, "Received SCTP_ADDR_MADE_PRIM: %s", addr_s);
+		break;
+	case SCTP_ADDR_CONFIRMED:
+		hlog(LOG_DEBUG, "Received SCTP_ADDR_CONFIRMED: %s", addr_s);
+		break;
+	default:
+		hlog(LOG_DEBUG, "SCTP Received unexpected peer_addr_change %d: %s", sn->sn_assoc_change.sac_state, addr_s);
+		break;
+	}
+	
+	hfree(addr_s);
 	
 	return 0;
 	
@@ -119,6 +155,8 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 	}
 	case SCTP_ASSOC_CHANGE:
 		return sctp_rx_assoc_change(c, sn);
+	case SCTP_PEER_ADDR_CHANGE:
+		return sctp_rx_peer_addr_change(c, sn);
 	};
 	
 	hlog(LOG_ERR, "sctp_rx_notification: Received unexpected notification: %d", sn->sn_header.sn_type);

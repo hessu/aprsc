@@ -18,6 +18,7 @@
 #include <time.h>
 #include <stdlib.h>
 #include <netinet/in.h>
+#include <fcntl.h>
 
 #include "worker.h"
 
@@ -453,6 +454,67 @@ struct client_t *pseudoclient_setup(int portnum)
 	//hlog(LOG_DEBUG, "pseudoclient setup %p: fd %d name %s addr_loc %s udpclient %p", c, c->fd, c->username, c->addr_loc, c->udpclient);
 	
 	return c;
+}
+
+/*
+ *	set client socket options, return -1 on serious errors, just log smaller ones
+ */
+
+int set_client_sockopt(struct client_t *c)
+{
+	/* set non-blocking mode */
+	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
+		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+
+#ifdef USE_SCTP
+	/* set socket options specific to SCTP clients */
+	if (c->ai_protocol == IPPROTO_SCTP)
+		return sctp_set_client_sockopt(c);
+#endif
+	
+	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
+	 * the dupe filters.
+	 */
+#ifdef TCP_NODELAY
+	int arg = 1;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
+		hlog(LOG_ERR, "%s - setsockopt(TCP_NODELAY, %d) failed: %s", c->addr_rem, arg, strerror(errno));
+#endif
+
+	/* Set up TCP keepalives, so that we'll notice idle clients.
+	 * I'm not sure if this is absolutely required, since we send
+	 * keepalive datetime messages every 30 seconds from the application,
+	 * but it can't hurt.
+	 */
+#ifdef SO_KEEPALIVE
+	int keepalive_arg;
+#ifdef TCP_KEEPIDLE
+	/* start sending keepalives after socket has been idle for 10 minutes */
+	keepalive_arg = 10*60;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - setsockopt(TCP_KEEPIDLE, %d) failed: %s", c->addr_rem, keepalive_arg, strerror(errno));
+#endif
+#ifdef TCP_KEEPINTVL
+	/* send keepalive probes every 20 seconds after the idle time has passed */
+	keepalive_arg = 20;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - setsockopt(TCP_KEEPINTVL, %d) failed: %s", c->addr_rem, keepalive_arg, strerror(errno));
+#endif
+#ifdef TCP_KEEPCNT
+	/* send 3 probes before giving up */
+	keepalive_arg = 3;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - setsockopt(TCP_KEEPCNT, %d) failed: %s", c->addr_rem, keepalive_arg, strerror(errno));
+#endif
+	/* enable TCP keepalives */
+	keepalive_arg = 1;
+	if (setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
+		hlog(LOG_ERR, "%s - setsockopt(TCP_KEEPALIVE, %d) failed: %s", c->addr_rem, keepalive_arg, strerror(errno));
+#endif
+	
+	return 0;
 }
 
 /*

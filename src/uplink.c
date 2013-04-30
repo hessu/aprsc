@@ -599,6 +599,9 @@ connerr:
 	hfree(s);
 
 	hlog(LOG_INFO, "Uplink %s: %s: Connection established on fd %d using source address %s", l->name, c->addr_rem, c->fd, c->addr_loc);
+	
+	if (set_client_sockopt(c) < 0)
+		goto err;
 
 	uplink_client[uplink_index] = c;
 	l->state = UPLINK_ST_CONNECTED;

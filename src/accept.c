@@ -763,67 +763,6 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 }
 
 /*
- *	set client socket options, return -1 on serious errors, just log smaller ones
- */
-
-static int set_client_sockopt(struct listen_t *l, struct client_t *c)
-{
-	/* set non-blocking mode */
-	if (fcntl(c->fd, F_SETFL, O_NONBLOCK)) {
-		hlog(LOG_ERR, "%s - Failed to set non-blocking mode on socket: %s", l->addr_s, strerror(errno));
-		return -1;
-	}
-
-#ifdef USE_SCTP
-	/* set socket options specific to SCTP clients */
-	if (l->ai_protocol == IPPROTO_SCTP)
-		return sctp_set_client_sockopt(l, c);
-#endif
-	
-	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
-	 * the dupe filters.
-	 */
-#ifdef TCP_NODELAY
-	int arg = 1;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_NODELAY, %d) failed: %s", l->addr_s, arg, strerror(errno));
-#endif
-
-	/* Set up TCP keepalives, so that we'll notice idle clients.
-	 * I'm not sure if this is absolutely required, since we send
-	 * keepalive datetime messages every 30 seconds from the application,
-	 * but it can't hurt.
-	 */
-#ifdef SO_KEEPALIVE
-	int keepalive_arg;
-#ifdef TCP_KEEPIDLE
-	/* start sending keepalives after socket has been idle for 10 minutes */
-	keepalive_arg = 10*60;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPIDLE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPIDLE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-#ifdef TCP_KEEPINTVL
-	/* send keepalive probes every 20 seconds after the idle time has passed */
-	keepalive_arg = 20;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPINTVL, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPINTVL, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-#ifdef TCP_KEEPCNT
-	/* send 3 probes before giving up */
-	keepalive_arg = 3;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_KEEPCNT, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPCNT, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-	/* enable TCP keepalives */
-	keepalive_arg = 1;
-	if (setsockopt(c->fd, SOL_SOCKET, SO_KEEPALIVE, (void *)&keepalive_arg, sizeof(keepalive_arg)))
-		hlog(LOG_ERR, "%s - Accept: setsockopt(TCP_KEEPALIVE, %d) failed: %s", l->addr_s, keepalive_arg, strerror(errno));
-#endif
-	
-	return 0;
-}
-
-/*
  *	Pick next worker to feed a client to
  */
 
@@ -985,7 +924,7 @@ static void do_accept(struct listen_t *l)
 	hlog(LOG_DEBUG, "%s - Accepted client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
 	/* set client socket options, return -1 on serious errors */
-	if (set_client_sockopt(l, c) != 0)
+	if (set_client_sockopt(c) != 0)
 		goto err;
 	
 	/* ok, found it... lock the new client queue and pass the client */
@@ -1266,7 +1205,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	
 	/* set client socket options, return -1 on serious errors */
-	if (set_client_sockopt(l, c) != 0)
+	if (set_client_sockopt(c) != 0)
 		goto err;
 	
 	/* Add the client to the client list. */

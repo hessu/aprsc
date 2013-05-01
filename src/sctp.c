@@ -112,25 +112,26 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 	switch (sn->sn_paddr_change.spc_state) {
 	case SCTP_ADDR_AVAILABLE:
-		hlog(LOG_DEBUG, "Received SCTP_ADDR_AVAILABLE: %s", addr_s);
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_AVAILABLE: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_UNREACHABLE:
-		hlog(LOG_DEBUG, "Received SCTP_ADDR_UNREACHABLE: %s", addr_s);
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_UNREACHABLE: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_REMOVED:
-		hlog(LOG_DEBUG, "Received SCTP_ADDR_REMOVED: %s", addr_s);
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_REMOVED: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_ADDED:
-		hlog(LOG_DEBUG, "Received SCTP_ADDR_ADDED: %s", addr_s);
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_ADDED: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_MADE_PRIM:
-		hlog(LOG_DEBUG, "Received SCTP_ADDR_MADE_PRIM: %s", addr_s);
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_MADE_PRIM: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_CONFIRMED:
-		hlog(LOG_DEBUG, "Received SCTP_ADDR_CONFIRMED: %s", addr_s);
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_CONFIRMED: %s", c->addr_rem, c->username, addr_s);
 		break;
 	default:
-		hlog(LOG_DEBUG, "SCTP Received unexpected peer_addr_change %d: %s", sn->sn_assoc_change.sac_state, addr_s);
+		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected peer_addr_change %d: %s",
+			c->addr_rem, c->username, sn->sn_assoc_change.sac_state, addr_s);
 		break;
 	}
 	
@@ -168,7 +169,8 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 		return sctp_rx_send_failed(c, sn);
 	};
 	
-	hlog(LOG_ERR, "sctp_rx_notification: Received unexpected notification: %d", sn->sn_header.sn_type);
+	hlog(LOG_ERR, "%s/%s: sctp_rx_notification: Received unexpected notification: %d",
+		c->addr_rem, c->username, sn->sn_header.sn_type);
 	
 	return -1;
 }

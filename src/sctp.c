@@ -80,22 +80,22 @@ static int sctp_rx_assoc_change(struct client_t *c, union sctp_notification *sn)
 {
 	switch (sn->sn_assoc_change.sac_state) {
 	case SCTP_COMM_UP:
-		hlog(LOG_DEBUG, "Received SCTP_COMM_UP");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_COMM_UP", c->addr_rem, c->username);
 		break;
 	case SCTP_COMM_LOST:
-		hlog(LOG_DEBUG, "Received SCTP_COMM_LOST");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_COMM_LOST", c->addr_rem, c->username);
 		break;
 	case SCTP_RESTART:
-		hlog(LOG_DEBUG, "Received SCTP_RESTART");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_RESTART", c->addr_rem, c->username);
 		break;
 	case SCTP_SHUTDOWN_COMP:
-		hlog(LOG_DEBUG, "Received SCTP_SHUTDOWN_COMP");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_SHUTDOWN_COMP", c->addr_rem, c->username);
 		break;
 	case SCTP_CANT_STR_ASSOC:
-		hlog(LOG_DEBUG, "Received SCTP_CANT_STR_ASSOC");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_CANT_STR_ASSOC", c->addr_rem, c->username);
 		break;
 	default:
-		hlog(LOG_DEBUG, "SCTP Received unexpected assoc_change %d", sn->sn_assoc_change.sac_state);
+		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected assoc_change %d", c->addr_rem, c->username, sn->sn_assoc_change.sac_state);
 		break;
 	}
 	

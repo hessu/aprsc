@@ -140,6 +140,13 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 }
 
+static int sctp_rx_send_failed(struct client_t *c, union sctp_notification *sn)
+{
+	hlog(LOG_DEBUG, "%s/%s: SCTP send failed", c->addr_rem, c->username);
+	
+	return 0;
+}
+
 static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 {
 	union sctp_notification *sn;
@@ -157,6 +164,8 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 		return sctp_rx_assoc_change(c, sn);
 	case SCTP_PEER_ADDR_CHANGE:
 		return sctp_rx_peer_addr_change(c, sn);
+	case SCTP_SEND_FAILED:
+		return sctp_rx_send_failed(c, sn);
 	};
 	
 	hlog(LOG_ERR, "sctp_rx_notification: Received unexpected notification: %d", sn->sn_header.sn_type);

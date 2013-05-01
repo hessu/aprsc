@@ -37,6 +37,7 @@ int sctp_set_client_sockopt(struct client_t *c)
 	
 	memset(&subscribe, 0, sizeof(subscribe));
 	
+	subscribe.sctp_shutdown_event = 1;
 	subscribe.sctp_association_event = 1;
 	subscribe.sctp_address_event = 1;
 	subscribe.sctp_send_failure_event = 1;
@@ -163,6 +164,9 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 		return 0;
 	case SCTP_REMOTE_ERROR:
 		hlog(LOG_DEBUG, "%s/%s: SCTP remote error", c->addr_rem, c->username);
+		return 0;
+	case SCTP_PARTIAL_DELIVERY_EVENT:
+		hlog(LOG_DEBUG, "%s/%s: SCTP partial delivery event", c->addr_rem, c->username);
 		return 0;
 	};
 	

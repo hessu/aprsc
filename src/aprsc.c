@@ -664,7 +664,7 @@ void version_report(const char *state)
 	ai = NULL;
 	i = getaddrinfo(s, NULL, &hints, &ai);
 	if (i != 0)
-		hlog(LOG_INFO, "DNS lookup of aprsc.he.fi failed: %s", gai_strerror(i));
+		hlog(LOG_DEBUG, "DNS lookup of aprsc.he.fi failed: %s", gai_strerror(i));
 	if (ai)
 		freeaddrinfo(ai);
 }

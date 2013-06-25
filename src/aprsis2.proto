@@ -1,4 +1,9 @@
 
+message ServerSignature {
+	required string app_name = 3;
+	required string app_version = 4;
+}
+
 message LoginRequest {
 	required string username = 1; // callsign-SSID
 	optional string password = 2;
@@ -9,9 +14,9 @@ message LoginRequest {
 
 enum VerificationStatus {
 	NONE = 0;
-	PASSCODE = 1;
-	PASSWORD = 2;
-	CERT = 3;
+	WEAK = 1;
+	MEDIUM = 2;
+	STRONG = 3;
 }
 
 enum LoginResult {

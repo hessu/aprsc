@@ -341,6 +341,7 @@ struct client_t {
 #define CLFLAGS_CLIENTONLY     0x800 /* Client connected on client-only port */
 #define CLFLAGS_IGATE          0x1000 /* Igate port */
 #define CLFLAGS_UPLINKMULTI    0x2000 /* Allow multiple parallel outgoing connections */
+#define CLFLAGS_IS2            0x4000 /* IS2 Protocol Buffers */
 
 #define VALIDATED_WEAK         1 /* client validated with passcode */
 #define VALIDATED_STRONG       3 /* client validated with SSL certificate */

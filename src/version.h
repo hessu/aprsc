@@ -16,6 +16,7 @@
 
 #define APRSC_TOCALL "APSC20"
 
+extern const char verstr_progname[];
 extern const char version_build[];
 extern const char verstr[];
 extern const char verstr_aprsis[];

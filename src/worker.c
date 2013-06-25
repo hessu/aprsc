@@ -37,7 +37,7 @@
 #include "version.h"
 #include "status.h"
 #include "sctp.h"
-
+#include "aprsis2.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by NTP */
 time_t tick;	/* monotonous clock, may or may not be wallclock */
@@ -1554,8 +1554,12 @@ static void collect_new_clients(struct worker_t *self)
 		 * In case of a live upgrade, this should maybe be skipped, but
 		 * I'll leave it in for now.
 		 */
-		if (c->flags & CLFLAGS_INPORT)
-			client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
+		if (c->flags & CLFLAGS_INPORT) {
+			if (c->flags & CLFLAGS_IS2)
+				is2_out_server_signature(self, c);
+			else
+				client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
+		}
 		
 		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */
 	}

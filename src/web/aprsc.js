@@ -1087,12 +1087,12 @@ function init()
 			'from': from,
 			'to': to
 		};
-		$('#g_zoom_in').show();
+		$('#g_zoom_in').removeAttr('disabled');
 	});
 	$('#graph').bind('plotunselected', function(event,ranges) {
 		console.log("plotunselected");
 		range_selected = undefined;
-		$('#g_zoom_in').hide();
+		$('#g_zoom_in').attr("disabled", "disabled");
 	});
 }
 

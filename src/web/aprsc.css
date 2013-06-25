@@ -11,8 +11,9 @@ body {
 .rxerr_red { color: #ff5370; cursor: pointer; }
 .link { color: #0000ff; cursor: pointer; }
 /* show/hide buttons */
-.show { color: #0000ff; cursor: pointer; }
-.hide { color: #0000ff; cursor: pointer; display: none; }
+.link { color: #0000ff; }
+.show { cursor: pointer; }
+.hide { cursor: pointer; display: none; }
 
 div.page_title {
 	color: #000;
@@ -21,6 +22,7 @@ div.page_title {
 	font-weight: bold;
 }
 
+#graph { cursor: pointer; }
 
 table {
 }
@@ -96,4 +98,10 @@ div#dupecheck_more {
 }
 
 div#motd { display: none; }
+
+/* buttons */
+
+button {
+	padding: 5px;
+}
 

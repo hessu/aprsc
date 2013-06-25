@@ -913,23 +913,36 @@ function graph_fill(cdata, opts)
 	$.plot($('#graph'), graph_data, graph_opt);
 }
 
+var zoomed_in = false;
 function graphZoom(zoom_in)
 {
 	console.log("graphZoom");
 	
 	if (range_selected && zoom_in) {
+		zoomed_in = true;
 		graph_opt.xaxis.min = range_selected.from;
 		graph_opt.xaxis.max = range_selected.to;
 	} else {
+		zoomed_in = false;
 		graph_opt.xaxis.min = null;
 		graph_opt.xaxis.max = null;
 	}
 	
-	//_o.series.points.show = (range && (range.to - range.from < 50));
+	update_buttons();
 	
-	$.plot($('#graph'), graph_data, graph_opt);
+	var p = $.plot($('#graph'), graph_data, graph_opt);
+	
+	if (range_selected)
+		p.setSelection({ xaxis: { from: range_selected.from, to: range_selected.to }});
 }
 
+function update_buttons()
+{
+	if (zoomed_in)
+		$('#g_zoom_out').show();
+	else
+		$('#g_zoom_out').hide();
+}
 
 var graphs = {
 	'totals.clients': { 'label': 'Clients allocated' },
@@ -997,6 +1010,10 @@ function load_graph()
 function gr_switch(id)
 {
 	graph_selected = id;
+	range_selected = false;
+	zoomed_in = false;
+	$('#graph').trigger('plotunselected');
+	update_buttons();
 	load_graph();
 }
 
@@ -1070,10 +1087,12 @@ function init()
 			'from': from,
 			'to': to
 		};
+		$('#g_zoom_in').show();
 	});
 	$('#graph').bind('plotunselected', function(event,ranges) {
 		console.log("plotunselected");
 		range_selected = undefined;
+		$('#g_zoom_in').hide();
 	});
 }
 

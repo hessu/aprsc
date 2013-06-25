@@ -53,6 +53,11 @@ AC_ARG_ENABLE([static-libevent],
 	[static_libevent=$enableval],
 	[])
 
+dnl Check for Protocol Buffers
+AC_SUBST(LIBPROTOBUFC)
+AC_CHECK_LIB(protobuf-c,protobuf_c_message_pack,[LIBPROTOBUFC="-lprotobuf-c"],[AC_MSG_ERROR([libprotobuf-c not found])])
+AC_CHECK_HEADER([google/protobuf-c/protobuf-c.h],,[AC_MSG_ERROR([protobuf-c.h header not found - remember to install the development package too])])
+
 dnl Check for libevent
 AC_CHECK_HEADER([event2/event.h],,[AC_MSG_ERROR([libevent2 header not found - remember to install the development package too])])
 AC_CHECK_HEADER([event2/http.h],,[AC_MSG_ERROR([libevent2 http header not found - remember to install the development package too])])

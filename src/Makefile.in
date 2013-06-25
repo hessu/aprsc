@@ -61,7 +61,10 @@ INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
 INSTALL_DIR=$(INSTALL)  -m 755 -d
 
-LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ @LIBSOCKET@ @LIBGETNAMEINFO@ @LIBCAP@ @LIBZ@ @LIBCRYPTO@ @LIBSSL@
+LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ \
+		@LIBSOCKET@ @LIBGETNAMEINFO@ \
+		@LIBCAP@ @LIBZ@ @LIBCRYPTO@ @LIBSSL@ \
+		@LIBPROTOBUFC@
 
 #LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
 #CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include
@@ -146,6 +149,7 @@ OBJS = aprsc.o accept.o worker.o errno.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \
 	http.o ssl.o sctp.o version.o \
+	aprsis2.pb-c.o \
 	@LIBOBJS@
 
 clean:
@@ -172,6 +176,9 @@ aprsc: $(OBJS)
 	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
 
 version.o: version_data.h
+
+aprsis2.pb-c.c: aprsis2.proto
+	protoc-c --c_out=. $<
 
 aprsc.8 : % : %.in VERSION Makefile
 	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\

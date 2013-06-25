@@ -407,7 +407,6 @@ function ttip(e, elem, fd)
 	//jsjam-keep: event_attach
 	//$(elem).on('mouseout', ttip_hide);
 	setTimeout(function() { ttip_show_maybe(elem, function() { return "contents"; }, co); }, 300);
-	//deb("  added listener");
 }
 
 function rx_err_contents(fd)
@@ -817,7 +816,7 @@ function schedule_update()
 {
 	if (next_req_timer)
 		clearTimeout(next_req_timer);
-		
+	
 	next_req_timer = setTimeout(update_status, 10000);
 }
 
@@ -916,8 +915,6 @@ function graph_fill(cdata, opts)
 var zoomed_in = false;
 function graphZoom(zoom_in)
 {
-	console.log("graphZoom");
-	
 	if (range_selected && zoom_in) {
 		zoomed_in = true;
 		graph_opt.xaxis.min = range_selected.from;
@@ -965,12 +962,20 @@ var graphs = {
 
 var graph_timer;
 
+function schedule_graph(t)
+{
+	if (graph_timer)
+		clearTimeout(graph_timer);
+	
+	graph_timer = setTimeout(load_graph, t);
+}
+
 function load_graph_success(data)
 {
 	top_status();
 	var d = graphs[this.k];
 	graph_fill(data, d);
-	graph_timer = setTimeout(load_graph, 60000);
+	schedule_graph(60000);
 }
 
 function load_graph_error(jqXHR, stat, errorThrown)
@@ -982,7 +987,7 @@ function load_graph_error(jqXHR, stat, errorThrown)
 	
 	top_status('msg_e', msg);
 	
-	graph_timer = setTimeout(load_graph, 60000);
+	schedule_graph(60000);
 }
 
 function load_graph()
@@ -1080,7 +1085,6 @@ function init()
 	gr_switch('totals.tcp_bytes_rx');
 	
 	$('#graph').bind('plotselected', function(event,ranges) {
-		console.log("plotselected");
 		var to = parseInt(ranges.xaxis.to.toFixed(0));
 		var from = parseInt(ranges.xaxis.from.toFixed(0));
 		range_selected = {
@@ -1088,9 +1092,9 @@ function init()
 			'to': to
 		};
 		$('#g_zoom_in').removeAttr('disabled');
+		schedule_graph(60000); /* delay next update */
 	});
 	$('#graph').bind('plotunselected', function(event,ranges) {
-		console.log("plotunselected");
 		range_selected = undefined;
 		$('#g_zoom_in').attr("disabled", "disabled");
 	});

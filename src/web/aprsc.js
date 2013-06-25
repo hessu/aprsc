@@ -977,6 +977,8 @@ function load_graph_success(data)
 	graph_fill(data, d);
 	schedule_graph(60000);
 	$('#graph').trigger('plotunselected');
+	zoomed_in = false;
+	update_buttons();
 }
 
 function load_graph_error(jqXHR, stat, errorThrown)

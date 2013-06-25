@@ -6,6 +6,7 @@
 #include "xpoll.h"
 #include "tls.h"
 
+const char verstr_progname[] = PROGNAME;
 const char version_build[] = VERSION "-" SRCVERSION VERSION_BRANCH;
 const char verstr[]        = PROGNAME " " VERSION "-" SRCVERSION VERSION_BRANCH;
 const char verstr_aprsis[] = PROGNAME " " VERSION "-" SRCVERSION VERSION_BRANCH;

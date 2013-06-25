@@ -305,7 +305,9 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	int rc;
 	int argc;
 	char *argv[256];
-
+	
+	//if (is2_in_server_signature(self, c, l4proto, s, len)
+	
 	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 #ifdef USE_SSL

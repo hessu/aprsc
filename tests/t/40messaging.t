@@ -18,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 1 + 6 + 4 };
+BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 2 + 6 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -143,6 +143,12 @@ istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message", $login_tx, $login_rx);
 $rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message", $login_tx, $login_rx);
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# with a different SSID
+$tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message with ssid", $login_tx, $login_rx . "-9");
+$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message with ssid", $login_tx, $login_rx. "-9");
+$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass diff ssid";
+istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 #
 # Message to an OBJECT

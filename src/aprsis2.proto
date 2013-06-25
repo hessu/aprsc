@@ -1,0 +1,27 @@
+
+message LoginRequest {
+	required string username = 1; // callsign-SSID
+	optional string password = 2;
+	required string app_name = 3;
+	required string app_version = 4;
+	optional string filter_string = 5; // traditional filter string
+}
+
+enum VerificationStatus {
+	NONE = 0;
+	PASSCODE = 1;
+	PASSWORD = 2;
+	CERT = 3;
+}
+
+enum LoginResult {
+	FAIL = 0;
+	OK = 1;
+}
+
+message LoginReply {
+	required LoginResult result = 1;
+	required VerificationStatus verified = 2;
+	optional string result_message = 3;
+}
+

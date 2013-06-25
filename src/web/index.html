@@ -21,7 +21,11 @@
 <div id='server'></div>
 
 <h3>Totals</h3>
-<div style='float: right; clear: right; height: 230px; width: 600px;' id='graph'></div> 
+<div style='float: right; clear: right;'>
+	<div style='height: 230px; width: 600px;' id='graph'></div>
+	<button onclick='graphZoom(1)'>Zoom</button>
+	<button onclick='graphZoom(0)'>Zoom out</button>
+</div>
 <div id='totals'></div>
 
 <h3>Duplicate filter
@@ -59,6 +63,7 @@
 <script type='text/JavaScript' src='http://code.jquery.com/jquery-1.8.1.min.js'></script>
 <!--[if lte IE 8]><script type='text/JavaScript' src='excanvas.min.js'></script><![endif]-->
 <script type='text/JavaScript' src='jquery.flot.min.js'></script>
+<script type='text/JavaScript' src='jquery.flot.selection.min.js'></script>
 <script type='text/JavaScript' src='aprsc.js'></script>
 <script type='text/JavaScript'>$(document).ready(function(){init();});;</script>
 

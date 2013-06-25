@@ -1,6 +1,7 @@
 <!--
 
 var options = {};
+var range_selected;
 
 function top_status(c, s)
 {
@@ -875,6 +876,9 @@ function update_status()
 	});
 }
 
+var graph_opt;
+var graph_data;
+
 function graph_fill(cdata, opts)
 {
 	var vals = cdata['values'];
@@ -887,7 +891,7 @@ function graph_fill(cdata, opts)
 	for (var i = 0; i < vl; i++)
 		vals[i][0] = vals[i][0] * 1000;
 		
-	var _d = [ { label: opts['label'], data: vals } ];
+	graph_data = [ { label: opts['label'], data: vals } ];
 	
 	var _x_opt = {
 		mode: 'time'
@@ -897,16 +901,35 @@ function graph_fill(cdata, opts)
 		min: 0
 	};
 	
-	var _o = {
+	graph_opt = {
 		grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
 		legend: { position: 'nw' },
 		colors: [ '#0000ff' ],
 		xaxis: _x_opt,
-		yaxis: _y_opt
+		yaxis: _y_opt,
+		selection: { mode: "x" }
 	};
 	
-	$.plot($('#graph'), _d, _o);
+	$.plot($('#graph'), graph_data, graph_opt);
 }
+
+function graphZoom(zoom_in)
+{
+	console.log("graphZoom");
+	
+	if (range_selected && zoom_in) {
+		graph_opt.xaxis.min = range_selected.from;
+		graph_opt.xaxis.max = range_selected.to;
+	} else {
+		graph_opt.xaxis.min = null;
+		graph_opt.xaxis.max = null;
+	}
+	
+	//_o.series.points.show = (range && (range.to - range.from < 50));
+	
+	$.plot($('#graph'), graph_data, graph_opt);
+}
+
 
 var graphs = {
 	'totals.clients': { 'label': 'Clients allocated' },
@@ -1038,6 +1061,20 @@ function init()
 	
 	update_status();
 	gr_switch('totals.tcp_bytes_rx');
+	
+	$('#graph').bind('plotselected', function(event,ranges) {
+		console.log("plotselected");
+		var to = parseInt(ranges.xaxis.to.toFixed(0));
+		var from = parseInt(ranges.xaxis.from.toFixed(0));
+		range_selected = {
+			'from': from,
+			'to': to
+		};
+	});
+	$('#graph').bind('plotunselected', function(event,ranges) {
+		console.log("plotunselected");
+		range_selected = undefined;
+	});
 }
 
 //-->

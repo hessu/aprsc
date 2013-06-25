@@ -4,6 +4,8 @@ aprsc.exe
 aprsc.8
 version_data.h
 
+aprsis2.pb-c.*
+
 # configure products
 Makefile
 ac-hdrs.h

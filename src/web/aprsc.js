@@ -976,6 +976,7 @@ function load_graph_success(data)
 	var d = graphs[this.k];
 	graph_fill(data, d);
 	schedule_graph(60000);
+	$('#graph').trigger('plotunselected');
 }
 
 function load_graph_error(jqXHR, stat, errorThrown)

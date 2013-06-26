@@ -153,7 +153,7 @@ OBJS = aprsc.o accept.o worker.o errno.o \
 	@LIBOBJS@
 
 clean:
-	rm -f *.o *~ */*~ ../*~ core *.d
+	rm -f *.o *~ */*~ ../*~ core *.d *.pb-c.*
 	rm -f ../svn-commit* svn-commit*
 
 distclean: clean

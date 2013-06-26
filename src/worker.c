@@ -1199,32 +1199,19 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	Process incoming data from client after reading
+ *	Consume CRLF-separated data from an APRSIS stream input buffer
  */
-
-int client_postread(struct worker_t *self, struct client_t *c, int r)
-{
+ 
+int consume_input_aprsis(struct worker_t *self, struct client_t *c)
+{	
 	char *s;
-	char *ibuf_end;
-	char *row_start;
-	
-	clientaccount_add(c, c->ai_protocol, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
-					     byte count is collected.
-					     The incoming_handler() will account
-					     packets. */
-
-	c->ibuf_end += r;
-	// hlog( LOG_DEBUG, "read: %d bytes from client fd %d (%s) - %d in ibuf",
-	//       r, c->fd, c->addr_rem, c->ibuf_end);
+	char *row_start = c->ibuf;
+	char *ibuf_end = c->ibuf + c->ibuf_end;
 	
 	/* parse out rows ending in CR and/or LF and pass them to the handler
 	 * without the CRLF (we accept either CR or LF or both, but make sure
 	 * to always output CRLF
 	 */
-	ibuf_end = c->ibuf + c->ibuf_end;
-	row_start = c->ibuf;
-	c->last_read = tick; /* not simulated time */
-
 	for (s = c->ibuf; s < ibuf_end; s++) {
 		if (*s == '\r' || *s == '\n') {
 			/* found EOL */
@@ -1248,13 +1235,35 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 		}
 	}
 	
-	if (row_start >= ibuf_end) {
+	return row_start - c->ibuf;
+}
+
+/*
+ *	Process incoming data from client after reading
+ */
+
+int client_postread(struct worker_t *self, struct client_t *c, int r)
+{
+	clientaccount_add(c, c->ai_protocol, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
+					     byte count is collected.
+					     The incoming_handler() will account
+					     packets. */
+
+	c->ibuf_end += r;
+	// hlog( LOG_DEBUG, "read: %d bytes from client fd %d (%s) - %d in ibuf",
+	//       r, c->fd, c->addr_rem, c->ibuf_end);
+	
+	c->last_read = tick; /* not simulated time */
+	
+	int consumed = c->handler_consume_input(self, c);
+	
+	if (consumed >= c->ibuf_end) {
 		/* ok, we processed the whole buffer, just mark it empty */
 		c->ibuf_end = 0;
-	} else if (row_start != c->ibuf) {
+	} else if (consumed > 0) {
 		/* ok, we found data... move the buffer contents to the beginning */
-		c->ibuf_end = ibuf_end - row_start;
-		memmove(c->ibuf, row_start, c->ibuf_end);
+		c->ibuf_end -= consumed;
+		memmove(c->ibuf, c->ibuf + consumed, c->ibuf_end);
 	}
 	
 	return 0;
@@ -1544,6 +1553,8 @@ static void collect_new_clients(struct worker_t *self)
 			c->handler_client_writable = &handle_client_writable;
 			c->write = &tcp_client_write;
 		}
+		
+		c->handler_consume_input = &consume_input_aprsis;
 
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.

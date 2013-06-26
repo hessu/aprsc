@@ -8,17 +8,17 @@
 #ifndef VERSION_H
 #define VERSION_H
 
-/* Mainline version number - please don't modify this.
+/*
  * If you're making modifications, put your own variant version
  * identification in version_branch.h. Thanks!
  */
-#define VERSION "2.0.5"
 
 #define APRSC_TOCALL "APSC20"
 
 extern const char version_build[];
 extern const char verstr[];
 extern const char verstr_aprsis[];
+extern const char verstr_http[];
 extern const char verstr_build_time[];
 extern const char verstr_build_user[];
 extern const char verstr_features[];

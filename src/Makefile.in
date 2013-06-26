@@ -124,6 +124,7 @@ version_data.h:
 	@echo "/* generated automatically by Makefile - mark your branch in version_branch.h */" > version_data.h.new
 	@echo "#ifndef VERSIONDATA_H" >> version_data.h.new
 	@echo "#define VERSIONDATA_H" >> version_data.h.new
+	@echo "#define VERSION \"$(VERSION)\"" >> version_data.h.new
 	@echo "#define SRCVERSION \"$(SRCVERSION)\"" >> version_data.h.new
 	@echo "#define BUILD_TIME \"$(BUILD_TIME)\"" >> version_data.h.new
 	@echo "#define BUILD_USER \"$(BUILD_USER)\"" >> version_data.h.new

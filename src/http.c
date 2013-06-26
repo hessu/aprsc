@@ -156,7 +156,7 @@ static void http_header_base(struct evkeyvalq *headers, int last_modified)
 	
 	http_date(dbuf, sizeof(dbuf), tick);
 	
-	evhttp_add_header(headers, "Server", PROGNAME "/" VERSION);
+	evhttp_add_header(headers, "Server", verstr_http);
 	evhttp_add_header(headers, "Date", dbuf);
 	
 	if (last_modified) {

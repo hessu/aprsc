@@ -413,7 +413,7 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 	ctx.avail_out = ospace;
 	
 	int ret = deflate(&ctx, Z_FINISH);
-	if (ret != Z_STREAM_END && ret != Z_OK) {
+	if (ret != Z_STREAM_END) {
 		hlog(LOG_ERR, "http_compress_gzip: deflate returned %d instead of Z_STREAM_END", ret);
 		(void)deflateEnd(&ctx);
 		return -1;
@@ -438,7 +438,8 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 #ifdef HAVE_LIBZ
 	char *compr = NULL;
 	
-	if (len > 100 && allow_compress) {
+	/* Gzipping files below 150 bytes can actually make them larger. */
+	if (len > 150 && allow_compress) {
 		/* Consider returning a compressed version */
 		int compr_type = http_check_req_compressed(r);
 		/*
@@ -447,12 +448,17 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 		*/
 		
 		if (compr_type == HTTP_COMPR_GZIP) {
-			compr = hmalloc(len);
-			int olen = http_compress_gzip(data, len, compr, len);
+			/* for small files it's possible that the output is actually
+			 * larger than the input
+			 */
+			int oblen = len + 60;
+			compr = hmalloc(oblen);
+			int olen = http_compress_gzip(data, len, compr, oblen);
 			/* If compression succeeded, replace buffer with the compressed one and free the
 			 * uncompressed one. Add HTTP header to indicate compressed response.
+			 * If the file got larger, send uncompressed.
 			 */
-			if (olen > 0) {
+			if (olen > 0 && olen < len) {
 				data = compr;
 				len = olen;
 				evhttp_add_header(headers, "Content-Encoding", "gzip");

@@ -30,3 +30,20 @@ message LoginReply {
 	optional string result_message = 3;
 }
 
+message OneMessage {
+	enum Type {
+		SERVER_SIGNATURE = 1;
+		LOGIN_REQUEST = 2;
+		LOGIN_REPLY = 3;
+	}
+	
+	// Identifies which message is filled in.
+	required Type type = 1;
+	
+	// One of the following will be filled in.
+	optional ServerSignature serversignature = 2;
+        optional LoginRequest loginrequest = 3;
+        optional LoginReply loginreply = 4;
+}
+
+

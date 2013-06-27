@@ -5,6 +5,7 @@
 #include "worker.h"
 
 extern int is2_out_server_signature(struct worker_t *self, struct client_t *c);
+extern int is2_in_server_signature(struct worker_t *self, struct client_t *c, char *s, int len);
 
 #endif
 

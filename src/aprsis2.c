@@ -24,15 +24,20 @@ static void *is2_allocate_buffer(int len)
 
 int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 {
+	IS2Message m = IS2_MESSAGE__INIT;
 	ServerSignature sig = SERVER_SIGNATURE__INIT;
+	
 	void *buf;	// Buffer to store serialized data
 	unsigned len;	// Length of serialized data
 	
+	m.type = IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
+	m.serversignature = &sig;
+	
 	sig.app_name = verstr_progname;
 	sig.app_version = version_build;
-	len = server_signature__get_packed_size(&sig);
+	len = is2_message__get_packed_size(&m);
 	buf = is2_allocate_buffer(len);
-	server_signature__pack(&sig, buf + IS2_HEAD_LEN);
+	is2_message__pack(&m, buf + IS2_HEAD_LEN);
 	
 	c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN);
 	
@@ -43,7 +48,14 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 
 static int is2_unpack_server_signature(struct worker_t *self, struct client_t *c, void *buf, int len)
 {
-	ServerSignature *sig = server_signature__unpack(NULL, len, buf);
+	IS2Message *m = is2_message__unpack(NULL, len, buf);
+	if (!m) {
+		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of message failed: ",
+			c->addr_rem, c->username);
+		return 0;
+	}
+	
+	ServerSignature *sig = m->serversignature;
 	if (!sig) {
 		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of server signature failed: ",
 			c->addr_rem, c->username);
@@ -53,7 +65,7 @@ static int is2_unpack_server_signature(struct worker_t *self, struct client_t *c
 	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: app %s version %s",
 		c->addr_rem, c->username, sig->app_name, sig->app_version);
 	
-	server_signature__free_unpacked(sig, NULL);
+	is2_message__free_unpacked(m, NULL);
 	
 	return 0;
 }

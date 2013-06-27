@@ -1204,38 +1204,34 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
  
 int consume_input_aprsis(struct worker_t *self, struct client_t *c)
 {	
-	char *s;
-	char *row_start = c->ibuf;
-	char *ibuf_end = c->ibuf + c->ibuf_end;
+	int i = 0;
+	int row_start = 0;
+	char *ibuf = c->ibuf;
 	
 	/* parse out rows ending in CR and/or LF and pass them to the handler
 	 * without the CRLF (we accept either CR or LF or both, but make sure
 	 * to always output CRLF
 	 */
-	for (s = c->ibuf; s < ibuf_end; s++) {
-		if (*s == '\r' || *s == '\n') {
-			/* found EOL */
-			if (s - row_start > 0) {
-				// int ch = *s;
-				// *s = 0;
-				// hlog( LOG_DEBUG, "got: %s\n", row_start );
-				// *s = ch;
-				
+	for (i = 0; i < c->ibuf_end; i++) {
+		if (ibuf[i] == '\r' || ibuf[i] == '\n') {
+			/* found EOL - if the line is not empty, feed it forward */
+			if (i - row_start > 0) {
 				/* NOTE: handler call CAN destroy the c-> object ! */
-				if (c->handler_line_in(self, c, c->ai_protocol, row_start, s - row_start) < 0)
+				if (c->handler_line_in(self, c, c->ai_protocol, ibuf + row_start, i - row_start) < 0)
 					return -1;
 			}
+			
 			/* skip the first, just-found part of EOL, which might have been
 			 * NULled by the login handler (TODO: make it not NUL it) */
-			s++;
+			i++;
 			/* skip the rest of EOL */
-			while (s < ibuf_end && (*s == '\r' || *s == '\n'))
-				s++;
-			row_start = s;
+			while (i < c->ibuf_end && (ibuf[i] == '\r' || ibuf[i] == '\n'))
+				i++;
+			row_start = i;
 		}
 	}
 	
-	return row_start - c->ibuf;
+	return row_start;
 }
 
 /*
@@ -1256,6 +1252,10 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 	c->last_read = tick; /* not simulated time */
 	
 	int consumed = c->handler_consume_input(self, c);
+	
+	/* the client might have been freed, even */
+	if (consumed == -1)
+		return -1;
 	
 	if (consumed >= c->ibuf_end) {
 		/* ok, we processed the whole buffer, just mark it empty */

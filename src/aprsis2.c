@@ -43,6 +43,18 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 
 static int is2_unpack_server_signature(struct worker_t *self, struct client_t *c, void *buf, int len)
 {
+	ServerSignature *sig = server_signature__unpack(NULL, len, buf);
+	if (!sig) {
+		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of server signature failed: ",
+			c->addr_rem, c->username);
+		return 0;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: app %s version %s",
+		c->addr_rem, c->username, sig->app_name, sig->app_version);
+	
+	server_signature__free_unpacked(sig, NULL);
+	
 	return 0;
 }
 
@@ -80,7 +92,7 @@ static int is2_deframe(struct worker_t *self, struct client_t *c, char *s, int l
 	
 	hlog_packet(LOG_DEBUG, s, len, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 	
-	is2_unpack_server_signature(self, c, s, len);
+	is2_unpack_server_signature(self, c, s + IS2_HEAD_LEN, clen);
 	
 	return 0;
 }

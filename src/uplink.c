@@ -44,6 +44,8 @@
 #include "outgoing.h"
 #include "filter.h"
 #include "tls.h"
+#include "aprsis2.h"
+
 
 int uplink_reconfiguring;
 int uplink_shutting_down;
@@ -306,10 +308,6 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	int argc;
 	char *argv[256];
 	
-	//if (is2_in_server_signature(self, c, l4proto, s, len)
-	
-	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
-	
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
 		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert against CA", c->addr_rem, c->username);
@@ -322,6 +320,11 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 		}
 	}
 #endif
+	
+	if (is2_in_server_signature(self, c, s, len))
+		return 0;
+	
+	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 	/* parse to arguments */
 	/* make it null-terminated for our string processing */

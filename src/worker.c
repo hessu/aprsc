@@ -1206,7 +1206,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
  *	Consume CRLF-separated data from an APRSIS stream input buffer
  */
  
-int consume_input_aprsis(struct worker_t *self, struct client_t *c)
+static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
 {	
 	int i = 0;
 	int row_start = 0;
@@ -1561,7 +1561,7 @@ static void collect_new_clients(struct worker_t *self)
 			c->write = &tcp_client_write;
 		}
 		
-		c->handler_consume_input = &consume_input_aprsis;
+		c->handler_consume_input = &deframe_aprsis_input_lines;
 
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.

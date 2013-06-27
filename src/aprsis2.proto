@@ -1,49 +1,143 @@
 
+/*
+ *	A server sends a ServerSignature to all new clients.
+ *
+ *	Future expansion space: the server may signal support for
+ *	optional future extensions by providing a list of string IDs
+ *	of supported features.
+ */
+
 message ServerSignature {
-	required string app_name = 3;
-	required string app_version = 4;
+	required string username = 1; // callsign-SSID
+	required string app_name = 2;
+	required string app_version = 3;
+	repeated string features = 4; // list of supported optional features
 }
+
+/*
+ *	Clients can then request a login with a LoginRequest.
+ *	
+ *	features_req contains a list of features the client would like
+ *	to enable for the connection (may only contain features
+ *	listed supported by the server).
+ */
 
 message LoginRequest {
 	required string username = 1; // callsign-SSID
-	optional string password = 2;
+	optional string password = 2; // passcode or password
 	required string app_name = 3;
 	required string app_version = 4;
 	optional string filter_string = 5; // traditional filter string
+	repeated string features_req = 6; // list of requested optional features
 }
+
+/*
+ *	Server will verify the login credentials of the client, and
+ *	signal result to the client (and possibly other servers)
+ *	using a VerificationStatus enum.
+ */
 
 enum VerificationStatus {
-	NONE = 0;
-	WEAK = 1;
+	NONE = 0;	// None at all, client may only receive data
+	WEAK = 1;	// "APRS passcode"
 	MEDIUM = 2;
-	STRONG = 3;
+	STRONG = 3;	// Certificate authentication or equivalent
 }
 
-enum LoginResult {
-	FAIL = 0;
-	OK = 1;
-}
+/*
+ *	Server replies to a LoginRequest with a LoginReply.
+ *
+ *	features_ack contains a list of optional features accepted
+ *	by the server (may only contain features requested in features_req).
+ *	The server may ignore feature requests from some clients,
+ *	even if it would technically support them.
+ */
 
 message LoginReply {
+	enum LoginResult {
+		FAIL = 0; // Login rejected, the client will be thrown out
+		OK = 1;
+	}
+	
+	/* Login result reason codes, provided in machine-readable codes
+	 * so that localized error messages can be displayed to users.
+	 * Login failure result code might also affect client actions.
+	 */
+	enum LoginResultReason {
+		// Nothing to say
+		NONE = 0;
+		// Password or passcode provided by client is not valid.
+		INVALID_PASSWORD = 1;
+		// Server requires certificate authentication, client did not
+		// provide one.
+		CERT_REQUIRED = 2;
+		// Server could not verify certificate (chain incomplete or
+		// root not trusted)
+		CERT_VERIFICATION_FAIL = 3;
+		// Certificate is not valid for username. OH7LZB's certificate is
+		// good for OH7LZB-9 and other SSIDs, but not for OH7AA or some other
+		// callsign.
+		CERT_MISMATCH = 4;
+		// Certificate has expired.
+		CERT_EXPIRED = 5;
+	}
+	
 	required LoginResult result = 1;
 	required VerificationStatus verified = 2;
-	optional string result_message = 3;
+	optional LoginResultReason result_code = 3;
+	optional string result_message = 4; // english descriptive
+	repeated string features_ack = 5; // list of agreed optional features
 }
+
+/*
+ *	Ping/pong message to check if the peer in the other end is
+ *	still there, and to measure the round-trip time.
+ *
+ *	When you get a ping request, you're supposed to change the
+ *	request to a reply, and send it back otherwise unmodified,
+ *	using the same request ID and data contents.
+ *
+ *	request_data can optionally be used to transmit, for example,
+ *	the local transmit timestamp at the requesting node, using
+ *	whichever convenient local format and accuracy.
+ */
+
+message KeepalivePing {
+	enum PingType {
+		REQUEST = 1;
+		REPLY = 2;
+	}
+	
+	required PingType ping_type = 1;
+	required uint32 request_id = 2;
+	optional bytes request_data = 3;
+}
+
+/*
+ *	This is the main link-level container message being transmitted
+ *	between peers (or clients and servers).
+ *
+ *	All of the above messages are embedded in one of these.
+ *
+ *	Just one message per container, so that in the most common case the
+ *	container can simply be retransmitted as-is by the servers.
+ */
 
 message IS2Message {
 	enum Type {
-		SERVER_SIGNATURE = 1;
-		LOGIN_REQUEST = 2;
-		LOGIN_REPLY = 3;
+		SERVER_SIGNATURE = 2;
+		LOGIN_REQUEST = 3;
+		LOGIN_REPLY = 4;
+		PING = 5;
 	}
 	
 	// Identifies which message is filled in.
 	required Type type = 1;
 	
-	// One of the following will be filled in.
+	// One of the following will be filled in. Just one.
 	optional ServerSignature serversignature = 2;
-        optional LoginRequest loginrequest = 3;
-        optional LoginReply loginreply = 4;
+	optional LoginRequest loginrequest = 3;
+	optional LoginReply loginreply = 4;
+	optional KeepalivePing keepalive_ping = 5;
 }
-
 

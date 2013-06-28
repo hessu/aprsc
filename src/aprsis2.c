@@ -57,18 +57,11 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 	return 0;
 }
 
-static int is2_unpack_server_signature(struct worker_t *self, struct client_t *c, void *buf, int len)
+static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
-	IS2Message *m = is2_message__unpack(NULL, len, buf);
-	if (!m) {
-		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of message failed: ",
-			c->addr_rem, c->username);
-		return 0;
-	}
-	
 	ServerSignature *sig = m->serversignature;
 	if (!sig) {
-		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of server signature failed: ",
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of server signature failed",
 			c->addr_rem, c->username);
 		return 0;
 	}
@@ -110,6 +103,62 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
 	
 	return r;
 }
+
+static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	KeepalivePing *ping = m->keepalive_ping;
+	if (!ping) {
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of ping failed",
+			c->addr_rem, c->username);
+		return 0;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Ping %s received: request_id %ul",
+		c->addr_rem, c->username,
+		(ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
+		ping->request_id);
+	
+	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
+		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
+		
+		int len = is2_message__get_packed_size(m);
+		void *buf = is2_allocate_buffer(len);
+		is2_message__pack(m, buf + IS2_HEAD_LEN);
+		
+		c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
+	}
+	
+	is2_message__free_unpacked(m, NULL);
+	
+	return 0;
+}
+
+
+static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *buf, int len)
+{
+	IS2Message *m = is2_message__unpack(NULL, len, buf);
+	if (!m) {
+		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of message failed: ",
+			c->addr_rem, c->username);
+		return 0;
+	}
+	
+	switch (m->type) {
+		case IS2_MESSAGE__TYPE__SERVER_SIGNATURE:
+			is2_in_server_signature(self, c, m);
+			break;
+		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+			is2_in_ping(self, c, m);
+			break;
+		default:
+			hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unknown message type: ",
+				c->addr_rem, c->username);
+			break;
+	};
+	
+	return 0;
+}
+
 
 
 #define IS2_MINIMUM_FRAME_CONTENT_LEN 4
@@ -160,7 +209,7 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		
 		hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 		
-		is2_unpack_server_signature(self, c, this + IS2_HEAD_LEN, clen);
+		is2_unpack_message(self, c, this + IS2_HEAD_LEN, clen);
 		i += IS2_HEAD_LEN + clen + IS2_TAIL_LEN;
 	}
 	
@@ -204,7 +253,7 @@ static int is2_deframe(struct worker_t *self, struct client_t *c, char *s, int l
 	
 	hlog_packet(LOG_DEBUG, s, len, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 	
-	is2_unpack_server_signature(self, c, s + IS2_HEAD_LEN, clen);
+	is2_unpack_message(self, c, s + IS2_HEAD_LEN, clen);
 	
 	return 0;
 }

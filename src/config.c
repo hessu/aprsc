@@ -747,7 +747,9 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	l->state = UPLINK_ST_UNKNOWN;
 	
 	for (i = 6; i < argc; i++) {
-		if (strcasecmp(argv[i], "sslkey") == 0) {
+		if (strcasecmp(argv[i], "is2") == 0) {
+			l->client_flags |= CLFLAGS_IS2;
+		} else if (strcasecmp(argv[i], "sslkey") == 0) {
 			if (config_uplink_ssl(argv, argc, &i, "sslkey", (char **)&l->keyfile)) {
 				free_uplink_config(&l);
 				return -2;

@@ -128,7 +128,7 @@ message IS2Message {
 		SERVER_SIGNATURE = 2;
 		LOGIN_REQUEST = 3;
 		LOGIN_REPLY = 4;
-		PING = 5;
+		KEEPALIVE_PING = 5;
 	}
 	
 	// Identifies which message is filled in.

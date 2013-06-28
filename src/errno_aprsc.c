@@ -31,7 +31,8 @@ const char *aprsc_errs[] = {
 	"Client login retry count exceeded",
 	"Client login timed out",
 	"Inactivity timeout",
-	"Uplink server certificate validation failed"
+	"Uplink server certificate validation failed",
+	"IS2 framing failure - no STX"
 };
 
 const char *aprsc_strerror(int er)

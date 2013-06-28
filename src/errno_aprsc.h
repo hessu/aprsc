@@ -2,7 +2,7 @@
 #ifndef APRSC_ERRNO_H
 #define APRSC_ERRNO_H
 
-#define APRSC_ERRNO_MAX 13
+#define APRSC_ERRNO_MAX 14
 #define APRSC_UNKNOWN_ERROR		-1
 #define CLIOK_PEERS_CLOSING		-2
 #define CLIOK_THREAD_SHUTDOWN		-3
@@ -16,6 +16,7 @@
 #define CLIERR_LOGIN_TIMEOUT			-11
 #define CLIERR_INACTIVITY			-12
 #define CLIERR_UPLINK_PEER_CERT_FAIL		-13
+#define CLIERR_IS2_FRAMING_NO_STX		-14
 
 extern const char *aprsc_strerror(int er);
 

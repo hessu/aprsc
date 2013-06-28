@@ -135,9 +135,9 @@ message IS2Message {
 	required Type type = 1;
 	
 	// One of the following will be filled in. Just one.
-	optional ServerSignature serversignature = 2;
-	optional LoginRequest loginrequest = 3;
-	optional LoginReply loginreply = 4;
+	optional ServerSignature server_signature = 2;
+	optional LoginRequest login_request = 3;
+	optional LoginReply login_reply = 4;
 	optional KeepalivePing keepalive_ping = 5;
 }
 

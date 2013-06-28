@@ -38,7 +38,7 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 	unsigned len;	// Length of serialized data
 	
 	m.type = IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
-	m.serversignature = &sig;
+	m.server_signature = &sig;
 	
 	sig.username = serverid;
 	sig.app_name = verstr_progname;
@@ -59,7 +59,7 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 
 static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
-	ServerSignature *sig = m->serversignature;
+	ServerSignature *sig = m->server_signature;
 	if (!sig) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of server signature failed",
 			c->addr_rem, c->username);
@@ -214,47 +214,5 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 	}
 	
 	return i;
-}
-
-static int is2_deframe(struct worker_t *self, struct client_t *c, char *s, int len)
-{
-	if (len < IS2_MINIMUM_FRAME_LEN) {
-		hlog_packet(LOG_WARNING, s, len, "%s/%s: IS2: Too short frame wrapper (%d): ",
-			c->addr_rem, c->username, len);
-		return -1;
-	}
-	
-	if (s[0] != STX) {
-		hlog_packet(LOG_WARNING, s, len, "%s/%s: IS2: Frame missing STX in beginning: ",
-			c->addr_rem, c->username);
-		return -1;
-	}
-	
-	uint32_t *ip = (uint32_t *)s;
-	uint32_t clen = ntohl(*ip) & 0xffffff;
-	
-	if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
-		hlog_packet(LOG_WARNING, s, len, "%s/%s: IS2: Too short frame content (%d): ",
-			c->addr_rem, c->username, clen);
-		return -1;
-	}
-	
-	if (IS2_HEAD_LEN + clen + IS2_TAIL_LEN > len) {
-		hlog_packet(LOG_WARNING, s, len, "%s/%s: IS2: Frame length points behind buffer end (%d+%d buflen %d): ",
-			c->addr_rem, c->username, clen, IS2_HEAD_LEN + IS2_TAIL_LEN, len);
-		return -1;
-	}
-	
-	if (s[IS2_HEAD_LEN + clen] != ETX) {
-		hlog_packet(LOG_WARNING, s, len, "%s/%s: IS2: Frame missing terminating ETX: ",
-			c->addr_rem, c->username);
-		return -1;
-	}
-	
-	hlog_packet(LOG_DEBUG, s, len, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
-	
-	is2_unpack_message(self, c, s + IS2_HEAD_LEN, clen);
-	
-	return 0;
 }
 

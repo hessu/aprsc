@@ -81,6 +81,37 @@ static int is2_unpack_server_signature(struct worker_t *self, struct client_t *c
 	return 0;
 }
 
+
+int is2_out_ping(struct worker_t *self, struct client_t *c)
+{
+	IS2Message m = IS2_MESSAGE__INIT;
+	KeepalivePing ping = KEEPALIVE_PING__INIT;
+	ProtobufCBinaryData rdata;
+	
+	rdata.data = NULL;
+	rdata.len  = 0; 
+	
+	void *buf;	// Buffer to store serialized data
+	unsigned len;	// Length of serialized data
+	
+	m.type = IS2_MESSAGE__TYPE__KEEPALIVE_PING;
+	m.keepalive_ping = &ping;
+	
+	ping.ping_type = KEEPALIVE_PING__PING_TYPE__REQUEST;
+	ping.request_id = random();
+	ping.request_data = rdata;
+	len = is2_message__get_packed_size(&m);
+	buf = is2_allocate_buffer(len);
+	is2_message__pack(&m, buf + IS2_HEAD_LEN);
+	
+	int r = c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN);
+	
+	hfree(buf);
+	
+	return r;
+}
+
+
 #define IS2_MINIMUM_FRAME_CONTENT_LEN 4
 #define IS2_MINIMUM_FRAME_LEN (IS2_HEAD_LEN + IS2_MINIMUM_FRAME_CONTENT_LEN + IS2_TAIL_LEN)
 
@@ -178,11 +209,3 @@ static int is2_deframe(struct worker_t *self, struct client_t *c, char *s, int l
 	return 0;
 }
 
-
-int is2_in_server_signature(struct worker_t *self, struct client_t *c, char *s, int len)
-{
-	/* this one comes through the CRLF deframing */
-	is2_deframe(self, c, s, len+1);
-	
-	return 0;
-}

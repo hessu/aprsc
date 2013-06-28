@@ -1642,14 +1642,19 @@ static void send_keepalives(struct worker_t *self)
 		if ((c->keepalive <= tick)
 		    || (c->keepalive > tick + keepalive_interval)) {
 			int flushlevel = c->obuf_flushsize;
-			c->keepalive = tick + keepalive_interval;
-
-			len = len0 + sprintf(s, "%s\r\n", c->addr_loc);
-
 			c->obuf_flushsize = 0;
-			/* Write out immediately */
-			rc = c->write(self, c, buf, len);
-			if (rc < -2) continue; // destroyed
+			c->keepalive = tick + keepalive_interval;
+			
+			if (c->flags & CLFLAGS_IS2) {
+				if (is2_out_ping(self, c) < -2)
+					continue; // destroyed
+			} else {
+				len = len0 + sprintf(s, "%s\r\n", c->addr_loc);
+				
+				/* Write out immediately */
+				rc = c->write(self, c, buf, len);
+				if (rc < -2) continue; // destroyed
+			}
 			c->obuf_flushsize = flushlevel;
 		} else {
 			/* just fush if there was anything to write */

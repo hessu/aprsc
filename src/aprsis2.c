@@ -49,7 +49,7 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 	buf = is2_allocate_buffer(len);
 	is2_message__pack(&m, buf + IS2_HEAD_LEN);
 	
-	c->write(self, c, "#IS2\n", 5);
+	//c->write(self, c, "#IS2\n", 5); /* not a good idea after all */
 	c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN);
 	
 	hfree(buf);

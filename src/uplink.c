@@ -321,11 +321,13 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	}
 #endif
 	
+	/* Might not be a good idea after all.
 	if (len >= 4 && memcmp(s, "#IS2", 4) == 0) {
 		hlog_packet(LOG_INFO, s, len, "%s: Uplink server talks IS2, switching: ", c->addr_rem);
 		c->handler_consume_input = &is2_deframe_input;
 		return 0;
 	}
+	*/
 	
 	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	

@@ -1202,22 +1202,21 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
  *	Consume CRLF-separated data from an APRSIS stream input buffer
  */
  
-static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
-{	
-	int i = 0;
-	int row_start = 0;
+static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c, int start_at)
+{
+	int i;
 	char *ibuf = c->ibuf;
 	
 	/* parse out rows ending in CR and/or LF and pass them to the handler
 	 * without the CRLF (we accept either CR or LF or both, but make sure
-	 * to always output CRLF
+	 * to always output CRLF)
 	 */
-	for (i = 0; i < c->ibuf_end; i++) {
+	for (i = start_at; i < c->ibuf_end; i++) {
 		if (ibuf[i] == '\r' || ibuf[i] == '\n') {
 			/* found EOL - if the line is not empty, feed it forward */
-			if (i - row_start > 0) {
+			if (i - start_at > 0) {
 				/* NOTE: handler call CAN destroy the c-> object ! */
-				if (c->handler_line_in(self, c, c->ai_protocol, ibuf + row_start, i - row_start) < 0)
+				if (c->handler_line_in(self, c, c->ai_protocol, ibuf + start_at, i - start_at) < 0)
 					return -1;
 			}
 			
@@ -1227,11 +1226,17 @@ static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
 			/* skip the rest of EOL */
 			while (i < c->ibuf_end && (ibuf[i] == '\r' || ibuf[i] == '\n'))
 				i++;
-			row_start = i;
+			
+			/* call myself recursively - it's possible that the deframing
+			 * handler has been changed by the line handler
+			 * (protocol switch)
+			 */
+			return c->handler_consume_input(self, c, i);
 		}
 	}
 	
-	return row_start;
+	/* didn't find anything to process */
+	return start_at;
 }
 
 /*
@@ -1251,7 +1256,7 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 	
 	c->last_read = tick; /* not simulated time */
 	
-	int consumed = c->handler_consume_input(self, c);
+	int consumed = c->handler_consume_input(self, c, 0);
 	
 	/* the client might have been freed, even */
 	if (consumed == -1)
@@ -1552,7 +1557,10 @@ static void collect_new_clients(struct worker_t *self)
 			c->write = &tcp_client_write;
 		}
 		
-		c->handler_consume_input = &deframe_aprsis_input_lines;
+		if (c->flags & CLFLAGS_IS2)
+			c->handler_consume_input = &is2_deframe_input;
+		else
+			c->handler_consume_input = &deframe_aprsis_input_lines;
 
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.

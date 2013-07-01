@@ -142,6 +142,7 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
 			client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 	};
 	
+	is2_message__free_unpacked(m, NULL);
 	return 0;
 }
 

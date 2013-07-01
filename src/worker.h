@@ -31,6 +31,7 @@
 #include "cJSON.h"
 #include "errno.h"
 #include "ssl.h"
+#include "aprsis2.pb-c.h"
 
 extern time_t now;	/* current wallclock time */
 extern time_t tick;	/* clocktick - monotonously increasing for timers, not affected by NTP et al */
@@ -356,6 +357,7 @@ struct client_t {
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
+	int	(*is2_input_handler) (struct worker_t *self, struct client_t *c, IS2Message *message);
 	int	(*handler_consume_input) (struct worker_t *self, struct client_t *c, int start_at);
 	int	(*write) (struct worker_t *self, struct client_t *c, char *p, int len);
 	

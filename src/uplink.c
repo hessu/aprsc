@@ -261,14 +261,6 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	}
 #endif
 	
-	/* Might not be a good idea after all.
-	if (len >= 4 && memcmp(s, "#IS2", 4) == 0) {
-		hlog_packet(LOG_INFO, s, len, "%s: Uplink server talks IS2, switching: ", c->addr_rem);
-		c->handler_consume_input = &is2_deframe_input;
-		return 0;
-	}
-	*/
-	
 	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 	/* parse to arguments */
@@ -574,7 +566,6 @@ connerr:
 	c->ai_protocol = req.ai_protocol;
 	c->state = CSTATE_INIT;
 	/* use the default login handler */
-	c->handler_line_in = &uplink_login_handler;
 	c->flags    = l->client_flags;
 	c->keepalive = tick;
 	c->last_read = tick;
@@ -582,6 +573,11 @@ connerr:
 	strncpy(c->username, l->name, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);
+	
+	if (c->flags & CLFLAGS_IS2)
+		c->is2_input_handler = &is2_input_handler_uplink_wait_signature;
+	else
+		c->handler_line_in = &uplink_login_handler;
 
 	/* These peer/sock name calls can not fail -- or the socket closed
 	   on us in which case it gets abandoned a bit further below. */

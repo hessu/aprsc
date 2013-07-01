@@ -44,6 +44,7 @@
 #include "clientlist.h"
 #include "client_heard.h"
 #include "keyhash.h"
+#include "aprsis2.h"
 #include "ssl.h"
 #include "sctp.h"
 
@@ -907,9 +908,13 @@ static void do_accept(struct listen_t *l)
 	hfree(s);
 
 	c->state   = CSTATE_LOGIN;
-	/* use the default login handler */
-	c->handler_line_in = &login_handler;
 	c->keepalive = tick + keepalive_interval;
+	
+	/* use the default login handler */
+	if (c->flags & CLFLAGS_IS2)
+		c->is2_input_handler = &is2_input_handler_login;
+	else
+		c->handler_line_in = &login_handler;
 
 #ifdef USE_SSL
 	if (l->ssl) {

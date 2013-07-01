@@ -132,6 +132,44 @@ void uplink_close(struct client_t *c, int errnum)
 	return;
 }
 
+#ifdef USE_SSL
+int uplink_server_validate_cert(c)
+{
+	if (c->ssl_con && c->ssl_con->validate) {
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert against CA", c->addr_rem, c->username);
+		int ssl_res = ssl_validate_peer_cert_phase1(c);
+		
+		if (ssl_res != 0) {
+			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
+			return 0;
+		}
+	}
+	
+	return 1;
+}
+
+int uplink_server_validate_cert_cn(c)
+{
+	if (c->ssl_con && c->ssl_con->validate) {
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert subject", c->addr_rem, c->username);
+		int ssl_res = ssl_validate_peer_cert_phase2(c);
+		
+		if (ssl_res != 0) {
+			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
+			return 0;
+		}
+		
+		c->validated = VALIDATED_STRONG;
+	}
+	
+	return 1;
+}
+
+#endif
+
+
 /*
  *	uplink_logresp_handler parses the "# logresp" string given by
  *	an upstream server after our "user" command has been sent.
@@ -212,18 +250,8 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	
 	/* check the server name against certificate */
 #ifdef USE_SSL
-	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert subject", c->addr_rem, c->username);
-		int ssl_res = ssl_validate_peer_cert_phase2(c);
-		
-		if (ssl_res != 0) {
-			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
-			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
-			return 0;
-		}
-		
-		c->validated = VALIDATED_STRONG;
-	}
+	if (!uplink_server_validate_cert_cn(c))
+		return 0;
 #endif
 	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
@@ -249,18 +277,10 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	char *argv[256];
 	
 #ifdef USE_SSL
-	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert against CA", c->addr_rem, c->username);
-		int ssl_res = ssl_validate_peer_cert_phase1(c);
-		
-		if (ssl_res != 0) {
-			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
-			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
-			return 0;
-		}
-	}
+	if (!uplink_server_validate_cert(c))
+		return 0;
 #endif
-	
+
 	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 	/* parse to arguments */

@@ -13,6 +13,10 @@
 #define IS2_HEAD_LEN 4 /* STX + network byte order 24 bits uint to specify body length */
 #define IS2_TAIL_LEN 1 /* ETX */
 
+/*
+ *	Allocate a buffer for a message, fill with head an tail
+ */
+
 static void *is2_allocate_buffer(int len)
 {
 	/* total length of outgoing buffer */
@@ -29,6 +33,10 @@ static void *is2_allocate_buffer(int len)
 	return (void *)buf;
 }
 
+/*
+ *	Write a message to a client, return result from c->write
+ */
+
 static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
 	/* Could optimize by writing directly on client obuf...
@@ -44,6 +52,9 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
 	return r;
 }
 
+/*
+ *	Transmit a server signature to a new client
+ */
 
 int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 {
@@ -60,6 +71,11 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 	
 	return is2_write_message(self, c, &m);
 }
+
+/*
+ *	Received server signature from an upstream server
+ *	- if ok, continue by sending a login command
+ */
 
 static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
@@ -80,6 +96,9 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 	return 0;
 }
 
+/*
+ *	Transmit a ping
+ */
 
 int is2_out_ping(struct worker_t *self, struct client_t *c)
 {
@@ -98,6 +117,10 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
 	
 	return is2_write_message(self, c, &m);
 }
+
+/*
+ *	Incoming ping handler, responds with a reply when a request is received
+ */
 
 static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
@@ -127,7 +150,10 @@ done:
 	return r;
 }
 
-
+/*
+ *	IS2 input handler, when waiting for an upstream server to
+ *	transmit a server signature
+ */
 
 int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
@@ -146,6 +172,10 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
 	return 0;
 }
 
+/*
+ *	IS2 input handler, when waiting for a login command
+ */
+ 
 int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
 	switch (m->type) {
@@ -161,6 +191,9 @@ int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Messag
 	return 0;
 }
 
+/*
+ *	Unpack a single message from the input buffer.
+ */
 
 static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *buf, int len)
 {
@@ -171,10 +204,14 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
 		return 0;
 	}
 	
+	/* Call the current input message handler */
 	return c->is2_input_handler(self, c, m);
 }
 
-
+/*
+ *	Scan client input buffer for valid IS2 frames, and
+ *	process them.
+ */
 
 #define IS2_MINIMUM_FRAME_CONTENT_LEN 4
 #define IS2_MINIMUM_FRAME_LEN (IS2_HEAD_LEN + IS2_MINIMUM_FRAME_CONTENT_LEN + IS2_TAIL_LEN)

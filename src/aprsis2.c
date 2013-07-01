@@ -89,8 +89,12 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
 		c->addr_rem, c->username, sig->username, sig->app_name, sig->app_version);
 	
-	
-	
+#ifdef USE_SSL
+	if (!uplink_server_validate_cert(self, c) || !uplink_server_validate_cert_cn(self, c))
+		goto done;
+#endif
+
+done:	
 	is2_message__free_unpacked(m, NULL);
 	
 	return 0;

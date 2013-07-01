@@ -22,4 +22,8 @@ extern void uplink_start(void);
 extern void uplink_stop(void);
 extern int  uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 
+extern int uplink_server_validate_cert(struct client_t *c);
+extern int uplink_server_validate_cert_cn(struct client_t *c);
+
+
 #endif /* FILTER_H */

@@ -133,7 +133,7 @@ void uplink_close(struct client_t *c, int errnum)
 }
 
 #ifdef USE_SSL
-int uplink_server_validate_cert(c)
+int uplink_server_validate_cert(struct client_t *c)
 {
 	if (c->ssl_con && c->ssl_con->validate) {
 		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert against CA", c->addr_rem, c->username);
@@ -149,7 +149,7 @@ int uplink_server_validate_cert(c)
 	return 1;
 }
 
-int uplink_server_validate_cert_cn(c)
+int uplink_server_validate_cert_cn(struct client_t *c)
 {
 	if (c->ssl_con && c->ssl_con->validate) {
 		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert subject", c->addr_rem, c->username);

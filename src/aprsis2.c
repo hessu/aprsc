@@ -29,32 +29,36 @@ static void *is2_allocate_buffer(int len)
 	return (void *)buf;
 }
 
+static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	/* Could optimize by writing directly on client obuf...
+	 * if it doesn't fit there, we're going to disconnect anyway.
+	 */
+	
+	int len = is2_message__get_packed_size(m);
+	void *buf = is2_allocate_buffer(len);
+	is2_message__pack(m, buf + IS2_HEAD_LEN);
+	int r = c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
+	hfree(buf);
+	
+	return r;
+}
+
+
 int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 {
-	IS2Message m = IS2_MESSAGE__INIT;
 	ServerSignature sig = SERVER_SIGNATURE__INIT;
-	
-	void *buf;	// Buffer to store serialized data
-	unsigned len;	// Length of serialized data
-	
-	m.type = IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
-	m.server_signature = &sig;
-	
 	sig.username = serverid;
 	sig.app_name = verstr_progname;
 	sig.app_version = version_build;
 	sig.n_features = 0;
 	sig.features = NULL;
-	len = is2_message__get_packed_size(&m);
-	buf = is2_allocate_buffer(len);
-	is2_message__pack(&m, buf + IS2_HEAD_LEN);
 	
-	//c->write(self, c, "#IS2\n", 5); /* not a good idea after all */
-	c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN);
+	IS2Message m = IS2_MESSAGE__INIT;
+	m.type = IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
+	m.server_signature = &sig;
 	
-	hfree(buf);
-	
-	return 0;
+	return is2_write_message(self, c, &m);
 }
 
 static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
@@ -69,6 +73,8 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
 		c->addr_rem, c->username, sig->username, sig->app_name, sig->app_version);
 	
+	
+	
 	is2_message__free_unpacked(m, NULL);
 	
 	return 0;
@@ -77,40 +83,32 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 
 int is2_out_ping(struct worker_t *self, struct client_t *c)
 {
-	IS2Message m = IS2_MESSAGE__INIT;
-	KeepalivePing ping = KEEPALIVE_PING__INIT;
 	ProtobufCBinaryData rdata;
-	
 	rdata.data = NULL;
 	rdata.len  = 0; 
 	
-	void *buf;	// Buffer to store serialized data
-	unsigned len;	// Length of serialized data
-	
-	m.type = IS2_MESSAGE__TYPE__KEEPALIVE_PING;
-	m.keepalive_ping = &ping;
-	
+	KeepalivePing ping = KEEPALIVE_PING__INIT;
 	ping.ping_type = KEEPALIVE_PING__PING_TYPE__REQUEST;
 	ping.request_id = random();
 	ping.request_data = rdata;
-	len = is2_message__get_packed_size(&m);
-	buf = is2_allocate_buffer(len);
-	is2_message__pack(&m, buf + IS2_HEAD_LEN);
 	
-	int r = c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN);
+	IS2Message m = IS2_MESSAGE__INIT;
+	m.type = IS2_MESSAGE__TYPE__KEEPALIVE_PING;
+	m.keepalive_ping = &ping;
 	
-	hfree(buf);
-	
-	return r;
+	return is2_write_message(self, c, &m);
 }
 
 static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
+	int r = 0;
+	
 	KeepalivePing *ping = m->keepalive_ping;
 	if (!ping) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of ping failed",
 			c->addr_rem, c->username);
-		return 0;
+		r = -1;
+		goto done;
 	}
 	
 	hlog(LOG_INFO, "%s/%s: IS2: Ping %s received: request_id %ul",
@@ -121,14 +119,43 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
 		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
 		
-		int len = is2_message__get_packed_size(m);
-		void *buf = is2_allocate_buffer(len);
-		is2_message__pack(m, buf + IS2_HEAD_LEN);
-		
-		c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
+		r = is2_write_message(self, c, m);
 	}
 	
+done:	
 	is2_message__free_unpacked(m, NULL);
+	return r;
+}
+
+
+
+int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	switch (m->type) {
+		case IS2_MESSAGE__TYPE__SERVER_SIGNATURE:
+			return is2_in_server_signature(self, c, m);
+		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+			return is2_in_ping(self, c, m);
+		default:
+			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",
+				c->addr_rem, c->username, m->type);
+			client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+	};
+	
+	return 0;
+}
+
+int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	switch (m->type) {
+		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+			return is2_in_ping(self, c, m);
+			break;
+		default:
+			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",
+				c->addr_rem, c->username, m->type);
+			break;
+	};
 	
 	return 0;
 }
@@ -143,20 +170,7 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
 		return 0;
 	}
 	
-	switch (m->type) {
-		case IS2_MESSAGE__TYPE__SERVER_SIGNATURE:
-			is2_in_server_signature(self, c, m);
-			break;
-		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
-			is2_in_ping(self, c, m);
-			break;
-		default:
-			hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unknown message type: ",
-				c->addr_rem, c->username);
-			break;
-	};
-	
-	return 0;
+	return c->is2_input_handler(self, c, m);
 }
 
 
@@ -197,7 +211,8 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		if (IS2_HEAD_LEN + clen + IS2_TAIL_LEN > left) {
 			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Frame length points behind buffer end (%d+%d buflen %d): ",
 				c->addr_rem, c->username, clen, IS2_HEAD_LEN + IS2_TAIL_LEN, left);
-			return -1;
+			/* this might get fixed when more data comes out from the pipe */
+			break;
 		}
 		
 		if (this[IS2_HEAD_LEN + clen] != ETX) {

@@ -360,6 +360,7 @@ struct client_t {
 	int	(*is2_input_handler) (struct worker_t *self, struct client_t *c, IS2Message *message);
 	int	(*handler_consume_input) (struct worker_t *self, struct client_t *c, int start_at);
 	int	(*write) (struct worker_t *self, struct client_t *c, char *p, int len);
+	int	(*write_packet) (struct worker_t *self, struct client_t *c, char *p, int len);
 	
 	int	(*handler_client_readable) (struct worker_t *self, struct client_t *c);
 	int	(*handler_client_writable) (struct worker_t *self, struct client_t *c);

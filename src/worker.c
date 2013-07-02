@@ -1522,7 +1522,7 @@ static void collect_new_clients(struct worker_t *self)
 			}
 			
 			c->handler_client_readable = &handle_corepeer_readable;
-			c->write = &udp_client_write;
+			c->write_packet = c->write = &udp_client_write;
 			
 			continue;
 		}
@@ -1557,11 +1557,14 @@ static void collect_new_clients(struct worker_t *self)
 			c->write = &tcp_client_write;
 		}
 		
-		if (c->flags & CLFLAGS_IS2)
+		if (c->flags & CLFLAGS_IS2) {
 			c->handler_consume_input = &is2_deframe_input;
-		else
+			c->write_packet = &is2_write_packet;
+		} else {
 			c->handler_consume_input = &deframe_aprsis_input_lines;
-
+			c->write_packet = c->write;
+		}
+		
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.
 		 */

@@ -524,7 +524,25 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 	return i;
 }
 
+/*
+ *	Write a packet to a client.
+ *
+ *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
+ */
+
 int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	return 0;
+	ProtobufCBinaryData data;
+	data.data = (uint8_t *)p;
+	data.len  = len-2; 
+	
+	ISPacket pa = ISPACKET__INIT;
+	pa.type = ISPACKET__TYPE__IS_PACKET;
+	pa.is_packet_data = data;
+	
+	IS2Message m = IS2_MESSAGE__INIT;
+	m.type = IS2_MESSAGE__TYPE__IS_PACKET;
+	m.is_packet = &pa;
+	
+	return is2_write_message(self, c, &m);
 }

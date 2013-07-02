@@ -35,7 +35,7 @@ static inline void send_single(struct worker_t *self, struct client_t *c, char *
 	else
 		clientaccount_add_tx( c, c->ai_protocol, 0, 1);
 	
-	c->write(self, c, data, len);
+	c->write_packet(self, c, data, len);
 }
 
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)

@@ -114,6 +114,23 @@ message KeepalivePing {
 }
 
 /*
+ *	APRS-IS packet
+ */
+
+message ISPacket {
+	enum Type {
+		// Traditional APRS-IS format with embedded Q construct
+		IS_PACKET = 2;
+	}
+	
+	// Identifies which message is filled in.
+	required Type type = 1;
+	
+	// packet data in traditional APRS-IS format, without CRLF
+	optional bytes is_packet_data = 2;
+}
+
+/*
  *	This is the main link-level container message being transmitted
  *	between peers (or clients and servers).
  *
@@ -129,6 +146,7 @@ message IS2Message {
 		LOGIN_REQUEST = 3;
 		LOGIN_REPLY = 4;
 		KEEPALIVE_PING = 5;
+		IS_PACKET = 6;
 	}
 	
 	// Identifies which message is filled in.
@@ -139,5 +157,6 @@ message IS2Message {
 	optional LoginRequest login_request = 3;
 	optional LoginReply login_reply = 4;
 	optional KeepalivePing keepalive_ping = 5;
+	optional ISPacket is_packet = 6;
 }
 

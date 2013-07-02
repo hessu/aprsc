@@ -7,6 +7,10 @@
 #include "hlog.h"
 #include "uplink.h"
 #include "config.h"
+#include "parse_qc.h"
+#include "passcode.h"
+#include "clientlist.h"
+#include "login.h"
 
 #define STX 0x02
 #define ETX 0x03
@@ -136,6 +140,38 @@ done:
 	return 0;
 }
 
+#ifdef USE_SSL
+static int is2_login_client_validate_cert(struct worker_t *self, struct client_t *c)
+{
+	hlog(LOG_DEBUG, "%s/%s: login: doing SSL client cert validation", c->addr_rem, c->username);
+	int ssl_res = ssl_validate_peer_cert_phase1(c);
+	if (ssl_res == 0)
+		ssl_res = ssl_validate_peer_cert_phase2(c);
+	
+	if (ssl_res == 0) {
+		c->validated = VALIDATED_STRONG;
+		return 1;
+	}
+	
+	hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+	int rc = 0;
+	/* TODO: pass errors
+	if (ssl_res == SSL_VALIDATE_CLIENT_CERT_UNVERIFIED)
+		rc = client_printf(self, c, "# Client certificate not accepted: %s\r\n", X509_verify_cert_error_string(c->ssl_con->ssl_err_code));
+	else
+		rc = client_printf(self, c, "# Client certificate authentication failed: %s\r\n", ssl_strerror(ssl_res));
+	*/
+	
+	c->failed_cmds = 10; /* bail out right away for a HTTP client */
+	
+	if (rc < 0)
+		return rc;
+	
+	return 0;
+}
+#endif
+
+
 /*
  *	Incoming login request
  */
@@ -168,6 +204,9 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);
 	
+	/* grab app information */
+	login_set_app_name(c, lr->app_name, lr->app_version);
+	
 	/* check the username against a static list of disallowed usernames */
 	/*
 	int i;
@@ -195,6 +234,83 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 		goto failed_login;
 	}
 	
+	/* if SSL client cert verification is enabled, check it */
+	int ssl_validated = 0;
+#ifdef USE_SSL
+	if (c->ssl_con && c->ssl_con->validate) {
+		ssl_validated = is2_login_client_validate_cert(self, c);
+		if (ssl_validated == -1) {
+			rc = ssl_validated;
+			goto failed_login;
+		}
+		if (ssl_validated != 1)
+			goto failed_login;
+	}
+#endif
+	
+	/* passcode auth? */
+	int given_passcode = -1;
+	if (!ssl_validated && (lr->password)) {
+		given_passcode = atoi(lr->password);
+		if (given_passcode >= 0)
+			if (given_passcode == aprs_passcode(c->username))
+				c->validated = VALIDATED_WEAK;
+	}
+	
+	/* clean up the filter string so that it doesn't contain invalid
+	 * UTF-8 or other binary stuff. */
+	sanitize_ascii_string(c->filter_s);
+	
+	/* ok, login succeeded, switch handler */
+	c->is2_input_handler = &is2_input_handler;
+	
+	/*
+	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
+			    username,
+			    (c->validated) ? "verified" : "unverified",
+			    serverid );
+	if (rc < -2)
+		return rc; // The client probably got destroyed!
+	*/
+	
+	hlog(LOG_DEBUG, "%s: IS2 login '%s'%s%s%s%s%s%s%s%s",
+	     c->addr_rem, c->username,
+	     (c->validated) ? " pass_ok" : "",
+	     (!c->validated && given_passcode >= 0) ? " pass_invalid" : "",
+	     (given_passcode < 0) ? " pass_none" : "",
+	     (c->udp_port) ? " UDP" : "",
+	     (*c->app_name) ? " app " : "",
+	     (*c->app_name) ? c->app_name : "",
+	     (*c->app_version) ? " ver " : "",
+	     (*c->app_version) ? c->app_version : ""
+	);
+	
+	/* mark as connected and classify */
+	worker_mark_client_connected(self, c);
+	
+	/* Add the client to the client list.
+	 *
+	 * If the client logged in with a valid passcode, check if there are
+	 * other validated clients logged in with the same username.
+	 * If one is found, it needs to be disconnected.
+	 *
+	 * The lookup is done while holding the write lock to the clientlist,
+	 * instead of a separate lookup call, so that two clients logging in
+	 * at exactly the same time won't make it.
+	 */
+	 
+	int old_fd = clientlist_add(c);
+	if (c->validated && old_fd != -1) {
+		/* TODO: If old connection is SSL validated, and this one is not, do not disconnect it. */
+		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, c->username);
+		/* The other client may be on another thread, so cannot client_close() it.
+		 * There is a small potential race here, if the old client disconnected and
+		 * the fd was recycled for another client right after the clientlist check.
+		 */
+		shutdown(old_fd, SHUT_RDWR);
+	}
+	
+
 	is2_message__free_unpacked(m, NULL);
 	return rc;
 
@@ -301,6 +417,25 @@ int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Messag
 			break;
 		case IS2_MESSAGE__TYPE__LOGIN_REQUEST:
 			return is2_in_login_request(self, c, m);
+			break;
+		default:
+			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",
+				c->addr_rem, c->username, m->type);
+			break;
+	};
+	
+	return 0;
+}
+
+/*
+ *	IS2 input handler, connected state
+ */
+ 
+int is2_input_handler(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	switch (m->type) {
+		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+			return is2_in_ping(self, c, m);
 			break;
 		default:
 			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",

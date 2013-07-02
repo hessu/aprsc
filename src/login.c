@@ -194,6 +194,35 @@ int login_setup_udp_feed(struct client_t *c, int port)
 	return 0;
 }
 
+#ifdef USE_SSL
+static int login_client_validate_cert(struct worker_t *self, struct client_t *c)
+{
+	hlog(LOG_DEBUG, "%s/%s: login: doing SSL client cert validation", c->addr_rem, c->username);
+	int ssl_res = ssl_validate_peer_cert_phase1(c);
+	if (ssl_res == 0)
+		ssl_res = ssl_validate_peer_cert_phase2(c);
+	
+	if (ssl_res == 0) {
+		c->validated = VALIDATED_STRONG;
+		return 1;
+	}
+	
+	hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+	int rc;
+	if (ssl_res == SSL_VALIDATE_CLIENT_CERT_UNVERIFIED)
+		rc = client_printf(self, c, "# Client certificate not accepted: %s\r\n", X509_verify_cert_error_string(c->ssl_con->ssl_err_code));
+	else
+		rc = client_printf(self, c, "# Client certificate authentication failed: %s\r\n", ssl_strerror(ssl_res));
+		
+	c->failed_cmds = 10; /* bail out right away for a HTTP client */
+	
+	if (rc < 0)
+		return rc;
+	
+	return 0;
+}
+#endif
+
 /*
  *	login.c: works in the context of the worker thread
  */
@@ -202,7 +231,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 {
 	int argc;
 	char *argv[256];
-	int i, rc;
+	int i;
+	int rc = 0;
 	
 	/* make it null-terminated for our string processing */
 	/* TODO: do not modify incoming stream - make s a const char! */
@@ -272,28 +302,17 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	int ssl_validated = 0;
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: login: doing SSL client cert validation", c->addr_rem, c->username);
-		int ssl_res = ssl_validate_peer_cert_phase1(c);
-		if (ssl_res == 0)
-			ssl_res = ssl_validate_peer_cert_phase2(c);
-		
-		if (ssl_res == 0) {
-			c->validated = VALIDATED_STRONG;
-			ssl_validated = 1;
-		} else {
-			hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
-			if (ssl_res == SSL_VALIDATE_CLIENT_CERT_UNVERIFIED)
-				rc = client_printf(self, c, "# Client certificate not accepted: %s\r\n", X509_verify_cert_error_string(c->ssl_con->ssl_err_code));
-			else
-				rc = client_printf(self, c, "# Client certificate authentication failed: %s\r\n", ssl_strerror(ssl_res));
-			c->failed_cmds = 10; /* bail out right away for a HTTP client */
+		ssl_validated = login_client_validate_cert(self, c);
+		if (ssl_validated == -1) {
+			rc = ssl_validated;
 			goto failed_login;
 		}
+		if (ssl_validated != 1)
+			goto failed_login;
 	}
 #endif
 	
-	
-	int given_passcode = -1;
+	char *pass = NULL;
 	
 	for (i = 2; i < argc; i++) {
 		if (strcasecmp(argv[i], "pass") == 0) {
@@ -302,12 +321,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				break;
 			}
 			
-			if (!ssl_validated) {
-				given_passcode = atoi(argv[i]);
-				if (given_passcode >= 0)
-					if (given_passcode == aprs_passcode(c->username))
-						c->validated = VALIDATED_WEAK;
-			}
+			pass = argv[i];
 		} else if (strcasecmp(argv[i], "vers") == 0) {
 			/* Collect application name and version separately.
 			 * Some clients only give out application name but
@@ -373,7 +387,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 					fp += l;
 					*fp = 0;
 					
-					f_non_first = 1;	
+					f_non_first = 1;
 				}
 				
 				/* parse filters in argv[i] */
@@ -385,6 +399,15 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				}
 			}
 		}
+	}
+	
+	/* passcode auth? */
+	int given_passcode = -1;
+	if (!ssl_validated && (pass)) {
+		given_passcode = atoi(pass);
+		if (given_passcode >= 0)
+			if (given_passcode == aprs_passcode(c->username))
+				c->validated = VALIDATED_WEAK;
 	}
 	
 	/* clean up the filter string so that it doesn't contain invalid

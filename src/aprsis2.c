@@ -523,3 +523,7 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 	return i;
 }
 
+int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	return 0;
+}

@@ -1,17 +1,24 @@
 
-#include "config.h"
-#include "hmalloc.h"
-#include "hlog.h"
-#include "sctp.h"
-#include "worker.h"
-
 /*
  *	Code to support SCTP connections
  */
 
+#include "config.h"
+
 #ifdef USE_SCTP
 
+#include <errno.h>
+#include <string.h>
+#include <strings.h>
+#include <stdio.h>
 #include <netinet/sctp.h>
+
+#include "hmalloc.h"
+#include "hlog.h"
+#include "worker.h"
+#include "sctp.h"
+
+
 
 int sctp_set_client_sockopt(struct client_t *c)
 {

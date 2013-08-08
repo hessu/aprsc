@@ -18,8 +18,6 @@
 #include "worker.h"
 #include "sctp.h"
 
-
-
 int sctp_set_client_sockopt(struct client_t *c)
 {
 	struct sctp_sndrcvinfo sri;
@@ -27,14 +25,14 @@ int sctp_set_client_sockopt(struct client_t *c)
 	
 	/* default sendmsg() parameters */
 	len = sizeof(sri);
-	if (getsockopt(c->fd, SOL_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, &len) == -1) {
+	if (getsockopt(c->fd, IPPROTO_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, &len) == -1) {
 		hlog(LOG_ERR, "getsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
 	
 	sri.sinfo_flags = SCTP_UNORDERED;
 	
-	if (setsockopt(c->fd, SOL_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, len) == -1) {
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_DEFAULT_SEND_PARAM, (char *)&sri, len) == -1) {
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
@@ -51,7 +49,7 @@ int sctp_set_client_sockopt(struct client_t *c)
 	subscribe.sctp_peer_error_event = 1;
 	subscribe.sctp_partial_delivery_event = 1;
 	
-	if (setsockopt(c->fd, SOL_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
@@ -72,7 +70,7 @@ int sctp_set_listen_params(struct listen_t *l)
 	subscribe.sctp_data_io_event = 1;
 	subscribe.sctp_association_event = 1;
 	
-	if (setsockopt(l->fd, SOL_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+	if (setsockopt(l->fd, IPPROTO_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", l->addr_s, strerror(errno));
 		return -1;
 	}

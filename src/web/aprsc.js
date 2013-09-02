@@ -94,6 +94,8 @@ function client_bytes_rates(c, k)
 		ckey = c['addr_rem'] + ':' + k;
 	var tx = calc_rate(ckey + ':tx', c['bytes_tx'], 1);
 	var rx = calc_rate(ckey + ':rx', c['bytes_rx'], 1);
+	console.log('tx: ' + tx);
+	console.log('rx: ' + rx);
 	if (!isUndefined(tx[1]) && tx[1] !== '')
 		return tx[1] + ' / ' + rx[1];
 	return '';
@@ -295,7 +297,7 @@ var key_tooltips = {
 };
 
 var val_convert_c = {
-	'bytes_rates': client_bytes_rates,
+	'bytes_rates': function() { return ''; }, //client_bytes_rates,
 	'pkts_rx': client_pkts_rx,
 	'connects_rates': port_conn_rates,
 	'verified': conv_verified
@@ -665,11 +667,13 @@ var tick_now;
 var rate_cache = {};
 function calc_rate(key, value, no_s)
 {
+	console.log("calc_rate key " + key + " value " + value + " t_now " + tick_now);
 	var rate = '';
 	if (rate_cache[key]) {
 		// can calculate current rate
 		var t_dif = tick_now - rate_cache[key][0];
 		var val_dif = value - rate_cache[key][1];
+		console.log("t_dif " + t_dif + " val_dif " + val_dif);
 		rate = val_dif / t_dif;
 		var prefix = '';
 		if (rate < 0) {
@@ -1047,6 +1051,27 @@ function init()
  *	give a go at using AngularJS
  */
 
+function client_rates(cl)
+{
+	for (var i in cl) {
+		var c = cl[i];
+		console.log("client " + i);
+		
+		var ckey = c['addr_rem'] + ':bytes_rate';
+		
+		var tx = calc_rate(ckey + ':tx', c['bytes_tx'], 1);
+		var rx = calc_rate(ckey + ':rx', c['bytes_rx'], 1);
+		console.log('tx: ' + tx);
+		console.log('rx: ' + rx);
+		
+		if (!isUndefined(tx[1]) && tx[1] !== '') {
+			c['bytes_tx_rate'] = tx[1];
+			c['bytes_rx_rate'] = rx[1];
+			console.log("client now: " + JSON.stringify(c));
+		};
+	}
+}
+
 var app = angular.module('aprsc', []).
 	config(function() {
 		console.log('aprsc module config');
@@ -1083,20 +1108,34 @@ app.filter('client_verified', function() {
 app.controller('aprscCtrl', [ '$scope', '$http', function($scope, $http) {
 	console.log('aprscCtrl init');
 	
+	var self = this;
+	this.scope = $scope;
+	this.update = function() {
+		console.log("doing update");
+		
+		$http.get('/status.json').success(function(d) {
+			console.log('NG got status');
+			tick_now = d['server']['tick_now'];
+			
+			client_rates(d['clients']);
+			
+			if (d['server'] && d['server']['tick_now'])
+				self.scope.server = d['server'];
+				
+			self.scope.clients = d['clients'];
+		});
+		
+		setTimeout(function() { self.update(); }, 10000);
+	};
+	
 	var order_server = [];
 	for (var i in keys_server)
 		order_server.push(i);
 	$scope.order_server = order_server;
 	$scope.keys_server = keys_server;
 	
-	$http.get('/status.json').success(function(d) {
-		console.log('NG got status');
-		
-		if (d['server'] && d['server']['tick_now'])
-			$scope.server = d['server'];
-			
-		$scope.clients = d['clients'];
-	});
+	this.update();
+	
 }]);
 
 //-->

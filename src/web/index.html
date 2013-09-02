@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html ng-app='aprsc'>
+<html xmlns:ng="http://angularjs.org" ng-app='aprsc'>
 <head>
 <title>aprsc status</title>
 <meta name="lang" content="en" />
@@ -7,7 +7,14 @@
 <link rel="stylesheet" type="text/css" href="/aprsc.css" />
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 <link rel="shortcut" href="/favicon.ico" type="image/x-icon" />
+<!--[if lte IE 8]>
+<script src="json2.js"></script>
+<![endif]-->
 <script src="angular.min.js"></script>
+<!-- script type='text/JavaScript' src='http://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js'></script -->
+<script type='text/JavaScript' src='http://code.jquery.com/jquery-1.8.1.min.js'></script>
+<!--[if lte IE 8]><script type='text/JavaScript' src='excanvas.min.js'></script><![endif]-->
+<script type='text/JavaScript' src='jquery.flot.min.js'></script>
 </head>
 
 <body onclick='ttip_hide();' ng-controller="aprscCtrl">
@@ -68,9 +75,20 @@
 	<th>MsgRcpts</th> <th>Filter</th>
 	</tr>
 <tr ng-repeat="c in clients"><td>{{ c.addr_loc|addr_port }}</td>
-	<td>{{ c.username }}</td>
+	<td><a href="http://aprs.fi/?call={{c.username}}" target="_blank">{{ c.username }}</a></td>
 	<td>{{ c.addr_rem }}</td>
 	<td ng-class="{'0':'red', '1':'green', '2':'green'}[c.verified]">{{ c|client_verified }}</td>
+	<td>{{ c.since_connect|duration }}</td>
+	<td>{{ c.since_last_read|duration }}</td>
+	<td>{{ c.app_name }} {{ c.app_version }}</td>
+	<td>{{ c.pkts_tx }}</td>
+	<td ng-class="{red: c.pkts_ign / c.pkts_rx > 0.1}">{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
+	<td>{{ c.bytes_tx }}</td>
+	<td>{{ c.bytes_rx }}</td>
+	<td>{{ c.bytes_tx_rate }} / {{ c.bytes_rx_rate }}</td>
+	<td>{{ c.obuf_q }}</td>
+	<td>{{ c.heard_count }}</td>
+	<td>{{ c.filter }}</td>
 	</tr>
 </table>
 
@@ -82,10 +100,6 @@
 
 <div id='ttip' class='ttip' style='display: none;'></div>
 
-<!-- script type='text/JavaScript' src='http://ajax.googleapis.com/ajax/libs/jquery/1.8.1/jquery.min.js'></script -->
-<script type='text/JavaScript' src='http://code.jquery.com/jquery-1.8.1.min.js'></script>
-<!--[if lte IE 8]><script type='text/JavaScript' src='excanvas.min.js'></script><![endif]-->
-<script type='text/JavaScript' src='jquery.flot.min.js'></script>
 <script type='text/JavaScript' src='aprsc.js'></script>
 <script type='text/JavaScript'>$(document).ready(function(){init();});;</script>
 

@@ -108,9 +108,11 @@ void status_error(int ttl, const char *err)
 	if (ttl > 0) {
 		if (e->set != 1) {
 			e->started = time(NULL);
-			e->ends = e->started + ttl;
 			e->set = 1;
 		}
+		
+		/* if the alarm is set already, just move the end time forward */
+		e->ends = e->started + ttl;
 	} else {
 		if (e->set != 0) {
 			e->ends = time(NULL);
@@ -138,6 +140,9 @@ cJSON *status_error_json(void)
 	ea = cJSON_CreateArray();
 	
 	for (e = status_errs; (e); e = e->next) {
+		if (e->ends < now) // don't display expired alarms
+			continue;
+			
 		cJSON *ej = cJSON_CreateObject();
 		cJSON_AddStringToObject(ej, "err", e->err);
 		cJSON_AddNumberToObject(ej, "set", e->set);

@@ -10,15 +10,16 @@ systems.
 aprsc has been built and tested on:
 
 * Ubuntu LTS (10.04, 12.04)
-* Debian stable (6.0, "squeeze")
-* Debian testing (7.0, "wheezy")
-* Debian 5.0 "lenny": i386 and x86_64
+* Debian 6.0, "squeeze"
+* Debian 7.0, "wheezy"
+* Debian 5.0, "lenny"
 * Mac OS X 10.8 (Snow Leopard): x86
 * FreeBSD 8.2 and 9.0 on amd64, 7.2 on i386
 * Solaris 11 (SunOS 5.11 11.0 i86pc i386)
-* Raspberry Pi (Raspbian): ARM11/ARMv6
+* Raspberry Pi (debian 7.0, Raspbian): ARM11/ARMv6
+* Windows 8 (Cygwin)
 
-If you wish to have decent support, please pick Debian or Ubuntu. The other
+If you wish to have decent support, please pick Ubuntu or Debian. The other
 platforms do work, but when it comes to building and installing, you're
 mostly on your own.
 

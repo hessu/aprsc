@@ -4,18 +4,17 @@ Installing aprsc
 
 aprsc is "officially" "supported" on the following platforms:
 
-* Debian stable (6.0, "squeeze"): i386 and x86_64
+* Debian stable (7.0, "squeeze"): i386, x86_64, armhf Raspberry Pi (armv6l)
 * Ubuntu LTS (10.04, 12.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
-* Debian testing (7.0, "wheezy"): armhf Raspberry Pi (armv6l)
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
 anything newer than that.
 
 These platforms are the easiest to install, and upgrades happen
-automatically using the mechanisms provided by the operating system.  One or
-two other modern Linux distributions might become supported in the near
-future, too.
+automatically using the mechanisms provided by the operating system.  The list of
+supported Linux distributions is not likely to become longer, since it takes
+a noticeable amount of time to support each distribution.
 
 If you're familiar with compiling software from the source code, and your
 preferred operating system is NOT listed above, take a look at

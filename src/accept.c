@@ -1513,6 +1513,8 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		cJSON_AddStringToObject(jl, "name", l->name);
 		cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);
+		if (l->filter_s)
+			cJSON_AddStringToObject(jl, "filter", l->filter_s);
 		cJSON_AddNumberToObject(jl, "clients", l->portaccount->gauge);
 		cJSON_AddNumberToObject(jl, "clients_peak", l->portaccount->gauge_max);
 		cJSON_AddNumberToObject(jl, "clients_max", l->clients_max);

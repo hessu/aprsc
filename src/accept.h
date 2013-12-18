@@ -44,6 +44,7 @@ struct listen_t {
 	char *name;
 	char *addr_s;
 	char *filters[LISTEN_MAX_FILTERS]; // up to 10 filter definitions
+	char *filter_s;
 };
 
 

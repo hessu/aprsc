@@ -97,6 +97,9 @@ static void listener_free(struct listen_t *l)
 		if (l->filters[i])
 			hfree(l->filters[i]);
 	
+	if (l->filter_s)
+		hfree(l->filter_s);
+	
 	if (l->acl)
 		acl_free(l->acl);
 	
@@ -117,6 +120,8 @@ static void listener_free(struct listen_t *l)
 static void listener_copy_filters(struct listen_t *l, struct listen_config_t *lc)
 {
 	int i;
+	char filter_s[FILTER_S_SIZE] = "";
+	int filter_s_l = 0;
 	
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
 		if (l->filters[i]) {
@@ -124,9 +129,34 @@ static void listener_copy_filters(struct listen_t *l, struct listen_config_t *lc
 			l->filters[i] = NULL;
 		}
 		
-		if (i < (sizeof(lc->filters)/sizeof(lc->filters[0])))
-			l->filters[i] = (lc->filters[i]) ? hstrdup(lc->filters[i]) : NULL;
+		if (i < (sizeof(lc->filters)/sizeof(lc->filters[0]))) {
+			if (!lc->filters[i])
+				continue;
+				
+			l->filters[i] = hstrdup(lc->filters[i]);
+			
+			int len = strlen(l->filters[i]);
+			if (filter_s_l + len + 2 < FILTER_S_SIZE) {
+				if (filter_s_l)
+					filter_s[filter_s_l++] = ' ';
+				
+				memcpy(filter_s + filter_s_l, l->filters[i], len);
+				filter_s_l += len;
+				filter_s[filter_s_l] = 0;
+			}
+		}
 	}
+	
+	if (l->filter_s) {
+		hfree(l->filter_s);
+		l->filter_s = NULL;
+	}
+	
+	if (filter_s_l == 0)
+		return;
+		
+	sanitize_ascii_string(filter_s);
+	l->filter_s = hstrdup(filter_s);
 }
 
 /*
@@ -753,11 +783,14 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 
 	/* apply predefined filters */
 	for (i = 0; i < (sizeof(l->filters)/sizeof(l->filters[0])); ++i) {
-		if (l->filters[i])
+		if (l->filters[i]) {
 			if (filter_parse(c, l->filters[i], 0) < 0) { /* system filters */
 				hlog(LOG_ERR, "Bad system filter definition: %s", l->filters[i]);
 			}
+		}
 	}
+	if (l->filter_s)
+		strncpy(c->filter_s, l->filter_s, sizeof(c->filter_s));
 	
 	return c;
 }

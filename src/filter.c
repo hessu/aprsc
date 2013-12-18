@@ -2630,7 +2630,6 @@ int filter_commands(struct worker_t *self, struct client_t *c, int in_message, c
 	
 	// archive a copy of the filters, for status display
 	strncpy(c->filter_s, b, FILTER_S_SIZE);
-	
 	c->filter_s[FILTER_S_SIZE-1] = 0;
 	sanitize_ascii_string(c->filter_s);
 	

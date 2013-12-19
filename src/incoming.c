@@ -685,6 +685,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	char *q_start = NULL; /* start of the Q construct (points to the 'q') */
 	char *q_replace = NULL; /* whether the existing Q construct is replaced */
 	char *data;	  /* points to original incoming path/payload separating ':' character */
+	int src_len;		/* source callsign length */
 	int datalen;		  /* length of the data block excluding tail \r\n */
 	int pathlen;		  /* length of the path  ==  data-s  */
 	int rc;
@@ -786,12 +787,13 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	src_end = memchr(s, '>', pathlen < CALLSIGNLEN_MAX+1 ? pathlen : CALLSIGNLEN_MAX+1);
 	if (!src_end)
 		return INERR_NO_DST;	// No ">" in packet start..
+	src_len = src_end - s;
 	
 	path_start = src_end+1;
 	if (path_start >= packet_end)	// We're already at the path end
 		return INERR_NO_PATH;
 	
-	if (check_invalid_src_dst(s, src_end - s) != 0)
+	if (check_invalid_src_dst(s, src_len) != 0)
 		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
@@ -821,7 +823,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	via_start = dstcall_end;
 	
 	/* check if the srccall equals the client's login */
-	if (strlen(c->username) == src_end - s && memcmp(c->username, s, (int)(src_end - s)) == 0)
+	if (strlen(c->username) == src_len && memcmp(c->username, s, src_len) == 0)
 		originated_by_client = 1;
 	
 	/* if disallow_unverified is enabled, don't allow unverified clients
@@ -918,14 +920,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* if the packet is sourced by a local login, but the packet is not
 	 * originated by that station, drop it.
 	 */
-	if (!originated_by_client && clientlist_check_if_validated_client(s, src_end - s) != -1) {
+	if (!originated_by_client && clientlist_check_if_validated_client(s, src_len) != -1) {
 		/* We mark the packet as a dupe, since dropping it completely
 		 * would result in an error-type counter getting incremented.
 		 * This is slightly incorrect (perhaps the packet is not a
 		 * duplicate after all), probably there should be a separate
 		 * statistics counter for this. TODO: add a "looped" counter.
 		 */
-		//hlog(LOG_DEBUG, "%s/%s: dropping due to source call '%.*s' being logged in on another socket", c->addr_rem, c->username, src_end - s, s);
+		//hlog(LOG_DEBUG, "%s/%s: dropping due to source call '%.*s' being logged in on another socket", c->addr_rem, c->username, src_len, s);
 		pb->flags |= F_DUPE;
 	}
 	
@@ -977,8 +979,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	packet_end = p; /* for easier overflow checking expressions */
 	/* fill necessary info for parsing and dupe checking in the packet buffer */
 	pb->srcname = pb->data;
-	pb->srcname_len = src_end - s;
-	pb->srccall_end = pb->data + (src_end - s);
+	pb->srcname_len = src_len;
+	pb->srccall_end = pb->data + src_len;
 	pb->dstcall_end_or_ssid = pb->data + (dstcall_end_or_ssid - s);
 	pb->dstcall_end = pb->data + (dstcall_end - s);
 	pb->dstcall_len = via_start - src_end - 1;

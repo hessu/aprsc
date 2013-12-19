@@ -92,19 +92,6 @@ static const char *disallow_srccalls[] = {
 	NULL
 };
 
-static const char *disallow_msg_recipients[] = {
-	"USERLIST", /* old aprsd */
-	"JAVATITLE", /* old aprsd */
-	"JAVATITL2", /* old aprsd */
-	NULL
-};
-
-static const char *disallow_data_prefixes[] = {
-	"DX de ", /* DX messages */
-	NULL
-};
-
-
 #ifdef _FOR_VALGRIND_
 typedef struct cellarena_t {
   int dummy;

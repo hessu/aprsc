@@ -789,8 +789,10 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 			}
 		}
 	}
-	if (l->filter_s)
+	if (l->filter_s) {
 		strncpy(c->filter_s, l->filter_s, sizeof(c->filter_s));
+		l->filter_s[FILTER_S_SIZE-1] = 0;
+	}
 	
 	return c;
 }

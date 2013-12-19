@@ -42,7 +42,7 @@
 #include "dupecheck.h"
 
 /* When adding labels here, remember to add the description strings in
- * web/aprsc.js rx_err_strings
+ * web/aprsc.js rx_err_strings, and worker.h constants
  */
 const char *inerr_labels[] = {
 	"unknown",
@@ -76,10 +76,33 @@ const char *inerr_labels[] = {
 	"q_newq_buffer_small",
 	"q_nonval_multi_q_calls",
 	"q_i_no_viacall",
-	"inerr_empty"
+	"inerr_empty",
+	"dis_srccall"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
+
+
+/* a static list of source callsigns which are dropped */
+static const char *disallow_srccalls[] = {
+	"N0CALL", /* default in some apps */
+	"NOCALL", /* default in some apps */
+	"SERVER", /* originated by APRS-IS server */
+	NULL
+};
+
+static const char *disallow_msg_recipients[] = {
+	"USERLIST", /* old aprsd */
+	"JAVATITLE", /* old aprsd */
+	"JAVATITL2", /* old aprsd */
+	NULL
+};
+
+static const char *disallow_data_prefixes[] = {
+	"DX de ", /* DX messages */
+	NULL
+};
+
 
 #ifdef _FOR_VALGRIND_
 typedef struct cellarena_t {
@@ -524,6 +547,22 @@ int check_invalid_src_dst(const char *call, int len)
 }
 
 /*
+ *	Check callsign against a list to see if it matches
+ */
+ 
+static int check_call_match(const char **set, const char *call, int len)
+{
+	int i;
+	
+	for (i = 0; (set[i]); i++) {
+		if (strncmp(call, set[i], len) == 0 && strlen(set[i]) == len)
+			return -1;
+	}
+	
+	return 0;
+}
+
+/*
  *	Check if a callsign is good for a digi path entry
  *	(valid APRS-IS callsign, * allowed in end)
  */
@@ -795,6 +834,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	if (check_invalid_src_dst(s, src_len) != 0)
 		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
+	
+	if (check_call_match(disallow_srccalls, s, src_len))
+		return INERR_DIS_SRCCALL; /* disallowed srccall */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload
 	if (info_start >= packet_end)

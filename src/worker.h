@@ -218,8 +218,9 @@ struct client_heard_t {
 #define INERR_Q_NONVAL_MULTI_Q_CALLS		-29
 #define INERR_Q_I_NO_VIACALL			-30
 #define INERR_EMPTY			-31
+#define INERR_DIS_SRCCALL		-32
 
-#define INERR_MIN			-31	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-32	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

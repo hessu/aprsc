@@ -219,7 +219,9 @@ var rx_err_strings = {
 	"q_newq_buffer_small": 'New Q construct too big',
 	"q_nonval_multi_q_calls": 'Multiple callsigns in Q path from unverified client',
 	"q_i_no_viacall": 'I path has no viacall',
-	"inerr_empty": 'Empty packet'
+	"inerr_empty": 'Empty packet',
+	"disallow_srcall": 'Disallowed source callsign (N0CALL or such)',
+	"disallow_dx": 'DX beacon packet'
 };
 
 var key_translate = {

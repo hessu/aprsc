@@ -1216,6 +1216,12 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 			return parse_aprs_item(pb, body, body_end);
 		}
 		return 0;
+	
+	case 'D':
+		/* we drop DX beacon packets, they start with "DX de " */
+		if (strncmp(body, "X de ", 5) == 0)
+			return INERR_DIS_DX;
+		break;
 
 	case 'T':
 		if (body_end - body > 18) {

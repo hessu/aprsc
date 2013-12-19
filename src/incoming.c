@@ -77,7 +77,8 @@ const char *inerr_labels[] = {
 	"q_nonval_multi_q_calls",
 	"q_i_no_viacall",
 	"inerr_empty",
-	"dis_srccall"
+	"disallow_srccall",
+	"disallow_dx"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])

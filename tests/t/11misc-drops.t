@@ -87,6 +87,9 @@ my @pkts = (
 	"SERVER>DST,DIGI,qAR,$login:>should drop, SERVER as source callsign",
 	# DX spots
 	"SRC>DST,DIGI,qAR,$login:DX de FOO: BAR - should drop",
+	# Disallowed message recipients, status messages and such
+	"SRC-2>APRS,qAR,${login}::KIPSS    :KipSS Login:OK1xx-1{16",
+	"SRC>APRS,qAR,${login}::javaMSG  :Foo_BAR Linux APRS Server: 192.168.10.72 connected 2 users online.",
 );
 
 # send the packets

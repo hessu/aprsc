@@ -78,7 +78,8 @@ const char *inerr_labels[] = {
 	"q_i_no_viacall",
 	"inerr_empty",
 	"disallow_srccall",
-	"disallow_dx"
+	"disallow_dx",
+	"disallow_msg_dst"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -538,7 +539,7 @@ int check_invalid_src_dst(const char *call, int len)
  *	Check callsign against a list to see if it matches
  */
  
-static int check_call_match(const char **set, const char *call, int len)
+int check_call_match(const char **set, const char *call, int len)
 {
 	int i;
 	

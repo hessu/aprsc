@@ -221,7 +221,8 @@ var rx_err_strings = {
 	"q_i_no_viacall": 'I path has no viacall',
 	"inerr_empty": 'Empty packet',
 	"disallow_srcall": 'Disallowed source callsign (N0CALL or such)',
-	"disallow_dx": 'DX beacon packet'
+	"disallow_dx": 'DX beacon packet',
+	"disallow_msg_dst": 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)'
 };
 
 var key_translate = {

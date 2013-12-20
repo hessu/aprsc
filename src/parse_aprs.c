@@ -1052,6 +1052,22 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
  *	Parse APRS message slightly (only as much as is necessary for packet forwarding)
  */
 
+static const char *disallow_msg_recipients[] = {
+	/* old aprsd status messages:
+	 * W5xx>JAVA,qAU,WB5AOH::javaMSG  :Foo_bar Linux APRS Server: 192.168.10.55 connected 2 users online.
+	 */
+	"javaMSG", /* old aprsd */
+	"JAVATITLE", /* old aprsd */
+	"JAVATITL2", /* old aprsd */
+	"USERLIST", /* old aprsd */
+	/* Status messages from APRS+SA, blocked in javap:
+	 * OK1xx>APRS,qAR,OK1Dxxx-1::KIPSS    :KipSS Login:OK1xxx-1{2
+	 * OK1xx>ID,WIDE,qAR,OK1xxx-1::INFO     :KipSS Node QRT
+	 */
+	"KIPSS",
+	NULL
+};
+
 static int preparse_aprs_message(struct pbuf_t *pb, const char *body, int body_len)
 {
 	// quick and loose way to identify NWS and SKYWARN messages
@@ -1089,19 +1105,20 @@ static int preparse_aprs_message(struct pbuf_t *pb, const char *body, int body_l
 	*/
 	
 	/* Collect message recipient */
-	{
-		int i;
-		
-		for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
-			// the recipient address is space padded
-			// to 9 chars, while our historydb is not.
-			if (body[i] == ' ' || body[i] == ':' || body[i] == 0)
-				break;
-		}
-		
-		pb->dstname = body;
-		pb->dstname_len = i;
+	int i;
+	
+	for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
+		// the recipient address is space padded
+		// to 9 chars, while our historydb is not.
+		if (body[i] == ' ' || body[i] == ':' || body[i] == 0)
+			break;
 	}
+	
+	pb->dstname = body;
+	pb->dstname_len = i;
+	
+	if (check_call_match(disallow_msg_recipients, body, i))
+		return INERR_DIS_MSG_DST;
 	
 	return 0;
 }

@@ -17,6 +17,7 @@
 extern const char *inerr_labels[];
 
 extern int check_invalid_src_dst(const char *call, int len);
+extern int check_call_match(const char **set, const char *call, int len);
 extern int check_path_calls(const char *via_start, const char *path_end);
 
 extern void incoming_flush(struct worker_t *self);

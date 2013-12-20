@@ -1049,6 +1049,64 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
 }
 
 /*
+ *	Parse APRS message slightly (only as much as is necessary for packet forwarding)
+ */
+
+static int preparse_aprs_message(struct pbuf_t *pb, const char *body, const char *body_end)
+{
+	// quick and loose way to identify NWS and SKYWARN messages
+	// they do apparently originate from "WXSRV", but that is not
+	// guaranteed thing...
+	if (memcmp(body,"NWS-",4) == 0) // as seen on specification
+		pb->packettype |= T_NWS;
+	if (memcmp(body,"NWS_",4) == 0) // as seen on data
+		pb->packettype |= T_NWS;
+	if (memcmp(body,"SKY",3) == 0)  // as seen on specification
+		pb->packettype |= T_NWS;
+	
+	// Is it perhaps TELEMETRY related "message" ?
+	if ( body[9] == ':' &&
+	    ( memcmp( body+10, "PARM.", 5 ) == 0 ||
+		memcmp( body+10, "UNIT.", 5 ) == 0 ||
+		memcmp( body+10, "EQNS.", 5 ) == 0 ||
+		memcmp( body+10, "BITS.", 5 ) == 0    )) {
+			pb->packettype &= ~T_MESSAGE;
+			pb->packettype |= T_TELEMETRY;
+			// Fall through to recipient location lookup
+	}
+	
+	// Or perhaps a DIRECTED QUERY ?
+	/* It might not be a bright idea to mark all messages starting with ?
+	 * queries instead of messages and making them NOT match the
+	 * filter message.
+	 * ALSO: General (non-directed) queries are DROPPED by aprsc.
+	 * Do not mark DIRECTED QUERIES as queries - we don't want to drop them.
+	if (body[9] == ':' && body[10] == '?') {
+		pb->packettype &= ~T_MESSAGE;
+		pb->packettype |=  T_QUERY;
+		// Fall through to recipient location lookup
+	}
+	*/
+	
+	/* Collect message recipient */
+	{
+		int i;
+		
+		for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
+			// the recipient address is space padded
+			// to 9 chars, while our historydb is not.
+			if (body[i] == ' ' || body[i] == ':' || body[i] == 0)
+				break;
+		}
+		
+		pb->dstname = body;
+		pb->dstname_len = i;
+	}
+	
+	return 0;
+}
+
+/*
  *	Parse the body of an APRS packet
  */
  
@@ -1143,56 +1201,7 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 
 	case ':':
 		pb->packettype |= T_MESSAGE;
-		// quick and loose way to identify NWS and SKYWARN messages
-		// they do apparently originate from "WXSRV", but that is not
-		// guaranteed thing...
-		if (memcmp(body,"NWS-",4) == 0) // as seen on specification
-			pb->packettype |= T_NWS;
-		if (memcmp(body,"NWS_",4) == 0) // as seen on data
-			pb->packettype |= T_NWS;
-		if (memcmp(body,"SKY",3) == 0)  // as seen on specification
-			pb->packettype |= T_NWS;
-                
-		// Is it perhaps TELEMETRY related "message" ?
-		if ( body[9] == ':' &&
-		     ( memcmp( body+10, "PARM.", 5 ) == 0 ||
-		       memcmp( body+10, "UNIT.", 5 ) == 0 ||
-		       memcmp( body+10, "EQNS.", 5 ) == 0 ||
-		       memcmp( body+10, "BITS.", 5 ) == 0    )) {
-			pb->packettype &= ~T_MESSAGE;
-			pb->packettype |= T_TELEMETRY;
-			// Fall through to recipient location lookup
-		}
-		
-
-		// Or perhaps a DIRECTED QUERY ?
-		/* It might not be a bright idea to mark all messages starting with ?
-		 * queries instead of messages and making them NOT match the
-		 * filter message.
-		 * ALSO: General (non-directed) queries are DROPPED by aprsc.
-		 * Do not mark DIRECTED QUERIES as queries - we don't want to drop them.
-		if (body[9] == ':' && body[10] == '?') {
-			pb->packettype &= ~T_MESSAGE;
-			pb->packettype |=  T_QUERY;
-			// Fall through to recipient location lookup
-		}
-		*/
-
-		/* Collect message recipient */
-		{
-			int i;
-
-			for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
-				// the recipient address is space padded
-				// to 9 chars, while our historydb is not.
-				if (body[i] == ' ' || body[i] == ':' || body[i] == 0)
-					break;
-			}
-			
-			pb->dstname = body;
-			pb->dstname_len = i;
-		}
-		return 0;
+		return preparse_aprs_message(pb, body, body_end);
 
 	case ';':
 		if (body_end - body > 29)

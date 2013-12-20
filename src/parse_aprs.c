@@ -1052,7 +1052,7 @@ static int parse_aprs_3rdparty(struct pbuf_t *pb, const char *info_start)
  *	Parse APRS message slightly (only as much as is necessary for packet forwarding)
  */
 
-static int preparse_aprs_message(struct pbuf_t *pb, const char *body, const char *body_end)
+static int preparse_aprs_message(struct pbuf_t *pb, const char *body, int body_len)
 {
 	// quick and loose way to identify NWS and SKYWARN messages
 	// they do apparently originate from "WXSRV", but that is not
@@ -1065,11 +1065,11 @@ static int preparse_aprs_message(struct pbuf_t *pb, const char *body, const char
 		pb->packettype |= T_NWS;
 	
 	// Is it perhaps TELEMETRY related "message" ?
-	if ( body[9] == ':' &&
+	if ( body[9] == ':' && body_len >= 10 + 6 &&
 	    ( memcmp( body+10, "PARM.", 5 ) == 0 ||
 		memcmp( body+10, "UNIT.", 5 ) == 0 ||
 		memcmp( body+10, "EQNS.", 5 ) == 0 ||
-		memcmp( body+10, "BITS.", 5 ) == 0    )) {
+		memcmp( body+10, "BITS.", 5 ) == 0 )) {
 			pb->packettype &= ~T_MESSAGE;
 			pb->packettype |= T_TELEMETRY;
 			// Fall through to recipient location lookup
@@ -1200,8 +1200,11 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 		return 0;
 
 	case ':':
-		pb->packettype |= T_MESSAGE;
-		return preparse_aprs_message(pb, body, body_end);
+		if (paclen >= 11) {
+			pb->packettype |= T_MESSAGE;
+			return preparse_aprs_message(pb, body, paclen-1);
+		}
+		return 0;
 
 	case ';':
 		if (body_end - body > 29)

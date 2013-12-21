@@ -389,7 +389,7 @@ int historydb_insert(struct pbuf_t *pb)
 			historydb_free(cp);
 			continue;
 		}
-		if ( (cp->hash1 == h1)) {
+		if (cp->hash1 == h1) {
 		       // Hash match, compare the key
 		    historydb_hashmatch(); // debug thing -- a profiling counter
 		    ++historydb_hashmatches;

@@ -1074,6 +1074,14 @@ function toggle(id)
 	$('#' + id).toggle(200);
 }
 
+/* easter egg */
+function check_for_easter()
+{
+	var D = new Date();
+	if (D.getMonth() == 11 && D.getDate() >= 24 && D.getDate() <= 25)
+		$('#logo').attr("src","/aprsc-joulukissa.jpg");
+}
+
 function init()
 {
 	listeners_table = $('#listeners');
@@ -1086,6 +1094,7 @@ function init()
 	totals_table = $('#totals');
 	server_table = $('#server');
 	alarm_div = $('#alarms');
+	check_for_easter();
 	
 	update_status();
 	gr_switch('totals.tcp_bytes_rx');

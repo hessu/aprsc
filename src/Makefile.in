@@ -107,7 +107,8 @@ WEBFILES = \
 	src/web/aprsc.css src/web/aprsc.js \
 	src/web/index.html \
 	src/web/favicon.ico \
-	src/web/aprsc-logo2.png \
+	src/web/aprsc-logo3.png \
+	src/web/aprsc-joulukissa.jpg \
  	src/web/excanvas.min.js \
  	src/web/jquery.flot.min.js \
  	src/web/jquery.flot.selection.min.js
@@ -202,9 +203,7 @@ install: all
 	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
 	$(INSTALL_PROGRAM) aprsc_munin $(DESTDIR)$(SBINDIR)/aprsc_munin
 	$(INSTALL_DATA) aprsc.8 $(DESTDIR)$(MANDIR)/man8/aprsc.8
-	$(INSTALL_DATA) web/*.css web/*.js web/index.html \
-		web/aprsc-logo2.png web/favicon.ico \
-		$(DESTDIR)/opt/aprsc/web
+	$(INSTALL_DATA) $(WEBFILES) $(DESTDIR)/opt/aprsc/web
 	if [ ! -f  $(DESTDIR)$(CFGFILE) ] ; then \
 		$(INSTALL_DATA) aprsc.conf $(DESTDIR)$(CFGFILE) ; \
 	else true ; fi

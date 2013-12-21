@@ -184,7 +184,7 @@ cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alig
 }
 
 
-inline void *cellhead_to_clientptr(struct cellhead *ch)
+static void *cellhead_to_clientptr(struct cellhead *ch)
 {
 	char *p = (char*)ch;
 #if CELLHEAD_DEBUG == 1
@@ -193,7 +193,7 @@ inline void *cellhead_to_clientptr(struct cellhead *ch)
 	return p;
 }
 
-inline struct cellhead *clientptr_to_cellhead(void *v)
+static struct cellhead *clientptr_to_cellhead(void *v)
 {
 #if CELLHEAD_DEBUG == 1
 	struct cellhead *ch = (struct cellhead *)(((char*)v) - sizeof(void*));

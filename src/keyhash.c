@@ -68,7 +68,7 @@
 
 void keyhash_init(void) { }
 
-uint32_t __attribute__((pure)) keyhash(const void const *p, int len, uint32_t hash)
+uint32_t __attribute__((pure)) keyhash(const void *p, int len, uint32_t hash)
 {
 	const uint8_t *u = p;
 	int i;
@@ -93,7 +93,7 @@ uint32_t __attribute__((pure)) keyhash(const void const *p, int len, uint32_t ha
 /* The data material is known to contain ASCII, and if any value in there
  * is a lower case letter, it is first converted to upper case one.
 */
-uint32_t __attribute__((pure)) keyhashuc(const void const *p, int len, uint32_t hash)
+uint32_t __attribute__((pure)) keyhashuc(const void *p, int len, uint32_t hash)
 {
 	const uint8_t *u = p;
 	int i;

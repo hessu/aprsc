@@ -105,7 +105,8 @@ Configuration file options in aprsc.conf
 
  *  PassCode 0
     
-    This is the passcode for your server ID.
+    This is the passcode for your server ID. It is required if your server
+    connects to upstream servers (Uplink configuration, see below).
 
  *  MyAdmin    "My Name, MYCALL"
 

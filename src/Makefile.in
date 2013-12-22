@@ -203,7 +203,7 @@ install: all
 	$(INSTALL_PROGRAM) aprsc $(DESTDIR)$(SBINDIR)/aprsc
 	$(INSTALL_PROGRAM) aprsc_munin $(DESTDIR)$(SBINDIR)/aprsc_munin
 	$(INSTALL_DATA) aprsc.8 $(DESTDIR)$(MANDIR)/man8/aprsc.8
-	$(INSTALL_DATA) $(WEBFILES) $(DESTDIR)/opt/aprsc/web
+	$(INSTALL_DATA) $(subst src/,,$(WEBFILES)) $(DESTDIR)/opt/aprsc/web
 	if [ ! -f  $(DESTDIR)$(CFGFILE) ] ; then \
 		$(INSTALL_DATA) aprsc.conf $(DESTDIR)$(CFGFILE) ; \
 	else true ; fi

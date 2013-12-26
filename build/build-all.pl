@@ -125,7 +125,7 @@ sub vm_build($$$)
 	my $port = 22;
 	$port = $pconf->{'port'} if (defined $pconf->{'port'});
 	
-	tcp_wait("$vm:$port", 30) || die "vm $vm ssh is not accepting connections\n";
+	tcp_wait("$vm:$port", 120) || die "vm $vm ssh is not accepting connections\n";
 	
 	my $d_tgz = $tgz;
 	$d_tgz =~ s/.*\///;
@@ -167,7 +167,7 @@ sub vm_build_rpm($$$)
 	
 	sleep(2);
 	
-	tcp_wait("$vm:22", 30) || die "vm $vm ssh is not accepting connections\n";
+	tcp_wait("$vm:22", 120) || die "vm $vm ssh is not accepting connections\n";
 	
 	my $d_tgz = $tgz;
 	$d_tgz =~ s/.*\///;

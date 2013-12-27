@@ -1113,8 +1113,13 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	
 	/* fetch peer address from the fd instead of parsing it from text */
 	addr_len = sizeof(sa);
-	if (getpeername(fd->valueint, &sa.sa, &addr_len) != 0) { /* Fails very rarely.. */
-		hlog(LOG_ERR, "Live upgrade: getpeername client fd %d failed: %s", fd->valueint, strerror(errno));
+	if (getpeername(fd->valueint, &sa.sa, &addr_len) != 0) {
+		/* Sometimes clients disconnect during upgrade, especially on slow RPi servers... */
+		if (errno == ENOTCONN)
+			hlog(LOG_INFO, "Live upgrade: Client %s on fd %d has disconnected during upgrade (%s)",
+				username->valuestring, fd->valueint, strerror(errno));
+		else
+			hlog(LOG_ERR, "Live upgrade: getpeername client fd %d failed: %s", fd->valueint, strerror(errno));
 		close(fd->valueint);
 		return -1;
 	}
@@ -1125,8 +1130,8 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	/* find the right listener for this client, for configuration and accounting */
 	struct listen_t *l = liveupgrade_find_listener(listener_id->valueint);
 	if (!l) {
-		hlog(LOG_ERR, "Live upgrade: Failed to find listener for fd %d (%s - local %s) - closing",
-			fd->valueint, client_addr_s, addr_loc->valuestring);
+		hlog(LOG_INFO, "Live upgrade: Listener has been removed for fd %d (%s - local %s): disconnecting %s",
+			fd->valueint, client_addr_s, addr_loc->valuestring, username->valuestring);
 		close(fd->valueint);
 		hfree(client_addr_s);
 		return -1;
@@ -1134,8 +1139,8 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	
 	struct client_t *c = accept_client_for_listener(l, fd->valueint, client_addr_s, &sa, addr_len);
 	if (!c) {
-		hlog(LOG_ERR, "Live upgrade - client_alloc returned NULL, too many clients. Denied client on fd %d from %s",
-			l->addr_s, fd->valueint, client_addr_s);
+		hlog(LOG_ERR, "Live upgrade - client_alloc returned NULL, too many clients. Denied client %s on fd %d from %s",
+			username->valuestring, fd->valueint, client_addr_s);
 		close(fd->valueint);
 		hfree(client_addr_s);
 		return -1;

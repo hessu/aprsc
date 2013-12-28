@@ -130,6 +130,38 @@ signal_aprsc () {
 	fi
 }
 
+instance_action () {
+	ACTION="$1"
+	ADESC="$2"
+	shift
+	if test -z "$2" ; then
+		echo "stopping all"
+		PIDFILE=
+		for PIDFILE in `ls $LOG_DIR/aprsc*.pid 2> /dev/null`; do
+			NAME=`echo $PIDFILE | cut -c17-`
+			NAME=${NAME%%.pid}
+			log_daemon_msg "  $ADESC aprsc '$NAME'"
+			eval $ACTION
+		done
+		if test -z "$PIDFILE" ; then
+			log_warning_msg "  No aprsc is running."
+		fi
+	else
+		while shift ; do
+			[ -z "$1" ] && break
+			PIDFILE="$LOG_DIR/$1.pid"
+			if test -e $PIDFILE ; then
+				log_daemon_msg "  $ADESC aprsc '$1'"
+				PIDFILE=`ls $PIDFILE 2> /dev/null`
+				NAME=`echo $PIDFILE | cut -c17-`
+				NAME=${NAME%%.pid}
+				eval $ACTION
+			else
+				log_failure_msg "  $ADESC aprsc '$1': No such aprsc is running."
+			fi
+		done
+	fi
+}
 
 case "$1" in
   start)
@@ -180,32 +212,8 @@ case "$1" in
 	;;
   stop)
 	log_action_begin_msg "Stopping $DESC"
-	if test -z "$2" ; then
-		PIDFILE=
-		for PIDFILE in `ls $LOG_DIR/aprsc*.pid 2> /dev/null`; do
-			NAME=`echo $PIDFILE | cut -c17-`
-			NAME=${NAME%%.pid}
-			log_daemon_msg "  Stopping aprsc '$NAME'"
-			stop_aprsc
-		done
-		if test -z "$PIDFILE" ; then
-			log_warning_msg "  No aprsc is running."
-		fi
-	else
-		while shift ; do
-			[ -z "$1" ] && break
-			PIDFILE="$LOG_DIR/$1.pid"
-			if test -e $PIDFILE ; then
-				log_daemon_msg "  Stopping aprsc '$1'"
-				PIDFILE=`ls $PIDFILE 2> /dev/null`
-				NAME=`echo $PIDFILE | cut -c17-`
-				NAME=${NAME%%.pid}
-				stop_aprsc
-			else
-				log_failure_msg "  Stopping aprsc '$1': No such aprsc is running."
-			fi
-		done
-	fi
+	shift
+	instance_action "stop_aprsc" "Stopping" $@
 	;;
   graceful | reload | force-reload )
   	check_configuration

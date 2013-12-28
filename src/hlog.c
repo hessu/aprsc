@@ -38,7 +38,7 @@ int log_level = LOG_INFO;	/* Logging level */
 int log_facility = LOG_DAEMON;	/* Logging facility */
 char *log_name = NULL;		/* Logging name */
 
-char log_basename[] = "aprsc.log";
+char *log_basename = NULL;	/* Derived from log_name */
 char *log_dir = NULL;		/* Access log directory */
 char *log_fname = NULL;		/* Access log file name */
 int log_file = -1;		/* If logging to a file, the file name */
@@ -168,6 +168,12 @@ int open_log(char *name, int reopen)
 		fprintf(stderr, "aprsc logger: out of memory!\n");
 		exit(1);
 	}
+	
+	if (log_basename)
+		hfree(log_basename);
+	
+	log_basename = hmalloc(strlen(log_name) + 5);
+	sprintf(log_basename, "%s.log", log_name);
 	
 	if (log_dest == L_SYSLOG)
 		openlog(name, LOG_NDELAY|LOG_PID, log_facility);

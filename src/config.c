@@ -23,7 +23,8 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include <sys/stat.h>
+                    
 #include "config.h"
 #include "hmalloc.h"
 #include "hlog.h"
@@ -1205,6 +1206,27 @@ char *strupr(char *s)
 }
 
 /*
+ *	test if a path points to a directory
+ */
+
+static int test_directory(const char *path)
+{
+	struct stat sb;
+	
+	if (stat(path, &sb) != 0) {
+		hlog(LOG_ERR, "stat(%s) failed: %s", path, strerror(errno));
+		return -1;
+	}
+	
+	if (!S_ISDIR(sb.st_mode)) {
+		hlog(LOG_ERR, "%s: Not a directory", path);
+		return -1;
+	}
+	
+	return 0;
+}
+
+/*
  *	Read configuration files, should add checks for this program's
  *	specific needs and obvious misconfigurations!
  */
@@ -1232,6 +1254,11 @@ int read_config(void)
 		if (new_rundir) {
 			hfree(new_rundir);
 			new_rundir = NULL;
+		}
+		
+		if (test_directory(new_rundir)) {
+			hlog(LOG_CRIT, "Config: rundir %s is not a directory.", new_rundir);
+			failed = 1;
 		}
 	}
 	

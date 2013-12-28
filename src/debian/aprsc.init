@@ -73,22 +73,16 @@ prepare_opts () {
 		return
 	fi
 	
-	VNAME="\$DAEMON_OPTS_$CFGNAME"
-	eval "ADD=$VNAME"
-	
-	if test -z "$ADD"; then
-		log_failure_msg "  defaults file does not set $VNAME !"
-		log_end_msg 1
-		exit 1
-	fi
-	
 	if test -z "$DAEMON_OPTS_BASE"; then
 		log_failure_msg "  defaults file does not set DAEMON_OPTS_BASE !"
 		log_end_msg 1
 		exit 1
 	fi
 	
-	USE_DAEMON_OPTS="$DAEMON_OPTS_BASE $ADD -c etc/$NAME.conf"
+	VNAME="\$DAEMON_OPTS_$CFGNAME"
+	eval "ADD=$VNAME"
+	
+	USE_DAEMON_OPTS="$DAEMON_OPTS_BASE $ADD -n $NAME -c etc/$NAME.conf"
 }
 
 # check configuration of a single aprsc instance

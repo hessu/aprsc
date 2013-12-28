@@ -163,14 +163,8 @@ instance_action () {
 	fi
 }
 
-case "$1" in
-  start)
-	set -e
-	prepare_chroot
-  	check_configuration
+start_action () {
   	ulimit -c unlimited
-  	log_daemon_msg "Starting $DESC:" "aprsc"
-  	
   	if test -z "$2" ; then
         	# automatic startup of all or configured instances
                 if test -z "$AUTOSTART" -o "x$AUTOSTART" = "xnone" ; then
@@ -209,6 +203,16 @@ case "$1" in
                 done
 	fi
 	exit ${STATUS:-0}
+}
+
+case "$1" in
+  start)
+	set -e
+	prepare_chroot
+  	check_configuration
+  	log_daemon_msg "Starting $DESC:" "aprsc"
+  	
+  	start_action $@
 	;;
   stop)
 	log_action_begin_msg "Stopping $DESC"
@@ -231,21 +235,11 @@ case "$1" in
 	;;
   restart)
   	check_configuration
-  	log_daemon_msg "Stopping $DESC:" "aprsc"
-	if start-stop-daemon --stop --quiet --oknodo --pidfile $LOG_DIR/$PIDNAME.pid --exec $DAEMON --retry 15; then
-		log_end_msg 0
-	else
-		log_end_msg 1
-	fi
+  	log_action_begin_msg "Stopping $DESC"
+	instance_action "stop_aprsc" "Stopping" $@
 	
 	prepare_chroot
-  	log_daemon_msg "Starting $DESC:" "aprsc"
-	set -e
-	if start-stop-daemon --start --quiet --oknodo --pidfile $LOG_DIR/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
-		log_end_msg 0
-	else
-		log_end_msg 1
-	fi
+  	start_action $@
 	;;
   *)
 	N=/etc/init.d/$NAME

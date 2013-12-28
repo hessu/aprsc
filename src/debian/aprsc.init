@@ -93,9 +93,10 @@ prepare_opts () {
 
 # check configuration of a single aprsc instance
 check_configuration() {
-  	log_daemon_msg "Testing aprsc configuration:" "aprsc"
-	if ! $DAEMON $DAEMON_OPTS -y > /dev/null 2>&1; then
-		$DAEMON $DAEMON_OPTS -y || true
+	prepare_opts
+	
+	if ! $DAEMON $USE_DAEMON_OPTS -y > /dev/null 2>&1; then
+		$DAEMON $USE_DAEMON_OPTS -y || true
 		log_end_msg 1
 		exit 1
 	fi
@@ -214,14 +215,13 @@ start_action () {
                 	fi
                 done
 	fi
-	exit ${STATUS:-0}
 }
 
 case "$1" in
   start)
 	set -e
 	prepare_chroot
-  	check_configuration
+  	start_action "check_configuration" "Checking configuration" $@
   	log_daemon_msg "Starting $DESC:" "aprsc"
   	
   	start_action "start_aprsc" "Starting" $@
@@ -231,23 +231,22 @@ case "$1" in
 	instance_action "stop_aprsc" "Stopping" $@
 	;;
   graceful | reload | force-reload )
-  	check_configuration
   	log_daemon_msg "Reloading $DESC configuration files:" "aprsc"
   	SIGNAL=USR1
 	instance_action "signal_aprsc" "Reloading" $@
 	;;
   liveupgrade )
 	prepare_chroot
-  	check_configuration
   	log_daemon_msg "Performing $DESC live upgrade:" "aprsc"
+  	start_action "check_configuration" "Checking configuration" $@
   	SIGNAL=USR2
 	instance_action "signal_aprsc" "Upgrading" $@
 	echo "Black magic invoked - live upgrade triggered."
 	echo "Remember to check $LOG_DIR/aprsc.log for any errors!"
 	;;
   restart)
-  	check_configuration
   	log_action_begin_msg "Stopping $DESC"
+  	start_action "check_configuration" "Checking configuration" $@
 	instance_action "stop_aprsc" "Stopping" $@
 	
 	prepare_chroot

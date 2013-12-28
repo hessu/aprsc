@@ -15,12 +15,15 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 BASEDIR=/opt/aprsc
 DAEMON=$BASEDIR/sbin/aprsc
+CONFIG_DIR=$BASEDIR/etc
+LOG_DIR=$BASEDIR/logs
 NAME=aprsc
 DIRNAME=aprsc
-PIDNAME=aprsc
 DESC="APRS-IS server"
+AUTOSTART="all"
 
 test -x $DAEMON || exit 0
+test -d $CONFIG_DIR || exit 0
 
 . /lib/lsb/init-functions
 
@@ -69,6 +72,65 @@ check_configuration() {
 	fi
 }
 
+prepare_opts () {
+	CFGNAME=`echo $NAME|sed -e 's/aprsc-//'`
+	PIDNAME=$NAME
+	
+	if test "x$NAME" = "xaprsc" ; then
+		USE_DAEMON_OPTS="$DAEMON_OPTS"
+		return
+	fi
+	
+	VNAME="\$DAEMON_OPTS_$CFGNAME"
+	eval "ADD=$VNAME"
+	
+	if test -z "$ADD"; then
+		log_failure_msg "  defaults file does not set $VNAME !"
+		log_end_msg 1
+		exit 1
+	fi
+	
+	if test -z "$DAEMON_OPTS_BASE"; then
+		log_failure_msg "  defaults file does not set DAEMON_OPTS_BASE !"
+		log_end_msg 1
+		exit 1
+	fi
+	
+	USE_DAEMON_OPTS="$DAEMON_OPTS_BASE $ADD -c etc/$NAME.conf"
+}
+
+start_aprsc () {
+	prepare_opts
+	
+	if start-stop-daemon --start --quiet --oknodo --pidfile $LOG_DIR/$PIDNAME.pid --exec $DAEMON -- $USE_DAEMON_OPTS; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
+}
+
+stop_aprsc () {
+	prepare_opts
+	
+	if start-stop-daemon --stop --quiet --pidfile $PIDFILE --exec $DAEMON --oknodo --retry 15; then
+		rm -f $PIDFILE
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
+}
+
+signal_aprsc () {
+	prepare_opts
+	
+	if start-stop-daemon --stop --signal $SIGNAL --quiet --pidfile $LOG_DIR/$PIDNAME.pid --exec $DAEMON; then
+		log_end_msg 0
+	else
+		log_end_msg 1
+	fi
+}
+
+
 case "$1" in
   start)
 	set -e
@@ -76,60 +138,94 @@ case "$1" in
   	check_configuration
   	ulimit -c unlimited
   	log_daemon_msg "Starting $DESC:" "aprsc"
-	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
-		log_end_msg 0
-	else
-		log_end_msg 1
+  	
+  	if test -z "$2" ; then
+        	# automatic startup of all or configured instances
+                if test -z "$AUTOSTART" -o "x$AUTOSTART" = "xnone" ; then
+                        log_warning_msg "  Autostart is disabled, aprsc will not be started."
+                        exit 0
+                fi
+                if test -z "$AUTOSTART" -o "x$AUTOSTART" = "xall" ; then
+                        for CFGFILE in `cd $CONFIG_DIR; ls aprsc.conf aprsc-*.conf 2> /dev/null`; do
+                                NAME=${CFGFILE%%.conf}
+                                log_daemon_msg "  Autostarting aprsc '$NAME'"
+                                start_aprsc
+                        done
+                else
+                        for NAME in $AUTOSTART ; do
+                                if test -e $CONFIG_DIR/$NAME.conf ; then
+                                        log_daemon_msg "  Autostarting aprsc '$NAME'"
+                                        start_aprsc
+                                else
+                                        log_failure_msg "  Autostarting aprsc '$NAME': missing $CONFIG_DIR/$NAME.conf file !"
+                                        STATUS=1
+                                fi
+                        done
+                fi
+        else
+		# start specific instances
+                while shift ; do
+                	[ -z "$1" ] && break
+                	NAME=$1
+                	if test -e $CONFIG_DIR/$NAME.conf ; then
+                		log_daemon_msg "  Starting aprsc '$NAME'"
+                		start_aprsc
+                	else
+                		log_failure_msg "  Starting aprsc '$NAME': missing $CONFIG_DIR/$NAME.conf file !"
+                		STATUS=1
+                	fi
+                done
 	fi
+	exit ${STATUS:-0}
 	;;
   stop)
-  	log_daemon_msg "Stopping $DESC:" "aprsc"
-	#set -e  # don't upset if it fails..
-	if start-stop-daemon --stop --quiet --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON --oknodo --retry 15; then
-		log_end_msg 0
+	log_action_begin_msg "Stopping $DESC"
+	if test -z "$2" ; then
+		PIDFILE=
+		for PIDFILE in `ls $LOG_DIR/aprsc*.pid 2> /dev/null`; do
+			NAME=`echo $PIDFILE | cut -c17-`
+			NAME=${NAME%%.pid}
+			log_daemon_msg "  Stopping aprsc '$NAME'"
+			stop_aprsc
+		done
+		if test -z "$PIDFILE" ; then
+			log_warning_msg "  No aprsc is running."
+		fi
 	else
-		log_end_msg 1
+		while shift ; do
+			[ -z "$1" ] && break
+			PIDFILE="$LOG_DIR/$1.pid"
+			if test -e $PIDFILE ; then
+				log_daemon_msg "  Stopping aprsc '$1'"
+				PIDFILE=`ls $PIDFILE 2> /dev/null`
+				NAME=`echo $PIDFILE | cut -c17-`
+				NAME=${NAME%%.pid}
+				stop_aprsc
+			else
+				log_failure_msg "  Stopping aprsc '$1': No such aprsc is running."
+			fi
+		done
 	fi
 	;;
-  graceful | reload )
+  graceful | reload | force-reload )
   	check_configuration
   	log_daemon_msg "Reloading $DESC configuration files:" "aprsc"
-	if start-stop-daemon --stop --signal USR1 --quiet --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON; then
-		log_end_msg 0
-	else
-		log_end_msg 1
-	fi
+  	SIGNAL=USR1
+  	signal_aprsc
 	;;
   liveupgrade )
 	prepare_chroot
   	check_configuration
   	log_daemon_msg "Performing $DESC live upgrade:" "aprsc"
-	if start-stop-daemon --stop --signal USR2 --quiet --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON; then
-		log_end_msg 0
-	else
-		log_end_msg 1
-	fi
+  	SIGNAL=USR2
+  	signal_aprsc
 	echo "Black magic invoked - live upgrade triggered."
-	echo "Remember to check /opt/aprsc/logs/aprsc.log for any errors!"
-	;;
-  force-reload)
-	#
-	#	If the "reload" option is implemented, move the "force-reload"
-	#	option to the "reload" entry above. If not, "force-reload" is
-	#	just the same as "restart" except that it does nothing if the
-	#   daemon isn't already running.
-	# check wether $DAEMON is running. If so, restart
-	set -e
-	start-stop-daemon --stop --test --quiet --pidfile \
-		$BASEDIR/logs/$PIDNAME.pid --retry 15 --exec $DAEMON \
-	&& $0 restart \
-	|| exit 0
+	echo "Remember to check $LOG_DIR/aprsc.log for any errors!"
 	;;
   restart)
   	check_configuration
   	log_daemon_msg "Stopping $DESC:" "aprsc"
-	#set -e  # don't upset if it fails..
-	if start-stop-daemon --stop --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON --retry 15; then
+	if start-stop-daemon --stop --quiet --oknodo --pidfile $LOG_DIR/$PIDNAME.pid --exec $DAEMON --retry 15; then
 		log_end_msg 0
 	else
 		log_end_msg 1
@@ -138,7 +234,7 @@ case "$1" in
 	prepare_chroot
   	log_daemon_msg "Starting $DESC:" "aprsc"
 	set -e
-	if start-stop-daemon --start --quiet --oknodo --pidfile $BASEDIR/logs/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
+	if start-stop-daemon --start --quiet --oknodo --pidfile $LOG_DIR/$PIDNAME.pid --exec $DAEMON -- $DAEMON_OPTS; then
 		log_end_msg 0
 	else
 		log_end_msg 1

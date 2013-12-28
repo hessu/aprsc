@@ -171,26 +171,31 @@ instance_action () {
 
 # start one or more instances
 start_action () {
+	ACTION="$1"
+	ADESC="$2"
+	shift
+	shift
+	
   	ulimit -c unlimited
   	if test -z "$2" ; then
         	# automatic startup of all or configured instances
                 if test -z "$AUTOSTART" -o "x$AUTOSTART" = "xnone" ; then
-                        log_warning_msg "  Autostart is disabled, aprsc will not be started."
+                        log_warning_msg "  AUTOSTART is disabled, aprsc will not be started."
                         exit 0
                 fi
                 if test -z "$AUTOSTART" -o "x$AUTOSTART" = "xall" ; then
                         for CFGFILE in `cd $CONFIG_DIR; ls aprsc.conf aprsc-*.conf 2> /dev/null`; do
                                 NAME=${CFGFILE%%.conf}
-                                log_daemon_msg "  Autostarting aprsc '$NAME'"
-                                start_aprsc
+                                log_daemon_msg "  $ADESC '$NAME'"
+                                eval $ACTION
                         done
                 else
                         for NAME in $AUTOSTART ; do
                                 if test -e $CONFIG_DIR/$NAME.conf ; then
-                                        log_daemon_msg "  Autostarting aprsc '$NAME'"
-                                        start_aprsc
+                                        log_daemon_msg "  $ADESC '$NAME'"
+					eval $ACTION
                                 else
-                                        log_failure_msg "  Autostarting aprsc '$NAME': missing $CONFIG_DIR/$NAME.conf file !"
+                                        log_failure_msg "  $ADESC '$NAME': missing $CONFIG_DIR/$NAME.conf file !"
                                         STATUS=1
                                 fi
                         done
@@ -201,10 +206,10 @@ start_action () {
                 	[ -z "$1" ] && break
                 	NAME=$1
                 	if test -e $CONFIG_DIR/$NAME.conf ; then
-                		log_daemon_msg "  Starting aprsc '$NAME'"
-                		start_aprsc
+                		log_daemon_msg "  $ADESC '$NAME'"
+				eval $ACTION
                 	else
-                		log_failure_msg "  Starting aprsc '$NAME': missing $CONFIG_DIR/$NAME.conf file !"
+                		log_failure_msg "  $ADESC '$NAME': missing $CONFIG_DIR/$NAME.conf file !"
                 		STATUS=1
                 	fi
                 done
@@ -219,7 +224,7 @@ case "$1" in
   	check_configuration
   	log_daemon_msg "Starting $DESC:" "aprsc"
   	
-  	start_action $@
+  	start_action "start_aprsc" "Starting" $@
 	;;
   stop)
 	log_action_begin_msg "Stopping $DESC"
@@ -246,7 +251,7 @@ case "$1" in
 	instance_action "stop_aprsc" "Stopping" $@
 	
 	prepare_chroot
-  	start_action $@
+  	start_action "start_aprsc" "Restarting" $@
 	;;
   *)
 	N=/etc/init.d/$NAME

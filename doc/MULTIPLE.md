@@ -14,7 +14,12 @@ named **FOO** in addition to the regular one.  We shall pick `foo` as the
 suffix, and the full name of the instance will then be `aprsc-foo`.  My CWOP
 server is set up with the instance name `aprsc-cwop`.
 
-Due to shell variable name restrictions, the instance suffix may not have
+Log and config files are named by the full instance name, i.e. 
+`/opt/aprsc/etc/aprsc-foo.conf`, `/opt/aprsc/logs/aprsc-foo.log`, and so on. 
+Not surprisingly, the "normal" default instance is simply named `aprsc`
+without a -suffix.
+
+Due to shell variable name restrictions the instance suffix may not have
 special characters, or the '-' character which happens to be special enough. 
 Go with an alphanumeric suffix such as 'foo' or 'cwop3' to stay on the safe
 side.
@@ -29,13 +34,15 @@ instance name.
 
 * On the `foo` instance, set RunDir to `data/foo`. Each instance must
   have a separate RunDir - otherwise live upgrade will likely fail
-  miserably.
+  miserably.  Due to the chroot setup RunDir must be a relative path,
+  i.e. `data/foo` - try to resist the urge of adding the `/opt/aprsc`
+  prefix to it.
 * Create the data directory:
   `sudo mkdir /opt/aprsc/data/foo`
 * Change its ownership so that aprsc can write there:
   `sudo chown aprsc:aprsc /opt/aprsc/data/foo`
-* Make sure all of the instances either listen on different ports **or**
-  different IP addresses.  If one instance listens on a wildcard address
+* Make sure all of the instances either **listen on different ports or
+  different IP addresses**.  If one instance listens on a wildcard address
   (0.0.0.0:14580), another instance can not listen on a specific address
   on the same port (192.168.1.2:14580) - all servers need to bind
   specific addresses in this case.
@@ -60,4 +67,5 @@ aprsc-foo` so that the instance will have its own log and pid files in
 
 If you wish to add instance-specific options **other than -n or -c**, you
 can set them in **DAEMON_OPTS_foo** (or **DAEMON_OPTS_instancesuffix**).
+
 

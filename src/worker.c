@@ -474,15 +474,6 @@ int set_client_sockopt(struct client_t *c)
 		return sctp_set_client_sockopt(c);
 #endif
 	
-	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
-	 * the dupe filters.
-	 */
-#ifdef TCP_NODELAY
-	int arg = 1;
-	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
-		hlog(LOG_ERR, "%s - setsockopt(TCP_NODELAY, %d) failed: %s", c->addr_rem, arg, strerror(errno));
-#endif
-
 	/* Set up TCP keepalives, so that we'll notice idle clients.
 	 * I'm not sure if this is absolutely required, since we send
 	 * keepalive datetime messages every 30 seconds from the application,
@@ -516,6 +507,21 @@ int set_client_sockopt(struct client_t *c)
 	
 	return 0;
 }
+
+int set_client_sockopt_post_login(struct client_t *c)
+{	
+	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
+	 * the dupe filters.
+	 */
+#ifdef TCP_NODELAY
+	int arg = 1;
+	if (setsockopt(c->fd, IPPROTO_TCP, TCP_NODELAY, (void *)&arg, sizeof(arg)))
+		hlog(LOG_ERR, "%s - setsockopt(TCP_NODELAY, %d) failed: %s", c->addr_rem, arg, strerror(errno));
+#endif
+
+	return 0;
+}
+
 
 /*
  *	Pass a new client to a worker thread
@@ -1410,6 +1416,8 @@ static void worker_classify_client(struct worker_t *self, struct client_t *c)
 void worker_mark_client_connected(struct worker_t *self, struct client_t *c)
 {
 	c->state = CSTATE_CONNECTED;
+	
+	set_client_sockopt_post_login(c);
 	
 	/* classify the client and put it in the right list of clients for
 	 * outgoing data to start flowing.

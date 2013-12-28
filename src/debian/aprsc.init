@@ -63,15 +63,7 @@ prepare_chroot () {
 	log_end_msg 0
 }
 
-check_configuration() {
-  	log_daemon_msg "Testing aprsc configuration:" "aprsc"
-	if ! $DAEMON $DAEMON_OPTS -y > /dev/null 2>&1; then
-		$DAEMON $DAEMON_OPTS -y || true
-		log_end_msg 1
-		exit 1
-	fi
-}
-
+# set up command-line options for an aprsc instance
 prepare_opts () {
 	CFGNAME=`echo $NAME|sed -e 's/aprsc-//'`
 	PIDNAME=$NAME
@@ -99,6 +91,17 @@ prepare_opts () {
 	USE_DAEMON_OPTS="$DAEMON_OPTS_BASE $ADD -c etc/$NAME.conf"
 }
 
+# check configuration of a single aprsc instance
+check_configuration() {
+  	log_daemon_msg "Testing aprsc configuration:" "aprsc"
+	if ! $DAEMON $DAEMON_OPTS -y > /dev/null 2>&1; then
+		$DAEMON $DAEMON_OPTS -y || true
+		log_end_msg 1
+		exit 1
+	fi
+}
+
+# start a single aprsc instance
 start_aprsc () {
 	prepare_opts
 	
@@ -109,6 +112,7 @@ start_aprsc () {
 	fi
 }
 
+# stop a single aprsc instance
 stop_aprsc () {
 	prepare_opts
 	
@@ -120,6 +124,7 @@ stop_aprsc () {
 	fi
 }
 
+# send a $SIGNAL to a single instance
 signal_aprsc () {
 	prepare_opts
 	
@@ -130,6 +135,7 @@ signal_aprsc () {
 	fi
 }
 
+# perform an action (stop, signal) on one or more currently running instances
 instance_action () {
 	ACTION="$1"
 	ADESC="$2"
@@ -163,6 +169,7 @@ instance_action () {
 	fi
 }
 
+# start one or more instances
 start_action () {
   	ulimit -c unlimited
   	if test -z "$2" ; then

@@ -134,8 +134,8 @@ instance_action () {
 	ACTION="$1"
 	ADESC="$2"
 	shift
+	shift
 	if test -z "$2" ; then
-		echo "stopping all"
 		PIDFILE=
 		for PIDFILE in `ls $LOG_DIR/aprsc*.pid 2> /dev/null`; do
 			NAME=`echo $PIDFILE | cut -c17-`
@@ -212,21 +212,20 @@ case "$1" in
 	;;
   stop)
 	log_action_begin_msg "Stopping $DESC"
-	shift
 	instance_action "stop_aprsc" "Stopping" $@
 	;;
   graceful | reload | force-reload )
   	check_configuration
   	log_daemon_msg "Reloading $DESC configuration files:" "aprsc"
   	SIGNAL=USR1
-  	signal_aprsc
+	instance_action "signal_aprsc" "Reloading" $@
 	;;
   liveupgrade )
 	prepare_chroot
   	check_configuration
   	log_daemon_msg "Performing $DESC live upgrade:" "aprsc"
   	SIGNAL=USR2
-  	signal_aprsc
+	instance_action "signal_aprsc" "Upgrading" $@
 	echo "Black magic invoked - live upgrade triggered."
 	echo "Remember to check $LOG_DIR/aprsc.log for any errors!"
 	;;

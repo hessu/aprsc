@@ -800,7 +800,7 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_write fd %d: SSL_write wants to write again, marking socket for write events", c->fd);
+		//hlog(LOG_DEBUG, "ssl_write fd %d: SSL_write wants to write again, marking socket for write events", c->fd);
 		
 		/* tell the poller that we have outgoing data */
 		xpoll_outgoing(&self->xp, c->xfd, 1);
@@ -809,7 +809,14 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_READ) {
-		hlog(LOG_INFO, "ssl_write fd %d: SSL_write wants to read, returning 0", c->fd);
+		/* This happens regularly when our SSL library wants to hear back from the
+		 * other end before transmitting more, for example when we're an SSL server,
+		 * we have the initial server-side login prompt to write, but we're still
+		 * waiting for the client SSL hello to appear. The login prompt is in obuf,
+		 * so the worker tries to write it every now and then until the handshake
+		 * is done.
+		 */
+		//hlog(LOG_DEBUG, "ssl_write fd %d: SSL_write wants to read, returning 0", c->fd);
 		
 		/* tell the poller that we won't be writing now, until we've read... */
 		xpoll_outgoing(&self->xp, c->xfd, 0);

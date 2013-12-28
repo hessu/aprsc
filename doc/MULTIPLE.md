@@ -69,3 +69,25 @@ If you wish to add instance-specific options **other than -n or -c**, you
 can set them in **DAEMON_OPTS_foo** (or **DAEMON_OPTS_instancesuffix**).
 
 
+Starting up and shutting down
+--------------------------------
+
+By default the aprsc init script starts and stops all instances when you run
+`sudo service aprsc start` or `sudo service aprsc stop` (or any of the other
+options such as `reload` or `restart`).  You can specify an instance to
+start or stop by adding the instance name in the end: `sudo service aprsc
+start aprsc-foo`.
+
+If you wish to only start up specific instances automatically when the
+system boots up, list the instance names in `/etc/defaults/aprsc` parameter
+**AUTOSTART**:
+
+    AUTOSTART="aprsc-foo aprsc-cwop"
+
+
+Upgrading
+------------
+
+When you install a new version of aprsc using dpkg or apt-get, all instances
+should be automatically upgraded live.
+

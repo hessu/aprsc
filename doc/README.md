@@ -59,9 +59,8 @@ A little additional feature sugar has been added on top:
 
 It does not, and will not, have any additional functions such as igating,
 digipeating, interfacing to radios, D-PRS or other gateway functions, or
-object generation.  It will not work on Windows.  The idea is to keep aprsc
-relatively simple and lean, and leave the more specialized features for more
-specialized software.
+object generation.  The idea is to keep aprsc relatively simple and lean,
+and leave the more specialized features for more specialized software.
 
 If you need a nice, compact igate software for Linux, please take a look at
 either aprsg, aprx, or aprs4r.  If you need to run an APRS-IS server on
@@ -115,12 +114,11 @@ bugs from creeping back in.
 Who's who, and how long did it take
 --------------------------------------
 
-aprsc has been developed between 2008 and 2012 by Matti Aarnio, OH2MQK
-(aprx, zmailer, etc), and Heikki Hannikainen, OH7LZB (aprs.fi).  Design
-phase and most of the core development happened during 2008, but the final
-sprint for feature completeness happened during the summer of 2012. 
-Substantial code reuse happens between aprx, aprsc and other projects of the
-authors.
+aprsc has been developed since 2008 by Matti Aarnio, OH2MQK (aprx, zmailer,
+etc), and Heikki Hannikainen, OH7LZB (aprs.fi).  Design phase and most of
+the core development happened during 2008, but the final sprint for feature
+completeness happened during the summer of 2012.  Substantial code reuse
+happens between aprx, aprsc and other projects of the authors.
 
 aprsc was inspired by the performance problems experienced on the core
 APRS-IS servers in early 2008, which were mitigated by moving CWOP clients

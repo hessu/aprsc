@@ -694,8 +694,11 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 		return;
 	}
 	
+	udp_pseudoclient->portaccount = l->portaccount;
 	e = pseudoclient_push_packet(udp_worker, udp_pseudoclient, username, packet, packet_len);
-
+	clientaccount_add(udp_pseudoclient, IPPROTO_UDP, len, 1, 0, 0, (e < 0) ? e : 0, 0);
+	udp_pseudoclient->portaccount = NULL;
+	
 	if (e < 0)
 		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parse failure code %d: %s", remote_host, e, packet);
 	else

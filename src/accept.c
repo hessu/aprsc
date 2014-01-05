@@ -1098,7 +1098,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 		fd_i = fd->valueint;
 		
 	if (fd_i < 0) {
-		hlog(LOG_INFO, "Live upgrade: Client '%s' has negative fd %d, ignoring (corepeer)", username_s, fd_i);
+		hlog(LOG_INFO, "Live upgrade: Client '%s' has negative fd %d, ignoring (corepeer?)", username_s, fd_i);
 		return -1;
 	}
 	

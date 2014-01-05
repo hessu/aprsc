@@ -17,7 +17,7 @@ CFGFILE=	/opt/aprsc/etc/aprsc.conf
 VERSION:=$(shell cat VERSION)
 GIT_CMD:=$(shell which git)
 GITVERSION:=$(shell if test -x $(GIT_CMD) -a \( -d .git -o -d ../.git \) ; then \
-		$(GIT_CMD) describe --long --dirty=M | sed -e 's/^.*-//' | tee GITVERSION; \
+		($(GIT_CMD) describe --long --dirty=M || $(GIT_CMD) describe --long)| sed -e 's/^.*-//' | tee GITVERSION; \
 	else \
 		(if test -f GITVERSION; then \
 			cat GITVERSION; \

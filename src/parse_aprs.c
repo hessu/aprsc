@@ -1247,7 +1247,7 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 		return 0;
 	
 	case 'D':
-		/* we drop DX beacon packets, they start with "DX de " */
+		/* we drop DX cluster packets, they start with "DX de " */
 		if (strncmp(body, "X de ", 5) == 0)
 			return INERR_DIS_DX;
 		break;

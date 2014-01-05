@@ -1119,7 +1119,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	filter = accept_liveupgrade_cJSON_get(client, "filter", cJSON_String, username_s);
 	
 	/* optional */
-	tick_connect = cJSON_GetObjectItem(client, "tick_connect");
+	tick_connect = cJSON_GetObjectItem(client, "t_connect_tick");
 	udp_port = cJSON_GetObjectItem(client, "udp_port");
 	ibuf = cJSON_GetObjectItem(client, "ibuf");
 	obuf = cJSON_GetObjectItem(client, "obuf");

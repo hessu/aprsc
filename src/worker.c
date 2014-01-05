@@ -1815,7 +1815,7 @@ void worker_thread(struct worker_t *self)
 			}
 #endif
 			/* collect client state first before closing or freeing anything */
-			if (worker_shutdown_clients) {
+			if (worker_shutdown_clients && c->fd >= 0) {
 				cJSON *jc = worker_client_json(c, 1);
 				cJSON_AddItemToArray(worker_shutdown_clients, jc);
 			}

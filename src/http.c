@@ -83,8 +83,10 @@ static struct http_static_t http_static_files[] = {
 	{ "/favicon.ico", "favicon.ico" },
 	{ "/aprsc.css", "aprsc.css" },
 	{ "/aprsc.js", "aprsc.js" },
-	{ "/aprsc-logo2.png", "aprsc-logo2.png" },
-	{ "/aprsc-logo3.png", "aprsc-logo3.png" },
+	/* allow old index.html versions to load the new logo */
+	{ "/aprsc-logo.png", "aprsc-logo.png" },
+	{ "/aprsc-logo2.png", "aprsc-logo.png" },
+	{ "/aprsc-logo3.png", "aprsc-logo.png" },
 	{ "/aprsc-joulukissa.jpg", "aprsc-joulukissa.jpg" },
 	{ "/excanvas.min.js", "excanvas.min.js" },
 	{ "/jquery.flot.min.js", "jquery.flot.min.js" },

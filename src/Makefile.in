@@ -107,7 +107,7 @@ WEBFILES = \
 	src/web/aprsc.css src/web/aprsc.js \
 	src/web/index.html \
 	src/web/favicon.ico \
-	src/web/aprsc-logo3.png \
+	src/web/aprsc-logo.png \
 	src/web/aprsc-joulukissa.jpg \
  	src/web/excanvas.min.js \
  	src/web/jquery.flot.min.js \

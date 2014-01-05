@@ -1047,6 +1047,25 @@ static void accept_rx_err_load(struct client_t *c, cJSON *rx_errs, int *rxerr_ma
  *	Live upgrade: accept old clients
  */
 
+static cJSON *accept_liveupgrade_cJSON_get(cJSON *tree, const char *key, int type, const char *logid)
+{
+	cJSON *val;
+	
+	val = cJSON_GetObjectItem(tree, key);
+	
+	if (!val) {
+		hlog(LOG_ERR, "Live upgrade: Client '%s' JSON: Field '%s' missing", logid, key);
+		return NULL;
+	}
+	
+	if (val->type != type) {
+		hlog(LOG_ERR, "Live upgrade: Client '%s' JSON: Field '%s' has incorrect type %d, expected %d", logid, key, val->type, type);
+		return NULL;
+	}
+	
+	return val;
+}
+
 static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_map_len)
 {
 	cJSON *fd, *listener_id, *username, *time_connect, *tick_connect;
@@ -1066,49 +1085,68 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	union sockaddr_u sa;
 	char *argv[256];
 	int i, argc;
+	const char *username_s = "unknown";
 	
-	fd = cJSON_GetObjectItem(client, "fd");
-	listener_id = cJSON_GetObjectItem(client, "listener_id");
-	state = cJSON_GetObjectItem(client, "state");
-	username = cJSON_GetObjectItem(client, "username");
-	time_connect = cJSON_GetObjectItem(client, "t_connect");
+	/* get username first, so we can log it later */
+	username = accept_liveupgrade_cJSON_get(client, "username", cJSON_String, username_s);
+	if (username)
+		username_s = username->valuestring;
+	
+	fd = accept_liveupgrade_cJSON_get(client, "fd", cJSON_Number, username_s);
+	int fd_i = -1;
+	if (fd)
+		fd_i = fd->valueint;
+		
+	if (fd_i < 0) {
+		hlog(LOG_INFO, "Live upgrade: Client '%s' has negative fd %d, ignoring (corepeer)", username_s, fd_i);
+		return -1;
+	}
+	
+	listener_id = accept_liveupgrade_cJSON_get(client, "listener_id", cJSON_Number, username_s);
+	state = accept_liveupgrade_cJSON_get(client, "state", cJSON_String, username_s);
+	time_connect = accept_liveupgrade_cJSON_get(client, "t_connect", cJSON_Number, username_s);
+	addr_loc = accept_liveupgrade_cJSON_get(client, "addr_loc", cJSON_String, username_s);
+	app_name = accept_liveupgrade_cJSON_get(client, "app_name", cJSON_String, username_s);
+	app_version = accept_liveupgrade_cJSON_get(client, "app_version", cJSON_String, username_s);
+	verified = accept_liveupgrade_cJSON_get(client, "verified", cJSON_Number, username_s);
+	obuf_q = accept_liveupgrade_cJSON_get(client, "obuf_q", cJSON_Number, username_s);
+	bytes_rx = accept_liveupgrade_cJSON_get(client, "bytes_rx", cJSON_Number, username_s);
+	bytes_tx = accept_liveupgrade_cJSON_get(client, "bytes_tx", cJSON_Number, username_s);
+	pkts_rx = accept_liveupgrade_cJSON_get(client, "pkts_rx", cJSON_Number, username_s);
+	pkts_tx = accept_liveupgrade_cJSON_get(client, "pkts_tx", cJSON_Number, username_s);
+	pkts_ign = accept_liveupgrade_cJSON_get(client, "pkts_ign", cJSON_Number, username_s);
+	rx_errs = accept_liveupgrade_cJSON_get(client, "rx_errs", cJSON_Array, username_s);
+	filter = accept_liveupgrade_cJSON_get(client, "filter", cJSON_String, username_s);
+	
+	/* optional */
 	tick_connect = cJSON_GetObjectItem(client, "tick_connect");
-	addr_loc = cJSON_GetObjectItem(client, "addr_loc");
 	udp_port = cJSON_GetObjectItem(client, "udp_port");
-	app_name = cJSON_GetObjectItem(client, "app_name");
-	app_version = cJSON_GetObjectItem(client, "app_version");
-	verified = cJSON_GetObjectItem(client, "verified");
-	obuf_q = cJSON_GetObjectItem(client, "obuf_q");
-	bytes_rx = cJSON_GetObjectItem(client, "bytes_rx");
-	bytes_tx = cJSON_GetObjectItem(client, "bytes_tx");
-	pkts_rx = cJSON_GetObjectItem(client, "pkts_rx");
-	pkts_tx = cJSON_GetObjectItem(client, "pkts_tx");
-	pkts_ign = cJSON_GetObjectItem(client, "pkts_ign");
-	rx_errs = cJSON_GetObjectItem(client, "rx_errs");
-	filter = cJSON_GetObjectItem(client, "filter");
 	ibuf = cJSON_GetObjectItem(client, "ibuf");
 	obuf = cJSON_GetObjectItem(client, "obuf");
 	client_heard = cJSON_GetObjectItem(client, "client_heard");
 	
-	if (!((fd) && fd->type == cJSON_Number
-		&& (listener_id) && listener_id->type == cJSON_Number
-		&& (state) && state->type == cJSON_String
-		&& (username) && username->type == cJSON_String
-		&& (time_connect) && time_connect->type == cJSON_Number
-		&& (addr_loc) && addr_loc->type == cJSON_String
-		&& (app_name) && app_name->type == cJSON_String
-		&& (app_version) && app_version->type == cJSON_String
-		&& (verified) && verified->type == cJSON_Number
-		&& (obuf_q) && obuf_q->type == cJSON_Number
-		&& (bytes_rx) && bytes_rx->type == cJSON_Number
-		&& (bytes_tx) && bytes_tx->type == cJSON_Number
-		&& (pkts_rx) && pkts_rx->type == cJSON_Number
-		&& (pkts_tx) && pkts_tx->type == cJSON_Number
-		&& (pkts_ign) && pkts_ign->type == cJSON_Number
-		&& (rx_errs) && rx_errs->type == cJSON_Array
-		&& (filter) && filter->type == cJSON_String
+	if (!(
+		(fd)
+		&& (listener_id)
+		&& (state)
+		&& (username)
+		&& (time_connect)
+		&& (addr_loc)
+		&& (app_name)
+		&& (app_version)
+		&& (verified)
+		&& (obuf_q)
+		&& (bytes_rx)
+		&& (bytes_tx)
+		&& (pkts_rx)
+		&& (pkts_tx)
+		&& (pkts_ign)
+		&& (rx_errs)
+		&& (filter)
 		)) {
-			hlog(LOG_ERR, "Live upgrade: Fields missing from client JSON");
+			hlog(LOG_ERR, "Live upgrade: Fields missing from client JSON, discarding client fd %d", fd_i);
+			if (fd_i >= 0)
+				close(fd_i);
 			return -1;
 	}
 	

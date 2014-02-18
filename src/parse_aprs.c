@@ -885,9 +885,10 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 		return 0;
 	}
 	
-	/* check that the timestamp ends with a z */
-	if (body[16] != 'z' && body[16] != 'Z') {
-		// fprintf(stderr, "\tinvalid object timestamp z character\n");
+	/* check that the timestamp ends with one of the valid timestamp type IDs */
+	char tz_end = body[16];
+	if (tz_end != 'z' && tz_end != 'Z' && tz_end != 'h' && tz_end != '/') {
+		DEBUG_LOG("\tinvalid object timestamp z character");
 		return 0;
 	}
 	
@@ -911,7 +912,7 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	pb->srcname = body;
 	pb->srcname_len = namelen+1;
 	
-	// fprintf(stderr, "\tobject name: '%.*s'\n", pb->srcname_len, pb->srcname);
+	DEBUG_LOG("object name: '%.*s'", pb->srcname_len, pb->srcname);
 	
 	/* Forward the location parsing onwards */
 	if (valid_sym_table_compressed(body[17]))
@@ -920,7 +921,7 @@ static int parse_aprs_object(struct pbuf_t *pb, const char *body, const char *bo
 	if (body[17] >= '0' && body[17] <= '9')
 		return parse_aprs_uncompressed(pb, body + 17, body_end);
 	
-	DEBUG_LOG("\tno valid position in object");
+	DEBUG_LOG("no valid position in object");
 	
 	return 0;
 }

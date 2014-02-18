@@ -18,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 2 + 6 + 4 };
+BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 2 + 6 + 4 + 1 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -89,9 +89,14 @@ $rx = "$msg_dst-3>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pa
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 # then, a message packet should magically pass!
-$tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message", $login_tx, $msg_dst);
-$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message", $login_tx, $msg_dst);
+$tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message{123", $login_tx, $msg_dst);
+$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message{123", $login_tx, $msg_dst);
 istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
+
+# and, its ACK packet should pass, too...
+$tx = sprintf("$msg_dst>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:ack123", $login_rx, $login_tx);
+$rx = sprintf("$msg_dst>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:ack123", $login_rx, $login_tx);
+istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 # Another message! With UTF-8 content.
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:Blää  blåå 日本語{1d", $login_tx, $msg_dst);

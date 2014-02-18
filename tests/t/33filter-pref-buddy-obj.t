@@ -83,7 +83,7 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 ############################
 # set an object filter
 #$i_rx->sendline("#filter o/OBJ1/OBJ2 o/PRE*/*END/FO*AR");
-$i_rx->sendline("#filter o/OBJ1/OBJ2/OBJ3/PRE*"); # # o/PRE*");
+$i_rx->sendline("#filter o/OBJ1/OBJ2/ISS/PRE*"); # # o/PRE*");
 sleep(0.5);
 
 # the previously set prefix filter should no longer pass
@@ -102,8 +102,8 @@ if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} =~ /javap/) {
 	$rx = "SRC>APRS,qAR,$login:;OBJ2     *090902z6010.78N/02451.11E-Object 2";
 	istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 	
-	$tx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
-	$rx = "SRC>APRS,qAR,$login:;OBJ3     *090902z6010.78N/02451.11E-Object 3";
+	# another object, this one having a HHMMSSh timestamp
+	$tx = $rx = "KJ4ERJ-15>APZTLE,TCPIP*,qAC,FOURTH:;ISS      *060312h4541.51N\\14357.24ESMsg4Pass }k1mlNcqQzAq5a0N5;A+Q#c+lN{!w+:!";
 	istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 }
 

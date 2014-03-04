@@ -1243,6 +1243,7 @@ int read_config(void)
 	 * for the first time.
 	 */
 	if (!rundir) {
+		/* initial setup */
 		if (new_rundir) {
 			rundir = new_rundir;
 			new_rundir = NULL;
@@ -1250,15 +1251,16 @@ int read_config(void)
 			hlog(LOG_CRIT, "Config: rundir not defined.");
 			failed = 1;
 		}
+		
+		if (test_directory(rundir)) {
+			hlog(LOG_CRIT, "Config: rundir %s is not a directory.", rundir);
+			failed = 1;
+		}
 	} else {
+		/* reconfig */
 		if (new_rundir) {
 			hfree(new_rundir);
 			new_rundir = NULL;
-		}
-		
-		if (test_directory(new_rundir)) {
-			hlog(LOG_CRIT, "Config: rundir %s is not a directory.", new_rundir);
-			failed = 1;
 		}
 	}
 	

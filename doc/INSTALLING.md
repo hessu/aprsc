@@ -5,7 +5,7 @@ Installing aprsc
 aprsc is "officially" "supported" on the following platforms:
 
 * Debian stable (7.0, "squeeze"): i386, x86_64, armhf Raspberry Pi (armv6l)
-* Ubuntu LTS (10.04, 12.04): i386 and x86_64
+* Ubuntu LTS (10.04, 12.04, 14.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
@@ -48,10 +48,11 @@ You'll need to figure out the codename of your distribution.  The command
 "lsb_release -c" should provide the codename.  Here's a list of distribution
 versions and their codenames:
 
-* Debian 6.0: squeeze
-* Debian 7.0: wheezy
+* Ubuntu 14.04 LTS: trusty
 * Ubuntu 12.04 LTS: precise
 * Ubuntu 10.04 LTS: lucid
+* Debian 7.0: wheezy
+* Debian 6.0: squeeze
 
 Other versions are currently not supported.
 

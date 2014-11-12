@@ -7,6 +7,9 @@
 #
 # Heikki Hannikainen, 2012
 
+# install dependencies:
+# apt-get install libwww-perl libjson-xs-perl 
+
 use strict;
 use warnings;
 
@@ -15,13 +18,19 @@ use Socket;
 use LWP::UserAgent;
 use File::Compare;
 
+use JSON::XS;
+
+# configuration
+
 my $base = "/opt/aprsc";
 my $acl_file = "$base/etc/t2.acl";
 my $pid_file = "$base/logs/aprsc.pid";
 
-my $url = "http://www.aprs2.net/t2servers.php";
+my $url = "https://t2sysop.aprs2.net/sysop/rotates.json";
+
 # If generated ACL has less than N rows, something went wrong.
 my $rows_min = 90;
+
 
 # IPv6 address validation (and compression)
 sub isip6 {
@@ -52,61 +61,65 @@ sub isip6 {
 	return $s;
 }                                                                                                                                                                                                                                                        
 
+
+# set up the JSON module
+my $json = new JSON::XS;
+   
+if (!$json) {
+	die "JSON loading failed";
+}
+
+$json->latin1(0);
+$json->ascii(1);
+$json->utf8(0);
+
+
 # Download the current ACL
 my $ua = LWP::UserAgent->new(timeout => 5);
 my $res = $ua->request(HTTP::Request->new('GET', $url));
 
-if (!$res->is_success) {
+if (!$res->is_success || $res->code != 200) {
 	# todo: print result error messages
-	die "Failed to download T2 ACL from $url\n";
+	die "Failed to download T2 ACL from $url: " .  $res->code . ": " . $res->message . "\n";
 }
-
-my $new_acl = $res->content;
 
 #warn "new: $new_acl\n";
 
-# Parse and validate file
-my $acl;
-my $rows = 0;
-foreach my $a (split(/[\r\n]+/, $new_acl)) {
-	$a =~ s/\s+//g;
-	#warn "a: '$a'\n";
-	
-	# ipv4?
-	if ($a =~ /^\d+\.\d+\.\d+\.\d+$/) {
-		$acl .= "allow $a\n";
-		$rows++;
-		next;
-	}
-	
-	# ipv6?
-	if (isip6($a) ne "") {
-		$acl .= "allow $a\n";
-		$rows++;
-		next;
-	}
-	
-	# hostname? Currently there's a single hostname in the ACL,
-	# which needs to be resolved.
-	if ($a =~ /^([A-Za-z][A-Za-z0-9-]*[A-Za-z0-9]\.)+[A-Za-z]{2,}$/) {
-		#warn "lookup: $a\n";
-		my $packed = gethostbyname($a);
-		if (!defined $packed) {
-			warn "T2 ACL: DNS lookup for $a failed\n";
-			next;
-		}
-		
-		my $ip = inet_ntoa($packed);
-		#warn "lookup $a resolved to $ip\n";
-		$acl .= "# resolved $a to $ip\nallow $ip\n";
-		$rows++;
-		next;
-	}
-	
-	die "T2 ACL contains invalid address: $a\n";
+my $j = $json->decode($res->decoded_content(charset => 'none'));
+if (!defined $j) {
+	die "Failed to decode JSON from $url\n";
 }
 
-#warn $acl;
+
+my $acl = '';
+my $rows = 0;
+for my $rotate_host (sort keys %{ $j }) {
+	next if ($rotate_host !~ /\.aprs2\.net$/); # do not add cwop/core servers
+	next if ($rotate_host =~ /firenet/); # do not add firenet servers
+	my $rot = $j->{$rotate_host};
+	
+	die "'servers' not defined in rotates.json for '$rotate_host'" if (!defined $rot->{'servers'});
+	
+	my $servers = $rot->{'servers'};
+	
+	for my $id (sort keys %{ $servers }) {
+		next if ($id =~ /^T2HUB/); # hubs should not be regular clients
+		my $s = $servers->{$id};
+		if (defined $s->{'deleted'} && $s->{'deleted'}) {
+			#warn "skipping $id: deleted\n";
+			next;
+		}
+		$acl .= "# $id\n";
+		if (defined $s->{'ipv4'} && $s->{'ipv4'} =~ /^\d+\.\d+\.\d+\.\d+$/) {
+			$acl .= "allow " . $s->{'ipv4'} . "\n";
+			$rows++;
+		}
+		if (defined $s->{'ipv6'} && isip6($s->{'ipv6'})) {
+			$acl .= "allow " . $s->{'ipv6'} . "\n";
+			$rows++;
+		}
+	}
+}
 
 # If the ACL is way too small, bail out just in case.
 if ($rows < $rows_min) {

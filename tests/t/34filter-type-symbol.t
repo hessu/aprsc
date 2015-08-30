@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 18 + 3 };
+BEGIN { plan tests => 6 + 19 + 3 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -94,6 +94,11 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 # CWOP pass, position drop
 $pass = "CW1234>APRS,qAR,$login:!6028.51N/02505.68E# CWOP pass";
 $drop = "XW1AA>APRS,qAR,$login:!6028.51N/02505.68E# pos drop";
+istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+# CWOP with overlay on symbol pass, position drop
+$pass = "YACHTS>APRS,qAR,$login:\@055503z4420.57N112405.53W_287/007g020t055r007p053P019h87b10115.U21h";
+$drop = "XW1AZ>APRS,qAR,$login:!6028.51N/02505.68E# pos drop again";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
 $pass = "EW1234>APRS,qAR,$login:!6028.51N/02505.68E# CWOP pass";

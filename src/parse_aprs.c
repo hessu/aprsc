@@ -70,10 +70,10 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 	pb->symbol[1] = sym_code;
 	pb->symbol[2] = 0;
 	
-	/* Is it perhaps a weather report ? */
-	if (sym_code == '_' && (sym_table == '/' || sym_table == '\\')) 
+	/* Is it perhaps a weather report ? Allow symbol overlays, too. */
+	if (sym_code == '_' && valid_sym_table_uncompressed(sym_table))
 		pb->packettype |= T_WX;
-	if (sym_code == '@' && (sym_table == '/' || sym_table == '\\')) 
+	if (sym_code == '@' && valid_sym_table_uncompressed(sym_table))
 		pb->packettype |= T_WX;	/* Hurricane */
 
 	bad |= (lat < -89.9 && -0.0001 <= lng && lng <= 0.0001);

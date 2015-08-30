@@ -49,7 +49,7 @@ On-line reconfiguration
 --------------------------
 
 aprsc has been designed from the start to support configuration reloading
-without requiring a full software restarts.  Many APRS server operators
+without requiring a full software restart.  Many APRS server operators
 value high uptimes and service availability, so server restarts should be
 kept to a minimum.
 

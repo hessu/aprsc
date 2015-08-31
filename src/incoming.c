@@ -684,6 +684,20 @@ static int incoming_server_message(struct worker_t *self, struct client_t *c, st
 }
 
 /*
+ *	Store the coordinates given in the current packet to the client
+ *	structure, so that they can be used later when processing the
+ *	m/ filter.
+ */
+
+static void client_loc_update(struct client_t *c, struct pbuf_t *pb)
+{
+	c->lat = pb->lat;
+	c->lng = pb->lng;
+	c->cos_lat = pb->cos_lat;
+	c->loc_known = 1;
+}
+
+/*
  *	Parse an incoming packet.
  *
  *	Returns -1 if the packet is pathologically invalid on APRS-IS
@@ -857,20 +871,10 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (strlen(c->username) == src_len && memcmp(c->username, s, src_len) == 0)
 		originated_by_client = 1;
 	
-	/* if disallow_unverified is enabled, don't allow unverified clients
-	 * to send any packets
-	 */
-	int via_len = path_end - via_start;
-	if (disallow_unverified) {
-		if (!c->validated)
-			return INERR_DISALLOW_UNVERIFIED;
-		if (memmem(via_start, via_len, ",TCPXX", 6))
-			return INERR_DISALLOW_UNVERIFIED_PATH;
-	}
-	
 	/* check if the path contains NOGATE or other signs which tell the
 	 * packet should be dropped
 	 */
+	int via_len = path_end - via_start;
 	if (digi_path_drop(via_start, via_len))
 		return INERR_NOGATE;
 	
@@ -1045,6 +1049,31 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (pb->packettype & T_QUERY) {
 		rc = INERR_GENERAL_QUERY;
 		goto free_pb_ret;
+	}
+	
+	/* If the client sent this packet itself, update its coordinates
+	 * in the client struct based on the packet for use in m/ filter
+	 * processing. This needs to be after parse_aprs and before dropping
+	 * unvalidated packets, so that t/m works for unvalidated
+	 * read-only clients.
+	 */
+	if (originated_by_client && (pb->packettype & T_POSITION))
+		client_loc_update(c, pb);
+	
+	/* If disallow_unverified is enabled, don't allow unverified clients
+	 * to send any packets. Do this after any potential client_loc_update
+	 * so that unverified clients can have their packets parsed
+	 * and m/ filters working.
+	 */
+	if (disallow_unverified) {
+		if (!c->validated) {
+			rc = INERR_DISALLOW_UNVERIFIED;
+			goto free_pb_ret;
+		}
+		if (memmem(via_start, via_len, ",TCPXX", 6)) {
+			rc = INERR_DISALLOW_UNVERIFIED_PATH;
+			goto free_pb_ret;
+		}
 	}
 	
 	/* Filter preprocessing before sending this to dupefilter.. */

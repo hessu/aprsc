@@ -355,6 +355,7 @@ struct client_t {
 	char  hidden;       /* is the user on a hidden listener socket, not shown on status */
 	char  failed_cmds;  /* how many login commands have failed */
 	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
+	char  loc_known;    /* have we received a position packet from this client */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
@@ -380,6 +381,9 @@ struct client_t {
 	struct client_heard_t* client_courtesy[CLIENT_HEARD_BUCKETS];
 	int client_heard_count;			/* number of 'heard' list entries for clients */
 	int client_courtesy_count;		/* number of 'courtesy' list entries for clients */
+	
+	/* coordinates of client, if transmitted */
+	float lat, lng, cos_lat;
 
 	// Maybe we use these four items, or maybe not.
 	// They are there for experimenting with outgoing queue processing algorithms.

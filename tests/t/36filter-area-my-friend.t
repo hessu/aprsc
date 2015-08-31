@@ -21,7 +21,7 @@ my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
 # allow range, then drop using a buddy filter
-my $i_rx = new Ham::APRS::IS("localhost:55581", $rxlogin);
+my $i_rx = new Ham::APRS::IS("localhost:55581", $rxlogin, 'nopass' => 1);
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
 my $ret;
@@ -63,10 +63,10 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 # also set a filter for friend range (it's position is already known
 # from previous test)
 $i_rx->sendline("#filter m/1 f/OH2TI/10");
-$i_rx->sendline("$rxlogin>APRS:!/0%<RTgK[>yL_");
+$i_rx->sendline("$rxlogin>APRS:!//HC`TPmVvR<_"); # tampere
 sleep(0.5);
 
-$pass = "T3ST>APRS,qAR,$login:!/0%<RTgK[>yL_ test"; # the same position...
+$pass = "T3ST>APRS,qAR,$login:!//H:sTQ\";vJI_ test"; # close to the previous compressed
 $drop = "DR0P-15>APN390,qAR,$login:!2334.10S/04719.70E#";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 

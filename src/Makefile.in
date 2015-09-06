@@ -278,7 +278,7 @@ SRCDOCS=$(addprefix ../doc/,$(DOCS))
 install-webdoc: $(DESTDOCS)
 $(DESTDOCS): $(SRCDOCS) ../doc/web-header.html ../doc/web-footer.html
 	cp ../doc/web-header.html $@
-	$(MARKDOWN) < $(addprefix ../doc/,$(basename $(notdir $@))).md > $@
+	$(MARKDOWN) < $(addprefix ../doc/,$(basename $(notdir $@))).md >> $@
 	cat ../doc/web-footer.html >> $@
 
 # -------------------------------------------------------------------- #

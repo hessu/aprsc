@@ -301,7 +301,9 @@ within HTML page.
 
 The following options allow the server operator to reject logins and packets
 from specific callsigns.  Both options support 'glob' type wildcards ('*'
-matches 0 or more any characters, '?' matches exactly one any character).
+matches 0 or more any characters, '?' matches exactly one any character). 
+The examples below are examples only - there is currently, by default, no need
+to have the example callsigns blocked.
 
 Separate multiple callsigns with spaces.
 

@@ -78,7 +78,7 @@
 #include <openssl/err.h>
 
 #define SSL_DEFAULT_CIPHERS     "HIGH:eNULL:!aNULL:!MD5"
-#define SSL_PROTOCOLS (NGX_SSL_SSLv3|NGX_SSL_TLSv1 |NGX_SSL_TLSv1_1|NGX_SSL_TLSv1_2)
+#define SSL_PROTOCOLS (NGX_SSL_TLSv1|NGX_SSL_TLSv1_1|NGX_SSL_TLSv1_2)
 
 /* ssl error strings */
 #define SSL_ERR_LABELS_COUNT 6

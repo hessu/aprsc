@@ -276,8 +276,10 @@ DOCS=README.md INSTALLING.md BUILDING.md CONFIGURATION.md DEBUGGING.md \
 DESTDOCS=$(addprefix $(WEBDOCS)/,$(addsuffix .html,$(basename $(DOCS))))
 SRCDOCS=$(addprefix ../doc/,$(DOCS))
 install-webdoc: $(DESTDOCS)
-$(DESTDOCS): $(SRCDOCS)
+$(DESTDOCS): $(SRCDOCS) ../doc/web-header.html ../doc/web-footer.html
+	cp ../doc/web-header.html $@
 	$(MARKDOWN) < $(addprefix ../doc/,$(basename $(notdir $@))).md > $@
+	cat ../doc/web-footer.html >> $@
 
 # -------------------------------------------------------------------- #
 

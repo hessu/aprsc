@@ -4,8 +4,9 @@ Installing aprsc
 
 aprsc is "officially" "supported" on the following platforms:
 
-* Debian stable (7.0, "wheezy"): i386, x86_64, armhf Raspberry Pi (armv6l)
-* Ubuntu LTS (10.04, 12.04, 14.04): i386 and x86_64
+* Debian stable (8.0, "jessie"): i386, x86_64
+* Debian oldstable (7.0, "wheezy"): i386, x86_64, armhf Raspberry Pi (armv6l)
+* Ubuntu LTS (12.04, 14.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
@@ -50,9 +51,8 @@ versions and their codenames:
 
 * Ubuntu 14.04 LTS: trusty
 * Ubuntu 12.04 LTS: precise
-* Ubuntu 10.04 LTS: lucid
+* Debian 8.0: jessie
 * Debian 7.0: wheezy
-* Debian 6.0: squeeze
 
 Other versions are currently not supported.
 

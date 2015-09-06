@@ -8,21 +8,23 @@ it runs on Linux and Unix servers.
 
 If you need igate or other radio-interfacing features, aprsc is not for you.
 
-If you need to run a server on Windows, aprsc is not for you. Sorry!
+
+Status of the project
+------------------------
+
+aprsc was released in 2012, and it has since been in continuous use on a
+large percentage of APRS-IS servers.  It has been found to be easy to set up
+and stable in production use.  Since it is pretty much feature complete by
+now, new major versions come out rarely, but smaller bugs get fixed at
+times.
 
 
-A word of caution
---------------------
+A word of caution for Windows users
+-------------------------------------
 
-The aprsc software is brand new, under active development, and release
-cycles are currently very quick - be ready to upgrade on a short notice when
-new versions are announced.  Like any new software, aprsc is likely to
-contain new bugs, and some upgrades might have a high priority.
-
-If you're not prepared to upgrade often, please wait for a few months, it
-should be more peaceful then.  Documentation is not there yet, either, but
-if you're an experienced APRS-IS server operator, there should be no big
-surprises around.
+The Windows version of aprsc is very new, it has only been tested on a
+couple of servers, so it is more likely to contain interesting "features"
+than the Linux / Unix builds.
 
 
 Features (and lack of)
@@ -83,12 +85,6 @@ Linux and OS X are the main development environments and will receive
 premium support, but FreeBSD and Solaris 11 are known to work too.  Packaged
 binaries for Debian and Ubuntu are available for super-easy installations
 and automatic upgrades using APT.
-
-
-Performance
---------------
-
-TODO: figures here
 
 
 Quality control

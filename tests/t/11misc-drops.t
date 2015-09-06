@@ -86,6 +86,12 @@ my @pkts = (
 	"NOCALL>DST,DIGI,qAR,$login:>should drop, NOCALL as source callsign",
 	"NOCALL-1>DST,DIGI,qAR,$login:>should drop, N0CALL-1 as source callsign",
 	"SERVER>DST,DIGI,qAR,$login:>should drop, SERVER as source callsign",
+	# additionally configured disallowed source callsigns: N7CALL N8CALL
+	"N7CALL>DST,DIGI,qAR,$login:>should drop, N7CALL as source callsign",
+	"N8CALL>DST,DIGI,qAR,$login:>should drop, N8CALL as source callsign",
+	"GLDROP>DST,DIGI,qAR,$login:>should drop, GLDROP as source callsign matches *DROP",
+	"DRGLOB>DST,DIGI,qAR,$login:>should drop, DRGLOB as source callsign matches DRG*",
+	"OH7DRU>DST,DIGI,qAR,$login:>should drop, OH7DRU as source callsign matches OH?DRUP",
 	# DX spots
 	"SRC>DST,DIGI,qAR,$login:DX de FOO: BAR - should drop",
 	# Disallowed message recipients, status messages and such

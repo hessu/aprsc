@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <fnmatch.h>
 
 #ifdef HAVE_ALLOCA_H
 #include <alloca.h>
@@ -86,7 +87,7 @@ const char *inerr_labels[] = {
 
 
 /* a static list of source callsigns which are dropped */
-static const char *disallow_srccalls[] = {
+static char *disallow_srccalls[] = {
 	"N0CALL", /* default in some apps */
 	"NOCALL", /* default in some apps */
 	"SERVER", /* originated by APRS-IS server */
@@ -551,13 +552,34 @@ int check_call_match(const char **set, const char *call, int len)
 	return 0;
 }
 
-static int check_call_prefix_match(const char **set, const char *call, int len)
+static int check_call_prefix_match(char **set, const char *call, int len)
 {
 	int i, l;
 	
 	for (i = 0; (set[i]); i++) {
 		l = strlen(set[i]);
 		if (len >= l && strncmp(call, set[i], l) == 0)
+			return -1;
+	}
+	
+	return 0;
+}
+
+#define MAX_TEST_CALL_LEN 32
+static int check_call_glob_match(char **set, const char *call, int len)
+{
+	int i;
+	char ts[MAX_TEST_CALL_LEN+1];
+	
+	if (len > MAX_TEST_CALL_LEN)
+		return 0; /* no match */
+	
+	/* glob match requires having a null-terminated string */
+	memcpy(ts, call, len);
+	ts[len] = 0;
+	
+	for (i = 0; (set[i]); i++) {
+		if (fnmatch(set[i], ts, FNM_CASEFOLD) == 0)
 			return -1;
 	}
 	
@@ -852,6 +874,9 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
 	
 	if (check_call_prefix_match(disallow_srccalls, s, src_len))
+		return INERR_DIS_SRCCALL; /* disallowed srccall */
+	
+	if (disallow_srccall_glob && check_call_glob_match(disallow_srccall_glob, s, src_len))
 		return INERR_DIS_SRCCALL; /* disallowed srccall */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload

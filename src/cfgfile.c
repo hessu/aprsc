@@ -61,6 +61,30 @@ int do_string(char **dest, int argc, char **argv)
 	return 0;
 }
 
+int do_string_array(char ***dest, int argc, char **argv)
+{
+	int i, n;
+	char **vars;
+	
+	if (argc < 2)
+		return -1;
+	
+	if (*dest) // TODO free the actual referenced strings
+		hfree(*dest);
+		
+	n = argc - 1;
+	
+	vars = hmalloc(sizeof(char *) * (n+1));
+	for (i = 0; i < n; i++)
+		vars[i] = hstrdup(argv[i + 1]);
+	
+	vars[i] = NULL;
+	
+	*dest = vars;
+	
+	return 0;
+}
+
 int do_int(int *dest, int argc, char **argv)
 {
 	if (argc < 2)

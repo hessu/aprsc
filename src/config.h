@@ -104,6 +104,9 @@ extern char *myadmin;
 extern char *http_status_options;
 extern char *fake_version;
 
+extern char **disallow_srccall_glob;
+extern char **disallow_login_glob;
+
 extern char def_cfgfile[];
 extern char *cfgfile;
 extern char *pidfile;

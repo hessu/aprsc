@@ -61,6 +61,9 @@ char *new_myemail;
 char *new_myadmin;
 char *new_fake_version;
 
+char **disallow_srccall_glob, **new_disallow_srccall_glob;
+char **disallow_login_glob, **new_disallow_login_glob;
+
 int listen_low_ports = 0; /* do we have any < 1024 ports set? need POSIX capabilities? */
 
 struct sockaddr_in uplink_bind_v4;
@@ -175,6 +178,8 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ "quirks_mode",	_CFUNC_ do_boolean,	&quirks_mode		},
 	{ "fake_version",	_CFUNC_ do_string,	&new_fake_version	},
+	{ "disallowlogincall",	_CFUNC_ do_string_array,	&new_disallow_login_glob	},
+	{ "disallowsourcecall",	_CFUNC_ do_string_array,	&new_disallow_srccall_glob	},
 	{ NULL,			NULL,			NULL			}
 };
 
@@ -1358,6 +1363,30 @@ int read_config(void)
 	} else {
 		char *o = fake_version;
 		fake_version = NULL;
+		hfree(o);
+	}
+	
+	if (new_disallow_srccall_glob) {
+		char **o = disallow_srccall_glob;
+		disallow_srccall_glob = new_disallow_srccall_glob;
+		new_disallow_srccall_glob = NULL;
+		if (o)
+			hfree(o);
+	} else {
+		char **o = disallow_srccall_glob;
+		disallow_srccall_glob = NULL;
+		hfree(o);
+	}
+	
+	if (new_disallow_login_glob) {
+		char **o = disallow_login_glob;
+		disallow_login_glob = new_disallow_login_glob;
+		new_disallow_login_glob = NULL;
+		if (o)
+			hfree(o);
+	} else {
+		char **o = disallow_login_glob;
+		disallow_login_glob = NULL;
 		hfree(o);
 	}
 	

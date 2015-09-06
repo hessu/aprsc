@@ -25,6 +25,7 @@ extern char *argstr(int arg, int argc, char **argv);
 extern int read_cfgfile(char *f, struct cfgcmd *cmds);
 
 extern int do_string(char **dest, int argc, char **argv);
+extern int do_string_array(char ***dest, int argc, char **argv);
 extern int do_int(int *dest, int argc, char **argv);
 extern int do_boolean(int *dest, int argc, char **argv);
 

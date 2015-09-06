@@ -327,7 +327,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	hlog(LOG_DEBUG, "packet: %s", packet);
 	
 	/* process the login string */
-	validated = http_udp_upload_login(remote_host, login_string, &username);
+	validated = http_udp_upload_login(remote_host, login_string, &username, "HTTP POST");
 	if (validated < 0) {
 		evhttp_send_error(r, HTTP_BADREQUEST, "Invalid login string");
 		return;

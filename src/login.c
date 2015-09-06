@@ -49,7 +49,7 @@ static const char *quirks_mode_blacklist[] = {
  *	TODO: Used for UDP too, so should not say HTTP in log errors...
  */
 
-int http_udp_upload_login(const char *addr_rem, char *s, char **username)
+int http_udp_upload_login(const char *addr_rem, char *s, char **username, const char *log_source)
 {
 	int argc;
 	char *argv[256];
@@ -61,12 +61,12 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 		return -1;
 	
 	if (argc < 2) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, too few arguments: '%s'", addr_rem, s);
+		hlog(LOG_WARNING, "%s: %s: Invalid login string, too few arguments: '%s'", addr_rem, log_source, s);
 		return -1;
 	}
 	
 	if (strcasecmp(argv[0], "user") != 0) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, no 'user': '%s'", addr_rem, s);
+		hlog(LOG_WARNING, "%s: %s: Invalid login string, no 'user': '%s'", addr_rem, log_source, s);
 		return -1;
 	}
 	
@@ -74,27 +74,27 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 	username_len = strlen(*username);
 	/* limit username length */
 	if (username_len > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, too long 'user' username: '%s'", addr_rem, *username);
+		hlog(LOG_WARNING, "%s: %s: Invalid login string, too long 'user' username: '%s'", addr_rem, log_source, *username);
 		return -1;
 	}
 	
 	/* check the username against a static list of disallowed usernames */
 	for (i = 0; (disallow_login_usernames[i]); i++) {
 		if (strcasecmp(*username, disallow_login_usernames[i]) == 0) {
-			hlog(LOG_WARNING, "%s: HTTP POST: Login by user '%s' not allowed", addr_rem, *username);
+			hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed", addr_rem, log_source, *username);
 			return -1;
 		}
 	}
 	
 	/* check the username against a dynamic list of disallowed usernames */
 	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, *username, username_len)) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Login by user '%s' not allowed due to config", addr_rem, *username);
+		hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed due to config", addr_rem, log_source, *username);
 		return -1;
 	}
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(*username, username_len)) {
-		hlog(LOG_WARNING, "%s: HTTP POST: Invalid login string, invalid 'user': '%s'", addr_rem, *username);
+		hlog(LOG_WARNING, "%s: %s: Invalid login string, invalid 'user': '%s'", addr_rem, log_source, *username);
 		return -1;
 	}
 	
@@ -104,7 +104,7 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 	for (i = 2; i < argc; i++) {
 		if (strcasecmp(argv[i], "pass") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): HTTP POST: No passcode after pass command", addr_rem, username);
+				hlog(LOG_WARNING, "%s (%s): %s: No passcode after pass command", addr_rem, log_source, username);
 				break;
 			}
 			
@@ -114,7 +114,7 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 					validated = 1;
 		} else if (strcasecmp(argv[i], "vers") == 0) {
 			if (i+2 >= argc) {
-				hlog(LOG_DEBUG, "%s (%s): HTTP POST: No application name and version after vers command", addr_rem, username);
+				hlog(LOG_DEBUG, "%s (%s): %s: No application name and version after vers command", addr_rem, username, log_source);
 				break;
 			}
 			

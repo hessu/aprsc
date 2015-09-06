@@ -672,7 +672,7 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	hlog(LOG_DEBUG, "UDP submit [%s]: packet: %s", remote_host, packet);
 	
 	/* process the login string */
-	validated = http_udp_upload_login(remote_host, login_string, &username);
+	validated = http_udp_upload_login(remote_host, login_string, &username, "UDP submit");
 	if (validated < 0) {
 		hlog(LOG_DEBUG, "UDP submit [%s]: Invalid login string", remote_host);
 		return;

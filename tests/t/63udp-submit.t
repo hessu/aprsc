@@ -42,7 +42,25 @@ $usock->send($post);
 my $l = $i_rx->getline_noncomment();
 ok($l, $out, "Got wrong line when sent using UDP");
 
-# another
+# test rejections
+
+my $fail = 0;
+my(@udp_rej) = (
+	[ 'UDROP', '', "UDROP>UDAPRS:>udp packet rejected, no passcode" ],
+	[ 'UDROP', 123, "UDROP>UDAPRS:>udp packet rejected, bad passcode" ],
+	[ 'UDROPASDSJSKD', 13293, "UDROPASDSJSKD>UDAPRS:>udp packet rejected, too long login callsign" ],
+	[ 'UDRO/OH', 29929, "UDROP>UDAPRS:>udp packet rejected, invalid login callsign" ],
+);
+
+for my $rej (@udp_rej) {
+	my($src, $passcode, $rejdata) = @{ $rej };
+	my $rej_post = "user $src pass $passcode vers udpaprstester 1.0\r\n"
+		. "$rejdata";
+
+	$usock->send($rej_post);
+}
+
+# another success after the failures
 
 $data = "TEST>UDAPRS:>udp packet content 2";
 $out = "TEST>UDAPRS,TCPIP*,qAU,TESTING:>udp packet content 2";

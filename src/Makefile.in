@@ -262,7 +262,7 @@ make-deb:
 		  < debian/changelog.release	\
 		  > debian/changelog ; \
 	fi
-	dpkg-buildpackage -b -us -uc -rfakeroot
+	nice dpkg-buildpackage -b -us -uc -rfakeroot -j2
 
 make-rpm: # actually just a reminder of how to do it..
 	rpmbuild --target i686 -ta $(DISTVERSION).tar.gz 

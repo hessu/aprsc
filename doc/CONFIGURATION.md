@@ -297,6 +297,24 @@ within HTML page.
     HTTPStatusOptions ShowEmail=1
 
 
+### Rejecting logins and packets ###
+
+The following options allow the server operator to reject logins and packets
+from specific callsigns.  Both options support 'glob' type wildcards ('*'
+matches 0 or more any characters, '?' matches exactly one any character).
+
+Separate multiple callsigns with spaces.
+
+DisallowLoginCall rejects logins by the specified callsign.
+
+    DisallowLoginCall P1RAT* P?ROT*
+
+DisallowSourceCall makes the server drop packets sent by the given source
+callsign, even though they were injected at a different server.
+
+    DisallowSourceCall P1RAT* P?ROT*
+
+
 ### Environment ###
 
 When the server starts up as the super-user (root), it can increase some

@@ -84,6 +84,7 @@ my @pkts = (
 	# disallowed source callsigns
 	"N0CALL>DST,DIGI,qAR,$login:>should drop, N0CALL as source callsign",
 	"NOCALL>DST,DIGI,qAR,$login:>should drop, NOCALL as source callsign",
+	"NOCALL-1>DST,DIGI,qAR,$login:>should drop, N0CALL-1 as source callsign",
 	"SERVER>DST,DIGI,qAR,$login:>should drop, SERVER as source callsign",
 	# DX spots
 	"SRC>DST,DIGI,qAR,$login:DX de FOO: BAR - should drop",

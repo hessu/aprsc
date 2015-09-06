@@ -551,6 +551,19 @@ int check_call_match(const char **set, const char *call, int len)
 	return 0;
 }
 
+static int check_call_prefix_match(const char **set, const char *call, int len)
+{
+	int i, l;
+	
+	for (i = 0; (set[i]); i++) {
+		l = strlen(set[i]);
+		if (len >= l && strncmp(call, set[i], l) == 0)
+			return -1;
+	}
+	
+	return 0;
+}
+
 /*
  *	Check if a callsign is good for a digi path entry
  *	(valid APRS-IS callsign, * allowed in end)
@@ -838,7 +851,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	if (check_invalid_src_dst(s, src_len) != 0)
 		return INERR_INV_SRCCALL; /* invalid or too long for source callsign */
 	
-	if (check_call_match(disallow_srccalls, s, src_len))
+	if (check_call_prefix_match(disallow_srccalls, s, src_len))
 		return INERR_DIS_SRCCALL; /* disallowed srccall */
 	
 	info_start = path_end+1;	// @":"+1 - first char of the payload

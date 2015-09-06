@@ -87,8 +87,8 @@ my @pkts = (
 	"NOCALL-1>DST,DIGI,qAR,$login:>should drop, N0CALL-1 as source callsign",
 	"SERVER>DST,DIGI,qAR,$login:>should drop, SERVER as source callsign",
 	# additionally configured disallowed source callsigns: N7CALL N8CALL
-	"N7CALL>DST,DIGI,qAR,$login:>should drop, N7CALL as source callsign",
-	"N8CALL>DST,DIGI,qAR,$login:>should drop, N8CALL as source callsign",
+	"N7CALL>DST,DIGI,qAR,$login:>should drop, N7CALL as source callsign matches N7CALL",
+	"N8CALL>DST,DIGI,qAR,$login:>should drop, N8CALL as source callsign matches N8CALL*",
 	"GLDROP>DST,DIGI,qAR,$login:>should drop, GLDROP as source callsign matches *DROP",
 	"DRGLOB>DST,DIGI,qAR,$login:>should drop, DRGLOB as source callsign matches DRG*",
 	"OH7DRU>DST,DIGI,qAR,$login:>should drop, OH7DRU as source callsign matches OH?DRUP",

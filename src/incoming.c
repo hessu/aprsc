@@ -566,7 +566,7 @@ static int check_call_prefix_match(char **set, const char *call, int len)
 }
 
 #define MAX_TEST_CALL_LEN 32
-static int check_call_glob_match(char **set, const char *call, int len)
+int check_call_glob_match(char **set, const char *call, int len)
 {
 	int i;
 	char ts[MAX_TEST_CALL_LEN+1];

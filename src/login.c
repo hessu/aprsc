@@ -45,6 +45,8 @@ static const char *quirks_mode_blacklist[] = {
 /*
  *	Parse the login string in a HTTP POST or UDP submit packet
  *	Argh, why are these not in standard POST parameters in HTTP?
+ *
+ *	TODO: Used for UDP too, so should not say HTTP in log errors...
  */
 
 int http_udp_upload_login(const char *addr_rem, char *s, char **username)
@@ -82,6 +84,12 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username)
 			hlog(LOG_WARNING, "%s: HTTP POST: Login by user '%s' not allowed", addr_rem, *username);
 			return -1;
 		}
+	}
+	
+	/* check the username against a dynamic list of disallowed usernames */
+	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, *username, username_len)) {
+		hlog(LOG_WARNING, "%s: HTTP POST: Login by user '%s' not allowed due to config", addr_rem, *username);
+		return -1;
 	}
 	
 	/* make sure the callsign is OK on the APRS-IS */
@@ -254,10 +262,17 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		}
 	}
 	
+	/* check the username against a dynamic list of disallowed usernames */
+	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, c->username, c->username_len)) {
+		hlog(LOG_WARNING, "%s: Login by user '%s' not allowed due to config", c->addr_rem, c->username);
+		rc = client_printf(self, c, "# Login by user not allowed\r\n");
+		goto failed_login;
+	}
+	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {
 		hlog(LOG_WARNING, "%s: Invalid login string, invalid 'user': '%s'", c->addr_rem, c->username);
-		rc = client_printf(self, c, "# Invalid username format\r\n");
+		rc = client_printf(self, c, "# Invalid username format, not allowed\r\n");
 		goto failed_login;
 	}
 	

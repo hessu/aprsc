@@ -196,13 +196,17 @@ sub connect($;%)
 	while (my $l = $self->getline()) {
 		#warn "login got: $l\n";
 		return 1 if ($l =~ /^#\s+logresp\s+/);
+		if ($l =~ /^#\s+(.*)(not allowed|invalid)(.*)/i) {
+			$self->{'error'} = "Login rejected: $1$2$3";
+			return 0;
+		}
 		if (time() - $t > 5) {
 			$self->{'error'} = "Login command timed out";
 			return 0;
 		}
 	}
 	
-	return 1;
+	return 0;
 }
 
 =head1 connected()

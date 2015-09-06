@@ -86,5 +86,5 @@ FileLimit        10000
 
 # Additional callsigns blocked
 DisallowSourceCall	N7CALL N8CALL* *DROP DRG* OH?DRU O*ZZZ
-DisallowLoginCall	LOGINB LOGINC
+DisallowLoginCall	LOGINA LOGINB *prrej mi*rej sufre*
 

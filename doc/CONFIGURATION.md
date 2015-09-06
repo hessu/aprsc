@@ -305,12 +305,15 @@ matches 0 or more any characters, '?' matches exactly one any character).
 
 Separate multiple callsigns with spaces.
 
-DisallowLoginCall rejects logins by the specified callsign.
+DisallowLoginCall rejects logins by the specified callsign. Callsigns which
+are not valid callsigns on the APRS-IS (non-alphanumeric, too long, etc) are
+rejected by default.
 
     DisallowLoginCall P1RAT* P?ROT*
 
 DisallowSourceCall makes the server drop packets sent by the given source
-callsign, even though they were injected at a different server.
+callsign, even though they were injected at a different server.  The
+following callsigns are dropped by default: N0CALL* NOCALL* SERVER*
 
     DisallowSourceCall P1RAT* P?ROT*
 

@@ -1371,11 +1371,11 @@ int read_config(void)
 		disallow_srccall_glob = new_disallow_srccall_glob;
 		new_disallow_srccall_glob = NULL;
 		if (o)
-			hfree(o);
-	} else {
+			free_string_array(o);
+	} else if (disallow_srccall_glob) {
 		char **o = disallow_srccall_glob;
 		disallow_srccall_glob = NULL;
-		hfree(o);
+		free_string_array(o);
 	}
 	
 	if (new_disallow_login_glob) {
@@ -1383,11 +1383,11 @@ int read_config(void)
 		disallow_login_glob = new_disallow_login_glob;
 		new_disallow_login_glob = NULL;
 		if (o)
-			hfree(o);
-	} else {
+			free_string_array(o);
+	} else if (disallow_login_glob) {
 		char **o = disallow_login_glob;
 		disallow_login_glob = NULL;
-		hfree(o);
+		free_string_array(o);
 	}
 	
 	/* validate uplink config: if there is a single 'multiro' connection
@@ -1507,5 +1507,13 @@ void free_config(void)
 	free_listen_config(&listen_config);
 	free_peerip_config(&peerip_config);
 	free_http_config(&http_config);
+	if (disallow_srccall_glob) {
+		free_string_array(disallow_srccall_glob);
+		disallow_srccall_glob = NULL;
+	}
+	if (disallow_login_glob) {
+		free_string_array(disallow_login_glob);
+		disallow_login_glob = NULL;
+	}
 }
 

@@ -85,6 +85,16 @@ int do_string_array(char ***dest, int argc, char **argv)
 	return 0;
 }
 
+extern void free_string_array(char **dest)
+{
+	int i;
+	
+	for (i = 0; (dest[i]); i++)
+		hfree(dest[i]);
+	
+	hfree(dest);
+}
+
 int do_int(int *dest, int argc, char **argv)
 {
 	if (argc < 2)

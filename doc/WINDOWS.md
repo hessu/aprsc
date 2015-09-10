@@ -24,6 +24,17 @@ CPU.
 [cygwin]: http://www.cygwin.com/
 
 
+A word of caution for Windows users
+-------------------------------------
+
+The Windows version of aprsc is new, and it has only been tested on a
+few servers, so it is more likely to contain interesting "features"
+than the Linux / Unix builds.
+
+If you are considering to run aprsc on Windows, please drop a note on the
+mailing list, just so that we know someone is actually using it.
+
+
 Download aprsc
 -----------------
 

@@ -180,3 +180,10 @@ aprsc.conf.
 After startup, look at the log file for startup messages, watch out for
 any warnings or errors.
 
+
+Windows
+----------
+
+There is a beta-level build of aprsc for Windows.  Please refer to the
+[WINDOWS](WINDOWS.html) document for installation instructions.
+

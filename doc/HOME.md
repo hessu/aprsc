@@ -19,14 +19,6 @@ now, new major versions come out rarely, but smaller bugs get fixed at
 times.
 
 
-A word of caution for Windows users
--------------------------------------
-
-The Windows version of aprsc is very new, it has only been tested on a
-couple of servers, so it is more likely to contain interesting "features"
-than the Linux / Unix builds.
-
-
 Features (and lack of)
 -------------------------
 

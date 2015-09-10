@@ -1930,20 +1930,64 @@ static int filter_process_one_m(struct client_t *c, struct pbuf_t *pb, struct fi
 
 	   80-120 instances in APRS-IS core at any given time.
 	   Up to 4200 invocations per second.
+	   
+	   Caching the historydb_lookup() result will lower CPU power
+	   spent on the historydb.
 	*/
 
 	float r;
+	float lat1, lon1, coslat1;
+	float lat2, lon2, coslat2;
+	int i;
+	struct history_cell_t *history;
 
 	if (!(pb->flags & F_HASPOS)) /* packet with a position.. (msgs with RECEIVER's position) */
 		return 0;
 	
-	if (!c->loc_known) /* if client location is not known yet, m/ won't work */
+	if (c->loc_known) {
+		/* If client has sent a location, use it. The client may be an unvalidated
+		 * client which does not exist in the historydb.
+		 */
+		r = maidenhead_km_distance(c->lat, c->cos_lat, c->lng, pb->lat, pb->cos_lat, pb->lng);
+		if (r < f->h.f_dist)  /* Range is less than given limit */
+			return f->h.negation ? 2 : 1;
+		
 		return 0;
-
-	r = maidenhead_km_distance(c->lat, c->cos_lat, c->lng, pb->lat, pb->cos_lat, pb->lng);
+	}
+	
+	/* Otherwise, fall back to looking up from the historydb */
+	 
+	if (!*c->username) /* Should not happen... */
+		return 0;
+	
+	if (f->h.hist_age < tick || f->h.hist_age > tick + HIST_LOOKUP_INTERVAL) {
+		i = historydb_lookup( c->username, strlen(c->username), &history );
+		f->h.numnames = i;
+		if (!i) {
+			f->h.hist_age = tick + HIST_LOOKUP_INTERVAL/2;
+			return 0; /* no result */
+		}
+		f->h.hist_age = tick + HIST_LOOKUP_INTERVAL;
+		f->h.f_latN   = history->lat;
+		f->h.f_lonE   = history->lon;
+		f->h.f_coslat = history->coslat;
+	}
+	
+	if (!f->h.numnames)
+		return 0; /* cached lookup invalid.. */
+	
+	lat1    = f->h.f_latN;
+	lon1    = f->h.f_lonE;
+	coslat1 = f->h.f_coslat;
+	
+	lat2    = pb->lat;
+	lon2    = pb->lng;
+	coslat2 = pb->cos_lat;
+	
+	r = maidenhead_km_distance(lat1, coslat1, lon1, lat2, coslat2, lon2);
 	if (r < f->h.f_dist)  /* Range is less than given limit */
 		return f->h.negation ? 2 : 1;
-
+	
 	return 0;
 }
 

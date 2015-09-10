@@ -3,7 +3,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 6 + 4 + 2 + 1 };
+BEGIN { plan tests => 6 + 4 + 2 + 6 + 1 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -38,11 +38,11 @@ my($tx, $rx, $helper);
 $i_rx->sendline("#filter a/60.1874/24.8362/60.1872/24.8365");
 sleep(0.5);
 
-$pass = "OH2TI>APRX1M,qAR,$login:/054048h6011.24N/02450.18E_c212s003g006t053h82b10046";
+$pass = "$login>APRX1M,qAR,$login:/054048h6011.24N/02450.18E_c212s003g006t053h82b10046";
 $drop = "DR0P>APRX1M,qAR,$login:/054048h6011.30N/02450.18E_c212s003g006t053h82b10046";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
-$pass = "OH2TI>RXTLM-1,qAR,$login:T#363,12.2,0.0,62.0,13.0,0.0,00000000";
+$pass = "$login>RXTLM-1,qAR,$login:T#363,12.2,0.0,62.0,13.0,0.0,00000000";
 $drop = "DR0P>APRX1M,qAR,$login:/054048h6011.224N/02450.28E_c212s003g006t053h82b10046";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 
@@ -62,7 +62,7 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 # filter for range around my position, and transmit my position too
 # also set a filter for friend range (it's position is already known
 # from previous test)
-$i_rx->sendline("#filter m/1 f/OH2TI/10");
+$i_rx->sendline("#filter m/1 f/$login/10");
 $i_rx->sendline("$rxlogin>APRS:!//HC`TPmVvR<_"); # tampere
 sleep(0.5);
 
@@ -74,6 +74,29 @@ istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
 $pass = "OH1UK>APRS,TCPIP*,qAC,T2FINLAND:;OH2TA    *101302z6014.89N/02447.00Ey";
 $drop = "OH2FOI>APRS,qAR,$login:!6013.90N/02500.05E-";
 istest::should_drop(\&ok, $i_tx, $i_rx, $drop, $pass);
+
+###############################################
+# reconnect and see if the m/ filter still works based
+# on a cached position in historydb
+$ret = $i_rx->disconnect();
+ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
+$ret = $i_tx->disconnect();
+ok($ret, 1, "Failed to disconnect from the server: " . $i_tx->{'error'});
+$ret = $i_tx->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to reconnect to the server: " . $i_tx->{'error'});
+$i_tx->sendline("#filter m/1");
+sleep(0.5);
+
+# new transmitter needed
+$tx2_login = 'TX2LOG';
+my $i_tx2 = new Ham::APRS::IS("localhost:55581", $tx2_login);
+ok(defined $i_tx2, 1, "Failed to initialize Ham::APRS::IS");
+$ret = $i_tx2->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to reconnect to the server: " . $i_tx2->{'error'});
+
+$pass = "T3ST-1>APRS,qAR,$tx2_login:/054048h6011.24N/02450.18E_c212s003g006t053h82b10046";
+$drop = "DR0P-15>APN390,qAR,$tx2_login:!2334.10S/04719.70E#";
+istest::should_drop(\&ok, $i_tx2, $i_tx, $drop, $pass);
 
 # stop
 

@@ -2141,6 +2141,11 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	cJSON_AddNumberToObject(jc, "heard_count", c->client_heard_count);
 	cJSON_AddNumberToObject(jc, "courtesy_count", c->client_courtesy_count);
 	
+	if (c->loc_known) {
+		cJSON_AddNumberToObject(jc, "lat", c->lat);
+		cJSON_AddNumberToObject(jc, "lng", c->lng);
+	}
+	
 	if (c->quirks_mode)
 		cJSON_AddNumberToObject(jc, "quirks_mode", c->quirks_mode);
 	

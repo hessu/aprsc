@@ -1081,6 +1081,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	cJSON *filter;
 	cJSON *ibuf, *obuf;
 	cJSON *client_heard;
+	cJSON *lat, *lng;
 	unsigned addr_len;
 	union sockaddr_u sa;
 	char *argv[256];
@@ -1124,6 +1125,8 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	ibuf = cJSON_GetObjectItem(client, "ibuf");
 	obuf = cJSON_GetObjectItem(client, "obuf");
 	client_heard = cJSON_GetObjectItem(client, "client_heard");
+	lat = cJSON_GetObjectItem(client, "lat");
+	lng = cJSON_GetObjectItem(client, "lng");
 	
 	if (!(
 		(fd)
@@ -1282,6 +1285,14 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	 */
 	if (rx_errs && rx_errs->type == cJSON_Array && rxerr_map && rxerr_map_len > 0)
 		accept_rx_err_load(c, rx_errs, rxerr_map, rxerr_map_len);
+	
+	/* set client lat/lon, if they're given
+	 */
+	if (lat && lng && lat->type == cJSON_Number && lng->type == cJSON_Number) {
+		c->loc_known = 1;
+		c->lat = lat->valuedouble;
+		c->lng = lng->valuedouble;
+	}
 	
 	hlog(LOG_DEBUG, "%s - Accepted live upgrade client on fd %d from %s", c->addr_loc, c->fd, c->addr_rem);
 	

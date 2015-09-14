@@ -357,23 +357,23 @@ Access list (ACL) file format
 Some directives in the main configuration can refer to ACL files. ACLs are
 used to allow and deny connections based on the client's IP address.
 
-If an ACL is not configured for a port listener, all connections will be
-allowed. If an ACL is configured, the default is to not allow any
+If no ACL file is specified for a port listener, all connections will be
+allowed. If an ACL file is configured, the default is to not allow any
 connections unless an "allow" rule permits it.
 
-Rules in an ACL are processed sequentially, starting from the beginning. The
+Rules in an ACL file are processed sequentially, starting from the beginning. The
 first `allow` or `deny` rule matching the address of the connecting client
 is applied.
 
 The following two IPv6 lines deny the `dead:beef:f00d::/48` subnet first,
 and then allow the rest of the `dead:beef::/32` network around it. All other
-IPv6 connections are denied.
+IPv6 (and IPv4) connections are denied.
 
     deny  dead:beef:f00d::/48
     allow dead:beef::/32
 
 The first two rules allow connections from 192.168.* except for 192.168.1.*,
-and also allow connections from the host at 10.52.42.3. All other IPv4
+and also allow connections from the host at 10.52.42.3. All other IPv4 (and IPv6)
 connections are denied.
     
     deny 192.168.1.0/24
@@ -385,6 +385,11 @@ If prefix length is not specified, a host rule is created (32 bits for IPv4,
 addresses you should specify a prefix length of 0 (::/0 for IPv6, 0.0.0.0/0
 for IPv4).
 
+If you want to specify an ACL file and allow any connection, you can use following ACL file:
+
+    allow 0.0.0.0/0
+    allow ::/0
+  
 ACL files are read and parsed when aprsc starts or reconfigures itself, so
 you need to do a configuration reload (on-line reconfiguration) after
 changing the contents of an ACL file.

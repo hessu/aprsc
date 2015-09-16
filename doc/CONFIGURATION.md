@@ -365,27 +365,20 @@ Rules in an ACL file are processed sequentially, starting from the beginning. Th
 first `allow` or `deny` rule matching the address of the connecting client
 is applied.
 
-The following two IPv6 lines deny the `dead:beef:f00d::/48` subnet first,
-and then allow the rest of the `dead:beef::/32` network around it. All other
-IPv6 (and IPv4) connections are denied.
+The first two following lines deny the `dead:beef:f00d::/48` subnet, and then allow the rest of the `dead:beef::/32` network around it. The third and fourth lines rules allow connections from 192.168.* except for 192.168.1.*, and last line allow connections from the host at 10.52.42.3. Without any further rules all other IPv4 and IPv6 connections are denied.
 
     deny  dead:beef:f00d::/48
     allow dead:beef::/32
-
-The first two rules allow connections from 192.168.* except for 192.168.1.*,
-and also allow connections from the host at 10.52.42.3. All other IPv4 (and IPv6)
-connections are denied.
-    
-    deny 192.168.1.0/24
+    deny  192.168.1.0/24
     allow 192.168.0.0/16
     allow 10.52.42.3
-
+  
 If prefix length is not specified, a host rule is created (32 bits for IPv4,
 128 bits prefix length for IPv6). To configure a rule that matches all
 addresses you should specify a prefix length of 0 (::/0 for IPv6, 0.0.0.0/0
 for IPv4).
 
-If you want to specify an ACL file and allow any connection, you can use following ACL file:
+If you want to specify an ACL file and allow any connection, you can use following ACL file content:
 
     allow 0.0.0.0/0
     allow ::/0

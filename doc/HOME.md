@@ -32,7 +32,7 @@ object generation.  The idea is to keep aprsc relatively simple and lean,
 and leave the more specialized features for more specialized software.
 
 If you need a nice, compact igate software for Linux, please take a look at
-either aprx, or aprs4r.  If you need to run an APRS-IS server on some
+either aprx or aprs4r.  If you need to run an APRS-IS server on some
 platform not supported by aprsc, or if you need the features existing in
 javAPRSSrvr which are missing from aprsc, javAPRSSrvr is the right choice
 for you - it's got a lot of good features that many of you need, and it

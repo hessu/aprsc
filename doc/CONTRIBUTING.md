@@ -119,7 +119,7 @@ Ideas that have been suggested, but will not be added
 --------------------------------------------------------
 
 * igating and other radio interfaces: These are igate functions, and
-  should be implemented in igate software (aprsg, aprx, there are a lot
+  should be implemented in igate software (aprx, aprs4r, there are a lot
   of those - pick one and implement it there).
 * beacon generation: Most if not all igate software can already beacon
   objects. No need to reimplement the functionality here.

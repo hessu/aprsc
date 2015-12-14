@@ -91,7 +91,7 @@ static struct http_static_t http_static_files[] = {
 	{ "/excanvas.min.js", "excanvas.min.js" },
 	{ "/jquery.flot.min.js", "jquery.flot.min.js" },
 	{ "/jquery.flot.selection.min.js", "jquery.flot.selection.min.js" },
-	{ "/motd.html", "motd.html" },
+	{ "/motd.html", "motd.html", "jquery.min.js" },
 	{ NULL, NULL }
 };
 

@@ -3,4 +3,4 @@ language: c
 compiler:
   - clang
   - gcc
-script: ./configure && make
+script: cd src && ./configure && make

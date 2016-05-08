@@ -333,6 +333,11 @@ static int hlog_write(int priority, const char *s)
 		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			       (log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
+		if (len >= LOG_LEN) {
+			len = LOG_LEN-1; // Truncated! Do not write out the NUL byte in the end.
+			wb[LOG_LEN-2] = '\n'; // Do write out a newline which was truncated.
+		}
+		
 		wb[LOG_LEN-1] = 0;
 		rwl_rdlock(&log_file_lock);
 		if ((w = write(log_file, wb, len)) != len)

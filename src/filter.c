@@ -928,6 +928,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 						 extend previous record! */
 		extend = 1;
 		refcount = ff->h.numnames + refmax;
+		//hlog(LOG_DEBUG, "extending, refcount %d numnames %d refmax %d", refcount, ff->h.numnames, refmax);
 		refbuf   = hrealloc(ff->h.refcallsigns, sizeof(*refbuf) * refcount);
 		ff->h.refcallsigns = refbuf;
 		refcount = ff->h.numnames;
@@ -943,7 +944,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	while (*p && *p != '/') ++p;
 	if (*p == '/') ++p;
 
-	/* hlog(LOG_DEBUG, "p-filter: '%s' vs. '%s'", p, keybuf); */
+	//hlog(LOG_DEBUG, "p-filter: '%s'", p);
 	while (*p)  {
 		k = prefixbuf;
 		memset(prefixbuf, 0, sizeof(prefixbuf));
@@ -1002,7 +1003,7 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		} else {
 			/* It does not fit anymore.. */
 			s = hmalloc(i); /* alloc a new one */
-			sprintf(s, "%s %s", p, filt0); /* .. and catenate. */
+			sprintf(s, "%s %s", ff->textbuf, filt0); /* .. and catenate. */
 			p = ff->h.text;
 			if (ff->h.text != ff->textbuf) /* possibly free old */
 				hfree((void*)p);

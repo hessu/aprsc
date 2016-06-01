@@ -343,7 +343,7 @@ static struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 	bunchlen = cellmallocmany( global_pool, (void**)allocarray, bunchlen );
 	if (bunchlen < 1) {
 		hlog(LOG_CRIT, "aprsc: Out of memory: Could not allocate packet buffers!");
-		abort();
+		return NULL;
 	}
 
 	for ( i = 1;  i < bunchlen; ++i ) {
@@ -962,8 +962,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	pb = pbuf_get(self, new_len);
 	if (!pb) {
-		// This should never happen...
-		hlog(LOG_ERR, "pbuf_get failed to get packet buffer");
+		// This should never happen... LOG_CRIT error logged in pbuf_get()
+		//hlog(LOG_DEBUG, "pbuf_get failed to get packet buffer");
 		return INERR_OUT_OF_PBUFS; // No room :-(
 	}
 	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?

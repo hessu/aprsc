@@ -219,6 +219,7 @@ var rx_err_strings = {
 	"q_newq_buffer_small": 'New Q construct too big',
 	"q_nonval_multi_q_calls": 'Multiple callsigns in Q path from unverified client',
 	"q_i_no_viacall": 'I path has no viacall',
+	"q_disallow_protocol": 'Invalid protocol ID in Q construct',
 	"inerr_empty": 'Empty packet',
 	"disallow_srccall": 'Disallowed source callsign (N0CALL or such)',
 	"disallow_dx": 'DX cluster packet',

@@ -77,6 +77,7 @@ const char *inerr_labels[] = {
 	"q_newq_buffer_small",
 	"q_nonval_multi_q_calls",
 	"q_i_no_viacall",
+	"q_disallow_protocol",
 	"inerr_empty",
 	"disallow_srccall",
 	"disallow_dx",

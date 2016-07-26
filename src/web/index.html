@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html ng-app='aprsc'>
 <head>
 <title>aprsc status</title>
 <meta name="lang" content="en" />
@@ -7,66 +7,40 @@
 <link rel="stylesheet" type="text/css" href="/aprsc.css" />
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 <link rel="shortcut" href="/favicon.ico" type="image/x-icon" />
+<script src="angular.min.js"></script>
 </head>
 
-<body onclick='ttip_hide();'>
+<body ng-controller="aprscc" onclick='ttip_hide();'>
 
-<div style='float: right;'><img id="logo" src="/aprsc-logo.png" /></div>
-<div class="page_title" id="title"><span id='serverid'></span> aprsc status <span id='upt'></span></div>
-<div id='status'></div>
-<div id='alarms' style='display: none;'></div>
-<div id='motd'></div>
+<div class='container'>
 
+ <div class="row">
+   <div class="col-md-3 col-sm-3">
+     <div class="text-primary text-right" ng-cloak>{{ status.server.server_id }} aprsc status</span> <span ng-show="status">at {{ status.server.time_now | datetime }}</span></div>
+     </div>
+ </div>
+
+<div class='row' ng-cloak>
 <h3>Server</h3>
-<div id='server'></div>
-
-<h3>Totals</h3>
-<div style='float: right; clear: right;'>
-	<div style='height: 230px; width: 600px;' id='graph'></div>
-	<div style='padding: 5px 0 0 0;'>
-	<button onclick='graphZoom(1)' disabled='1' id='g_zoom_in'>Zoom</button>
-	<button onclick='graphZoom(0)' class='hide' id='g_zoom_out'>Zoom out</button>
-	</div>
+<div class='table-responsive'>
+<table class='table table-hover table-condensed'>
+ <tr><td>Server ID</td> <td>{{ status.server.server_id }}</td></tr>
+ <tr><td>Server admin</td> <td>{{ status.server.admin }}</td></tr>
+ <tr><td>Software</td> <td>{{ status.server.software }} {{ status.server.software_version }}</td></tr>
+ <tr><td>Software features</td> <td>{{ status.server.software_build_features }}</td></tr>
+ <tr><td>Uptime</td> <td>{{ status.server.uptime | duration }}</td></tr>
+ <tr><td>Started</td> <td>{{ status.server.time_started | datetime }}</td></tr>
+ <tr><td>OS</td> <td>{{ status.server.os }}</td></tr>
+</table>
 </div>
-<div id='totals'></div>
-
-<h3>Duplicate filter
-<span class='link show' id='dupecheck_more_show' onclick='toggle("dupecheck_more")'>
-	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqC7wd4jIAAABtSURBVCjPY/z//z8DKYAJU+jFA4YbNxh+4NLxHxV8//7fX/4/O/v//e//YwVMDCQCkjUgnLS//7+4+H9+/v/8/P8ZGP4zMPxn54dyzeMRTmKB6/zwgOHlSxSzfn5k+AkJhheD2tMka2AkNWkAAOhriTYQTgMEAAAAAElFTkSuQmCC" />
-	</span>
-<span class='link hide' id='dupecheck_more_hide' onclick='toggle("dupecheck_more")'>
-	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqE69xemQAAABMSURBVCjPY/z//z8DKYCJgUQwqDUcmMAgIcEgIMAgIMDAyMjAyMjAIQDlWiQgNLDAWR8eMLx8iWLYz48MPxkYGBgYXrxACDKOxGAFAAP1ERwzsIoPAAAAAElFTkSuQmCC" />
-	</span></h3>
-<div id='dupecheck'></div>
-<div id='dupecheck_more'></div>
-
-<h3>Port listeners</h3>
-<div id='listeners'></div>
-
-<div id='uplinks_d'>
-<h3>Uplinks</h3>
-<div id='uplinks'></div>
 </div>
 
-<div id='peers_d'>
-<h3>Peers</h3>
-<div id='peers'></div>
-</div>
-
-<h3>Clients</h3>
-<div id='clients'></div>
-
-<h3>Memory</h3>
-<div id='memory'></div>
-
-<div id='ttip' class='ttip' style='display: none;'></div>
-
+</div><!-- container -->
 
 <script type='text/JavaScript' src='jquery.min.js'></script>
 <script type='text/JavaScript' src='jquery.flot.min.js'></script>
 <script type='text/JavaScript' src='jquery.flot.selection.min.js'></script>
 <script type='text/JavaScript' src='aprsc.js'></script>
-<script type='text/JavaScript'>$(document).ready(function(){init();});;</script>
 
 </body>
 </html>

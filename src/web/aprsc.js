@@ -1116,4 +1116,45 @@ function init()
 	});
 }
 
+var setup = {
+    'server_keys': [ 'server_id', 'admin' ]
+};
+
+var app = angular.module('aprsc', []).
+	config(function() {
+		console.log('aprsc module config');
+	}).
+	run(function() {
+		console.log('aprsc module run');
+	});
+
+app.filter('duration', function() { return dur_str; });
+app.filter('datetime', function() { return timestr; });
+
+app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
+	console.log('aprsc init');
+
+	/* Ajax updates */
+	
+	var full_load = function($scope, $http) {
+		var config = {
+			'timeout': 35000
+		};
+		
+		$http.get('/status.json', config).success(function(d) {
+			console.log('status.json received, status: ' + d['result']);
+			
+			$scope.status = d;
+			
+			setTimeout(function() { full_load($scope, $http); }, 10000);
+		}).error(function(data, status, headers, config) {
+			console.log('HTTP update failed, status: ' + status);
+			setTimeout(function() { full_load($scope, $http); }, 10000);
+		});
+	};
+	
+	full_load($scope, $http);
+
+}]);
+
 //-->

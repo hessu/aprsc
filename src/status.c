@@ -246,6 +246,11 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(server, "tick_now", tick);
 	cJSON_AddNumberToObject(server, "time_now", now);
 	cJSON_AddNumberToObject(server, "time_started", startup_time);
+	
+	char q_protocol_id_s[2] = { q_protocol_id, 0 };
+	cJSON_AddStringToObject(server, "q_protocol_id", q_protocol_id_s);
+	cJSON_AddNumberToObject(server, "disallow_other_q_protocols", disallow_other_protocol_id);
+	
 	status_uname(server);
 	cJSON_AddItemToObject(root, "server", server);
 	

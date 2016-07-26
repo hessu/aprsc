@@ -95,6 +95,18 @@ extern void free_string_array(char **dest)
 	hfree(dest);
 }
 
+int do_char(char *dest, int argc, char **argv)
+{
+	if (argc != 2)
+		return -1;
+		
+	if (strlen(argv[1]) != 1)
+		return -1;
+		
+	*dest = *argv[1];
+	return 0;
+}
+
 int do_int(int *dest, int argc, char **argv)
 {
 	if (argc < 2)

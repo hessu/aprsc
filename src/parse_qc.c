@@ -87,8 +87,8 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 */
 	
 	if (q_type == 'Z') {
-		/* TODO: The reject log should really log the offending packet */
-		hlog(LOG_DEBUG, "q: dropping for unknown Q construct %c%c", q_proto, q_type);
+		/* qAZ is for packets from client to server, to prevent redistribution */
+		hlog(LOG_DEBUG, "q: dropping due q_type %c%c", q_proto, q_type);
 		return INERR_Q_QAZ; /* drop the packet */
 	}
 	

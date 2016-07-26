@@ -117,6 +117,9 @@ extern char *logname;
 extern char *chrootdir;
 extern char *setuid_s;
 
+extern int disallow_other_protocol_id;
+extern char q_protocol_id;
+
 #define LISTEN_MAX_FILTERS 10
 
 struct listen_config_t {

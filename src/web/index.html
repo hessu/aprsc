@@ -16,7 +16,7 @@
 
  <div class="row">
    <div class="col-md-3 col-sm-3">
-     <div class="text-primary text-right" ng-cloak>{{ status.server.server_id }} aprsc status</span> <span ng-show="status">at {{ status.server.time_now | datetime }}</span></div>
+     <div class="text-primary text-right" ng-cloak><h3>{{ status.server.server_id }} aprsc status <span ng-show="status">at {{ status.server.time_now | datetime }}</span></h3></div>
      </div>
  </div>
 
@@ -24,16 +24,30 @@
 <h3>Server</h3>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed'>
- <tr><td>Server ID</td> <td>{{ status.server.server_id }}</td></tr>
- <tr><td>Server admin</td> <td>{{ status.server.admin }}</td></tr>
- <tr><td>Software</td> <td>{{ status.server.software }} {{ status.server.software_version }}</td></tr>
- <tr><td>Software features</td> <td>{{ status.server.software_build_features }}</td></tr>
- <tr><td>Uptime</td> <td>{{ status.server.uptime | duration }}</td></tr>
- <tr><td>Started</td> <td>{{ status.server.time_started | datetime }}</td></tr>
- <tr><td>OS</td> <td>{{ status.server.os }}</td></tr>
+  <tr><td>Server ID</td> <td class="ar">{{ status.server.server_id }}</td></tr>
+  <tr><td>Server admin</td> <td class="ar">{{ status.server.admin }}</td></tr>
+  <tr><td>Software</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
+  <tr><td>Software features</td> <td class="ar">{{ status.server.software_build_features }}</td></tr>
+  <tr><td>Uptime</td> <td class="ar">{{ status.server.uptime | duration }}</td></tr>
+  <tr><td>Started</td> <td class="ar">{{ status.server.time_started | datetime }}</td></tr>
+  <tr><td>OS</td> <td class="ar">{{ status.server.os }}</td></tr>
 </table>
 </div>
 </div>
+
+<div class='row' ng-cloak>
+<h3>Totals</h3>
+<div class='table-responsive'>
+<table class='table table-hover table-condensed'>
+<tr ng-repeat="k in setup.keys_totals">
+  <td>{{ setup.key_translate[k] }}</td>
+  <td>{{ status.totals[k] }}</td>
+  <td ng-show="status_prev">{{ (status.totals[k] - status_prev.totals[k]) / (status.server.tick_now - status_prev.server.tick_now) | ratestr}}/s</td>
+  </tr>
+</table>
+</div>
+</div>
+
 
 </div><!-- container -->
 

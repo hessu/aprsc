@@ -145,6 +145,9 @@ function dur_str(i)
 	var s = '';
 	var c = 0;
 	
+	if (isUndefined(i))
+		return '';
+	
 	if (i > 86400) {
 		t = Math.floor(i/86400);
 		i -= t*86400;
@@ -691,13 +694,6 @@ function calc_rate(key, value, no_s)
 	return [ value, rate ];
 }
 
-var totals_keys = [
-	'clients', 'connects',
-	'tcp_bytes_tx', 'tcp_bytes_rx', 'tcp_pkts_tx', 'tcp_pkts_rx',
-	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx',
-	'sctp_bytes_tx', 'sctp_bytes_rx', 'sctp_pkts_tx', 'sctp_pkts_rx'
-];
-
 var alarms_visible = 0;
 
 function render_alarms(alarms)
@@ -1116,9 +1112,37 @@ function init()
 	});
 }
 
-var setup = {
-    'server_keys': [ 'server_id', 'admin' ]
-};
+/* ******** NEW angular.js ********* */
+
+function ratestr(rate)
+{
+	var prefix = '';
+	if (rate < 0) {
+		rate *= -1;
+		prefix = '-';
+	}
+	
+	if (rate >= 10)
+		rate = rate.toFixed(0);
+	else if (rate >= 1)
+		rate = rate.toFixed(1);
+	else if (rate > 0)
+		rate = rate.toFixed(2);
+	else if (rate == 0)
+		rate = '0';
+	else
+		rate = rate.toFixed(2);
+		
+	return prefix + rate;
+}
+
+
+var keys_totals = [
+	'clients', 'connects',
+	'tcp_bytes_tx', 'tcp_bytes_rx', 'tcp_pkts_tx', 'tcp_pkts_rx',
+	'udp_bytes_tx', 'udp_bytes_rx', 'udp_pkts_tx', 'udp_pkts_rx',
+	'sctp_bytes_tx', 'sctp_bytes_rx', 'sctp_pkts_tx', 'sctp_pkts_rx'
+];
 
 var app = angular.module('aprsc', []).
 	config(function() {
@@ -1130,9 +1154,15 @@ var app = angular.module('aprsc', []).
 
 app.filter('duration', function() { return dur_str; });
 app.filter('datetime', function() { return timestr; });
+app.filter('ratestr', function() { return ratestr; });
 
 app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	console.log('aprsc init');
+	
+	$scope.setup = {
+	    'keys_totals': keys_totals,
+	    'key_translate': key_translate
+	};
 
 	/* Ajax updates */
 	
@@ -1144,6 +1174,7 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 		$http.get('/status.json', config).success(function(d) {
 			console.log('status.json received, status: ' + d['result']);
 			
+			$scope.status_prev = $scope.status;
 			$scope.status = d;
 			
 			setTimeout(function() { full_load($scope, $http); }, 10000);

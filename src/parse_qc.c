@@ -67,6 +67,11 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	int login_in_path = 0;
 	int i, j, l;
 	
+	if (q_proto != q_protocol_id && disallow_other_protocol_id) {
+		hlog(LOG_DEBUG, "q: dropping due to q%c%c (wrong Q protocol ID)", q_proto, q_type);
+		return INERR_Q_DISALLOW_PROTOCOL; /* drop the packet */
+	}
+	
 	/* If disallow_unverified is on, drop packets with qAX (packet from unverified client) */
 	if (q_type == 'X' && disallow_unverified) {
 		hlog(LOG_DEBUG, "q: dropping due to q%c%c (unverified client)", q_proto, q_type);
@@ -81,7 +86,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * }
 	 */
 	
-	if (q_proto == 'A' && q_type == 'Z') {
+	if (q_type == 'Z') {
 		/* TODO: The reject log should really log the offending packet */
 		hlog(LOG_DEBUG, "q: dropping for unknown Q construct %c%c", q_proto, q_type);
 		return INERR_Q_QAZ; /* drop the packet */
@@ -205,7 +210,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * }
 	 */
 	
-	if (q_proto == 'A' && q_type == 'I') {
+	if (q_type == 'I') {
 		/* we replace the existing Q construct with a regenerated one */
 		*q_replace = q_start+1;
 		
@@ -325,9 +330,9 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			*q_replace = via_start;
 			//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
 			if (c->validated)
-				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
+				return snprintf(new_q, new_q_size, ",TCPIP*,q%cC,%s", q_protocol_id, serverid);
 			else
-				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s",  serverid);
+				return snprintf(new_q, new_q_size, ",TCPXX*,q%cX,%s", q_protocol_id, serverid);
 		}
 	}
 	
@@ -338,7 +343,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 		// where to replace from
 		*q_replace = via_start;
 		//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
-		return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
+		return snprintf(new_q, new_q_size, ",TCPIP*,q%cC,%s", q_protocol_id, serverid);
 	}
 	
 	// fprintf(stderr, "\tstep 2...\n");
@@ -374,9 +379,9 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			/* Append ,qAU,SERVERLOGIN */
 			/* Add TCPIP* in the end of the path only if it's not there already */
 			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
-				return snprintf(new_q, new_q_size, ",qAU,%s", serverid);
+				return snprintf(new_q, new_q_size, ",q%cU,%s", q_protocol_id, serverid);
 			else
-				return snprintf(new_q, new_q_size, ",TCPIP*,qAU,%s", serverid);
+				return snprintf(new_q, new_q_size, ",TCPIP*,q%cU,%s", q_protocol_id, serverid);
 		}
 		
 		/*
@@ -402,7 +407,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				 * Replace the q construct with ,qAX,SERVERLOGIN
 				 */
 				*path_end = via_start;
-				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", serverid);
+				return snprintf(new_q, new_q_size, ",TCPXX*,q%cX,%s", q_protocol_id, serverid);
 			} else if (q_proto && q_nextcall_end < *path_end) {
 				/* more than a single call exists after the q construct,
 				 * invalid header, drop the packet as error
@@ -411,7 +416,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			} else {
 				/* Append ,qAX,SERVERLOGIN (well, javaprssrvr replaces the via path too) */
 				*path_end = via_start;
-				return snprintf(new_q, new_q_size, ",TCPXX*,qAX,%s", serverid);
+				return snprintf(new_q, new_q_size, ",TCPXX*,q%cX,%s", q_protocol_id, serverid);
 			}
 		}
 		
@@ -420,7 +425,7 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				*path_end = q_start;
 			else
 				*path_end = via_start;
-			return snprintf(new_q, new_q_size, ",qAC,%s", serverid);
+			return snprintf(new_q, new_q_size, ",q%cC,%s", q_protocol_id, serverid);
 		}
 		
 		/* OLD:
@@ -462,15 +467,15 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			if (q_proto) {
 				// fprintf(stderr, "\thas q construct\n");
 				/* if the q construct equals ,qAR,callsignssid or ,qAr,callsignssid */
-				if (q_proto == 'A' && (q_type == 'R' || q_type == 'r')) {
+				if (q_type == 'R' || q_type == 'r') {
 					/* Replace qAR with qAo */
 					*(q_start + 3) = q_type = 'o';
 					// fprintf(stderr, "\treplaced qAR with qAo\n");
-				} else if (q_proto == 'A' && q_type == 'S') {
+				} else if (q_type == 'S') {
 					/* Replace qAS with qAO */
 					*(q_start + 3) = q_type = 'O';
 					// fprintf(stderr, "\treplaced qAS with qAO\n");
-				} else if (q_proto == 'A' && q_type == 'C') {
+				} else if (q_type == 'C') {
 					// FIXME: should also check callsignssid to servercall & login
 					/* Replace qAC with qAO */
 					*(q_start + 3) = q_type = 'O';
@@ -496,8 +501,9 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 					if (1) {
 						/* Replace ,login,I with qAo,previouscall */
 						*path_end = p;
-						new_q_len = snprintf(new_q, new_q_size, ",qAo,%.*s", (int)(prevcall_end - prevcall), prevcall);
-						q_proto = 'A';
+						new_q_len = snprintf(new_q, new_q_size, ",q%co,%.*s",
+							q_protocol_id, (int)(prevcall_end - prevcall), prevcall);
+						q_proto = q_protocol_id;
 						q_type = 'o';
 						add_qAO = 0;
 					}
@@ -506,8 +512,8 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			
 			if (add_qAO) {
 				/* Append ,qAO,login */
-				new_q_len = snprintf(new_q, new_q_size, ",qAO,%s", c->username);
-				q_proto = 'A';
+				new_q_len = snprintf(new_q, new_q_size, ",q%cO,%s", q_protocol_id, c->username);
+				q_proto = q_protocol_id;
 				q_type = 'O';
 			}
 			
@@ -563,14 +569,14 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				if (strlen(c->username) == prevcall_end - prevcall && strncasecmp(c->username, prevcall, prevcall_end - prevcall) == 0) {
 					/* Replace ,login,I with qAR,login */
 					*path_end = p;
-					new_q_len = snprintf(new_q, new_q_size, ",qAR,%s", c->username);
-					q_proto = 'A';
+					new_q_len = snprintf(new_q, new_q_size, ",q%cR,%s", q_protocol_id, c->username);
+					q_proto = q_protocol_id;
 					q_type = 'R';
 				} else {
 					/* Replace ,VIACALL,I with qAr,VIACALL */
 					*path_end = p;
-					new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", (int)(prevcall_end - prevcall), prevcall);
-					q_proto = 'A';
+					new_q_len = snprintf(new_q, new_q_size, ",q%cr,%.*s", q_protocol_id, (int)(prevcall_end - prevcall), prevcall);
+					q_proto = q_protocol_id;
 					q_type = 'r';
 				}
 			} else {
@@ -586,8 +592,8 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
 		} else {
 			/* Append ,qAS,login */
-			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->username);
-			q_proto = 'A';
+			new_q_len = snprintf(new_q, new_q_size, ",q%cS,%s", q_protocol_id, c->username);
+			q_proto = q_protocol_id;
 			q_type = 'S';
 		}
 		/* Skip to "All packets with q constructs" */
@@ -621,8 +627,8 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				// fprintf(stderr, "\tprevious callsign is %.*s\n", prevcall_end - prevcall, prevcall);
 				/* Replace ,VIACALL,I with qAr,VIACALL */
 				*path_end = p;
-				new_q_len = snprintf(new_q, new_q_size, ",qAr,%.*s", (int)(prevcall_end - prevcall), prevcall);
-				q_proto = 'A';
+				new_q_len = snprintf(new_q, new_q_size, ",q%cr,%.*s", q_protocol_id, (int)(prevcall_end - prevcall), prevcall);
+				q_proto = q_protocol_id;
 				q_type = 'r';
 			} else {
 				/* Undefined by the algorithm - there was no VIACALL */
@@ -632,8 +638,8 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			/* Append ,qAS,IPADDR (IPADDR is an 8 character hex representation 
 			 * of the IP address of the remote server)
 			 */
-			new_q_len = snprintf(new_q, new_q_size, ",qAS,%s", c->addr_hex);
-			q_proto = 'A';
+			new_q_len = snprintf(new_q, new_q_size, ",q%cS,%s", q_protocol_id, c->addr_hex);
+			q_proto = q_protocol_id;
 			q_type = 'S';
 		}
 	}

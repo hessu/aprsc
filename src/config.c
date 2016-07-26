@@ -47,7 +47,8 @@ char *chrootdir = NULL;
 char *setuid_s = NULL;
 
 int disallow_other_protocol_id = 1; /* drop packets with other Q protocol identifiers */
-char q_protocol_id = 'A'; /* A for APRS-IS, O for OGN */
+#define Q_PROTOCOL_ID_DEFAULT 'A' /* A for APRS-IS */
+char q_protocol_id = Q_PROTOCOL_ID_DEFAULT;
 
 char def_logname[] = "aprsc";
 char *logname = def_logname;	/* syslog entries use this program name */
@@ -179,7 +180,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
 	{ "q_protocol_id",	_CFUNC_ do_char,	&q_protocol_id	},
-	{ "disallow_other_q_protocol",_CFUNC_ do_boolean,	&disallow_other_protocol_id	},
+	{ "disallow_other_q_protocols",_CFUNC_ do_boolean,	&disallow_other_protocol_id	},
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
 	{ "quirks_mode",	_CFUNC_ do_boolean,	&quirks_mode		},
 	{ "fake_version",	_CFUNC_ do_string,	&new_fake_version	},
@@ -1474,6 +1475,10 @@ int read_config(void)
 		
 		pidfile = s;
 	}
+	
+	/* log network ID if not default */
+	if (q_protocol_id != Q_PROTOCOL_ID_DEFAULT)
+		hlog(LOG_INFO, "Q protocol ID: %c - %s", q_protocol_id, (disallow_other_protocol_id) ? "dropping others" : "allowing others");
 	
 	return 0;
 }

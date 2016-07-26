@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 40 };
+BEGIN { plan tests => 41 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -58,6 +58,12 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"$login>DST,WIDE2-2,qAR,$login:tcpip-path-replace5",
 	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace5");
+
+# Not in the algorithm, but done in javap/javap4/aprsc:
+# Packets having other protocol than 'A' in 'qA', should be dropped.
+istest::should_drop(\&ok, $i_tx, $i_rx,
+	"SRCCALL>DST,qOR,GATES:testing wrong Q protocol ID",
+	"SRC>DST:dummy"); # will pass (helper packet)
 
 #
 # All packets

@@ -1144,6 +1144,11 @@ var keys_totals = [
 	'sctp_bytes_tx', 'sctp_bytes_rx', 'sctp_pkts_tx', 'sctp_pkts_rx'
 ];
 
+var keys_dupecheck = [ 'dupes_dropped', 'uniques_out' ];
+var keys_dupecheck_variations = [
+	'exact', 'space_trim', '8bit_strip', '8bit_clear', '8bit_spaced',
+	'low_strip', 'low_spaced', 'del_strip', 'del_spaced' ];
+
 var app = angular.module('aprsc', []).
 	config(function() {
 		console.log('aprsc module config');
@@ -1161,6 +1166,8 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	
 	$scope.setup = {
 	    'keys_totals': keys_totals,
+	    'keys_dupecheck': keys_dupecheck,
+	    'keys_dupecheck_variations': keys_dupecheck_variations,
 	    'key_translate': key_translate
 	};
 

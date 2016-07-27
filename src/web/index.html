@@ -48,6 +48,36 @@
 </div>
 </div>
 
+<div class='row' ng-cloak>
+<h3>Duplicate filter
+<span class='link' id='dupecheck_more_show' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='!(dupe_vars_visible)'>
+	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqC7wd4jIAAABtSURBVCjPY/z//z8DKYAJU+jFA4YbNxh+4NLxHxV8//7fX/4/O/v//e//YwVMDCQCkjUgnLS//7+4+H9+/v/8/P8ZGP4zMPxn54dyzeMRTmKB6/zwgOHlSxSzfn5k+AkJhheD2tMka2AkNWkAAOhriTYQTgMEAAAAAElFTkSuQmCC" />
+	</span>
+<span class='link' id='dupecheck_more_hide' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='dupe_vars_visible'>
+	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqE69xemQAAABMSURBVCjPY/z//z8DKYCJgUQwqDUcmMAgIcEgIMAgIMDAyMjAyMjAIQDlWiQgNLDAWR8eMLx8iWLYz48MPxkYGBgYXrxACDKOxGAFAAP1ERwzsIoPAAAAAElFTkSuQmCC" />
+	</span></h3>
+<div class='table-responsive'>
+<table class='table table-hover table-condensed'>
+<tr ng-repeat="k in setup.keys_dupecheck">
+  <td>{{ setup.key_translate[k] }}</td>
+  <td>{{ status.dupecheck[k] }}</td>
+  <td ng-show="status_prev">{{ (status.dupecheck[k] - status_prev.dupecheck[k]) / (status.server.tick_now - status_prev.server.tick_now) | ratestr}}/s</td>
+  </tr>
+</table>
+</div>
+
+<div class='table-responsive' ng-show='dupe_vars_visible'>
+<table class='table table-hover table-condensed'>
+<tr ng-repeat="k in setup.keys_dupecheck_variations">
+  <td>{{ setup.key_translate[k] }}</td>
+  <td>{{ status.dupecheck.variations[k] }}</td>
+  <td ng-show="status_prev">{{ (status.dupecheck.variations[k] - status_prev.dupecheck.variations[k]) / (status.server.tick_now - status_prev.server.tick_now) | ratestr}}/s</td>
+  </tr>
+</table>
+</div>
+</div>
+
+
 
 </div><!-- container -->
 

@@ -77,7 +77,71 @@
 </div>
 </div>
 
+<div class='row' ng-cloak>
+<h3>Port listeners</h3>
+<div class='table-responsive' ng-show='status'>
+<table class='table table-hover table-condensed'>
+<tr><th ng-repeat="title in setup.cols_listener">{{ title }}</th></tr>
+<tr ng-repeat="l in status.listeners">
+  <td ng-repeat="(k, title) in setup.cols_listener">{{ l[k] }} {{ status_prev.listeners[$parent.$index][k] }}</td>
+  </tr>
+</table>
+</div>
+</div>
 
+<div class='row' ng-cloak>
+<h3>Peers</h3>
+<div class='table-responsive' ng-show='status.peers'>
+<table class='table table-hover table-condensed'>
+<tr><th ng-repeat="title in setup.cols_peers">{{ title }}</th></tr>
+<tr ng-repeat="p in status.peers">
+  <td ng-repeat="(k, title) in setup.cols_peers">{{ p[k] }}</td>
+  </tr>
+</table>
+</div>
+</div>
+
+<div class='row' ng-cloak>
+<h3>Clients</h3>
+<div class='table-responsive' ng-show='status'>
+<table class='table table-hover table-condensed'>
+<tr>
+  <th>Port</th>
+  <th>Callsign</th>
+  <th>Address</th>
+  <th>Verified</th>
+  <th>Up</th>
+  <th>Last in</th>
+  <th>Software</th>
+  <th>Packets Tx</th>
+  <th>Packets Rx</th>
+  <th>Bytes Tx</th>
+  <th>Bytes Rx</th>
+  <th>Tx/Rx bytes/s</th>
+  <th>OutQ</th>
+  <th>MsgRcpts</th>
+  <th>Filter</th>
+  </tr>
+<tr ng-repeat="c in status.clients">
+  <td>{{ c.addr_loc }}</td>
+  <td>{{ c.username }}</td>
+  <td>{{ c.addr_rem }}</td>
+  <td>{{ c.verified }}</td>
+  <td>{{ c.since_connect | duration }}</td>
+  <td>{{ c.since_last_read | duration }}</td>
+  <td>{{ c.app_name }} {{ c.app_version }}</td>
+  <td>{{ c.pkts_tx }}</td>
+  <td>{{ c.pkts_rx }}</td>
+  <td>{{ c.bytes_tx }}</td>
+  <td>{{ c.bytes_rx }}</td>
+  <td>{{ c.bytes_rates }}</td>
+  <td>{{ c.obuf_q }}</td>
+  <td>{{ c.heard_count }}</td>
+  <td>{{ c.filter }}</td>
+  </tr>
+</table>
+</div>
+</div>
 
 </div><!-- container -->
 

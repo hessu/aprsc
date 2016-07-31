@@ -311,22 +311,6 @@ var val_convert = {
 	'addr_loc': addr_loc_port
 };
 
-var listener_cols = {
-	'proto': 'Proto',
-	'addr': 'Address',
-	'name': 'Name',
-	'clients': 'Clients',
-	'clients_peak': 'Peak',
-	'clients_max': 'Max',
-	'connects': 'Connects',
-	'connects_rates': 'Conn/s',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s'
-};
-
 var uplink_cols = {
 	'username': 'Server ID',
 	'addr_rem_shown': 'Address',
@@ -341,36 +325,6 @@ var uplink_cols = {
 	'bytes_rx': 'Bytes Rx',
 	'bytes_rates': 'Tx/Rx bytes/s',
 	'obuf_q': 'OutQ'
-};
-
-var peer_cols = {
-	'username': 'Server ID',
-	'addr_rem_shown': 'Address',
-	'since_last_read': 'Last in',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s',
-	'obuf_q': 'OutQ'
-};
-
-var client_cols = {
-	'addr_loc': 'Port',
-	'username': 'Callsign',
-	'addr_rem_shown': 'Address',
-	'verified': 'Verified',
-	'since_connect': 'Up',
-	'since_last_read': 'Last in',
-	'show_app_name': 'Software',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s',
-	'obuf_q': 'OutQ',
-	'heard_count': 'MsgRcpts',
-	'filter': 'Filter'
 };
 
 /* applications which typically have a port 14501 status port - can be linked */
@@ -1136,6 +1090,22 @@ function ratestr(rate)
 	return prefix + rate;
 }
 
+function calculate_rates(status_old, status_new)
+{
+    var i = 0;
+    
+    var listeners_old = status_old['listeners'];
+    var listeners_new = status_new['listeners'];
+    var tdif = status_new['server']['tick_now'] - status_old['server']['tick_now'];
+    
+    for (var n in listeners_new) {
+        var o = listeners_old[i];
+        
+        rate = 
+        
+        i += 1;
+    }
+}
 
 var keys_totals = [
 	'clients', 'connects',
@@ -1148,6 +1118,53 @@ var keys_dupecheck = [ 'dupes_dropped', 'uniques_out' ];
 var keys_dupecheck_variations = [
 	'exact', 'space_trim', '8bit_strip', '8bit_clear', '8bit_spaced',
 	'low_strip', 'low_spaced', 'del_strip', 'del_spaced' ];
+
+var cols_listener = {
+	'proto': 'Proto',
+	'addr': 'Address',
+	'name': 'Name',
+	'clients': 'Clients',
+	'clients_peak': 'Peak',
+	'clients_max': 'Max',
+	'connects': 'Connects',
+	'connects_rates': 'Conn/s',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx bytes/s'
+};
+
+var cols_peers = {
+	'username': 'Server ID',
+	'addr_rem': 'Address',
+	'since_last_read': 'Last in',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx bytes/s',
+	'obuf_q': 'OutQ'
+};
+
+var cols_clients = {
+	'addr_loc': 'Port',
+	'username': 'Callsign',
+	'addr_rem': 'Address',
+	'verified': 'Verified',
+	'since_connect': 'Up',
+	'since_last_read': 'Last in',
+	'show_app_name': 'Software',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx bytes/s',
+	'obuf_q': 'OutQ',
+	'heard_count': 'MsgRcpts',
+	'filter': 'Filter'
+};
+
 
 var app = angular.module('aprsc', []).
 	config(function() {
@@ -1168,7 +1185,10 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	    'keys_totals': keys_totals,
 	    'keys_dupecheck': keys_dupecheck,
 	    'keys_dupecheck_variations': keys_dupecheck_variations,
-	    'key_translate': key_translate
+	    'key_translate': key_translate,
+	    'cols_listener': cols_listener,
+	    'cols_peers': cols_peers,
+	    'cols_clients': cols_clients
 	};
 
 	/* Ajax updates */
@@ -1180,6 +1200,9 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 		
 		$http.get('/status.json', config).success(function(d) {
 			console.log('status.json received, status: ' + d['result']);
+			
+			if ($scope.status)
+			    calculate_rates($scope.status, d);
 			
 			$scope.status_prev = $scope.status;
 			$scope.status = d;

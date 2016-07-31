@@ -4,6 +4,8 @@
 <title>aprsc status</title>
 <meta name="lang" content="en" />
 <meta http-equiv="Content-Type" content="application/xhtml+xml;charset=UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/bootstrap.min.css">
 <link rel="stylesheet" type="text/css" href="/aprsc.css" />
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 <link rel="shortcut" href="/favicon.ico" type="image/x-icon" />
@@ -15,15 +17,19 @@
 <div class='container'>
 
  <div class="row">
-   <div class="col-md-3 col-sm-3">
-     <div class="text-primary text-right" ng-cloak><h3>{{ status.server.server_id }} aprsc status <span ng-show="status">at {{ status.server.time_now | datetime }}</span></h3></div>
+   <div class="col-md-3 col-sm-4">
+     <div class="text-primary text-right" ng-cloak>
+     <h4>{{ status.server.server_id }} aprsc status<br/>
+     <span ng-show="status">{{ status.server.time_now | datetime }}</span>
+     </h4>
      </div>
+   </div>
  </div>
 
 <div class='row' ng-cloak>
 <h3>Server</h3>
 <div class='table-responsive'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
   <tr><td>Server ID</td> <td class="ar">{{ status.server.server_id }}</td></tr>
   <tr><td>Server admin</td> <td class="ar">{{ status.server.admin }}</td></tr>
   <tr><td>Software</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
@@ -38,7 +44,7 @@
 <div class='row' ng-cloak>
 <h3>Totals</h3>
 <div class='table-responsive'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_totals">
   <td>{{ setup.key_translate[k] }}</td>
   <td>{{ status.totals[k] }}</td>
@@ -57,7 +63,7 @@
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqE69xemQAAABMSURBVCjPY/z//z8DKYCJgUQwqDUcmMAgIcEgIMAgIMDAyMjAyMjAIQDlWiQgNLDAWR8eMLx8iWLYz48MPxkYGBgYXrxACDKOxGAFAAP1ERwzsIoPAAAAAElFTkSuQmCC" />
 	</span></h3>
 <div class='table-responsive'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_dupecheck">
   <td>{{ setup.key_translate[k] }}</td>
   <td>{{ status.dupecheck[k] }}</td>
@@ -67,7 +73,7 @@
 </div>
 
 <div class='table-responsive' ng-show='dupe_vars_visible'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_dupecheck_variations">
   <td>{{ setup.key_translate[k] }}</td>
   <td>{{ status.dupecheck.variations[k] }}</td>
@@ -80,7 +86,7 @@
 <div class='row' ng-cloak>
 <h3>Port listeners</h3>
 <div class='table-responsive' ng-show='status'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
 <tr><th ng-repeat="title in setup.cols_listener">{{ title }}</th></tr>
 <tr ng-repeat="l in status.listeners">
   <td ng-repeat="(k, title) in setup.cols_listener">{{ l[k] }} {{ status_prev.listeners[$parent.$index][k] }}</td>
@@ -92,7 +98,7 @@
 <div class='row' ng-cloak>
 <h3>Peers</h3>
 <div class='table-responsive' ng-show='status.peers'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
 <tr><th ng-repeat="title in setup.cols_peers">{{ title }}</th></tr>
 <tr ng-repeat="p in status.peers">
   <td ng-repeat="(k, title) in setup.cols_peers">{{ p[k] }}</td>
@@ -104,7 +110,7 @@
 <div class='row' ng-cloak>
 <h3>Clients</h3>
 <div class='table-responsive' ng-show='status'>
-<table class='table table-hover table-condensed'>
+<table class='table table-hover table-condensed table-striped'>
 <tr>
   <th>Port</th>
   <th>Callsign</th>

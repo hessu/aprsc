@@ -94,6 +94,7 @@ static struct http_static_t http_static_files[] = {
 	{ "/motd.html", "motd.html" },
 	{ "/jquery.min.js", "jquery.min.js" },
 	{ "/angular.min.js", "angular.min.js" },
+	{ "/bootstrap.min.css", "bootstrap.min.css" },
 	{ NULL, NULL }
 };
 

@@ -112,8 +112,9 @@ WEBFILES = \
  	src/web/excanvas.min.js \
 	src/web/angular.min.js \
  	src/web/jquery.min.js \
- 	src/web/jquery.flot.min.js \
- 	src/web/jquery.flot.selection.min.js
+	src/web/jquery.flot.min.js \
+	src/web/jquery.flot.selection.min.js \
+	src/web/bootstrap/css/bootstrap.min.css
  	
 testinstall:
 	mkdir -p ../tests/web

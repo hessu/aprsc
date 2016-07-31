@@ -27,13 +27,14 @@ div.page_title {
 table {
 }
 
+/*
 td {
 	background: #e1f6ff;
 	padding: 1px 4px 1px 4px;
 	margin: 1px 3px 1px 10px;
 	border: 1px solid white;
-	vertical-align: top;
-}
+	vertical-align: top; 
+}*/
 
 td.grtd {
 	background: #e1f6ff; color: #0000ff; cursor: pointer;
@@ -43,9 +44,10 @@ td.grtd_sel {
 	background: #f6e1ff; cursor: pointer;
 }
 
+/*
 th {
 	vertical-align: top;
-}
+}*/
 
 td.ar {
 	text-align: right;

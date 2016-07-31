@@ -2071,6 +2071,7 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	
 	cJSON *jc = cJSON_CreateObject();
 	cJSON_AddNumberToObject(jc, "fd", c->fd);
+	cJSON_AddNumberToObject(jc, "id", c->fd);
 	
 	/* additional information for live upgrade, not published */
 	if (liveup_info) {

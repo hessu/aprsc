@@ -134,7 +134,8 @@
   <td>{{ c.pkts_rx }}</td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
-  <td>{{ c.bytes_rates }}</td>
+  <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
+       / {{ (c.bytes_rx - status_prev.clients_id[c.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
   <td>{{ c.obuf_q }}</td>
   <td>{{ c.heard_count }}</td>
   <td>{{ c.filter }}</td>

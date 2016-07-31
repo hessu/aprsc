@@ -1090,21 +1090,30 @@ function ratestr(rate)
 	return prefix + rate;
 }
 
+function rehash_clients(status)
+{
+	var clients_id = {};
+	
+	for (var c in status['clients']) {
+		var cl = status['clients'][c];
+		clients_id[cl['id']] = cl;
+	}
+	
+	status['clients_id'] = clients_id;
+}
+
 function calculate_rates(status_old, status_new)
 {
-    var i = 0;
-    
-    var listeners_old = status_old['listeners'];
-    var listeners_new = status_new['listeners'];
-    var tdif = status_new['server']['tick_now'] - status_old['server']['tick_now'];
-    
-    for (var n in listeners_new) {
-        var o = listeners_old[i];
-        
-        rate = 
-        
-        i += 1;
-    }
+	var i = 0;
+	
+	var listeners_old = status_old['listeners'];
+	var listeners_new = status_new['listeners'];
+	var tdif = status_new['server']['tick_now'] - status_old['server']['tick_now'];
+	
+	for (var n in listeners_new) {
+		var o = listeners_old[i];
+		i += 1;
+	}
 }
 
 var keys_totals = [
@@ -1201,8 +1210,11 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 		$http.get('/status.json', config).success(function(d) {
 			console.log('status.json received, status: ' + d['result']);
 			
-			if ($scope.status)
+			if ($scope.status) {
+			    d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;
 			    calculate_rates($scope.status, d);
+			    rehash_clients($scope.status);
+			}
 			
 			$scope.status_prev = $scope.status;
 			$scope.status = d;

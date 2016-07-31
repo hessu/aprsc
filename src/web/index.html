@@ -124,7 +124,7 @@
   </tr>
 <tr ng-repeat="c in status.clients">
   <td>{{ c.addr_loc }}</td>
-  <td>{{ c.username }}</td>
+  <td><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
   <td>{{ c.addr_rem }}</td>
   <td>{{ c.verified }}</td>
   <td>{{ c.since_connect | duration }}</td>

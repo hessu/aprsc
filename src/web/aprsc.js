@@ -1196,9 +1196,14 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 		graph_zoom($scope, zoom_in);
 	};
 	
-	/* set up sorting for client list */
+	/* set up sorting for client and peer lists */
 	$scope.clients_sort = {
 		column: 'since_connect',
+		descending: false
+	};
+	
+	$scope.peers_sort = {
+		column: 'username',
 		descending: false
 	};
 	

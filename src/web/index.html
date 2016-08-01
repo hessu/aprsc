@@ -116,8 +116,11 @@
 <h4>Peers</h4>
 <div class='table-responsive' ng-show='status.peers'>
 <table class='table table-hover table-condensed table-striped'>
-<tr><th ng-repeat="title in setup.cols_peers">{{ title }}</th></tr>
-<tr ng-repeat="p in status.peers">
+<tr>
+  <th ng-repeat="(k, v) in setup.cols_peers"
+      ng-click="changeSorting(peers_sort, k)">{{ v }} <span ng-class="sortIndicator(peers_sort, k)"></span></th>
+  </tr>
+<tr ng-repeat="p in status.peers | orderBy : peers_sort.column : peers_sort.descending">
   <td ng-repeat="(k, title) in setup.cols_peers">{{ p[k] }}</td>
   </tr>
 </table>

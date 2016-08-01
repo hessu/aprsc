@@ -27,7 +27,8 @@
  </div>
 
 <div class='row' ng-cloak>
-<h3>Server</h3>
+<div class='col-md-4 col-sm-12'>
+<h4>Server</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
   <tr><td>Server ID</td> <td class="ar">{{ status.server.server_id }}</td></tr>
@@ -41,8 +42,17 @@
 </div>
 </div>
 
+<div class='col-md-8 col-sm-12'>
+<div style='height: 230px;' id='graph'></div>
+<div style='padding: 5px 0 0 0;'>
+<button onclick='graphZoom(1)' disabled='1' id='g_zoom_in'>Zoom</button>
+<button onclick='graphZoom(0)' class='hide' id='g_zoom_out'>Zoom out</button>
+</div>
+</div>
+</div>
+
 <div class='row' ng-cloak>
-<h3>Totals</h3>
+<h4>Totals</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_totals">
@@ -55,13 +65,13 @@
 </div>
 
 <div class='row' ng-cloak>
-<h3>Duplicate filter
+<h4>Duplicate filter
 <span class='link' id='dupecheck_more_show' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='!(dupe_vars_visible)'>
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqC7wd4jIAAABtSURBVCjPY/z//z8DKYAJU+jFA4YbNxh+4NLxHxV8//7fX/4/O/v//e//YwVMDCQCkjUgnLS//7+4+H9+/v/8/P8ZGP4zMPxn54dyzeMRTmKB6/zwgOHlSxSzfn5k+AkJhheD2tMka2AkNWkAAOhriTYQTgMEAAAAAElFTkSuQmCC" />
 	</span>
 <span class='link' id='dupecheck_more_hide' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='dupe_vars_visible'>
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqE69xemQAAABMSURBVCjPY/z//z8DKYCJgUQwqDUcmMAgIcEgIMAgIMDAyMjAyMjAIQDlWiQgNLDAWR8eMLx8iWLYz48MPxkYGBgYXrxACDKOxGAFAAP1ERwzsIoPAAAAAElFTkSuQmCC" />
-	</span></h3>
+	</span></h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_dupecheck">
@@ -84,7 +94,7 @@
 </div>
 
 <div class='row' ng-cloak>
-<h3>Port listeners</h3>
+<h4>Port listeners</h4>
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
 <tr><th ng-repeat="title in setup.cols_listener">{{ title }}</th></tr>
@@ -96,7 +106,7 @@
 </div>
 
 <div class='row' ng-cloak>
-<h3>Peers</h3>
+<h4>Peers</h4>
 <div class='table-responsive' ng-show='status.peers'>
 <table class='table table-hover table-condensed table-striped'>
 <tr><th ng-repeat="title in setup.cols_peers">{{ title }}</th></tr>
@@ -108,7 +118,7 @@
 </div>
 
 <div class='row' ng-cloak>
-<h3>Clients</h3>
+<h4>Clients</h4>
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
 <tr>
@@ -154,7 +164,9 @@
 
 <script type='text/JavaScript' src='jquery.min.js'></script>
 <script type='text/JavaScript' src='jquery.flot.min.js'></script>
+<script type='text/JavaScript' src='jquery.flot.time.min.js'></script>
 <script type='text/JavaScript' src='jquery.flot.selection.min.js'></script>
+<script type='text/JavaScript' src='jquery.flot.resize.min.js'></script>
 <script type='text/JavaScript' src='aprsc.js'></script>
 
 </body>

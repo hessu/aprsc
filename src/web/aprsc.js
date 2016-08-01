@@ -521,8 +521,6 @@ function render_clients(element, d, cols)
 	return;
 }
 
-var graph_selected = '';
-
 function render_block(graph_tree, element, d)
 {
 	var s = '<table>';
@@ -829,6 +827,8 @@ function update_status()
 	});
 }
 
+var graph_selected = '';
+
 var graph_opt;
 var graph_data;
 
@@ -1048,6 +1048,12 @@ function init()
 	check_for_easter();
 	
 	update_status();
+}
+
+/* ******** NEW angular.js ********* */
+
+function graph_setup()
+{
 	gr_switch('totals.tcp_bytes_rx');
 	
 	$('#graph').bind('plotselected', function(event,ranges) {
@@ -1065,8 +1071,6 @@ function init()
 		$('#g_zoom_in').attr("disabled", "disabled");
 	});
 }
-
-/* ******** NEW angular.js ********* */
 
 function ratestr(rate)
 {
@@ -1227,6 +1231,8 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	};
 	
 	full_load($scope, $http);
+	
+	graph_setup();
 
 }]);
 

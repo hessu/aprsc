@@ -14,7 +14,7 @@
 
 <body ng-controller="aprscc" onclick='ttip_hide();'>
 
-<div class='container'>
+<div class='container-fluid'>
 
  <div class="row">
    <div class="col-md-3 col-sm-4">
@@ -36,8 +36,8 @@
   <tr><td>Software</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
   <tr><td>Software features</td> <td class="ar">{{ status.server.software_build_features }}</td></tr>
   <tr><td>Uptime</td> <td class="ar">{{ status.server.uptime | duration }}</td></tr>
-  <tr><td>Started</td> <td class="ar">{{ status.server.time_started | datetime }}</td></tr>
-  <tr><td>OS</td> <td class="ar">{{ status.server.os }}</td></tr>
+  <tr><td>Server started</td> <td class="ar">{{ status.server.time_started | datetime }}</td></tr>
+  <tr><td>Operating system</td> <td class="ar">{{ status.server.os }}</td></tr>
 </table>
 </div>
 </div>
@@ -52,6 +52,7 @@
 </div>
 
 <div class='row' ng-cloak>
+<div class='col-md-4 col-sm-12'>
 <h4>Totals</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
@@ -63,8 +64,10 @@
 </table>
 </div>
 </div>
+</div>
 
 <div class='row' ng-cloak>
+<div class='col-md-5 col-sm-12'>
 <h4>Duplicate filter
 <span class='link' id='dupecheck_more_show' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='!(dupe_vars_visible)'>
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqC7wd4jIAAABtSURBVCjPY/z//z8DKYAJU+jFA4YbNxh+4NLxHxV8//7fX/4/O/v//e//YwVMDCQCkjUgnLS//7+4+H9+/v/8/P8ZGP4zMPxn54dyzeMRTmKB6/zwgOHlSxSzfn5k+AkJhheD2tMka2AkNWkAAOhriTYQTgMEAAAAAElFTkSuQmCC" />
@@ -92,8 +95,10 @@
 </table>
 </div>
 </div>
+</div>
 
 <div class='row' ng-cloak>
+<div class='col-md-12 col-sm-12'>
 <h4>Port listeners</h4>
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
@@ -104,8 +109,10 @@
 </table>
 </div>
 </div>
+</div>
 
 <div class='row' ng-cloak>
+<div class='col-md-12 col-sm-12'>
 <h4>Peers</h4>
 <div class='table-responsive' ng-show='status.peers'>
 <table class='table table-hover table-condensed table-striped'>
@@ -116,8 +123,10 @@
 </table>
 </div>
 </div>
+</div>
 
 <div class='row' ng-cloak>
+<div class='col-md-12 col-sm-12'>
 <h4>Clients</h4>
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
@@ -157,6 +166,7 @@
   <td>{{ c.filter }}</td>
   </tr>
 </table>
+</div>
 </div>
 </div>
 

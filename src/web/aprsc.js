@@ -1,7 +1,6 @@
 <!--
 
 var options = {};
-var range_selected;
 
 function top_status(c, s)
 {
@@ -827,64 +826,6 @@ function update_status()
 	});
 }
 
-var graph_selected = '';
-
-var graph_opt;
-var graph_data;
-
-function graph_fill(cdata, opts)
-{
-	var vals = cdata['values'];
-	var vl = vals.length;
-	if (opts['div']) {
-		var div = opts['div'];
-		for (var i = 0; i < vl; i++)
-			vals[i][1] = vals[i][1] / div;
-	}
-	for (var i = 0; i < vl; i++)
-		vals[i][0] = vals[i][0] * 1000;
-		
-	graph_data = [ { label: opts['label'], data: vals } ];
-	
-	var _x_opt = {
-		mode: 'time'
-	};
-	
-	var _y_opt = {
-		min: 0
-	};
-	
-	graph_opt = {
-		grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
-		legend: { position: 'nw' },
-		colors: [ '#0000ff' ],
-		xaxis: _x_opt,
-		yaxis: _y_opt,
-		selection: { mode: "x" }
-	};
-	
-	$.plot($('#graph'), graph_data, graph_opt);
-}
-
-var zoomed_in = false;
-function graph_zoom($scope, zoom_in)
-{
-	if (range_selected && zoom_in) {
-		$scope.graph_zoomed = zoomed_in = true;
-		graph_opt.xaxis.min = range_selected.from;
-		graph_opt.xaxis.max = range_selected.to;
-	} else {
-		$scope.graph_zoomed = zoomed_in = false;
-		graph_opt.xaxis.min = null;
-		graph_opt.xaxis.max = null;
-	}
-	
-	var p = $.plot($('#graph'), graph_data, graph_opt);
-	
-	if (range_selected)
-		p.setSelection({ xaxis: { from: range_selected.from, to: range_selected.to }});
-}
-
 var graphs = {
 	'totals.clients': { 'label': 'Clients allocated' },
 	'totals.connects': { 'label': 'Incoming connections/min' },
@@ -903,69 +844,6 @@ var graphs = {
 	'dupecheck.dupes_dropped': { 'label': 'Duplicate packets dropped/s', 'div' : 60 },
 	'dupecheck.uniques_out': { 'label': 'Unique packets/s', 'div' : 60 }
 };
-
-var graph_timer;
-
-function schedule_graph(t)
-{
-	if (graph_timer)
-		clearTimeout(graph_timer);
-	
-	graph_timer = setTimeout(load_graph, t);
-}
-
-function load_graph_success(data)
-{
-	top_status();
-	var d = graphs[this.k];
-	graph_fill(data, d);
-	schedule_graph(60000);
-	$('#graph').trigger('plotunselected');
-	this.scope.graph_zoomed = zoomed_in = false;
-}
-
-function load_graph_error(jqXHR, stat, errorThrown)
-{
-	var msg = 'Graph data download failed (' + stat + '). Server or network down?';
-	
-	if (errorThrown)
-		msg += '<br />HTTP error: ' + htmlent(errorThrown);
-	
-	top_status('msg_e', msg);
-	
-	schedule_graph(60000);
-}
-
-function load_graph($scope)
-{
-	var k = graph_selected;
-	
-	if (graph_timer) { 
-		clearTimeout(graph_timer);
-		graph_timer = 0;
-	}
-	
-	$('.grtd').removeClass('grtd_sel');
-	$('#' + k.replace('.', '_')).addClass('grtd_sel');
-	
-	$.ajax({
-		url: '/counterdata?' + k,
-		dataType: 'json',
-		timeout: 5000,
-		context: { 'k': k, 'scope': $scope },
-		success: load_graph_success,
-		error: load_graph_error
-	});
-}
-
-function gr_switch($scope, id)
-{
-	graph_selected = id;
-	range_selected = false;
-	$scope.graph_zoomed = zoomed_in = false;
-	$('#graph').trigger('plotunselected');
-	load_graph($scope);
-}
 
 var motd_last;
 
@@ -1039,26 +917,6 @@ function init()
 }
 
 /* ******** NEW angular.js ********* */
-
-function graph_setup($scope)
-{
-	gr_switch($scope, 'totals.tcp_bytes_rx');
-	
-	$('#graph').bind('plotselected', function(event,ranges) {
-		var to = parseInt(ranges.xaxis.to.toFixed(0));
-		var from = parseInt(ranges.xaxis.from.toFixed(0));
-		range_selected = {
-			'from': from,
-			'to': to
-		};
-		$('#g_zoom_in').removeAttr('disabled');
-		schedule_graph(60000); /* delay next update */
-	});
-	$('#graph').bind('plotunselected', function(event,ranges) {
-		range_selected = undefined;
-		$('#g_zoom_in').attr("disabled", "disabled");
-	});
-}
 
 function ratestr(rate)
 {
@@ -1166,8 +1024,142 @@ var cols_clients = {
 	'filter': 'Filter'
 };
 
+var graph_module = angular.module('graph', [ ]).
+	factory('graphs', function() {
+		console.log("graphService setup");
+		var instance = {};
+		
+		instance.graph_fill = function(cdata, opts) {
+			var vals = cdata['values'];
+			var vl = vals.length;
+			if (opts['div']) {
+				var div = opts['div'];
+				for (var i = 0; i < vl; i++)
+					vals[i][1] = vals[i][1] / div;
+			}
+			for (var i = 0; i < vl; i++)
+				vals[i][0] = vals[i][0] * 1000;
+			
+			instance.graph_data = [ { label: opts['label'], data: vals } ];
+			
+			var _x_opt = {
+				mode: 'time'
+			};
+			
+			var _y_opt = {
+				min: 0
+			};
+			
+			instance.graph_opt = {
+				grid: { hoverable: true, autoHighlight: false, minBorderMargin: 20 },
+				legend: { position: 'nw' },
+				colors: [ '#0000ff' ],
+				xaxis: _x_opt,
+				yaxis: _y_opt,
+				selection: { mode: "x" }
+			};
+			
+			$.plot($('#graph'), instance.graph_data, instance.graph_opt);
+                }
 
-var app = angular.module('aprsc', []).
+		instance.schedule_graph = function(t) {
+			if (instance.graph_timer)
+				clearTimeout(instance.graph_timer);
+			instance.graph_timer = setTimeout(instance.load_graph, t);
+		};
+		
+		instance.load_graph_success = function(data) {
+			top_status();
+			var d = graphs[this.k];
+			instance.graph_fill(data, d);
+			instance.schedule_graph(60000);
+			$('#graph').trigger('plotunselected');
+			instance.scope.graph_zoomed = false;
+		};
+		
+		instance.load_graph_error = function(jqXHR, stat, errorThrown) {
+			var msg = 'Graph data download failed (' + stat + '). Server or network down?';
+			
+			if (errorThrown)
+				msg += '<br />HTTP error: ' + htmlent(errorThrown);
+			
+			top_status('msg_e', msg);
+			instance.schedule_graph(60000);
+		};
+		
+		instance.load_graph = function($scope) {
+			var k = instance.graph_selected;
+			
+			if (instance.graph_timer) { 
+				clearTimeout(instance.graph_timer);
+				instance.graph_timer = 0;
+			}
+			
+			$('.grtd').removeClass('grtd_sel');
+			$('#' + k.replace('.', '_')).addClass('grtd_sel');
+			
+			$.ajax({
+				url: '/counterdata?' + k,
+				dataType: 'json',
+				timeout: 5000,
+				context: { 'k': k, 'scope': $scope },
+				success: instance.load_graph_success,
+				error: instance.load_graph_error
+			});
+		};
+		
+		instance.gr_switch = function($scope, id) {
+			instance.graph_selected = id;
+			instance.range_selected = false;
+			$scope.graph_zoomed = false;
+			$('#graph').trigger('plotunselected');
+			instance.load_graph($scope);
+		};
+		
+		instance.graph_zoom = function(zoom_in) {
+			if (instance.range_selected && zoom_in) {
+				instance.scope.graph_zoomed = true;
+				instance.graph_opt.xaxis.min = instance.range_selected.from;
+				instance.graph_opt.xaxis.max = instance.range_selected.to;
+			} else {
+				instance.scope.graph_zoomed = false;
+				instance.graph_opt.xaxis.min = null;
+				instance.graph_opt.xaxis.max = null;
+			}
+			
+			var p = $.plot($('#graph'), instance.graph_data, instance.graph_opt);
+			
+			if (instance.range_selected)
+				p.setSelection({ xaxis: { from: instance.range_selected.from, to: instance.range_selected.to }});
+		};
+
+
+                instance.graph_setup = function($scope) {
+                	instance.scope = $scope;
+                        instance.gr_switch($scope, 'totals.tcp_bytes_rx');
+                        
+                        $('#graph').bind('plotselected', function(event,ranges) {
+                                var to = parseInt(ranges.xaxis.to.toFixed(0));
+                                var from = parseInt(ranges.xaxis.from.toFixed(0));
+                                instance.range_selected = {
+                                        'from': from,
+                                        'to': to
+                                };
+                                $('#g_zoom_in').removeAttr('disabled');
+                                instance.schedule_graph(60000); /* delay next update */
+                        });
+                        
+                        $('#graph').bind('plotunselected', function(event,ranges) {
+                                instance.range_selected = undefined;
+                                $('#g_zoom_in').attr("disabled", "disabled");
+                        });
+                };
+		
+		return instance;
+	});
+
+
+var app = angular.module('aprsc', [ 'graph' ]).
 	config(function() {
 		console.log('aprsc module config');
 	}).
@@ -1179,7 +1171,7 @@ app.filter('duration', function() { return dur_str; });
 app.filter('datetime', function() { return timestr; });
 app.filter('ratestr', function() { return ratestr; });
 
-app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
+app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, graphs) {
 	console.log('aprsc init');
 	
 	$scope.setup = {
@@ -1191,10 +1183,8 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	    'cols_peers': cols_peers,
 	    'cols_clients': cols_clients
 	};
-
-	$scope.graphZoom = function(zoom_in) {
-		graph_zoom($scope, zoom_in);
-	};
+	
+	$scope.graphZoom = graphs.graph_zoom;
 	
 	/* set up sorting for client and peer lists */
 	$scope.clients_sort = {
@@ -1252,7 +1242,7 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	
 	full_load($scope, $http);
 	
-	graph_setup($scope);
+	graphs.graph_setup($scope);
 
 }]);
 

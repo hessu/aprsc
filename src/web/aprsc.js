@@ -1196,6 +1196,29 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 		graph_zoom($scope, zoom_in);
 	};
 	
+	/* set up sorting for client list */
+	$scope.clients_sort = {
+		column: 'since_connect',
+		descending: false
+	};
+	
+	$scope.sortIndicator = function(sort, column) {
+		if (column == sort.column) {
+			return 'glyphicon glyphicon-sort-by-attributes'
+				+ ((sort.descending) ? '-alt' : '');
+		}
+		return '';
+	};
+	
+	$scope.changeSorting = function(sort, column) {
+		if (sort.column == column) {
+			sort.descending = !sort.descending;
+		} else {
+			sort.column = column;
+			sort.descending = false;
+		}
+	};
+	
 	/* Ajax updates */
 	
 	var full_load = function($scope, $http) {

@@ -131,23 +131,10 @@
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
 <tr>
-  <th>Port</th>
-  <th>Callsign</th>
-  <th>Address</th>
-  <th>Verified</th>
-  <th>Up</th>
-  <th>Last in</th>
-  <th>Software</th>
-  <th>Packets Tx</th>
-  <th>Packets Rx</th>
-  <th>Bytes Tx</th>
-  <th>Bytes Rx</th>
-  <th>Tx/Rx bytes/s</th>
-  <th>OutQ</th>
-  <th>MsgRcpts</th>
-  <th>Filter</th>
+  <th ng-repeat="(k, v) in setup.cols_clients"
+      ng-click="changeSorting(clients_sort, k)">{{ v }} <span ng-class="sortIndicator(clients_sort, k)"></span></th>
   </tr>
-<tr ng-repeat="c in status.clients">
+<tr ng-repeat="c in status.clients | orderBy : clients_sort.column : clients_sort.descending">
   <td>{{ c.addr_loc }}</td>
   <td><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
   <td>{{ c.addr_rem }}</td>

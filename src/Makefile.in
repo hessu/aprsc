@@ -116,7 +116,11 @@ WEBFILES = \
 	src/web/jquery.flot.time.min.js \
 	src/web/jquery.flot.selection.min.js \
 	src/web/jquery.flot.resize.min.js \
-	src/web/bootstrap/css/bootstrap.min.css
+	src/web/bootstrap/css/bootstrap.min.css \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.eot \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.ttf \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.woff \
+	src/web/bootstrap/fonts/glyphicons-halflings-regular.woff2
  	
 testinstall:
 	mkdir -p ../tests/web

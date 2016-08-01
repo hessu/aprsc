@@ -97,6 +97,10 @@ static struct http_static_t http_static_files[] = {
 	{ "/jquery.min.js", "jquery.min.js" },
 	{ "/angular.min.js", "angular.min.js" },
 	{ "/bootstrap.min.css", "bootstrap.min.css" },
+	{ "/fonts/glyphicons-halflings-regular.eot", "glyphicons-halflings-regular.eot" },
+	{ "/fonts/glyphicons-halflings-regular.ttf", "glyphicons-halflings-regular.ttf" },
+	{ "/fonts/glyphicons-halflings-regular.woff", "glyphicons-halflings-regular.woff" },
+	{ "/fonts/glyphicons-halflings-regular.woff2", "glyphicons-halflings-regular.woff2" },
 	{ NULL, NULL }
 };
 

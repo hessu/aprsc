@@ -867,32 +867,22 @@ function graph_fill(cdata, opts)
 }
 
 var zoomed_in = false;
-function graphZoom(zoom_in)
+function graph_zoom($scope, zoom_in)
 {
 	if (range_selected && zoom_in) {
-		zoomed_in = true;
+		$scope.graph_zoomed = zoomed_in = true;
 		graph_opt.xaxis.min = range_selected.from;
 		graph_opt.xaxis.max = range_selected.to;
 	} else {
-		zoomed_in = false;
+		$scope.graph_zoomed = zoomed_in = false;
 		graph_opt.xaxis.min = null;
 		graph_opt.xaxis.max = null;
 	}
-	
-	update_buttons();
 	
 	var p = $.plot($('#graph'), graph_data, graph_opt);
 	
 	if (range_selected)
 		p.setSelection({ xaxis: { from: range_selected.from, to: range_selected.to }});
-}
-
-function update_buttons()
-{
-	if (zoomed_in)
-		$('#g_zoom_out').show();
-	else
-		$('#g_zoom_out').hide();
 }
 
 var graphs = {
@@ -931,8 +921,7 @@ function load_graph_success(data)
 	graph_fill(data, d);
 	schedule_graph(60000);
 	$('#graph').trigger('plotunselected');
-	zoomed_in = false;
-	update_buttons();
+	this.scope.graph_zoomed = zoomed_in = false;
 }
 
 function load_graph_error(jqXHR, stat, errorThrown)
@@ -947,7 +936,7 @@ function load_graph_error(jqXHR, stat, errorThrown)
 	schedule_graph(60000);
 }
 
-function load_graph()
+function load_graph($scope)
 {
 	var k = graph_selected;
 	
@@ -963,20 +952,19 @@ function load_graph()
 		url: '/counterdata?' + k,
 		dataType: 'json',
 		timeout: 5000,
-		context: { 'k': k },
+		context: { 'k': k, 'scope': $scope },
 		success: load_graph_success,
 		error: load_graph_error
 	});
 }
 
-function gr_switch(id)
+function gr_switch($scope, id)
 {
 	graph_selected = id;
 	range_selected = false;
-	zoomed_in = false;
+	$scope.graph_zoomed = zoomed_in = false;
 	$('#graph').trigger('plotunselected');
-	update_buttons();
-	load_graph();
+	load_graph($scope);
 }
 
 var motd_last;
@@ -1052,9 +1040,9 @@ function init()
 
 /* ******** NEW angular.js ********* */
 
-function graph_setup()
+function graph_setup($scope)
 {
-	gr_switch('totals.tcp_bytes_rx');
+	gr_switch($scope, 'totals.tcp_bytes_rx');
 	
 	$('#graph').bind('plotselected', function(event,ranges) {
 		var to = parseInt(ranges.xaxis.to.toFixed(0));
@@ -1204,6 +1192,10 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	    'cols_clients': cols_clients
 	};
 
+	$scope.graphZoom = function(zoom_in) {
+		graph_zoom($scope, zoom_in);
+	};
+	
 	/* Ajax updates */
 	
 	var full_load = function($scope, $http) {
@@ -1232,7 +1224,7 @@ app.controller('aprscc', [ '$scope', '$http', function($scope, $http) {
 	
 	full_load($scope, $http);
 	
-	graph_setup();
+	graph_setup($scope);
 
 }]);
 

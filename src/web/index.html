@@ -45,8 +45,8 @@
 <div class='col-md-8 col-sm-12'>
 <div style='height: 230px;' id='graph'></div>
 <div style='padding: 5px 0 0 0;'>
-<button onclick='graphZoom(1)' disabled='1' id='g_zoom_in'>Zoom</button>
-<button onclick='graphZoom(0)' class='hide' id='g_zoom_out'>Zoom out</button>
+<button ng-click='graphZoom(1)' ng-hide='graph_zoomed'>Zoom</button>
+<button ng-click='graphZoom(0)' ng-hide='!graph_zoomed'>Zoom out</button>
 </div>
 </div>
 </div>

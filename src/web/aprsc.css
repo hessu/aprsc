@@ -64,6 +64,10 @@ td.grtd_sel {
 	background: #f6e1ff; cursor: pointer;
 }
 
+td.username {
+	white-space: nowrap;
+}
+
 /*
 th {
 	vertical-align: top;

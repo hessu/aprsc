@@ -140,7 +140,7 @@
   <th ng-repeat="(k, v) in setup.cols_uplinks">{{ v }}</th>
   </tr>
 <tr ng-repeat="c in status.uplinks">
-  <td>{{ c.username }}</td>
+  <td class='username'>{{ c.username }}</td>
   <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
   <td>{{ c.mode }}</td>
   <td>{{ c.t_connect | duration }}</td>
@@ -170,7 +170,7 @@
       ng-click="changeSorting(peers_sort, k)">{{ v }} <span ng-class="sortIndicator(peers_sort, k)"></span></th>
   </tr>
 <tr ng-repeat="c in status.peers | orderBy : peers_sort.column : peers_sort.descending">
-  <td>{{ c.username }}</td>
+  <td class='username'>{{ c.username }}</td>
   <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
   <td>{{ c.since_last_read | duration }}</td>
   <td>{{ c.pkts_tx }}</td>
@@ -197,7 +197,7 @@
   </tr>
 <tr ng-repeat="c in status.clients | orderBy : clients_sort.column : clients_sort.descending">
   <td>{{ c.addr_loc }}</td>
-  <td><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
+  <td class='username'><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
   <td><a ng-show="linkable(c)" ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a><span ng-show="!linkable(c)">{{ c.addr_rem }}</span></td>
   <td><span ng-show='c.verified == 0' class='red'>No</span>
       <span ng-show='c.verified == 1'>Yes</span>

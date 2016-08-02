@@ -1569,6 +1569,7 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 			continue;
 		cJSON *jl = cJSON_CreateObject();
 		cJSON_AddNumberToObject(jl, "fd", l->fd);
+		cJSON_AddNumberToObject(jl, "id", l->id);
 		cJSON_AddStringToObject(jl, "name", l->name);
 		cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);

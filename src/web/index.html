@@ -104,7 +104,20 @@
 <table class='table table-hover table-condensed table-striped'>
 <tr><th ng-repeat="title in setup.cols_listener">{{ title }}</th></tr>
 <tr ng-repeat="l in status.listeners">
-  <td ng-repeat="(k, title) in setup.cols_listener">{{ l[k] }} {{ status_prev.listeners[$parent.$index][k] }}</td>
+  <td>{{ l.proto }}</td>
+  <td>{{ l.addr }}</td>
+  <td>{{ l.name }}</td>
+  <td>{{ l.clients }}</td>
+  <td>{{ l.clients_peak }}</td>
+  <td>{{ l.clients_max }}</td>
+  <td>{{ l.connects }}</td>
+  <td><span ng-show='status.tick_dif'>{{ (l.connects - status_prev.listeners_id[l.id].connects) / status.tick_dif | ratestr }}</span></td>
+  <td>{{ l.pkts_tx }}</td>
+  <td>{{ l.pkts_rx }}</td>
+  <td>{{ l.bytes_tx }}</td>
+  <td>{{ l.bytes_rx }}</td>
+  <td><span ng-show='status.tick_dif'>{{ (l.bytes_tx - status_prev.listeners_id[l.id].bytes_tx) / status.tick_dif | ratestr }}
+       / {{ (l.bytes_rx - status_prev.clisteners_id[l.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
   </tr>
 </table>
 </div>

@@ -918,7 +918,7 @@ function ratestr(rate)
 	return prefix + rate;
 }
 
-function rehash_clients(status)
+function rehash_clients_old(status)
 {
 	var clients_id = {};
 	
@@ -928,6 +928,18 @@ function rehash_clients(status)
 	}
 	
 	status['clients_id'] = clients_id;
+}
+
+function array_to_dict_by_id(arr)
+{
+	var dict = {};
+	
+	for (var c in arr) {
+		var cl = arr[c];
+		dict[cl['id']] = cl;
+	}
+	
+	return dict;
 }
 
 function calculate_rates(status_old, status_new)
@@ -1088,7 +1100,8 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, 
 			if ($scope.status) {
 			    d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;
 			    calculate_rates($scope.status, d);
-			    rehash_clients($scope.status);
+			    $scope.status['clients_id'] = array_to_dict_by_id($scope.status.clients);
+			    $scope.status['listeners_id'] = array_to_dict_by_id($scope.status.listeners);
 			}
 			
 			$scope.status_prev = $scope.status;

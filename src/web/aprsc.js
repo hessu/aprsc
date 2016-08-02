@@ -230,52 +230,6 @@ var key_tooltips = {
 };
 
 
-/* render a clients array (also peers, uplinks, and listeners) */
-function render_clients(element, d, cols)
-{
-	var s = '<table><tr>';
-	for (var k in cols) {
-		s += '<th>' + htmlent(cols[k]) + '</th>';
-	}
-	s += '</tr>';
-	
-	for (var ci in d) {
-		s += '<tr>';
-		var c = d[ci];
-		
-		if (isUndefined(c['fd']) || c['fd'] < 0)
-			c['fd'] = Math.random() * -1000000;
-		
-		c['addr_rem_shown'] = c['addr_rem'];
-		
-		if (c['udp_downstream']) { 
-			if (c['mode'] == 'peer')
-				c['addr_rem_shown'] += ' UDP';
-			else
-				c['addr_rem_shown'] += ' +UDP';
-		}
-		
-		if (linkable[c['app_name']] || c['mode'] == 'peer')
-			c['addr_rem_shown'] = '<a href="http://' + server_status_host(c) + '/">' + htmlent(c['addr_rem_shown']) + '</a>';
-		
-		if (c['app_name'] && c['app_version'])
-			c['show_app_name'] = c['app_name'] + ' ' + c['app_version'];
-		else
-			c['show_app_name'] = c['app_name'];
-		
-		for (var k in cols) {
-			s += '<td>';
-			s += '</td>';
-		}
-		
-		s += '</tr>';
-	}
-	s += '</table>';
-	
-	element.html(s);
-	return;
-}
-
 var mem_rows = {
 	'pbuf_small': 'Small pbufs',
 	'pbuf_medium': 'Medium pbufs',

@@ -4,6 +4,26 @@ body {
 	font-size: 12px;
 }
 
+div.sprite_logo {
+	background: url(aprsc-logo4.png);
+	width: 233px;
+	height: 69px;
+}
+
+@media
+	only screen and (min-device-pixel-ratio: 2),
+	only screen and (-webkit-min-device-pixel-ratio: 2),
+	only screen and (-moz-min-device-pixel-ratio: 2),
+	only screen and (-o-min-device-pixel-ratio: 2/1) {
+		div.sprite_logo {
+			background: url(aprsc-logo4@2x.png);
+			background-size: 233px 69px;
+		}
+}
+
+@brand-primary: #0024ff;
+.text-primary { color: #0024ff; }
+
 .grey { color: #666; }
 .bold { font-weight: bold; }
 .red { color: #ff5370; }

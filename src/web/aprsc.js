@@ -46,67 +46,9 @@ function parse_options(s)
 		key_translate['email'] = 'Admin email';
 }
 
-function server_status_host(s)
-{
-	var h = s['addr_rem'];
-	var p = h.lastIndexOf(':');
-	if (h.lastIndexOf(']') > p || p == -1)
-		return h + ':14501';
-	return h.substr(0, p) + ':14501';
-}
-
 function addr_loc_port(s)
 {
 	return s.substr(s.lastIndexOf(':') + 1);
-}
-
-function conv_verified(c, k)
-{
-	if (c['verified'] == 3)
-		return '<span class="link" onclick="return cert_popup(event, ' + c['fd'] + ');">Cert</span>';
-		
-	if (c['verified'])
-		return 'Yes';
-	
-	return '<span class="red">No</span>';
-}
-
-function port_conn_rates(c, k)
-{
-	var ckey = 'l_' + c['proto'] + c['addr'] + ':' + k;
-	var c = calc_rate(ckey + ':c', c['connects'], 1);
-	if (!isUndefined(c[1]) && c[1] !== '')
-		return c[1];
-	return '';
-}
-
-function client_bytes_rates(c, k)
-{
-	var ckey;
-	if (isUndefined(c['addr_rem']))
-		ckey = 'l_' + c['proto'] + c['addr'] + ':' + k;
-	else
-		ckey = c['addr_rem'] + ':' + k;
-	var tx = calc_rate(ckey + ':tx', c['bytes_tx'], 1);
-	var rx = calc_rate(ckey + ':rx', c['bytes_rx'], 1);
-	if (!isUndefined(tx[1]) && tx[1] !== '')
-		return tx[1] + ' / ' + rx[1];
-	return '';
-}
-
-function client_pkts_rx(c, k)
-{
-	//if (isUndefined(c['pkts_ign']))
-	//	return c['pkts_rx'];
-	
-	var s = c['pkts_rx'] + '/' + c['pkts_dup'] + '/' + c['pkts_ign'];
-	
-	if (c['pkts_ign'] > 0 || c['pkts_dup'] > 0)
-		return '<span class="'
-			+ ((c['pkts_ign'] / c['pkts_rx'] > 0.1) ? 'rxerr_red' : 'rxerr')
-			+ '" onclick="return rx_err_popup(event, ' + c['fd'] + ');">' + s + '</span>';
-
-	return s;
 }
 
 function htmlent(s)
@@ -287,163 +229,6 @@ var key_tooltips = {
 	'sctp_bytes_rx': 'APRS-IS data received over SCTP'
 };
 
-var val_convert_c = {
-	'bytes_rates': client_bytes_rates,
-	'pkts_rx': client_pkts_rx,
-	'connects_rates': port_conn_rates,
-	'verified': conv_verified
-};
-
-var val_convert = {
-	'time_started': timestr,
-	'uptime': dur_str,
-	't_connect': timestr,
-	'since_connect': dur_str,
-	'since_last_read': dur_str,
-	'addr_rem_shown': conv_none,
-	'addr_loc': addr_loc_port
-};
-
-/* applications which typically have a port 14501 status port - can be linked */
-var linkable = {
-	'aprsc': 1,
-	'aprsd': 1,
-	'javAPRSSrvr': 1
-};
-
-/* clients per fd, to support onclick actions within client/uplink/peer tables */
-var fd_clients = {};
-var rx_err_codes = []; /* an array of rx err field codes */
-
-/* tooltip action for rx errors counters */
-function event_click_coordinates(e)
-{
-	var posx = 0;
-	var posy = 0;
-	
-	if (e.pageX || e.pageY) {
-		posx = e.pageX;
-		posy = e.pageY;
-	} else if (e.clientX || e.clientY) {
-		posx = e.clientX + document.body.scrollLeft + document.documentElement.scrollLeft;
-		posy = e.clientY + document.body.scrollTop + document.documentElement.scrollTop;
-	}/* else {
-		alert("event_click_coordinates failed!");
-	}*/
-	
-	return [ posx, posy ];
-}
-
-var ttip_inside_element;
-function ttip(e, elem, fd)
-{
-	var co = event_click_coordinates(e);
-	
-	// make note of element we're in
-	ttip_inside_element = elem;
-	
-	//jsjam-keep: event_attach
-	//$(elem).on('mouseout', ttip_hide);
-	setTimeout(function() { ttip_show_maybe(elem, function() { return "contents"; }, co); }, 300);
-}
-
-function rx_err_contents(fd)
-{
-	if (isUndefined(fd_clients[fd]))
-		return 'No client on fd ' + fd;
-		
-	var er = fd_clients[fd]['rx_errs'];
-	
-	if (isUndefined(er))
-		return 'No rx errors for client on fd ' + fd;
-	
-	var s = '<b>Receive drops: ' + fd_clients[fd]['pkts_dup'] + ' dupes, ' + fd_clients[fd]['pkts_ign'] + ' errors in ' + fd_clients[fd]['pkts_rx'] + '</b><br />';
-	
-	for (var i = 0; i < rx_err_codes.length; i++) {
-		if (er[i] < 1)
-			continue;
-		s += ((rx_err_strings[rx_err_codes[i]]) ? rx_err_strings[rx_err_codes[i]] : rx_err_codes[i])
-			+ ': ' + er[i] + '<br />';
-	}
-	
-	return s;
-}
-
-function rx_err_popup(e, fd)
-{
-	cancel_events(e);
-	
-	if (isUndefined(fd_clients[fd]))
-		return;
-	
-	var co = event_click_coordinates(e);
-	
-	ttip_show(function() { return rx_err_contents(fd); }, co);
-	
-	return false;
-}
-
-function cert_contents(fd)
-{
-	if (isUndefined(fd_clients[fd]))
-		return 'No client on fd ' + fd;
-		
-	var subj = fd_clients[fd]['cert_subject'];
-	var iss = fd_clients[fd]['cert_issuer'];
-	
-	if (isUndefined(subj) && isUndefined(iss))
-		return 'Client on fd ' + fd + ' has no certificate';
-	
-	var s = '';
-	
-	if (!isUndefined(subj))
-		s += '<b>Subject:</b><br />' + htmlent(subj) + '<br />';
-	if (!isUndefined(iss))
-		s += '<b>Issuer:</b><br />' + htmlent(iss) + '<br />';
-		
-	return s;
-}
-
-function cert_popup(e, fd)
-{
-	cancel_events(e);
-	
-	if (isUndefined(fd_clients[fd]))
-		return;
-	
-	var co = event_click_coordinates(e);
-	
-	ttip_show(function() { return cert_contents(fd); }, co);
-	
-	return false;
-}
-
-function ttip_show_maybe(elem, cb, co)
-{
-	if (ttip_inside_element == elem)
-		ttip_show(cb, co);
-}
-
-function ttip_show(cb, co)
-{
-	var element = $('#ttip');
-	element.hide();
-	
-	var ttip_size = 300;
-	if (co[0] > ttip_size + 40)
-		co[0] -= ttip_size + 40; // position on left of event
-	else
-		co[0] += 40; // position on right of event
-	
-	element.html("<span>" + cb() + "</span>");
-	element.css({ 'left': co[0] + 'px', 'top': co[1] + 'px'}).show('fast');
-}
-
-function ttip_hide()
-{
-	$('#ttip').hide('fast');
-	ttip_inside_element = null;
-}
 
 /* render a clients array (also peers, uplinks, and listeners) */
 function render_clients(element, d, cols)
@@ -461,7 +246,6 @@ function render_clients(element, d, cols)
 		if (isUndefined(c['fd']) || c['fd'] < 0)
 			c['fd'] = Math.random() * -1000000;
 		
-		fd_clients[c['fd']] = c;
 		c['addr_rem_shown'] = c['addr_rem'];
 		
 		if (c['udp_downstream']) { 
@@ -481,52 +265,10 @@ function render_clients(element, d, cols)
 		
 		for (var k in cols) {
 			s += '<td>';
-			if (val_convert_c[k])
-				s += val_convert_c[k](c, k);
-			else if (val_convert[k])
-				s += val_convert[k](c[k]);
-			else
-				s += htmlent(c[k]);
 			s += '</td>';
 		}
 		
 		s += '</tr>';
-	}
-	s += '</table>';
-	
-	element.html(s);
-	return;
-}
-
-function render_block(graph_tree, element, d)
-{
-	var s = '<table>';
-	
-	for (var k in d) {
-		if (!key_translate[k])
-			continue;
-			
-		var o;
-		if (typeof(d[k]) == 'object') {
-			for (var i in d[k])
-				d[k][i] = htmlent(d[k][i]);
-			o = '<td class="ar">' + d[k].join('</td><td class="ar">') + '</td>';
-		} else {
-			if (val_convert[k])
-				o = val_convert[k](d[k]);
-			else
-				o = htmlent(d[k]);
-			
-			o = '<td class="ar">' + o + '</td>';
-		}
-		
-		if (graph_tree) {
-			var id = graph_tree + '.' + k;
-			var cl = (graph_selected == id) ? 'grtd grtd_sel' : 'grtd';
-			s += '<tr><td class="' + cl + '" id="' + id.replace('.', '_') + '" onclick="gr_switch(\'' + id + '\')">' + htmlent(key_translate[k]) + '</td>' + o + '</tr>';
-		} else {
-			s += '<tr><td>' + htmlent(key_translate[k]) + '</td>' + o + '</tr>';
-		}
 	}
 	s += '</table>';
 	
@@ -589,39 +331,6 @@ function render_memory(element, d)
 
 var tick_now;
 
-var rate_cache = {};
-function calc_rate(key, value, no_s)
-{
-	var rate = '';
-	if (rate_cache[key]) {
-		// can calculate current rate
-		var t_dif = tick_now - rate_cache[key][0];
-		var val_dif = value - rate_cache[key][1];
-		rate = val_dif / t_dif;
-		var prefix = '';
-		if (rate < 0) {
-			rate *= -1;
-			prefix = '-';
-		}
-		
-		if (rate >= 10)
-			rate = rate.toFixed(0);
-		else if (rate >= 1)
-			rate = rate.toFixed(1);
-		else if (rate > 0)
-			rate = rate.toFixed(2);
-		else if (rate == 0)
-			rate = '0';
-		else
-			rate = rate.toFixed(2);
-		if (!no_s)
-			rate += '/s';
-		rate = prefix + rate;
-	}
-	
-	rate_cache[key] = [tick_now, value];
-	return [ value, rate ];
-}
 
 var alarms_visible = 0;
 
@@ -677,7 +386,6 @@ function render(d)
 		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
 			s['software'] = s['software'] + ' ' + s['software_version'];
 		
-		render_block(0, server_table, s);
 	} else {
 		return;
 	}
@@ -698,9 +406,6 @@ function render(d)
 		var u = d['dupecheck'];
 		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
 		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
-		render_block('dupecheck', dupecheck_table, u);
-		if (u['variations'])
-			render_block(0, dupecheck_more_table, u['variations']);
 	}
 	
 	if (d['totals']) {
@@ -709,10 +414,7 @@ function render(d)
 			if (u[totals_keys[i]] !== undefined)
 				u[totals_keys[i]] = calc_rate('totals.' + totals_keys[i], u[totals_keys[i]]);
 		}
-		render_block('totals', totals_table, u);
 	}
-	
-	fd_clients = {};
 	
 	if (d['listeners'])
 		render_clients(listeners_table, d['listeners'], listener_cols);
@@ -804,25 +506,6 @@ function update_status()
 	});
 }
 
-var graphs = {
-	'totals.clients': { 'label': 'Clients allocated' },
-	'totals.connects': { 'label': 'Incoming connections/min' },
-	'totals.tcp_bytes_rx': { 'label': 'Bytes/s Rx, TCP', 'div' : 60 },
-	'totals.tcp_bytes_tx': { 'label': 'Bytes/s Tx, TCP', 'div' : 60 },
-	'totals.udp_bytes_rx': { 'label': 'Bytes/s Rx, UDP', 'div' : 60 },
-	'totals.udp_bytes_tx': { 'label': 'Bytes/s Tx, UDP', 'div' : 60 },
-	'totals.sctp_bytes_rx': { 'label': 'Bytes/s Rx, SCTP', 'div' : 60 },
-	'totals.sctp_bytes_tx': { 'label': 'Bytes/s Tx, SCTP', 'div' : 60 },
-	'totals.tcp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, TCP', 'div' : 60 },
-	'totals.tcp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, TCP', 'div' : 60 },
-	'totals.udp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, UDP', 'div' : 60 },
-	'totals.udp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, UDP', 'div' : 60 },
-	'totals.sctp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, SCTP', 'div' : 60 },
-	'totals.sctp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, SCTP', 'div' : 60 },
-	'dupecheck.dupes_dropped': { 'label': 'Duplicate packets dropped/s', 'div' : 60 },
-	'dupecheck.uniques_out': { 'label': 'Unique packets/s', 'div' : 60 }
-};
-
 var motd_last;
 
 function motd_hide()
@@ -860,38 +543,6 @@ function motd_check()
 	}
 		
 	setTimeout(motd_check, 61000);
-}
-
-function toggle(id)
-{
-	$('#' + id + '_show').toggle(100);
-	$('#' + id + '_hide').toggle(100);
-	$('#' + id).toggle(200);
-}
-
-/* easter egg */
-function check_for_easter()
-{
-	var D = new Date();
-	if (D.getMonth() == 11 && D.getDate() >= 24 && D.getDate() <= 25)
-		$('#logo').attr("src","/aprsc-joulukissa.jpg");
-}
-
-function init()
-{
-	listeners_table = $('#listeners');
-	uplinks_table = $('#uplinks');
-	peers_table = $('#peers');
-	clients_table = $('#clients');
-	memory_table = $('#memory');
-	dupecheck_table = $('#dupecheck');
-	dupecheck_more_table = $('#dupecheck_more');
-	totals_table = $('#totals');
-	server_table = $('#server');
-	alarm_div = $('#alarms');
-	check_for_easter();
-	
-	update_status();
 }
 
 /* ******** NEW angular.js ********* */
@@ -1004,8 +655,34 @@ var cols_clients = {
 	'filter': 'Filter'
 };
 
+/* applications which typically have a port 14501 status port - can be linked */
+var linkable = {
+	'aprsc': 1,
+	'aprsd': 1,
+	'javAPRSSrvr': 1
+};
 
-var app = angular.module('aprsc', [ 'graph' ]).
+var graphs_available = {
+	'totals.clients': { 'label': 'Clients allocated' },
+	'totals.connects': { 'label': 'Incoming connections/min' },
+	'totals.tcp_bytes_rx': { 'label': 'Bytes/s Rx, TCP', 'div' : 60 },
+	'totals.tcp_bytes_tx': { 'label': 'Bytes/s Tx, TCP', 'div' : 60 },
+	'totals.udp_bytes_rx': { 'label': 'Bytes/s Rx, UDP', 'div' : 60 },
+	'totals.udp_bytes_tx': { 'label': 'Bytes/s Tx, UDP', 'div' : 60 },
+	'totals.sctp_bytes_rx': { 'label': 'Bytes/s Rx, SCTP', 'div' : 60 },
+	'totals.sctp_bytes_tx': { 'label': 'Bytes/s Tx, SCTP', 'div' : 60 },
+	'totals.tcp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, TCP', 'div' : 60 },
+	'totals.tcp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, TCP', 'div' : 60 },
+	'totals.udp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, UDP', 'div' : 60 },
+	'totals.udp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, UDP', 'div' : 60 },
+	'totals.sctp_pkts_rx': { 'label': 'APRS-IS packets/s Rx, SCTP', 'div' : 60 },
+	'totals.sctp_pkts_tx': { 'label': 'APRS-IS packets/s Tx, SCTP', 'div' : 60 },
+	'dupecheck.dupes_dropped': { 'label': 'Duplicate packets dropped/s', 'div' : 60 },
+	'dupecheck.uniques_out': { 'label': 'Unique packets/s', 'div' : 60 }
+};
+
+
+var app = angular.module('aprsc', [ 'graph', 'ngDialog' ]).
 	config(function() {
 		console.log('aprsc module config');
 	}).
@@ -1017,7 +694,7 @@ app.filter('duration', function() { return dur_str; });
 app.filter('datetime', function() { return timestr; });
 app.filter('ratestr', function() { return ratestr; });
 
-app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, graphs) {
+app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($scope, $http, graphs, ngDialog) {
 	console.log('aprsc init');
 	
 	$scope.setup = {
@@ -1028,12 +705,41 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, 
 	    'cols_listener': cols_listener,
 	    'cols_uplinks': cols_uplinks,
 	    'cols_peers': cols_peers,
-	    'cols_clients': cols_clients
+	    'cols_clients': cols_clients,
+	    'rx_err_strings': rx_err_strings
 	};
 	
 	/* graph zooming and switching */
 	$scope.graphZoom = graphs.graph_zoom;
 	$scope.graphSwitch = function(tree, key) { graphs.gr_switch(tree + '.' + key); };
+	
+	/* client list styling helpers */
+	$scope.linkable = function(s) { return linkable[s.app_name]; };
+	
+	$scope.server_status_href = function(s) {
+		var h = s['addr_rem'];
+		var p = h.lastIndexOf(':');
+		if (h.lastIndexOf(']') > p || p == -1)
+			return 'http://' + h + ':14501';
+		return 'http://' + h.substr(0, p) + ':14501';
+	};
+	
+	$scope.pkts_rx_class = function(c) {
+		if (c.pkts_ign > 0 || c.pkts_dup > 0)
+			return (c.pkts_ign / c.pkts_rx > 0.1) ? 'rxerr_red' : 'rxerr';
+			
+		return '';
+	};
+	
+	$scope.pkts_rx_dialog = function (c) {
+		$scope.sel_c = c;
+		ngDialog.open({ template: 'pkts_rx_dialog', className: 'ngdialog-theme-plain', scope: $scope });
+	};
+	
+	$scope.client_cert_dialog = function (c) {
+		$scope.sel_c = c;
+		ngDialog.open({ template: 'client_cert_dialog', className: 'ngdialog-theme-plain', scope: $scope });
+	};
 	
 	/* set up sorting for client and peer lists */
 	$scope.clients_sort = {
@@ -1091,7 +797,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, 
 	
 	full_load($scope, $http);
 	
-	graphs.graph_setup($scope);
+	graphs.graph_setup($scope, graphs_available);
 
 }]);
 

@@ -107,10 +107,14 @@ WEBFILES = \
 	src/web/aprsc.css src/web/aprsc.js src/web/aprsc-graph.js \
 	src/web/index.html \
 	src/web/favicon.ico \
-	src/web/aprsc-logo.png \
+	src/web/aprsc-logo4.png \
+	src/web/aprsc-logo4@2x.png \
 	src/web/aprsc-joulukissa.jpg \
  	src/web/excanvas.min.js \
 	src/web/angular.min.js \
+	src/web/ngDialog.min.js \
+	src/web/ngDialog.min.css \
+	src/web/ngDialog-theme-plain.min.css \
  	src/web/jquery.min.js \
 	src/web/jquery.flot.min.js \
 	src/web/jquery.flot.time.min.js \

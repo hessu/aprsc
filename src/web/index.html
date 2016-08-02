@@ -6,18 +6,24 @@
 <meta http-equiv="Content-Type" content="application/xhtml+xml;charset=UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/bootstrap.min.css">
+<link rel="stylesheet" href="/ngDialog.min.css">
+<link rel="stylesheet" href="/ngDialog-theme-plain.min.css">
 <link rel="stylesheet" type="text/css" href="/aprsc.css" />
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 <link rel="shortcut" href="/favicon.ico" type="image/x-icon" />
 <script src="angular.min.js"></script>
+<script src="ngDialog.min.js"></script>
 </head>
 
-<body ng-controller="aprscc" onclick='ttip_hide();'>
+<body ng-controller="aprscc">
 
 <div class='container-fluid'>
 
  <div class="row">
-   <div class="col-md-3 col-sm-4">
+   <div class="col-md-3 pull-right">
+     <div class="sprite_logo" style="float:right;"></div>
+   </div>
+   <div class="col-md-3 pull-right">
      <div class="text-primary text-right" ng-cloak>
      <h4>{{ status.server.server_id }} aprsc status<br/>
      <span ng-show="status">{{ status.server.time_now | datetime }}</span>
@@ -46,10 +52,10 @@
 <div style='height: 230px;' id='graph'></div>
 <div style='padding: 5px 0 0 0;'>
 <button ng-click='graphZoom(1)' ng-hide='graph_zoomed'>Zoom</button>
-<button ng-click='graphZoom(0)' ng-hide='!graph_zoomed'>Zoom out</button>
+<button ng-click='graphZoom(0)' ng-hide='!graph_zoomed'>Zoom out</button><br /><br />
 </div>
 </div>
-</div>
+</div><!-- row -->
 
 <div class='row' ng-cloak>
 <div class='col-md-4 col-sm-12'>
@@ -64,7 +70,8 @@
 </table>
 </div>
 </div>
-</div>
+
+</div><!-- row -->
 
 <div class='row' ng-cloak>
 <div class='col-md-5 col-sm-12'>
@@ -95,7 +102,7 @@
 </table>
 </div>
 </div>
-</div>
+</div><!-- row -->
 
 <div class='row' ng-cloak>
 <div class='col-md-12 col-sm-12'>
@@ -113,7 +120,7 @@
   <td>{{ l.connects }}</td>
   <td><span ng-show='status.tick_dif'>{{ (l.connects - status_prev.listeners_id[l.id].connects) / status.tick_dif | ratestr }}</span></td>
   <td>{{ l.pkts_tx }}</td>
-  <td>{{ l.pkts_rx }}</td>
+  <td ng-class='pkts_rx_class(l)' ng-click='pkts_rx_dialog(l)'>{{ l.pkts_rx }}/{{ l.pkts_dup }}/{{ l.pkts_ign }}</td>
   <td>{{ l.bytes_tx }}</td>
   <td>{{ l.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (l.bytes_tx - status_prev.listeners_id[l.id].bytes_tx) / status.tick_dif | ratestr }}
@@ -122,7 +129,7 @@
 </table>
 </div>
 </div>
-</div>
+</div><!-- row -->
 
 <div class='row' ng-cloak ng-show='status.uplinks.length > 0'>
 <div class='col-md-12 col-sm-12'>
@@ -134,14 +141,14 @@
   </tr>
 <tr ng-repeat="c in status.uplinks">
   <td>{{ c.username }}</td>
-  <td>{{ c.addr_rem }}</td>
+  <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
   <td>{{ c.mode }}</td>
   <td>{{ c.t_connect | duration }}</td>
   <td>{{ c.since_connect | duration }}</td>
   <td>{{ c.since_last_read | duration }}</td>
   <td>{{ c.app_name }} {{ c.app_version }}</td>
   <td>{{ c.pkts_tx }}</td>
-  <td>{{ c.pkts_rx }}</td>
+  <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
@@ -151,7 +158,7 @@
 </table>
 </div>
 </div>
-</div>
+</div><!-- row -->
 
 <div class='row' ng-cloak ng-show='status.peers.length > 0'>
 <div class='col-md-12 col-sm-12'>
@@ -164,10 +171,10 @@
   </tr>
 <tr ng-repeat="c in status.peers | orderBy : peers_sort.column : peers_sort.descending">
   <td>{{ c.username }}</td>
-  <td>{{ c.addr_rem }}</td>
+  <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
   <td>{{ c.since_last_read | duration }}</td>
   <td>{{ c.pkts_tx }}</td>
-  <td>{{ c.pkts_rx }}</td>
+  <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
@@ -177,7 +184,7 @@
 </table>
 </div>
 </div>
-</div>
+</div><!-- row -->
 
 <div class='row' ng-cloak>
 <div class='col-md-12 col-sm-12'>
@@ -191,13 +198,16 @@
 <tr ng-repeat="c in status.clients | orderBy : clients_sort.column : clients_sort.descending">
   <td>{{ c.addr_loc }}</td>
   <td><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
-  <td>{{ c.addr_rem }}</td>
-  <td>{{ c.verified }}</td>
+  <td><a ng-show="linkable(c)" ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a><span ng-show="!linkable(c)">{{ c.addr_rem }}</span></td>
+  <td><span ng-show='c.verified == 0' class='red'>No</span>
+      <span ng-show='c.verified == 1'>Yes</span>
+      <span ng-show='c.verified == 3' class='link' ng-click='client_cert_dialog(c)'>Cert</span>
+      </td>
   <td>{{ c.since_connect | duration }}</td>
   <td>{{ c.since_last_read | duration }}</td>
   <td>{{ c.app_name }} {{ c.app_version }}</td>
   <td>{{ c.pkts_tx }}</td>
-  <td>{{ c.pkts_rx }}</td>
+  <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
@@ -209,9 +219,28 @@
 </table>
 </div>
 </div>
-</div>
+</div><!-- row -->
 
 </div><!-- container -->
+
+<script type="text/ng-template" id="pkts_rx_dialog">
+	<p><strong>{{ sel_c.pkts_rx }} packets received, with {{ sel_c.pkts_dup }} duplicates and {{ sel_c.pkts_ign }} errors</strong></p>
+	<p>
+	<span ng-repeat='i in sel_c.rx_errs track by $index' ng-show='i > 0'>{{ setup.rx_err_strings[status.rx_errs[$index]] }}: {{ i }}<br></span>
+	</p>
+</script>
+
+<script type="text/ng-template" id="client_cert_dialog">
+	<p><strong>{{ sel_c.username }} authenticated using a certificate.</strong></p>
+	<p>
+	<strong>Subject:</strong><br>
+	{{ sel_c.cert_subject }}
+	</p>
+	<p>
+	<strong>Issuer:</strong><br>
+	{{ sel_c.cert_issuer }}
+	</p>
+</script>
 
 <script type='text/JavaScript' src='jquery.min.js'></script>
 <script type='text/JavaScript' src='jquery.flot.min.js'></script>

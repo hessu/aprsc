@@ -46,7 +46,7 @@ var graph_module = angular.module('graph', [ ]).
 		
 		instance.load_graph_success = function(data) {
 			top_status();
-			var d = graphs[this.k];
+			var d = instance.graphs_available[this.k];
 			instance.graph_fill(data, d);
 			instance.schedule_graph(60000);
 			$('#graph').trigger('plotunselected');
@@ -110,8 +110,9 @@ var graph_module = angular.module('graph', [ ]).
 		};
 
 
-                instance.graph_setup = function($scope) {
+                instance.graph_setup = function($scope, graphs_available) {
                 	instance.scope = $scope;
+                	instance.graphs_available = graphs_available;
                         instance.gr_switch('totals.tcp_bytes_rx');
                         
                         $('#graph').bind('plotselected', function(event,ranges) {

@@ -149,8 +149,17 @@
   <th ng-repeat="(k, v) in setup.cols_peers"
       ng-click="changeSorting(peers_sort, k)">{{ v }} <span ng-class="sortIndicator(peers_sort, k)"></span></th>
   </tr>
-<tr ng-repeat="p in status.peers | orderBy : peers_sort.column : peers_sort.descending">
-  <td ng-repeat="(k, title) in setup.cols_peers">{{ p[k] }}</td>
+<tr ng-repeat="c in status.peers | orderBy : peers_sort.column : peers_sort.descending">
+  <td>{{ c.username }}</td>
+  <td>{{ c.addr_rem }}</td>
+  <td>{{ c.since_last_read | duration }}</td>
+  <td>{{ c.pkts_tx }}</td>
+  <td>{{ c.pkts_rx }}</td>
+  <td>{{ c.bytes_tx }}</td>
+  <td>{{ c.bytes_rx }}</td>
+  <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
+       / {{ (c.bytes_rx - status_prev.clients_id[c.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
+  <td>{{ c.obuf_q }}</td>
   </tr>
 </table>
 </div>

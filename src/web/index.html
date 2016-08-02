@@ -111,10 +111,39 @@
 </div>
 </div>
 
-<div class='row' ng-cloak>
+<div class='row' ng-cloak ng-show='status.uplinks.length > 0'>
+<div class='col-md-12 col-sm-12'>
+<h4>Uplinks</h4>
+<div class='table-responsive' ng-show='status.uplinks'>
+<table class='table table-hover table-condensed table-striped'>
+<tr>
+  <th ng-repeat="(k, v) in setup.cols_uplinks">{{ v }}</th>
+  </tr>
+<tr ng-repeat="c in status.uplinks">
+  <td>{{ c.username }}</td>
+  <td>{{ c.addr_rem }}</td>
+  <td>{{ c.mode }}</td>
+  <td>{{ c.t_connect | duration }}</td>
+  <td>{{ c.since_connect | duration }}</td>
+  <td>{{ c.since_last_read | duration }}</td>
+  <td>{{ c.app_name }} {{ c.app_version }}</td>
+  <td>{{ c.pkts_tx }}</td>
+  <td>{{ c.pkts_rx }}</td>
+  <td>{{ c.bytes_tx }}</td>
+  <td>{{ c.bytes_rx }}</td>
+  <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
+       / {{ (c.bytes_rx - status_prev.clients_id[c.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
+  <td>{{ c.obuf_q }}</td>
+  </tr>
+</table>
+</div>
+</div>
+</div>
+
+<div class='row' ng-cloak ng-show='status.peers.length > 0'>
 <div class='col-md-12 col-sm-12'>
 <h4>Peers</h4>
-<div class='table-responsive' ng-show='status.peers'>
+<div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
 <tr>
   <th ng-repeat="(k, v) in setup.cols_peers"

@@ -60,11 +60,6 @@ function addr_loc_port(s)
 	return s.substr(s.lastIndexOf(':') + 1);
 }
 
-function username_link(s)
-{
-	return '<a href="http://aprs.fi/?call=' + s + '" target="_blank">' + htmlent(s) + "</a>";
-}
-
 function conv_verified(c, k)
 {
 	if (c['verified'] == 3)
@@ -306,24 +301,7 @@ var val_convert = {
 	'since_connect': dur_str,
 	'since_last_read': dur_str,
 	'addr_rem_shown': conv_none,
-	'username': username_link,
 	'addr_loc': addr_loc_port
-};
-
-var uplink_cols = {
-	'username': 'Server ID',
-	'addr_rem_shown': 'Address',
-	'mode': 'Mode',
-	't_connect': 'Connected',
-	'since_connect': 'Up',
-	'since_last_read': 'Last in',
-	'show_app_name': 'Software',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s',
-	'obuf_q': 'OutQ'
 };
 
 /* applications which typically have a port 14501 status port - can be linked */
@@ -994,6 +972,22 @@ var cols_listener = {
 	'bytes_rates': 'Tx/Rx bytes/s'
 };
 
+var cols_uplinks = {
+	'username': 'Server ID',
+	'addr': 'Address',
+	'mode': 'Mode',
+	't_connect': 'Connected',
+	'since_connect': 'Up',
+	'since_last_read': 'Last in',
+	'show_app_name': 'Software',
+	'pkts_tx': 'Packets Tx',
+	'pkts_rx': 'Packets Rx',
+	'bytes_tx': 'Bytes Tx',
+	'bytes_rx': 'Bytes Rx',
+	'bytes_rates': 'Tx/Rx bytes/s',
+	'obuf_q': 'OutQ'
+};
+
 var cols_peers = {
 	'username': 'Server ID',
 	'addr_rem': 'Address',
@@ -1046,6 +1040,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, 
 	    'keys_dupecheck_variations': keys_dupecheck_variations,
 	    'key_translate': key_translate,
 	    'cols_listener': cols_listener,
+	    'cols_uplinks': cols_uplinks,
 	    'cols_peers': cols_peers,
 	    'cols_clients': cols_clients
 	};

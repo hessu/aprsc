@@ -918,18 +918,6 @@ function ratestr(rate)
 	return prefix + rate;
 }
 
-function rehash_clients_old(status)
-{
-	var clients_id = {};
-	
-	for (var c in status['clients']) {
-		var cl = status['clients'][c];
-		clients_id[cl['id']] = cl;
-	}
-	
-	status['clients_id'] = clients_id;
-}
-
 function array_to_dict_by_id(arr)
 {
 	var dict = {};
@@ -940,20 +928,6 @@ function array_to_dict_by_id(arr)
 	}
 	
 	return dict;
-}
-
-function calculate_rates(status_old, status_new)
-{
-	var i = 0;
-	
-	var listeners_old = status_old['listeners'];
-	var listeners_new = status_new['listeners'];
-	var tdif = status_new['server']['tick_now'] - status_old['server']['tick_now'];
-	
-	for (var n in listeners_new) {
-		var o = listeners_old[i];
-		i += 1;
-	}
 }
 
 var keys_totals = [
@@ -1095,13 +1069,12 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, 
 		};
 		
 		$http.get('/status.json', config).success(function(d) {
-			console.log('status.json received, status: ' + d['result']);
+			console.log('status.json received');
 			
 			if ($scope.status) {
-			    d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;
-			    calculate_rates($scope.status, d);
-			    $scope.status['clients_id'] = array_to_dict_by_id($scope.status.clients);
-			    $scope.status['listeners_id'] = array_to_dict_by_id($scope.status.listeners);
+				d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;
+				$scope.status['clients_id'] = array_to_dict_by_id($scope.status.clients);
+				$scope.status['listeners_id'] = array_to_dict_by_id($scope.status.listeners);
 			}
 			
 			$scope.status_prev = $scope.status;

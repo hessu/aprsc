@@ -1508,6 +1508,7 @@ static void collect_new_clients(struct worker_t *self)
 			}
 			
 			/* build a static array of clients, for quick searching based on address */
+			c->fd = worker_corepeer_client_count * -1 - 100;
 			worker_corepeer_clients[worker_corepeer_client_count] = c;
 			worker_corepeer_client_count++;
 			

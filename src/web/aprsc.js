@@ -712,6 +712,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 	/* graph zooming and switching */
 	$scope.graphZoom = graphs.graph_zoom;
 	$scope.graphSwitch = function(tree, key) { graphs.gr_switch(tree + '.' + key); };
+	$scope.graphClass = function(tree, key) { return (graphs.graph_selected == tree + '.' + key) ? "bg-info" : ""; };
 	
 	/* client list styling helpers */
 	$scope.linkable = function(s) { return linkable[s.app_name]; };

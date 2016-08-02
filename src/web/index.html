@@ -198,7 +198,10 @@
 <tr ng-repeat="c in status.clients | orderBy : clients_sort.column : clients_sort.descending">
   <td>{{ c.addr_loc }}</td>
   <td class='username'><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
-  <td><a ng-show="linkable(c)" ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a><span ng-show="!linkable(c)">{{ c.addr_rem }}</span></td>
+  <td><a ng-show="linkable(c)" ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a>
+      <span ng-show="!linkable(c)">{{ c.addr_rem }}</span>
+      <span ng-show="c.udp_downstream">+UDP</span>
+      </td>
   <td><span ng-show='c.verified == 0' class='red'>No</span>
       <span ng-show='c.verified == 1'>Yes</span>
       <span ng-show='c.verified == 3' class='link' ng-click='client_cert_dialog(c)'>Cert</span>

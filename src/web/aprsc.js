@@ -1031,7 +1031,9 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', function($scope, $http, 
 	    'cols_clients': cols_clients
 	};
 	
+	/* graph zooming and switching */
 	$scope.graphZoom = graphs.graph_zoom;
+	$scope.graphSwitch = function(tree, key) { graphs.gr_switch(tree + '.' + key); };
 	
 	/* set up sorting for client and peer lists */
 	$scope.clients_sort = {

@@ -57,7 +57,7 @@
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_totals">
-  <td>{{ setup.key_translate[k] }}</td>
+  <td ng-click='graphSwitch("totals", k)' class='link'>{{ setup.key_translate[k] }}</td>
   <td>{{ status.totals[k] }}</td>
   <td ng-show="status_prev">{{ (status.totals[k] - status_prev.totals[k]) / status.tick_dif | ratestr}}/s</td>
   </tr>
@@ -78,7 +78,7 @@
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
 <tr ng-repeat="k in setup.keys_dupecheck">
-  <td>{{ setup.key_translate[k] }}</td>
+  <td ng-click='graphSwitch("dupecheck", k)' class='link'>{{ setup.key_translate[k] }}</td>
   <td>{{ status.dupecheck[k] }}</td>
   <td ng-show="status_prev">{{ (status.dupecheck[k] - status_prev.dupecheck[k]) / status.tick_dif | ratestr}}/s</td>
   </tr>

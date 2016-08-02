@@ -84,12 +84,12 @@ var graph_module = angular.module('graph', [ ]).
 			});
 		};
 		
-		instance.gr_switch = function($scope, id) {
+		instance.gr_switch = function(id) {
 			instance.graph_selected = id;
 			instance.range_selected = false;
-			$scope.graph_zoomed = false;
+			instance.scope.graph_zoomed = false;
 			$('#graph').trigger('plotunselected');
-			instance.load_graph($scope);
+			instance.load_graph(instance.scope);
 		};
 		
 		instance.graph_zoom = function(zoom_in) {
@@ -112,7 +112,7 @@ var graph_module = angular.module('graph', [ ]).
 
                 instance.graph_setup = function($scope) {
                 	instance.scope = $scope;
-                        instance.gr_switch($scope, 'totals.tcp_bytes_rx');
+                        instance.gr_switch('totals.tcp_bytes_rx');
                         
                         $('#graph').bind('plotselected', function(event,ranges) {
                                 var to = parseInt(ranges.xaxis.to.toFixed(0));

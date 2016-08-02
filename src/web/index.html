@@ -61,7 +61,7 @@
 <div class='col-md-4 col-sm-12'>
 <h4>Totals</h4>
 <div class='table-responsive'>
-<table class='table table-hover table-condensed table-striped'>
+<table class='table table-hover table-condensed'>
 <tr ng-repeat="k in setup.keys_totals">
   <td ng-click='graphSwitch("totals", k)' class='link'>{{ setup.key_translate[k] }}</td>
   <td>{{ status.totals[k] }}</td>
@@ -83,7 +83,7 @@
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqE69xemQAAABMSURBVCjPY/z//z8DKYCJgUQwqDUcmMAgIcEgIMAgIMDAyMjAyMjAIQDlWiQgNLDAWR8eMLx8iWLYz48MPxkYGBgYXrxACDKOxGAFAAP1ERwzsIoPAAAAAElFTkSuQmCC" />
 	</span></h4>
 <div class='table-responsive'>
-<table class='table table-hover table-condensed table-striped'>
+<table class='table table-hover table-condensed'>
 <tr ng-repeat="k in setup.keys_dupecheck">
   <td ng-click='graphSwitch("dupecheck", k)' class='link'>{{ setup.key_translate[k] }}</td>
   <td>{{ status.dupecheck[k] }}</td>
@@ -93,7 +93,7 @@
 </div>
 
 <div class='table-responsive' ng-show='dupe_vars_visible'>
-<table class='table table-hover table-condensed table-striped'>
+<table class='table table-hover table-condensed'>
 <tr ng-repeat="k in setup.keys_dupecheck_variations">
   <td>{{ setup.key_translate[k] }}</td>
   <td>{{ status.dupecheck.variations[k] }}</td>

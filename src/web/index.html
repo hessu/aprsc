@@ -26,7 +26,7 @@
    </div>
    <div class="col-md-3 pull-right">
      <div class="text-primary text-right" ng-cloak>
-     <h4>{{ status.server.server_id }} aprsc status<br/>
+     <h4>{{ 'APRSC_STATUS_TITLE' | translate:status.server }}<br/>
      <span ng-show="status">{{ status.server.time_now | datetime }}</span>
      </h4>
      </div>
@@ -144,7 +144,7 @@
   <td class='username'>{{ c.username }}</td>
   <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
   <td>{{ c.mode }}</td>
-  <td>{{ c.t_connect | duration }}</td>
+  <td>{{ c.t_connect | datetime }}</td>
   <td>{{ c.since_connect | duration }}</td>
   <td>{{ c.since_last_read | duration }}</td>
   <td>{{ c.app_name }} {{ c.app_version }}</td>

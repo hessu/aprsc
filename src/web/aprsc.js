@@ -606,6 +606,8 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 		console.log('aprsc module config');
 		
 		$translateProvider.translations('en', {
+			APRSC_STATUS_TITLE: '{{server_id}} aprsc status',
+			
 			SERVER_TITLE: 'Server',
 			SERVER_SERVER_ID: 'Server ID',
 			SERVER_SERVER_ADMIN: 'Server admin',

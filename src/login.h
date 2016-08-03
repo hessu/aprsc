@@ -13,6 +13,8 @@
 
 #include "worker.h"
 
+extern const char *disallow_login_usernames[];
+
 extern int http_udp_upload_login(const char *addr_rem, char *s, char **username, const char *log_source);
 extern int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 extern void login_set_app_name(struct client_t *c, const char *app_name, const char *app_ver);

@@ -26,7 +26,7 @@
 #include "tls.h"
 
 /* a static list of usernames which are not allowed to log in */
-static const char *disallow_login_usernames[] = {
+const char *disallow_login_usernames[] = {
 	"pass", /* a sign of "user  pass -1" login with no configured username */
 	NULL
 };

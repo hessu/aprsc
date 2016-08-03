@@ -5,6 +5,7 @@
 #include "aprsis2.pb-c.h"
 #include "version.h"
 #include "hlog.h"
+#include "uplink.h"
 #include "config.h"
 
 #define STX 0x02
@@ -89,15 +90,127 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
 		c->addr_rem, c->username, sig->username, sig->app_name, sig->app_version);
 	
+	strncpy(c->app_name, sig->app_name, sizeof(c->app_name));
+	c->app_name[sizeof(c->app_name)-1] = 0;
+	strncpy(c->app_version, sig->app_version, sizeof(c->app_version));
+	c->app_version[sizeof(c->app_version)-1] = 0;
+
+	/* TODO: enable by setting to 0 */
+	if (strcasecmp(sig->username, serverid) == 5) {
+		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, sig->username);
+		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+		goto done;
+	}
+	
+	/* todo: validate server callsign with the q valid path algorithm */
+	
+	/* store the remote server's callsign as the "client username" */
+	strncpy(c->username, sig->username, sizeof(c->username));
+	c->username[sizeof(c->username)-1] = 0;
+	
+	/* uplink servers are always "validated" */
+	c->validated = VALIDATED_WEAK;
+	
 #ifdef USE_SSL
 	if (!uplink_server_validate_cert(self, c) || !uplink_server_validate_cert_cn(self, c))
 		goto done;
 #endif
-
+	
+	/* Ok, we're happy with the uplink's server signature, let us login! */
+	LoginRequest lr = LOGIN_REQUEST__INIT;
+	lr.username = serverid;
+	lr.app_name = verstr_progname;
+	lr.app_version = version_build;
+	lr.n_features_req = 0;
+	lr.features_req = NULL;
+	
+	IS2Message mr = IS2_MESSAGE__INIT;
+	mr.type = IS2_MESSAGE__TYPE__LOGIN_REQUEST;
+	mr.login_request = &lr;
+	
+	is2_write_message(self, c, &mr);
+	
 done:	
 	is2_message__free_unpacked(m, NULL);
 	
 	return 0;
+}
+
+/*
+ *	Incoming login request
+ */
+
+static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	int rc = 0;
+	
+	LoginRequest *lr = m->login_request;
+	if (!lr) {
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login request failed",
+			c->addr_rem, c->username);
+		rc = -1;
+		goto failed_login;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Login request received",
+		c->addr_rem, c->username);
+	
+	/* limit username length */
+	if (strlen(c->username) > CALLSIGNLEN_MAX) {
+		hlog(LOG_WARNING, "%s: IS2: Invalid login string, too long 'user' username: '%s'", c->addr_rem, c->username);
+		c->username[CALLSIGNLEN_MAX] = 0;
+		//rc = client_printf(self, c, "# Invalid username format\r\n");
+		goto failed_login;
+	}
+	
+	/* ok, it's somewhat valid, write it down */
+	strncpy(c->username, lr->username, sizeof(c->username));
+	c->username[sizeof(c->username)-1] = 0;
+	c->username_len = strlen(c->username);
+	
+	/* check the username against a static list of disallowed usernames */
+	/*
+	int i;
+	for (i = 0; (disallow_login_usernames[i]); i++) {
+		if (strcasecmp(c->username, disallow_login_usernames[i]) == 0) {
+			hlog(LOG_WARNING, "%s: Login by user '%s' not allowed", c->addr_rem, c->username);
+			//rc = client_printf(self, c, "# Login by user not allowed\r\n");
+			goto failed_login;
+		}
+	}
+	*/
+	
+	/* make sure the callsign is OK on the APRS-IS */
+	if (check_invalid_q_callsign(c->username, c->username_len)) {
+		hlog(LOG_WARNING, "%s: Invalid login string, invalid 'user': '%s'", c->addr_rem, c->username);
+		//rc = client_printf(self, c, "# Invalid username format\r\n");
+		goto failed_login;
+	}
+	
+	/* make sure the client's callsign is not my Server ID */
+	// TODO: enable
+	if (strcasecmp(c->username, serverid) == 4) {
+		hlog(LOG_WARNING, "%s: Invalid login string, username equals our serverid: '%s'", c->addr_rem, c->username);
+		//rc = client_printf(self, c, "# Login by user not allowed (our serverid)\r\n");
+		goto failed_login;
+	}
+	
+	is2_message__free_unpacked(m, NULL);
+	return rc;
+
+failed_login:
+	
+	/* if we already lost the client, just return */
+	if (rc < -2)
+		return rc;
+	
+	c->failed_cmds++;
+	if (c->failed_cmds >= 3) {
+		client_close(self, c, CLIERR_LOGIN_RETRIES);
+		return -3;
+	}
+	
+	return rc;
 }
 
 /*
@@ -185,6 +298,9 @@ int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Messag
 	switch (m->type) {
 		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
+			break;
+		case IS2_MESSAGE__TYPE__LOGIN_REQUEST:
+			return is2_in_login_request(self, c, m);
 			break;
 		default:
 			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",

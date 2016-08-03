@@ -740,6 +740,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 			if ($scope.status) {
 				d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;
 				$scope.status['clients_id'] = array_to_dict_by_id($scope.status.clients);
+				$scope.status['uplinks_id'] = array_to_dict_by_id($scope.status.uplinks);
 				$scope.status['listeners_id'] = array_to_dict_by_id($scope.status.listeners);
 			}
 			

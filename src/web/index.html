@@ -233,13 +233,13 @@
 </script>
 
 <script type="text/ng-template" id="client_cert_dialog">
-	<p><strong>{{ sel_c.username }} authenticated using a certificate.</strong></p>
+	<p><strong>{{ 'CERT_DIALOG_TITLE' | translate:sel_c }}</strong></p>
 	<p>
-	<strong>Subject:</strong><br>
+	<strong>{{ 'CERT_SUBJECT' | translate }}</strong><br>
 	{{ sel_c.cert_subject }}
 	</p>
 	<p>
-	<strong>Issuer:</strong><br>
+	<strong>{{ 'CERT_ISSUER' | translate }}</strong><br>
 	{{ sel_c.cert_issuer }}
 	</p>
 </script>

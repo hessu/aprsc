@@ -637,8 +637,11 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			RXERR_inerr_empty: 'Empty packet',
 			RXERR_disallow_srccall: 'Disallowed source callsign (N0CALL or such)',
 			RXERR_disallow_dx: 'DX cluster packet',
-			RXERR_disallow_msg_dst: 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)'
+			RXERR_disallow_msg_dst: 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)',
 			
+			CERT_DIALOG_TITLE: '{{ username }} authenticated using a certificate.',
+			CERT_SUBJECT: 'Certificate subject:',
+			CERT_ISSUER: 'Certificate issuer:'
 			
 		});
 		

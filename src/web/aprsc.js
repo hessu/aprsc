@@ -126,45 +126,6 @@ var alarm_strings = {
 	'packet_drop_future': "Server has dropped packets due to backward time leaps."
 };
 
-var rx_err_strings = {
-	"unknown": 'Unknown error',
-	"no_colon": 'No colon (":") in packet',
-	"no_dst": 'No ">" in packet to mark beginning of destination callsign',
-	"no_path": 'No path found between source callsign and ":"',
-	"inv_srccall": 'Invalid source callsign',
-	"no_body": 'No packet body/data after ":"',
-	"inv_dstcall": 'Invalid destination callsign',
-	"disallow_unverified": 'Packet from unverified local client',
-	"disallow_unverified_path": 'Packet from unverified client (TCPXX)',
-	"path_nogate": 'Packet with NOGATE/RFONLY in path',
-	"party_3rd_ip": '3rd-party packet gated TCPIP>RF>TCPIP',
-	"party_3rd_inv": 'Invalid 3rd-party packet header',
-	"general_query": 'General query',
-	"aprsc_oom_pbuf": 'aprsc out of packet buffers',
-	"aprsc_class_fail": 'aprsc failed to classify packet',
-	"aprsc_q_bug": 'aprsc Q construct processing failed',
-	"q_drop": 'Q construct algorithm dropped packet',
-	"short_packet": 'Packet too short',
-	"long_packet": 'Packet too long',
-	"inv_path_call": 'Invalid callsign in path',
-	"q_qax": 'qAX: Packet from unverified remote client',
-	"q_qaz": 'qAZ construct',
-	"q_path_mycall": 'My ServerID in Q path',
-	"q_path_call_twice": 'Same callsign twice in the Q path',
-	"q_path_login_not_last": 'Local client login found but not last in Q path',
-	"q_path_call_is_local": 'Callsign in Q path is a local verified client',
-	"q_path_call_inv": 'Invalid callsign in Q path',
-	"q_qau_path_call_srccall": 'qAU callsign in path equals srccall',
-	"q_newq_buffer_small": 'New Q construct too big',
-	"q_nonval_multi_q_calls": 'Multiple callsigns in Q path from unverified client',
-	"q_i_no_viacall": 'I path has no viacall',
-	"q_disallow_protocol": 'Invalid protocol ID in Q construct',
-	"inerr_empty": 'Empty packet',
-	"disallow_srccall": 'Disallowed source callsign (N0CALL or such)',
-	"disallow_dx": 'DX cluster packet',
-	"disallow_msg_dst": 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)'
-};
-
 var key_tooltips = {
 	// dupecheck block
 	'dupes_dropped': 'Duplicate APRS-IS packets dropped in the dupecheck thread (per-client counts not available for performance reasons)',
@@ -636,8 +597,47 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			TH_port: 'Port',
 			TH_verified: 'Verified',
 			TH_heard_count: 'MsgRcpts',
-			TH_filter: 'Filter'
+			TH_filter: 'Filter',
 			
+			RXERR_DIALOG_TITLE: '{{ pkts_rx }} packets received',
+			RXERR_DIALOG_MESSAGE: '{{ pkts_dup }} duplicates and {{ pkts_ign }} erroneus packets dropped.',
+			
+			RXERR_unknown: 'Unknown error',
+			RXERR_no_colon: 'No colon (":") in packet',
+			RXERR_no_dst: 'No ">" in packet to mark beginning of destination callsign',
+			RXERR_no_path: 'No path found between source callsign and ":"',
+			RXERR_inv_srccall: 'Invalid source callsign',
+			RXERR_no_body: 'No packet body/data after ":"',
+			RXERR_inv_dstcall: 'Invalid destination callsign',
+			RXERR_disallow_unverified: 'Packet from unverified local client',
+			RXERR_disallow_unverified_path: 'Packet from unverified client (TCPXX)',
+			RXERR_path_nogate: 'Packet with NOGATE/RFONLY in path',
+			RXERR_party_3rd_ip: '3rd-party packet gated TCPIP>RF>TCPIP',
+			RXERR_party_3rd_inv: 'Invalid 3rd-party packet header',
+			RXERR_general_query: 'General query',
+			RXERR_aprsc_oom_pbuf: 'aprsc out of packet buffers',
+			RXERR_aprsc_class_fail: 'aprsc failed to classify packet',
+			RXERR_aprsc_q_bug: 'aprsc Q construct processing failed',
+			RXERR_q_drop: 'Q construct algorithm dropped packet',
+			RXERR_short_packet: 'Packet too short',
+			RXERR_long_packet: 'Packet too long',
+			RXERR_inv_path_call: 'Invalid callsign in path',
+			RXERR_q_qax: 'qAX: Packet from unverified remote client',
+			RXERR_q_qaz: 'qAZ construct',
+			RXERR_q_path_mycall: 'My ServerID in Q path',
+			RXERR_q_path_call_twice: 'Same callsign twice in the Q path',
+			RXERR_q_path_login_not_last: 'Local client login found but not last in Q path',
+			RXERR_q_path_call_is_local: 'Callsign in Q path is a local verified client',
+			RXERR_q_path_call_inv: 'Invalid callsign in Q path',
+			RXERR_q_qau_path_call_srccall: 'qAU callsign in path equals srccall',
+			RXERR_q_newq_buffer_small: 'New Q construct too big',
+			RXERR_q_nonval_multi_q_calls: 'Multiple callsigns in Q path from unverified client',
+			RXERR_q_i_no_viacall: 'I path has no viacall',
+			RXERR_q_disallow_protocol: 'Invalid protocol ID in Q construct',
+			RXERR_inerr_empty: 'Empty packet',
+			RXERR_disallow_srccall: 'Disallowed source callsign (N0CALL or such)',
+			RXERR_disallow_dx: 'DX cluster packet',
+			RXERR_disallow_msg_dst: 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)'
 			
 			
 		});
@@ -663,8 +663,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 	    'cols_listener': cols_listener,
 	    'cols_uplinks': cols_uplinks,
 	    'cols_peers': cols_peers,
-	    'cols_clients': cols_clients,
-	    'rx_err_strings': rx_err_strings
+	    'cols_clients': cols_clients
 	};
 	
 	/* graph zooming and switching */

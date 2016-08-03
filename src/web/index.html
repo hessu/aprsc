@@ -228,9 +228,10 @@
 </div><!-- container -->
 
 <script type="text/ng-template" id="pkts_rx_dialog">
-	<p><strong>{{ sel_c.pkts_rx }} packets received, with {{ sel_c.pkts_dup }} duplicates and {{ sel_c.pkts_ign }} errors</strong></p>
+	<p><strong>{{'RXERR_DIALOG_TITLE' | translate:sel_c }}</strong></p>
+	<p>{{'RXERR_DIALOG_MESSAGE' | translate:sel_c }}</p>
 	<p>
-	<span ng-repeat='i in sel_c.rx_errs track by $index' ng-show='i > 0'>{{ setup.rx_err_strings[status.rx_errs[$index]] }}: {{ i }}<br></span>
+	<span ng-repeat='i in sel_c.rx_errs track by $index' ng-show='i > 0'>{{ 'RXERR_' + status.rx_errs[$index] | translate }}: {{ i }}<br></span>
 	</p>
 </script>
 

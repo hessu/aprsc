@@ -2,16 +2,6 @@
 
 var options = {};
 
-function top_status(c, s)
-{
-	if (!c) {
-		$('#status').hide('fast');
-		return;
-	}
-	
-	$('#status').hide().html('<div class="' + c + '">' + s + '</div>').show('fast');
-}
-
 function isUndefined(v)
 {
 	var undef;
@@ -314,70 +304,8 @@ function render(d)
 }
 
 
-var next_req_timer;
-
-function schedule_update()
-{
-	if (next_req_timer)
-		clearTimeout(next_req_timer);
-	
-	next_req_timer = setTimeout(update_status, 10000);
-}
-
 var current_status;
 
-function update_success(data)
-{
-	if (next_req_timer) {
-		clearTimeout(next_req_timer);
-		next_req_timer = 0;
-	}
-	
-	top_status();
-	/* If this is the first successful status download, motd needs to be
-	 * updated too.
-	 */
-	if (!current_status) {
-		current_status = data;
-		motd_check();
-	} else {
-		current_status = data;
-	}
-	render(data);
-	schedule_update();
-}
-
-function update_status()
-{
-	if (next_req_timer) {
-		clearTimeout(next_req_timer);
-		next_req_timer = 0;
-	}
-	
-	$.ajax({
-		url: '/status.json',
-		dataType: 'json',
-		cache: false,
-		timeout: 5000,
-		error: function(jqXHR, stat, errorThrown) {
-			var msg = '';
-			if (stat == 'timeout')
-				msg = 'Status download timed out. Network or server down?';
-			else if (stat == 'error')
-				msg = 'Status download failed with an error. Network or server down?';
-			else
-				msg = 'Status download failed (' + stat + ').';
-				
-			if (errorThrown)
-				msg += '<br />HTTP error: ' + htmlent(errorThrown);
-				
-			top_status('msg_e', msg);
-			
-			schedule_update();
-		},
-		success: update_success
-	});
-}
 
 var motd_last;
 

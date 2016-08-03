@@ -45,7 +45,6 @@ var graph_module = angular.module('graph', [ ]).
 		};
 		
 		instance.load_graph_success = function(data) {
-			top_status();
 			var d = instance.graphs_available[this.k];
 			instance.graph_fill(data, d);
 			instance.schedule_graph(60000);
@@ -54,12 +53,14 @@ var graph_module = angular.module('graph', [ ]).
 		};
 		
 		instance.load_graph_error = function(jqXHR, stat, errorThrown) {
+			/*
 			var msg = 'Graph data download failed (' + stat + '). Server or network down?';
 			
 			if (errorThrown)
 				msg += '<br />HTTP error: ' + htmlent(errorThrown);
 			
-			top_status('msg_e', msg);
+			instance.scope.uierror = msg_e;
+			*/
 			instance.schedule_graph(60000);
 		};
 		

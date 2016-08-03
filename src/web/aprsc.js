@@ -165,19 +165,6 @@ var rx_err_strings = {
 	"disallow_msg_dst": 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)'
 };
 
-var key_translate = {
-	// server block
-	'server_id': 'Server ID',
-	'admin': 'Server admin',
-	'software': 'Server software',
-	'software_build_features': 'Software features',
-	'os': 'Operating system',
-	'time_started': 'Server started',
-	'uptime': 'Uptime'
-	
-	
-};
-
 var key_tooltips = {
 	// dupecheck block
 	'dupes_dropped': 'Duplicate APRS-IS packets dropped in the dupecheck thread (per-client counts not available for performance reasons)',
@@ -673,7 +660,6 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 	    'keys_totals': keys_totals,
 	    'keys_dupecheck': keys_dupecheck,
 	    'keys_dupecheck_variations': keys_dupecheck_variations,
-	    'key_translate': key_translate,
 	    'cols_listener': cols_listener,
 	    'cols_uplinks': cols_uplinks,
 	    'cols_peers': cols_peers,

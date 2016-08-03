@@ -173,38 +173,9 @@ var key_translate = {
 	'software_build_features': 'Software features',
 	'os': 'Operating system',
 	'time_started': 'Server started',
-	'uptime': 'Uptime',
+	'uptime': 'Uptime'
 	
-	// dupecheck block
-	'dupes_dropped': 'Duplicate packets dropped',
-	'uniques_out': 'Unique packets seen',
 	
-	// dupecheck_more (variations) block
-	'exact': 'Exact duplicates',
-	'space_trim': 'Dupes with spaces trimmed from end',
-	'8bit_strip': 'Dupes with 8-bit bytes stripped out',
-	'8bit_clear': 'Dupes with 8th bit set to 0',
-	'8bit_spaced': 'Dupes with 8-bit bytes replaced with spaces',
-	'low_strip': 'Dupes with low bytes stripped out',
-	'low_spaced': 'Dupes with low bytes replaced with spaces',
-	'del_strip': 'Dupes with DEL bytes stripped out',
-	'del_spaced': 'Dupes with DEL bytes replaced with spaces',
-	
-	// totals block
-	'clients': 'Clients',
-	'connects': 'Connects',
-	'tcp_pkts_tx': 'Packets Tx TCP',
-	'tcp_pkts_rx': 'Packets Rx TCP',
-	'tcp_bytes_tx': 'Bytes Tx TCP',
-	'tcp_bytes_rx': 'Bytes Rx TCP',
-	'udp_pkts_tx': 'Packets Tx UDP',
-	'udp_pkts_rx': 'Packets Rx UDP',
-	'udp_bytes_tx': 'Bytes Tx UDP',
-	'udp_bytes_rx': 'Bytes Rx UDP',
-	'sctp_pkts_tx': 'Packets Tx SCTP',
-	'sctp_pkts_rx': 'Packets Rx SCTP',
-	'sctp_bytes_tx': 'Bytes Tx SCTP',
-	'sctp_bytes_rx': 'Bytes Rx SCTP'
 };
 
 var key_tooltips = {
@@ -618,7 +589,35 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			SERVER_OS: 'Operating system',
 			
 			TOTALS_TITLE: 'Totals',
+			TOTALS_clients: 'Clients',
+			TOTALS_connects: 'Connects',
+			TOTALS_tcp_pkts_tx: 'Packets Tx TCP',
+			TOTALS_tcp_pkts_rx: 'Packets Rx TCP',
+			TOTALS_tcp_bytes_tx: 'Bytes Tx TCP',
+			TOTALS_tcp_bytes_rx: 'Bytes Rx TCP',
+			TOTALS_udp_pkts_tx: 'Packets Tx UDP',
+			TOTALS_udp_pkts_rx: 'Packets Rx UDP',
+			TOTALS_udp_bytes_tx: 'Bytes Tx UDP',
+			TOTALS_udp_bytes_rx: 'Bytes Rx UDP',
+			TOTALS_sctp_pkts_tx: 'Packets Tx SCTP',
+			TOTALS_sctp_pkts_rx: 'Packets Rx SCTP',
+			TOTALS_sctp_bytes_tx: 'Bytes Tx SCTP',
+			TOTALS_sctp_bytes_rx: 'Bytes Rx SCTP',
+			
 			DUPES_TITLE: 'Duplicate filter',
+			DUPES_dupes_dropped: 'Duplicate packets dropped',
+			DUPES_uniques_out: 'Unique packets seen',
+			
+			DUPES_exact: 'Exact duplicates',
+			DUPES_space_trim: 'Dupes with spaces trimmed from end',
+			DUPES_8bit_strip: 'Dupes with 8-bit bytes stripped out',
+			DUPES_8bit_clear: 'Dupes with 8th bit set to 0',
+			DUPES_8bit_spaced: 'Dupes with 8-bit bytes replaced with spaces',
+			DUPES_low_strip: 'Dupes with low bytes stripped out',
+			DUPES_low_spaced: 'Dupes with low bytes replaced with spaces',
+			DUPES_del_strip: 'Dupes with DEL bytes stripped out',
+			DUPES_del_spaced: 'Dupes with DEL bytes replaced with spaces',
+			
 			LISTENERS_TITLE: 'Port listeners',
 			UPLINKS_TITLE: 'Uplinks',
 			PEERS_TITLE: 'Peers',

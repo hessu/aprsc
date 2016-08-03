@@ -37,7 +37,7 @@
 <div class='col-md-4 col-sm-12'>
 <h4>{{ 'SERVER_TITLE' | translate }}</h4>
 <div class='table-responsive'>
-<table class='table table-hover table-condensed table-striped'>
+<table class='table table-hover table-condensed'>
   <tr><td>{{ 'SERVER_SERVER_ID' | translate }}</td> <td class="ar">{{ status.server.server_id }}</td></tr>
   <tr><td>{{ 'SERVER_SERVER_ADMIN' | translate }}</td> <td class="ar">{{ status.server.admin }}</td></tr>
   <tr><td>{{ 'SERVER_SOFTWARE' | translate }}</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
@@ -59,7 +59,7 @@
 </div><!-- row -->
 
 <div class='row' ng-cloak>
-<div class='col-md-4 col-sm-12'>
+<div class='col-md-4 col-sm-6'>
 <h4>{{ 'TOTALS_TITLE' | translate }}</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed'>
@@ -72,10 +72,7 @@
 </div>
 </div>
 
-</div><!-- row -->
-
-<div class='row' ng-cloak>
-<div class='col-md-5 col-sm-12'>
+<div class='col-md-5 col-sm-6'>
 <h4>{{ 'DUPES_TITLE' | translate }}
 <span class='link' id='dupecheck_more_show' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='!(dupe_vars_visible)'>
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqC7wd4jIAAABtSURBVCjPY/z//z8DKYAJU+jFA4YbNxh+4NLxHxV8//7fX/4/O/v//e//YwVMDCQCkjUgnLS//7+4+H9+/v/8/P8ZGP4zMPxn54dyzeMRTmKB6/zwgOHlSxSzfn5k+AkJhheD2tMka2AkNWkAAOhriTYQTgMEAAAAAElFTkSuQmCC" />

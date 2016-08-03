@@ -751,10 +751,13 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 			
 			$scope.status_prev = $scope.status;
 			$scope.status = d;
+			$scope.uierror = null;
 			
 			setTimeout(function() { full_load($scope, $http); }, 10000);
 		}, function errorCallback(r) {
 			console.log('HTTP status.json fetch failed: ' + r.status);
+			
+			$scope.uierror = 'Server status download failed with an error. Network or server down?';
 			
 			setTimeout(function() { full_load($scope, $http); }, 10000);
 		});

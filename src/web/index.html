@@ -21,15 +21,18 @@
 <div class='container-fluid'>
 
  <div class="row">
-   <div class="col-md-3 pull-right">
+   <div class="col-md-3 col-sm-4 pull-right">
      <div class="sprite_logo" style="float:right;"></div>
    </div>
-   <div class="col-md-3 pull-right">
+   <div class="col-md-4 col-sm-5 pull-right">
      <div class="text-primary text-right" ng-cloak>
      <h4>{{ 'APRSC_STATUS_TITLE' | translate:status.server }}<br/>
      <span ng-show="status">{{ status.server.time_now | datetime }}</span>
      </h4>
      </div>
+   </div>
+   <div class="col-md-5 col-sm-12 pull-left" ng-if="uierror" ng-cloak>
+   <h4 class="text-danger">{{ uierror }}</h4>
    </div>
  </div>
 

@@ -734,8 +734,10 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 			'timeout': 35000
 		};
 		
-		$http.get('/status.json', config).success(function(d) {
-			console.log('status.json received');
+		$http({ method: 'GET', url: '/status.json', config: config}).then(function successCallback(r) {
+			console.log('status.json received: ' + r.status);
+			
+			var d = r.data;
 			
 			if ($scope.status) {
 				d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;
@@ -748,8 +750,9 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 			$scope.status = d;
 			
 			setTimeout(function() { full_load($scope, $http); }, 10000);
-		}).error(function(data, status, headers, config) {
-			console.log('HTTP update failed, status: ' + status);
+		}, function errorCallback(r) {
+			console.log('HTTP status.json fetch failed: ' + r.status);
+			
 			setTimeout(function() { full_load($scope, $http); }, 10000);
 		});
 	};

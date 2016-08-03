@@ -547,67 +547,32 @@ var keys_dupecheck_variations = [
 	'exact', 'space_trim', '8bit_strip', '8bit_clear', '8bit_spaced',
 	'low_strip', 'low_spaced', 'del_strip', 'del_spaced' ];
 
-var cols_listener = {
-	'proto': 'Proto',
-	'addr': 'Address',
-	'name': 'Name',
-	'clients': 'Clients',
-	'clients_peak': 'Peak',
-	'clients_max': 'Max',
-	'connects': 'Connects',
-	'connects_rates': 'Conn/s',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s'
-};
+var cols_listener = [
+	'proto', 'addr', 'name', 'clients', 'clients_peak', 'clients_max',
+	'connects', 'connects_rates',
+	'pkts_tx', 'pkts_rx', 'bytes_tx', 'bytes_rx', 'bytes_rates'
+	];
 
-var cols_uplinks = {
-	'username': 'Server ID',
-	'addr': 'Address',
-	'mode': 'Mode',
-	't_connect': 'Connected',
-	'since_connect': 'Up',
-	'since_last_read': 'Last in',
-	'show_app_name': 'Software',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s',
-	'obuf_q': 'OutQ'
-};
+var cols_uplinks = [
+	'server_id', 'addr', 'mode', 't_connect', 'since_connect', 'since_last_read',
+	'software',
+	'pkts_tx', 'pkts_rx', 'bytes_tx', 'bytes_rx', 'bytes_rates',
+	'obuf_q'
+	];
 
-var cols_peers = {
-	'username': 'Server ID',
-	'addr_rem': 'Address',
-	'since_last_read': 'Last in',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s',
-	'obuf_q': 'OutQ'
-};
+var cols_peers = [
+	'server_id', 'addr', 'since_last_read',
+	'pkts_tx', 'pkts_rx', 'bytes_tx', 'bytes_rx', 'bytes_rates',
+	'obuf_q'
+	];
 
-var cols_clients = {
-	'addr_loc': 'Port',
-	'username': 'Callsign',
-	'addr_rem': 'Address',
-	'verified': 'Verified',
-	'since_connect': 'Up',
-	'since_last_read': 'Last in',
-	'show_app_name': 'Software',
-	'pkts_tx': 'Packets Tx',
-	'pkts_rx': 'Packets Rx',
-	'bytes_tx': 'Bytes Tx',
-	'bytes_rx': 'Bytes Rx',
-	'bytes_rates': 'Tx/Rx bytes/s',
-	'obuf_q': 'OutQ',
-	'heard_count': 'MsgRcpts',
-	'filter': 'Filter'
-};
+var cols_clients = [
+	'port', 'username', 'addr', 'verified',
+	'since_connect', 'since_last_read', 'software',
+	'pkts_tx', 'pkts_rx', 'bytes_tx', 'bytes_rx', 'bytes_rates',
+	'obuf_q',
+	'heard_count', 'filter'
+	];
 
 /* applications which typically have a port 14501 status port - can be linked */
 var linkable = {
@@ -655,7 +620,37 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			LISTENERS_TITLE: 'Port listeners',
 			UPLINKS_TITLE: 'Uplinks',
 			PEERS_TITLE: 'Peers',
-			CLIENTS_TITLE: 'Clients'
+			CLIENTS_TITLE: 'Clients',
+			
+			TH_proto: 'Proto',
+			TH_addr: 'Address',
+			TH_name: 'Name',
+			TH_clients: 'Clients',
+			TH_clients_peak: 'Peak',
+			TH_clients_max: 'Max',
+			TH_connects: 'Connects',
+			TH_connects_rates: 'Conn/s',
+			TH_pkts_tx: 'Packets Tx',
+			TH_pkts_rx: 'Packets Rx',
+			TH_bytes_tx: 'Bytes Tx',
+			TH_bytes_rx: 'Bytes Rx',
+			TH_bytes_rates: 'Tx/Rx bytes/s',
+			
+			TH_username: 'Username',
+			TH_server_id: 'Server ID',
+			TH_mode: 'Mode',
+			TH_t_connect: 'Connected',
+			TH_since_connect: 'Up',
+			TH_since_last_read: 'Last in',
+			TH_software: 'Software',
+			TH_obuf_q: 'OutQ',
+			
+			TH_port: 'Port',
+			TH_verified: 'Verified',
+			TH_heard_count: 'MsgRcpts',
+			TH_filter: 'Filter'
+			
+			
 			
 		});
 		

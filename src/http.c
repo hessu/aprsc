@@ -96,6 +96,7 @@ static struct http_static_t http_static_files[] = {
 	{ "/motd.html", "motd.html" },
 	{ "/jquery.min.js", "jquery.min.js" },
 	{ "/angular.min.js", "angular.min.js" },
+	{ "/angular-translate.min.js", "angular-translate.min.js" },
 	{ "/ngDialog.min.js", "ngDialog.min.js" },
 	{ "/ngDialog.min.css", "ngDialog.min.css" },
 	{ "/ngDialog-theme-plain.min.css", "ngDialog-theme-plain.min.css" },

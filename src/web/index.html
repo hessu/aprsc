@@ -12,6 +12,7 @@
 <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 <link rel="shortcut" href="/favicon.ico" type="image/x-icon" />
 <script src="angular.min.js"></script>
+<script src="angular-translate.min.js"></script>
 <script src="ngDialog.min.js"></script>
 </head>
 
@@ -34,16 +35,16 @@
 
 <div class='row' ng-cloak>
 <div class='col-md-4 col-sm-12'>
-<h4>Server</h4>
+<h4>{{ 'SERVER_TITLE' | translate }}</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
-  <tr><td>Server ID</td> <td class="ar">{{ status.server.server_id }}</td></tr>
-  <tr><td>Server admin</td> <td class="ar">{{ status.server.admin }}</td></tr>
-  <tr><td>Software</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
-  <tr><td>Software features</td> <td class="ar">{{ status.server.software_build_features }}</td></tr>
-  <tr><td>Uptime</td> <td class="ar">{{ status.server.uptime | duration }}</td></tr>
-  <tr><td>Server started</td> <td class="ar">{{ status.server.time_started | datetime }}</td></tr>
-  <tr><td>Operating system</td> <td class="ar">{{ status.server.os }}</td></tr>
+  <tr><td>{{ 'SERVER_SERVER_ID' | translate }}</td> <td class="ar">{{ status.server.server_id }}</td></tr>
+  <tr><td>{{ 'SERVER_SERVER_ADMIN' | translate }}</td> <td class="ar">{{ status.server.admin }}</td></tr>
+  <tr><td>{{ 'SERVER_SOFTWARE' | translate }}</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
+  <tr><td>{{ 'SERVER_SOFTWARE_FEATURES' | translate }}</td> <td class="ar">{{ status.server.software_build_features }}</td></tr>
+  <tr><td>{{ 'SERVER_UPTIME' | translate }}</td> <td class="ar">{{ status.server.uptime | duration }}</td></tr>
+  <tr><td>{{ 'SERVER_STARTED' | translate }}</td> <td class="ar">{{ status.server.time_started | datetime }}</td></tr>
+  <tr><td>{{ 'SERVER_OS' | translate }}</td> <td class="ar">{{ status.server.os }}</td></tr>
 </table>
 </div>
 </div>
@@ -59,7 +60,7 @@
 
 <div class='row' ng-cloak>
 <div class='col-md-4 col-sm-12'>
-<h4>Totals</h4>
+<h4>{{ 'TOTALS_TITLE' | translate }}</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed'>
 <tr ng-repeat='k in setup.keys_totals' ng-click='graphSwitch("totals", k)' ng-class='graphClass("totals", k)'>
@@ -75,7 +76,7 @@
 
 <div class='row' ng-cloak>
 <div class='col-md-5 col-sm-12'>
-<h4>Duplicate filter
+<h4>{{ 'DUPES_TITLE' | translate }}
 <span class='link' id='dupecheck_more_show' ng-click='dupe_vars_visible = !(dupe_vars_visible)' ng-show='!(dupe_vars_visible)'>
 	<img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAMCAIAAADkharWAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKHQcqC7wd4jIAAABtSURBVCjPY/z//z8DKYAJU+jFA4YbNxh+4NLxHxV8//7fX/4/O/v//e//YwVMDCQCkjUgnLS//7+4+H9+/v/8/P8ZGP4zMPxn54dyzeMRTmKB6/zwgOHlSxSzfn5k+AkJhheD2tMka2AkNWkAAOhriTYQTgMEAAAAAElFTkSuQmCC" />
 	</span>
@@ -106,7 +107,7 @@
 
 <div class='row' ng-cloak>
 <div class='col-md-12 col-sm-12'>
-<h4>Port listeners</h4>
+<h4>{{ 'LISTENERS_TITLE' | translate }}</h4>
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
 <tr><th ng-repeat="title in setup.cols_listener">{{ title }}</th></tr>
@@ -133,7 +134,7 @@
 
 <div class='row' ng-cloak ng-show='status.uplinks.length > 0'>
 <div class='col-md-12 col-sm-12'>
-<h4>Uplinks</h4>
+<h4>{{ 'UPLINKS_TITLE' | translate }}</h4>
 <div class='table-responsive' ng-show='status.uplinks'>
 <table class='table table-hover table-condensed table-striped'>
 <tr>
@@ -162,7 +163,7 @@
 
 <div class='row' ng-cloak ng-show='status.peers.length > 0'>
 <div class='col-md-12 col-sm-12'>
-<h4>Peers</h4>
+<h4>{{ 'PEERS_TITLE' | translate }}</h4>
 <div class='table-responsive'>
 <table class='table table-hover table-condensed table-striped'>
 <tr>
@@ -188,7 +189,7 @@
 
 <div class='row' ng-cloak>
 <div class='col-md-12 col-sm-12'>
-<h4>Clients</h4>
+<h4>{{ 'CLIENTS_TITLE' | translate }}</h4>
 <div class='table-responsive' ng-show='status'>
 <table class='table table-hover table-condensed table-striped'>
 <tr>

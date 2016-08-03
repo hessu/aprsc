@@ -636,9 +636,31 @@ var graphs_available = {
 };
 
 
-var app = angular.module('aprsc', [ 'graph', 'ngDialog' ]).
-	config(function() {
+var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog' ]).
+	config(function($translateProvider) {
 		console.log('aprsc module config');
+		
+		$translateProvider.translations('en', {
+			SERVER_TITLE: 'Server',
+			SERVER_SERVER_ID: 'Server ID',
+			SERVER_SERVER_ADMIN: 'Server admin',
+			SERVER_SOFTWARE: 'Software',
+			SERVER_SOFTWARE_FEATURES: 'Software features',
+			SERVER_UPTIME: 'Uptime',
+			SERVER_STARTED: 'Server started',
+			SERVER_OS: 'Operating system',
+			
+			TOTALS_TITLE: 'Totals',
+			DUPES_TITLE: 'Duplicate filter',
+			LISTENERS_TITLE: 'Port listeners',
+			UPLINKS_TITLE: 'Uplinks',
+			PEERS_TITLE: 'Peers',
+			CLIENTS_TITLE: 'Clients'
+			
+		});
+		
+		$translateProvider.useSanitizeValueStrategy('escape');
+		$translateProvider.preferredLanguage('en');
 	}).
 	run(function() {
 		console.log('aprsc module run');

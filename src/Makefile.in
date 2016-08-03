@@ -112,6 +112,7 @@ WEBFILES = \
 	src/web/aprsc-joulukissa.jpg \
  	src/web/excanvas.min.js \
 	src/web/angular.min.js \
+	src/web/angular-translate.min.js \
 	src/web/ngDialog.min.js \
 	src/web/ngDialog.min.css \
 	src/web/ngDialog-theme-plain.min.css \

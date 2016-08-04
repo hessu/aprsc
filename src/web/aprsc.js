@@ -22,20 +22,6 @@ function cancel_events(e)
 	if (e.cancel != null) e.cancel = true;
 }
 
-function parse_options(s)
-{
-	options = {};
-	var a = s.split(' ');
-	for (var i = 0; i < a.length; i++) {
-		var p = a[i].split('=');
-		var c = p[0].toLowerCase();
-		options[c] = p[1];
-	}
-	
-	if (options['showemail'] == 1)
-		key_translate['email'] = 'Admin email';
-}
-
 function addr_loc_port(s)
 {
 	return s.substr(s.lastIndexOf(':') + 1);
@@ -227,14 +213,8 @@ function render_alarms(alarms)
 	}
 }
 
-var options_s;
-
 function render(d)
 {
-	if (d['status_options'] != options_s) {
-		options_s = d['status_options'];
-		parse_options(options_s);
-	}
 	if (d['server'] && d['server']['tick_now']) {
 		var s = d['server'];
 		
@@ -420,6 +400,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			SERVER_TITLE: 'Server',
 			SERVER_SERVER_ID: 'Server ID',
 			SERVER_SERVER_ADMIN: 'Server admin',
+			SERVER_SERVER_EMAIL: 'Admin email',
 			SERVER_SOFTWARE: 'Software',
 			SERVER_SOFTWARE_FEATURES: 'Software features',
 			SERVER_UPTIME: 'Uptime',
@@ -651,6 +632,26 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 		}
 	};
 	
+	/* status options parsing */
+	var options_s;
+	
+	var parse_options = function(s) {
+		if (!s) {
+			$scope.options = {};
+			return;
+		}
+		
+		var o = {};
+		var a = s.split(' ');
+		for (var i = 0; i < a.length; i++) {
+			var p = a[i].split('=');
+			var c = p[0].toLowerCase();
+			o[c] = p[1];
+		}
+		
+		$scope.options = o;
+	}
+	
 	/* Ajax updates */
 	
 	var full_load = function($scope, $http) {
@@ -673,6 +674,11 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 			$scope.status_prev = $scope.status;
 			$scope.status = d;
 			$scope.uierror = null;
+			
+			if (d['status_options'] != options_s) {
+				options_s = d['status_options'];
+				parse_options(options_s);
+			}
 			
 			motd_check(d);
 			

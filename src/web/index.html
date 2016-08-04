@@ -45,6 +45,7 @@
 <table class='table table-hover table-condensed'>
   <tr><td>{{ 'SERVER_SERVER_ID' | translate }}</td> <td class="ar">{{ status.server.server_id }}</td></tr>
   <tr><td>{{ 'SERVER_SERVER_ADMIN' | translate }}</td> <td class="ar">{{ status.server.admin }}</td></tr>
+  <tr ng-show='options.showemail == 1'><td>{{ 'SERVER_SERVER_EMAIL' | translate }}</td> <td class="ar">{{ status.server.email }}</td></tr>
   <tr><td>{{ 'SERVER_SOFTWARE' | translate }}</td> <td class="ar">{{ status.server.software }} {{ status.server.software_version }}</td></tr>
   <tr><td>{{ 'SERVER_SOFTWARE_FEATURES' | translate }}</td> <td class="ar">{{ status.server.software_build_features }}</td></tr>
   <tr><td>{{ 'SERVER_UPTIME' | translate }}</td> <td class="ar">{{ status.server.uptime | duration }}</td></tr>

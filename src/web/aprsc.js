@@ -307,44 +307,6 @@ function render(d)
 var current_status;
 
 
-var motd_last;
-
-function motd_hide()
-{
-	$('#motd').hide('slow');
-	motd_last = '';
-}
-
-function motd_success(data)
-{
-	if (data) {
-		/* don't refill and re-animate if it doesn't change. */
-		if (data == motd_last)
-			return;
-		motd_last = data;
-		$('#motd').html(data);
-		$('#motd').show('fast');
-	} else {
-		motd_hide();
-	}
-}
-
-function motd_check()
-{
-	if (current_status && current_status['motd']) {
-		$.ajax({
-			url: current_status['motd'],
-			dataType: 'html',
-			timeout: 30000,
-			success: motd_success,
-			error: motd_hide
-		});
-	} else {
-		motd_hide();
-	}
-		
-	setTimeout(motd_check, 61000);
-}
 
 /* ******** NEW angular.js ********* */
 
@@ -584,7 +546,7 @@ app.filter('duration', function() { return dur_str; });
 app.filter('datetime', function() { return timestr; });
 app.filter('ratestr', function() { return ratestr; });
 
-app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($scope, $http, graphs, ngDialog) {
+app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', function($scope, $http, graphs, ngDialog, $sce) {
 	console.log('aprsc init');
 	
 	$scope.setup = {
@@ -658,6 +620,37 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 		}
 	};
 	
+	var motd_last;
+
+	var motd_hide = function() {
+		$scope.motd = null;
+		motd_last = '';
+	};
+	
+	var motd_success = function(data) {
+		if (data) {
+			/* don't refill and re-animate if it doesn't change. */
+			if (data == motd_last)
+				return;
+				
+			motd_last = data;
+			$scope.motd = $sce.trustAsHtml(data);
+		} else {
+			motd_hide();
+		}
+	};
+	
+	var motd_check = function(status) {
+		if (status && status['motd']) {
+			$http({ method: 'GET', url: status['motd']}).then(function successCallback(r) {
+				console.log('motd received: ' + r.status);
+				motd_success(r.data);
+			});
+		} else {
+			motd_hide();
+		}
+	};
+	
 	/* Ajax updates */
 	
 	var full_load = function($scope, $http) {
@@ -681,7 +674,10 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', function($sc
 			$scope.status = d;
 			$scope.uierror = null;
 			
+			motd_check(d);
+			
 			setTimeout(function() { full_load($scope, $http); }, 10000);
+			
 		}, function errorCallback(r) {
 			console.log('HTTP status.json fetch failed: ' + r.status);
 			

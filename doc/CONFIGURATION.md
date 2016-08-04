@@ -414,23 +414,35 @@ is in UTF-8.
 To remove the MOTD, simply remove motd.html or rename it to nomotd.html (or
 something).  There is no need to restart aprsc to make changes in the MOTD.
 
-To display consistent HTML messages, you might want to use the same div CSS
-classes as aprsc itself.  Here are some good sample contents - you can paste
-these as-is to motd.html (without any other extra tags around them - no `html`
-or `body` tags needed):
+To display consistent HTML messages, you might want to use the same
+Bootstrap CSS classes as aprsc itself.  Here are some good sample contents -
+you can paste these as-is to motd.html (without any other extra tags around
+them - no `html` or `body` tags needed):
 
-    <div class='msg_i'>
+    <div class='row'>
+    
+    <div class="col-md-6 col-sm-12">
+    <h4 class="text-info">Maintenance coming</h4>
+    <p class="text-info">
     Informative message about upcoming maintenance or configuration change.
-    Gets a yellow background and a box with round corners.
+    Coloured accordingly.
+    </p>
     </div>
     
-    <div class='msg_s'>
-    Success, green background - happy news!
+    <div class="col-md-6 col-sm-12">
+    <h4 class="text-success">Good news everyone!</h4>
+    <p>This server has been upgraded to aprsc 2.1.</p>
     </div>
     
-    <div class='msg_e'>
-    Error message! Red background.
+    <div class="col-md-6 col-sm-12">
+    <h4 class="text-danger">Oops!</h4>
+    <p class="text-danger">
+    There was an outage affecting blah blah blah.
+    The outage is reported here with red text.
+    </p>
     </div>
+    
+    </div><!-- closing row -->
 
 Make sure your message is correctly HTML formatted and all tags are closed
 properly!  Even if your web browser is happy to display broken HTML, someone

@@ -952,7 +952,11 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "fullfeed") == 0) {
 	  clflags |= CLFLAGS_FULLFEED;
-	} else if (strcasecmp(argv[2], "is2") == 0) {
+	} else if (strcasecmp(argv[2], "is2fullfeed") == 0) {
+	  clflags |= CLFLAGS_FULLFEED;
+	  clflags |= CLFLAGS_IS2;
+	} else if (strcasecmp(argv[2], "is2igate") == 0) {
+	  clflags |= CLFLAGS_USERFILTEROK;
 	  clflags |= CLFLAGS_IGATE;
 	  clflags |= CLFLAGS_IS2;
 	} else if (strcasecmp(argv[2], "dupefeed") == 0) {

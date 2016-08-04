@@ -203,6 +203,9 @@ version.o: version_data.h
 aprsis2.pb-c.c: aprsis2.proto
 	protoc-c --c_out=. $<
 
+aprsis2.pb-c.h: aprsis2.pb-c.c
+aprsc.o: aprsis2.pb-c.h
+
 aprsc.8 : % : %.in VERSION Makefile
 	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\
 	          s{\@VARRUN\@}{$(VARRUN)}g;			\

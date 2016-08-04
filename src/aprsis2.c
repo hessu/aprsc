@@ -1,4 +1,6 @@
 
+#include <string.h>
+
 #include "hmalloc.h"
 #include "worker.h"
 #include "aprsis2.h"
@@ -11,6 +13,7 @@
 #include "passcode.h"
 #include "clientlist.h"
 #include "login.h"
+#include "incoming.h"
 
 #define STX 0x02
 #define ETX 0x03
@@ -49,6 +52,7 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
 	 */
 	
 	int len = is2_message__get_packed_size(m);
+	hlog(LOG_DEBUG, "%s/%s: IS2: serialized length %d", c->addr_rem, c->username, len);
 	void *buf = is2_allocate_buffer(len);
 	is2_message__pack(m, buf + IS2_HEAD_LEN);
 	int r = c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
@@ -76,6 +80,53 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 	
 	return is2_write_message(self, c, &m);
 }
+
+/*
+ *	Transmit a login reply to a new client
+ */
+
+int is2_out_login_reply(struct worker_t *self, struct client_t *c, LoginReply__LoginResult result, LoginReply__LoginResultReason reason)
+{
+	LoginReply lr = LOGIN_REPLY__INIT;
+	lr.result = result;
+	lr.result_code = reason;
+
+	IS2Message m = IS2_MESSAGE__INIT;
+	m.type = IS2_MESSAGE__TYPE__LOGIN_REPLY;
+	m.login_reply = &lr;
+	
+	return is2_write_message(self, c, &m);
+}
+
+/*
+ *	Receive a login reply
+ */
+
+static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	LoginReply *lr = m->login_reply;
+	if (!lr) {
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login reply failed",
+			c->addr_rem, c->username);
+		return 0;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Login reply received",
+		c->addr_rem, c->username);
+	
+	// TODO: handle negative responses
+	
+	/* ok, login succeeded, switch handler */
+	c->is2_input_handler = &is2_input_handler;
+	
+	/* mark as connected and classify */
+	worker_mark_client_connected(self, c);
+	
+	is2_message__free_unpacked(m, NULL);
+	
+	return 0;
+}
+
 
 /*
  *	Received server signature from an upstream server
@@ -285,6 +336,9 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 	     (*c->app_version) ? c->app_version : ""
 	);
 	
+	/* tell the client he's good */
+	is2_out_login_reply(self, c, LOGIN_REPLY__LOGIN_RESULT__OK, LOGIN_REPLY__LOGIN_RESULT_REASON__NONE);
+	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);
 	
@@ -330,6 +384,57 @@ failed_login:
 }
 
 /*
+ *	Incoming packet handler
+ */
+
+static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	int i;
+	int r = 0;
+	ISPacket *p;
+	
+	hlog(LOG_DEBUG, "%s/%s: IS2: %d packets received in message",
+		c->addr_rem, c->username, m->n_is_packet);
+	
+	for (i = 0; i < m->n_is_packet; i++) {
+		p = m->is_packet[i];
+		
+		hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d",
+			c->addr_rem, c->username, p->type, p->is_packet_data.len);
+			
+		if (p->type == ISPACKET__TYPE__IS_PACKET && p->has_is_packet_data) {
+			incoming_handler(self, c, IPPROTO_TCP, (char *)p->is_packet_data.data, p->is_packet_data.len);
+		}
+	}
+	
+	/*
+	KeepalivePing *ping = m->keepalive_ping;
+	if (!ping) {
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of ping failed",
+			c->addr_rem, c->username);
+		r = -1;
+		goto done;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Ping %s received: request_id %ul",
+		c->addr_rem, c->username,
+		(ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
+		ping->request_id);
+	
+	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
+		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
+		
+		r = is2_write_message(self, c, m);
+	}
+	*/
+	
+done:	
+	is2_message__free_unpacked(m, NULL);
+	return r;
+}
+
+
+/*
  *	Transmit a ping
  */
 
@@ -367,7 +472,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 		goto done;
 	}
 	
-	hlog(LOG_INFO, "%s/%s: IS2: Ping %s received: request_id %ul",
+	hlog(LOG_DEBUG, "%s/%s: IS2: Ping %s received: request_id %lu",
 		c->addr_rem, c->username,
 		(ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
 		ping->request_id);
@@ -395,8 +500,10 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
 			return is2_in_server_signature(self, c, m);
 		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
+		case IS2_MESSAGE__TYPE__LOGIN_REPLY:
+			return is2_in_login_reply(self, c, m);
 		default:
-			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",
+			hlog(LOG_WARNING, "%s/%s: IS2: connect: unknown message type %d",
 				c->addr_rem, c->username, m->type);
 			client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 	};
@@ -419,7 +526,7 @@ int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Messag
 			return is2_in_login_request(self, c, m);
 			break;
 		default:
-			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",
+			hlog(LOG_WARNING, "%s/%s: IS2: login: unknown message type %d",
 				c->addr_rem, c->username, m->type);
 			break;
 	};
@@ -436,6 +543,9 @@ int is2_input_handler(struct worker_t *self, struct client_t *c, IS2Message *m)
 	switch (m->type) {
 		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
+			break;
+		case IS2_MESSAGE__TYPE__IS_PACKET:
+			return is2_in_packet(self, c, m);
 			break;
 		default:
 			hlog(LOG_WARNING, "%s/%s: IS2: unknown message type %d",
@@ -524,24 +634,45 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 }
 
 /*
- *	Write a packet to a client.
+ *	Write a single packet to a client.
  *
  *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
  */
 
 int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
 {
+	/* trim away CR/LF */
+	len = len - 2;
+	
+	hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
+	
 	ProtobufCBinaryData data;
 	data.data = (uint8_t *)p;
-	data.len  = len-2; 
+	data.len  = len;
 	
-	ISPacket pa = ISPACKET__INIT;
-	pa.type = ISPACKET__TYPE__IS_PACKET;
-	pa.is_packet_data = data;
+	int n = 1; // just one packet
+	int i;
+	ISPacket **subs = hmalloc(sizeof(ISPacket*) * n);
+	for (i = 0; i < n; i++) {
+		hlog(LOG_DEBUG, "packing packet %d", i);
+		subs[i] = hmalloc(sizeof(ISPacket));
+		ispacket__init(subs[i]);
+		subs[i]->type = ISPACKET__TYPE__IS_PACKET;
+		subs[i]->has_is_packet_data = 1;
+		subs[i]->is_packet_data = data;
+	}
 	
 	IS2Message m = IS2_MESSAGE__INIT;
 	m.type = IS2_MESSAGE__TYPE__IS_PACKET;
-	m.is_packet = &pa;
+	m.n_is_packet = n;
+	m.is_packet = subs;
 	
-	return is2_write_message(self, c, &m);
+	int ret = is2_write_message(self, c, &m);
+	
+	for (i = 0; i < n; i++)
+		hfree(subs[i]);
+	hfree(subs);
+	
+	return ret;
 }
+

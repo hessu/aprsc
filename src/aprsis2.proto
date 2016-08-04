@@ -152,11 +152,16 @@ message IS2Message {
 	// Identifies which message is filled in.
 	required Type type = 1;
 	
+	// For UDP packets, a sequence number may be transmitted
+	optional uint32 sequence = 2;
+	// For UDP packets, a HMAC signature may be transmitted
+	optional bytes signature = 3;
+	
 	// One of the following will be filled in. Just one.
-	optional ServerSignature server_signature = 2;
-	optional LoginRequest login_request = 3;
-	optional LoginReply login_reply = 4;
-	optional KeepalivePing keepalive_ping = 5;
-	optional ISPacket is_packet = 6;
+	optional ServerSignature server_signature = 21;
+	optional LoginRequest login_request = 22;
+	optional LoginReply login_reply = 23;
+	optional KeepalivePing keepalive_ping = 24;
+	repeated ISPacket is_packet = 25;
 }
 

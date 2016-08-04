@@ -4,3 +4,6 @@ compiler:
   - clang
   - gcc
 script: cd src && ./configure && make
+before_script:
+  - sudo apt-get -qq update
+  - sudo apt-get install -y protobuf-c-compiler

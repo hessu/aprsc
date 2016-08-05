@@ -11,5 +11,5 @@ script:
   - ./configure
   - time make -j2
   - make testinstall
-  - cd ../tests && mkdir -p logs data
+  - cd ../tests
   - time make travistest

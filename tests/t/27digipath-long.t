@@ -33,14 +33,14 @@ BEGIN {
 		push @packets, $packet;
 	}
 	
-	plan tests => 9 + ($#packets+1) + 2 + 2;
+	plan tests => 8 + ($#packets+1) + 2 + 2;
 };
 
 ok(1); # If we made it this far, we're ok.
 
-my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'FAKE4');
-ok(defined $iss1, 1, "Test failed to initialize listening server socket");
-$iss1->bind_and_listen();
+#my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'FAKE4');
+#ok(defined $iss1, 1, "Test failed to initialize listening server socket");
+#$iss1->bind_and_listen();
 
 my $iss6 = new Ham::APRS::IS_Fake('[::]:54153', 'FAKE6');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");

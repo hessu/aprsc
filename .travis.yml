@@ -12,4 +12,4 @@ script:
   - time make -j2
   - make testinstall
   - cd ../tests && mkdir -p logs data
-  - time make travistest || cat logs/aprsc.log
+  - time make travistest

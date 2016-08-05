@@ -12,19 +12,19 @@ ok(1); # If we made it this far, we're ok.
 
 my $upstream_call = 'FAKEUP';
 
-print "setting up first listener...\n";
+warn "setting up first listener...\n";
 my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', $upstream_call);
 ok(defined $iss1, 1, "Test failed to initialize listening server socket (IPv4)");
-print "binding and listen...\n";
+warn "binding and listen...\n";
 $iss1->bind_and_listen();
 
-print "running...\n";
+warn "running...\n";
 my $p = new runproduct('uplinks');
 
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
 
-print "started\n";
+warn "started\n";
 
 my $login = "N5CAL-1";
 my $server_call = "TESTING";
@@ -67,7 +67,7 @@ $iss1->unbind();
 
 #warn "switching to ipv6\n";
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', $upstream_call);
+my $iss6 = new Ham::APRS::IS_Fake('[::]:54153', $upstream_call);
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 

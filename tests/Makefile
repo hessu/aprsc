@@ -16,6 +16,10 @@ test:
 	@rm -f logs/aprsc.log
 	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" $(TEST_FILES)
 
+quicktest:
+	@rm -f logs/aprsc.log
+	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" t/01login.t 
+
 AGGREGATOR_FILES = aggregator/*.t
 
 aggrtest:

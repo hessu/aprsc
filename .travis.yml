@@ -8,4 +8,5 @@ before_script:
   - sudo apt-get install -y protobuf-c-compiler libprotobuf-c0-dev libio-socket-inet6-perl
 script:
   - cd src && ./configure && time make -j2
-  - cd ../tests && mkdir -p logs data && (time make quicktest || cat logs/aprsc.log)
+  - cd ../tests && mkdir -p logs data
+  - time make test || cat logs/aprsc.log

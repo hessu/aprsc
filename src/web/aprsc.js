@@ -125,59 +125,6 @@ var key_tooltips = {
 };
 
 
-var mem_rows = {
-	'pbuf_small': 'Small pbufs',
-	'pbuf_medium': 'Medium pbufs',
-	'pbuf_large': 'Large pbufs',
-	'historydb': 'Position history',
-	'dupecheck': 'Dupecheck DB',
-	'client': 'Clients',
-	'client_heard': 'Client MsgRcpts',
-	'client_courtesy': 'Client CourtesySrcs',
-	'filter': 'Filter entries',
-	'filter_wx': 'Filter WX stations',
-	'filter_entrycall': 'Filter entrycalls'
-};
-
-var mem_cols = {
-	'': 'Type',
-	'_cell_size_aligned': 'Cell size',
-	'_cells_used': 'Cells used',
-	'_cells_free': 'Cells free',
-	'_used_bytes': 'Bytes used',
-	'_allocated_bytes': 'Bytes allocated',
-	'_blocks': 'Blocks allocated'
-};
-
-function render_memory(element, d)
-{
-	var s = '<tr>';
-	for (var k in mem_cols) {
-		s += '<th>' + htmlent(mem_cols[k]) + '</th>';
-	}
-	s += '</tr>';
-	
-	for (var t in mem_rows) {
-		if (isUndefined(d[t + '_cells_used']))
-			continue;
-		
-		s += '<tr>';
-		for (var k in mem_cols) {
-			if (k == '')
-				s += '<td>' + htmlent(mem_rows[t]) + '</td>';
-			else {
-				var rk = t + k;
-				if (k == '_blocks' && !isUndefined(d[rk]))
-					d[rk] += '/' + d[t + '_blocks_max'];
-				s += '<td>' + htmlent(d[rk]) + '</th>';
-			}
-		}
-		s += '</tr>';
-	}
-	
-	$(element).html(s);
-}
-
 var tick_now;
 
 
@@ -363,6 +310,19 @@ var cols_clients = [
 	'heard_count', 'filter'
 	];
 
+var rows_mem = {
+	'pbuf_small': 'Small pbufs',
+	'pbuf_medium': 'Medium pbufs',
+	'pbuf_large': 'Large pbufs',
+	'historydb': 'Position history',
+	'dupecheck': 'Dupecheck DB',
+	'client': 'Clients',
+	'client_heard': 'Client MsgRcpts',
+	'filter': 'Filter entries',
+	'filter_wx': 'Filter WX stations',
+	'filter_entrycall': 'Filter entrycalls'
+};
+
 /* applications which typically have a port 14501 status port - can be linked */
 var linkable = {
 	'aprsc': 1,
@@ -441,6 +401,15 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			UPLINKS_TITLE: 'Uplinks',
 			PEERS_TITLE: 'Peers',
 			CLIENTS_TITLE: 'Clients',
+			
+			MEM_TITLE: 'Memory',
+			MEM_TH_TYPE: 'Type',
+			MEM_TH_cell_size: 'Cell size',
+			MEM_TH_cells_used: 'Cells used',
+			MEM_TH_cells_free: 'Cells free',
+			MEM_TH_used_bytes: 'Bytes used',
+			MEM_TH_allocated_bytes: 'Bytes allocated',
+			MEM_TH_blocks: 'Blocks allocated',
 			
 			TH_proto: 'Proto',
 			TH_addr: 'Address',
@@ -537,7 +506,8 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 	    'cols_listener': cols_listener,
 	    'cols_uplinks': cols_uplinks,
 	    'cols_peers': cols_peers,
-	    'cols_clients': cols_clients
+	    'cols_clients': cols_clients,
+	    'rows_mem': rows_mem
 	};
 	
 	/* graph zooming and switching */

@@ -228,6 +228,34 @@
 </div>
 </div><!-- row -->
 
+<div class='row' ng-cloak>
+<div class='col-md-9 col-sm-12'>
+<h4>{{ 'MEM_TITLE' | translate }}</h4>
+<div class='table-responsive'>
+<table class='table table-hover table-condensed'>
+<tr>
+  <th>{{ 'MEM_TH_TYPE' | translate }}</th>
+  <th>{{ 'MEM_TH_cell_size' | translate }}</th>
+  <th>{{ 'MEM_TH_cells_used' | translate }}</th>
+  <th>{{ 'MEM_TH_cells_free' | translate }}</th>
+  <th>{{ 'MEM_TH_used_bytes' | translate }}</th>
+  <th>{{ 'MEM_TH_allocated_bytes' | translate }}</th>
+  <th>{{ 'MEM_TH_blocks' | translate }}</th>
+  </tr>
+<tr ng-repeat='(k, v) in setup.rows_mem'>
+  <td>{{ v }}</td>
+  <td>{{ status.memory[k + '_cell_size'] }}</td>
+  <td>{{ status.memory[k + '_cells_used'] }}</td>
+  <td>{{ status.memory[k + '_cells_free'] }}</td>
+  <td>{{ status.memory[k + '_used_bytes'] }}</td>
+  <td>{{ status.memory[k + '_allocated_bytes'] }}</td>
+  <td>{{ status.memory[k + '_blocks'] }}/{{ status.memory[k + '_blocks_max'] }}</td>
+  </tr>
+</table>
+</div>
+</div>
+</div><!-- row -->
+
 </div><!-- container -->
 
 <script type="text/ng-template" id="pkts_rx_dialog">

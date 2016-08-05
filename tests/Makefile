@@ -2,6 +2,9 @@
 # Makefile for running the test suite
 
 TEST_FILES = t/*.t
+LIGHT_TEST_IGNORE = t/64udp-load.t
+LIGHT_TEST_FILES = $(filter-out $(LIGHT_TEST_IGNORE), $(wildcard t/*.t))
+
 TEST_VERBOSE = 0
 INST_LIB = libperl
 INST_ARCHLIB = libperl
@@ -16,9 +19,9 @@ test:
 	@rm -f logs/aprsc.log
 	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" $(TEST_FILES)
 
-quicktest:
+travistest:
 	@rm -f logs/aprsc.log
-	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" t/01login.t 
+	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" $(LIGHT_TEST_FILES)
 
 AGGREGATOR_FILES = aggregator/*.t
 

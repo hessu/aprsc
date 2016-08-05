@@ -8,4 +8,4 @@ before_script:
   - sudo apt-get install -y protobuf-c-compiler libprotobuf-c0-dev
 script:
   - cd src && ./configure && make
-  - cd tests && make test
+  - cd ../tests && make test

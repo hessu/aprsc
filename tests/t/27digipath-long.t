@@ -42,7 +42,7 @@ my $iss1 = new Ham::APRS::IS_Fake('127.0.0.1:54153', 'FAKE4');
 ok(defined $iss1, 1, "Test failed to initialize listening server socket");
 $iss1->bind_and_listen();
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'FAKE6');
+my $iss6 = new Ham::APRS::IS_Fake('[::]:54153', 'FAKE6');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 

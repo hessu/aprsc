@@ -38,7 +38,7 @@ BEGIN {
 
 ok(1); # If we made it this far, we're ok.
 
-my $iss6 = new Ham::APRS::IS_Fake('[::1]:54153', 'FAKEIS');
+my $iss6 = new Ham::APRS::IS_Fake('[::]:54153', 'FAKEIS');
 ok(defined $iss6, 1, "Test failed to initialize listening server socket on IPv6");
 $iss6->bind_and_listen();
 

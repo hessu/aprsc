@@ -125,8 +125,6 @@ var key_tooltips = {
 };
 
 
-var tick_now;
-
 
 var alarms_visible = 0;
 
@@ -159,77 +157,6 @@ function render_alarms(alarms)
 		alarms_visible = 1;
 	}
 }
-
-function render(d)
-{
-	if (d['server'] && d['server']['tick_now']) {
-		var s = d['server'];
-		
-		if (s['server_id']) {
-			document.title = htmlent(s['server_id']) + ' aprsc status';
-			$('#serverid').html(htmlent(s['server_id']));
-		}
-		
-		if (s['time_now'])
-			$('#upt').html(' at ' + timestr(s['time_now']));
-		
-		if ((!isUndefined(s['software'])) && !isUndefined(s['software_version']))
-			s['software'] = s['software'] + ' ' + s['software_version'];
-		
-	} else {
-		return;
-	}
-	
-	tick_now = d['server']['tick_now'];
-	rx_err_codes = d['rx_errs'];
-	
-	if (d['alarms']) {
-		render_alarms(d['alarms']);
-	} else {
-		if (alarms_visible) {
-			alarms_visible = 0;
-			alarm_div.hide('slow', function() { alarm_div.empty(); });
-		}
-	}
-	
-	if (d['dupecheck']) {
-		var u = d['dupecheck'];
-		u['dupes_dropped'] = calc_rate('dupecheck.dupes_dropped', u['dupes_dropped']);
-		u['uniques_out'] = calc_rate('dupecheck.uniques_out', u['uniques_out']);
-	}
-	
-	if (d['totals']) {
-		var u = d['totals'];
-		for (var i in totals_keys) {
-			if (u[totals_keys[i]] !== undefined)
-				u[totals_keys[i]] = calc_rate('totals.' + totals_keys[i], u[totals_keys[i]]);
-		}
-	}
-	
-	if (d['listeners'])
-		render_clients(listeners_table, d['listeners'], listener_cols);
-	
-	if (d['uplinks'] && d['uplinks'].length > 0) {
-		render_clients(uplinks_table, d['uplinks'], uplink_cols);
-		$('#uplinks_d').show();
-	} else {
-		$('#uplinks_d').hide();
-	}
-	
-	if (d['peers'] && d['peers'].length > 0) {
-		render_clients(peers_table, d['peers'], peer_cols);
-		$('#peers_d').show();
-	} else {
-		$('#peers_d').hide();
-	}
-		
-	if (d['clients'])
-		render_clients(clients_table, d['clients'], client_cols);
-		
-	if (d['memory'])
-		render_memory(memory_table, d['memory']);
-}
-
 
 var current_status;
 

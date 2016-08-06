@@ -8,33 +8,6 @@ function isUndefined(v)
 	return v === undef;
 }
 
-function cancel_events(e)
-{
-	if (!e)
-		if (window.event) e = window.event;
-	else
-		return;
-	
-	if (e.cancelBubble != null) e.cancelBubble = true;
-	if (e.stopPropagation) e.stopPropagation();
-	if (e.preventDefault) e.preventDefault();
-	if (window.event) e.returnValue = false;
-	if (e.cancel != null) e.cancel = true;
-}
-
-function addr_loc_port(s)
-{
-	return s.substr(s.lastIndexOf(':') + 1);
-}
-
-function htmlent(s)
-{
-	if (isUndefined(s))
-		return '';
-		
-	return $('<div/>').text(s).html();
-}
-
 function lz(i)
 {
 	if (i < 10)
@@ -88,14 +61,6 @@ function dur_str(i)
 	return i.toFixed(0) + 's';
 }
 
-function conv_none(s)
-{
-	return s;
-}
-
-var listeners_table, uplinks_table, peers_table, clients_table, memory_table,
-	dupecheck_table, dupecheck_more_table, totals_table;
-
 var key_tooltips = {
 	// dupecheck block
 	'dupes_dropped': 'Duplicate APRS-IS packets dropped in the dupecheck thread (per-client counts not available for performance reasons)',
@@ -117,42 +82,6 @@ var key_tooltips = {
 	'sctp_bytes_tx': 'APRS-IS data transmitted over SCTP',
 	'sctp_bytes_rx': 'APRS-IS data received over SCTP'
 };
-
-
-
-var alarms_visible = 0;
-
-function render_alarms(alarms)
-{
-	var s = '';
-	for (var i = 0; i < alarms.length; i++) {
-		a = alarms[i];
-		//console.log("alarm " + i + ": " + a['err']);
-		if (a['set'] != 1)
-			continue;
-		s += '<div class="msg_e">'
-			+ ((alarm_strings[a['err']]) ? alarm_strings[a['err']] : a['err'])
-			+ ' See server log for details.</div>';
-	}
-	
-	if (s == "") {
-		if (alarms_visible) {
-			alarms_visible = 0;
-			alarm_div.hide('slow', function() { alarm_div.empty(); });
-			return;
-		}
-		return;
-	}
-	
-	alarm_div.html(s);
-	
-	if (!alarms_visible) {
-		alarm_div.show('fast');
-		alarms_visible = 1;
-	}
-}
-
-var current_status;
 
 
 

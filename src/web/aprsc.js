@@ -339,8 +339,9 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			
 		});
 		
+		$translateProvider.useUrlLoader("/strings.json");
 		$translateProvider.useSanitizeValueStrategy('escape');
-		$translateProvider.preferredLanguage('en');
+		$translateProvider.preferredLanguage('fi');
 	}).
 	run(function() {
 		console.log('aprsc module run');

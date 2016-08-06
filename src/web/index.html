@@ -36,7 +36,13 @@
    </div>
  </div>
 
- <div ng-bind-html="motd" ng-if="motd"></div>
+<div class="row" ng-if="status.alarms" ng-cloak>
+ <div class="col-md-12 col-sm-12" ng-repeat="alarm in status.alarms">
+ <h4 class="text-danger"><span class="glyphicon glyphicon-exclamation-sign"></span> {{ 'ALARM_' + alarm.err | translate }}</h4>
+ </div>
+ </div>
+
+<div ng-bind-html="motd" ng-if="motd"></div>
 
 <div class='row' ng-cloak>
 <div class='col-md-4 col-sm-12'>

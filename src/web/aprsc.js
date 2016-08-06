@@ -96,12 +96,6 @@ function conv_none(s)
 var listeners_table, uplinks_table, peers_table, clients_table, memory_table,
 	dupecheck_table, dupecheck_more_table, totals_table;
 
-var alarm_strings = {
-	'no_uplink': "Server does not have any uplink connections.",
-	'packet_drop_hang': "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",
-	'packet_drop_future': "Server has dropped packets due to backward time leaps."
-};
-
 var key_tooltips = {
 	// dupecheck block
 	'dupes_dropped': 'Duplicate APRS-IS packets dropped in the dupecheck thread (per-client counts not available for performance reasons)',
@@ -405,6 +399,10 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			RXERR_disallow_srccall: 'Disallowed source callsign (N0CALL or such)',
 			RXERR_disallow_dx: 'DX cluster packet',
 			RXERR_disallow_msg_dst: 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)',
+			
+			ALARM_no_uplink: "Server does not have any uplink connections.",
+			ALARM_packet_drop_hang: "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",
+			ALARM_packet_drop_future: "Server has dropped packets due to backward time leaps.",
 			
 			CERT_DIALOG_TITLE: '{{ username }} authenticated using a certificate.',
 			CERT_SUBJECT: 'Certificate subject:',

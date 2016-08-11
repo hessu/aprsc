@@ -19,10 +19,12 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <glob.h>
 
 #include <event2/event.h>  
 #include <event2/http.h>  
 #include <event2/buffer.h>
+#include <event2/keyvalq_struct.h>
 
 #if 0
 #ifdef HAVE_EVENT2_EVENT_H
@@ -109,6 +111,9 @@ static struct http_static_t http_static_files[] = {
 	{ NULL, NULL }
 };
 
+int http_language_count = 0;
+struct http_static_t **http_language_files = NULL;
+
 /*
  *	Content types for the required file extensions
  */
@@ -120,6 +125,7 @@ static struct http_static_t http_content_types[] = {
 	{ ".js", "application/x-javascript; charset=UTF-8" },
 	{ ".jpg", "image/jpeg" },
 	{ ".jpeg", "image/jpeg" },
+	{ ".json", "application/json" },
 	{ ".png", "image/png" },
 	{ ".gif", "image/gif" },
 	{ NULL, NULL }
@@ -525,7 +531,7 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
 	const char *query;
 	
 	query = evhttp_uri_get_query(evhttp_request_get_evhttp_uri(r));
-	hlog(LOG_DEBUG, "counterdata query: %s", query);
+	hlog(LOG_DEBUG, "http counterdata query: %s", query);
 	
 	json = cdata_json_string(query);
 	if (!json) {
@@ -546,43 +552,25 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
  *	HTTP static file server
  */
 
-#define HTTP_FNAME_LEN 1024
-
-static void http_route_static(struct evhttp_request *r, const char *uri)
+static void http_static_file(struct evhttp_request *r, const char *fname)
 {
-	struct http_static_t *cmdp;
 	struct stat st;
-	char fname[HTTP_FNAME_LEN];
-	char last_modified[128];
-	char *contenttype;
 	int fd;
 	int file_size;
-	char *buf;
 	struct evkeyvalq *req_headers;
 	const char *ims;
-	
-	for (cmdp = http_static_files; cmdp->name != NULL; cmdp++)
-		if (strcmp(cmdp->name, uri) == 0)
-			break;
-			
-	if (cmdp->name == NULL) {
-		hlog(LOG_DEBUG, "HTTP: 404");
-		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
-		return;
-	}
-	
-	snprintf(fname, HTTP_FNAME_LEN, "%s/%s", webdir, cmdp->filename);
-	
-	//hlog(LOG_DEBUG, "static file request %s", uri);
+	char last_modified[128];
+	char *contenttype;
+	char *buf;
 	
 	fd = open(fname, 0, O_RDONLY);
 	if (fd < 0) {
 		if (errno == ENOENT) {
 			/* don't complain about missing motd.html - it's optional. */
 			int level = LOG_ERR;
-			if (strcmp(cmdp->filename, "motd.html") == 0)
+			if (strcmp(fname, "motd.html") == 0)
 				level = LOG_DEBUG;
-			hlog(level, "http static file '%s' not found", fname);
+			hlog(level, "http static file '%s' not found: 404", fname);
 			evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 			return;
 		}
@@ -602,7 +590,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	
 	http_date(last_modified, sizeof(last_modified), st.st_mtime);
 	
-	contenttype = http_content_type(cmdp->filename);
+	contenttype = http_content_type(fname);
 	//hlog(LOG_DEBUG, "found content-type %s", contenttype);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
@@ -651,6 +639,69 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 	hfree(buf);
 }
 
+
+#define HTTP_FNAME_LEN 1024
+
+static void http_route_static(struct evhttp_request *r, const char *uri)
+{
+	struct http_static_t *cmdp;
+	char fname[HTTP_FNAME_LEN];
+	
+	for (cmdp = http_static_files; cmdp->name != NULL; cmdp++)
+		if (strcmp(cmdp->name, uri) == 0)
+			break;
+			
+	if (cmdp->name == NULL) {
+		hlog(LOG_DEBUG, "http static file request: 404: %s", uri);
+		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+		return;
+	}
+	
+	snprintf(fname, HTTP_FNAME_LEN, "%s/%s", webdir, cmdp->filename);
+	
+	//hlog(LOG_DEBUG, "http static file request: %s", uri);
+	
+	return http_static_file(r, fname);
+}
+
+/*
+ *	Return translated strings in JSON
+ */
+
+static void http_strings(struct evhttp_request *r, const char *uri)
+{
+	const char *query;
+	
+	query = evhttp_uri_get_query(evhttp_request_get_evhttp_uri(r));
+	//hlog(LOG_DEBUG, "strings query: %s", query);
+	
+	const char *lang = NULL;
+	struct evkeyvalq args;
+	
+	if (evhttp_parse_query_str(query, &args) == 0) {
+		lang = evhttp_find_header(&args, "lang");
+		//hlog(LOG_DEBUG, "lang: %s, checking against %d languages", lang, http_language_count);
+		
+		int i;
+		for (i = 0; i < http_language_count; i++) {
+			if (strcasecmp(lang, http_language_files[i]->name) == 0) {
+				hlog(LOG_DEBUG, "http strings query: %s: %s", lang, http_language_files[i]->filename);
+				evhttp_clear_headers(&args);
+				
+				return http_static_file(r, http_language_files[i]->filename);
+			}
+		}
+	}
+	
+	hlog(LOG_DEBUG, "http strings query: 404: %s", uri);
+	evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+	
+	evhttp_clear_headers(&args);
+	
+	return;
+}
+
+
 /*
  *	HTTP request router
  */
@@ -676,6 +727,11 @@ static void http_router(struct evhttp_request *r, void *which_server)
 		
 		if (strncmp(uri, "/counterdata?", 13) == 0) {
 			http_counterdata(r, uri);
+			return;
+		}
+		
+		if (strncmp(uri, "/strings?", 9) == 0) {
+			http_strings(r, uri);
 			return;
 		}
 		
@@ -763,6 +819,85 @@ static void http_server_free(void)
 }
 
 /*
+ *	Scan for language string files
+ */
+
+void lang_scan(void)
+{
+	hlog(LOG_DEBUG, "Scanning languages");
+	
+	struct http_static_t **new_language_files = NULL;
+	int languages_loaded = 0;
+	
+#define LANG_FNAME_PREFIX "strings-"
+#define LANG_FNAME_SUFFIX ".json"
+	const char glob_s[] = LANG_FNAME_PREFIX "*" LANG_FNAME_SUFFIX;
+	int glob_l = strlen(webdir) + 1 + strlen(glob_s) + 1;
+	char *fullglob = hmalloc(glob_l);
+	snprintf(fullglob, glob_l, "%s/%s", webdir, glob_s);
+	
+	glob_t globbuf;
+	
+	int ret = glob(fullglob, GLOB_NOSORT|GLOB_ERR, NULL, &globbuf);
+	if (ret == 0) {
+		int i;
+		
+		hlog(LOG_DEBUG, "%d language files found", globbuf.gl_pathc);
+		
+		new_language_files = hmalloc(sizeof(*new_language_files) * globbuf.gl_pathc);
+		memset(new_language_files, 0, sizeof(*new_language_files) * globbuf.gl_pathc);
+		
+		for (i = 0; i < globbuf.gl_pathc; i++) {
+			hlog(LOG_DEBUG, "Language file: %s", globbuf.gl_pathv[i]);
+			
+			char *lang = NULL;
+			char *bp, *ep = NULL;
+			bp = strstr(globbuf.gl_pathv[i], LANG_FNAME_PREFIX);
+			if (bp) {
+				bp += strlen(LANG_FNAME_PREFIX);
+				ep = strstr(bp, LANG_FNAME_SUFFIX);
+			}
+			
+			if (ep) {
+				int langlen = ep - bp;
+				lang = hmalloc(langlen + 1);
+				strncpy(lang, bp, langlen + 1); 
+				lang[langlen] = 0;
+				
+				new_language_files[languages_loaded] = hmalloc(sizeof(struct http_static_t));
+				new_language_files[languages_loaded]->name = lang;
+				new_language_files[languages_loaded]->filename = hstrdup(globbuf.gl_pathv[i]);
+				
+				hlog(LOG_INFO, "Language %d installed: %s: %s", languages_loaded, lang, globbuf.gl_pathv[i]);
+				
+				languages_loaded++;
+			}
+			
+		}
+	} else {
+		switch (ret) {
+			case GLOB_NOSPACE:
+				hlog(LOG_ERR, "Language file search failed: Out of memory");
+				break;
+			case GLOB_ABORTED:
+				hlog(LOG_ERR, "Language file search failed: Read error / %s", strerror(errno));
+				break;
+			case GLOB_NOMATCH:
+				hlog(LOG_INFO, "Language file search failed: No files found");
+				break;
+			default:
+				break;
+		}
+	}
+	
+	globfree(&globbuf);
+	hfree(fullglob);
+	
+	http_language_count = languages_loaded;
+	http_language_files = new_language_files;
+}
+
+/*
  *	HTTP server thread
  */
 
@@ -791,6 +926,8 @@ void http_thread(void *asdf)
 	
 	/* start the http thread, which will start server threads */
 	hlog(LOG_INFO, "HTTP thread starting...");
+	
+	lang_scan();
 	
 	/* we allocate a worker structure to be used within the http thread
 	 * for parsing incoming packets and passing them on to the dupecheck

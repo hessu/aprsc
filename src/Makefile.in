@@ -105,6 +105,8 @@ DATAINSTALL = install --preserve-timestamps -m $(DATAMODE)
 
 WEBFILES = \
 	src/web/aprsc.css src/web/aprsc.js src/web/aprsc-graph.js \
+	src/web/strings-en.json \
+	src/web/strings-fi.json \
 	src/web/index.html \
 	src/web/favicon.ico \
 	src/web/aprsc-logo4.png \

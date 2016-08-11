@@ -339,7 +339,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			
 		});
 		
-		$translateProvider.useUrlLoader("/strings.json");
+		$translateProvider.useUrlLoader("/strings");
 		$translateProvider.useSanitizeValueStrategy('escape');
 		$translateProvider.preferredLanguage('fi');
 	}).

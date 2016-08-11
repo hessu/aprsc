@@ -341,7 +341,14 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 		
 		$translateProvider.useUrlLoader("/strings");
 		$translateProvider.useSanitizeValueStrategy('escape');
-		$translateProvider.preferredLanguage('fi');
+		$translateProvider.registerAvailableLanguageKeys(
+			// add additional language codes here:
+			['en', 'fi'], {
+			// and here, for dialect mapping (en_US, en_GB to en):
+			'en_*': 'en',
+			'fi_*': 'fi',
+			'*': 'en'
+		}).determinePreferredLanguage();
 	}).
 	run(function() {
 		console.log('aprsc module run');

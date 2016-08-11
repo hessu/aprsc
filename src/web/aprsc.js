@@ -341,6 +341,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 		
 		$translateProvider.useUrlLoader("/strings");
 		$translateProvider.useSanitizeValueStrategy('escape');
+		$translateProvider.preferredLanguage('en');
 		$translateProvider.registerAvailableLanguageKeys(
 			// add additional language codes here:
 			['en', 'fi'], {

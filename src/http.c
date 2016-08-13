@@ -927,8 +927,6 @@ void http_thread(void *asdf)
 	/* start the http thread, which will start server threads */
 	hlog(LOG_INFO, "HTTP thread starting...");
 	
-	lang_scan();
-	
 	/* we allocate a worker structure to be used within the http thread
 	 * for parsing incoming packets and passing them on to the dupecheck
 	 * thread.
@@ -948,6 +946,8 @@ void http_thread(void *asdf)
 			
 			// shut down existing instance
 			http_server_free();
+			
+			lang_scan();
 			
 			// do init
 #if 1

@@ -5,8 +5,10 @@ Translating aprsc status view to other languages
 Create a new language file
 ----------------------------
 
-Go to /opt/aprsc/web, and make a copy of the master English strings
-file:
+Go to /opt/aprsc/web, and make a copy of the master English strings file. 
+Look up your two-letter language code from
+[the list](https://www.w3.org/International/articles/language-tags/)
+('sv' is for Swedish, for example), and use it to construct the file name.
 
     cd /opt/aprsc/web
     cp strings-en.json strings-sv.json

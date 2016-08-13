@@ -74,6 +74,10 @@ for instructions.
 After the software is installed, please go through the
 [CONFIGURATION](CONFIGURATION.html) document.
 
+You may also look into translating the aprsc status page to your
+language. The process is described in the
+[TRANSLATING](TRANSLATING.html) document.
+
 
 Other documentation
 ----------------------

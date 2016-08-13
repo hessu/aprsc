@@ -45,6 +45,7 @@ servers:
 * Uplink server support
 * Passcode validation
 * Web status page + Machine-readable JSON status on an HTTP server
+* Localisation support for status web
 * HTTP position upload using POST
 * Full IPv4 and IPv6 support
 * Configurable access lists on client ports

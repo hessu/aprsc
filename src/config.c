@@ -489,6 +489,8 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	char *peerid = NULL;
 	char *fullhost, *host_s, *port_s;
 	int af;
+	
+	ai = my_ai = a = NULL;
 
 	if (argc < 4)
 		return -1;
@@ -535,6 +537,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	if (d != 1) {
 		hlog(LOG_ERR, "PeerGroup: address parsing for local address %s returned %d addresses - can only have one", fullhost, d);
 		hfree(fullhost);
+		freeaddrinfo(my_ai);
 		return -2;
 	}
 	
@@ -626,6 +629,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 			fullhost = NULL;
 			hfree(peerid);
 			freeaddrinfo(ai);
+			ai = NULL;
 			continue;
 		}
 		
@@ -665,6 +669,8 @@ err:
 		hfree(fullhost);
 	if (peerid)
 		hfree(peerid);
+	if (ai)
+		freeaddrinfo(ai);
 		
 	return -2;
 }

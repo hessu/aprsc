@@ -122,6 +122,8 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 		prefixlen = atoi(prefixls);
 		if (prefixlen < 0 || prefixlen > 128) {
 			hlog(LOG_ERR, "ACL: invalid prefix len '%s' for '%s'", prefixls, netspec);
+			if (ai)
+				freeaddrinfo(ai);
 			return -1;
 		}
 	}
@@ -179,7 +181,7 @@ int acl_add(struct acl_t *acl, char *netspec, int allow)
 		}
 		
 		hfree(addr_s);
-		hfree(ai);
+		freeaddrinfo(ai);
 		ai = nextai;
 	}
 	

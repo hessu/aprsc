@@ -14,12 +14,12 @@ PASSWORD=`cat ~/.covpw`
 
 echo "Uploading version $VERSION to Coverity..."
 
-curl --form file=@aprsc.tgz --form project=aprsc \
-	--form password="$PASSWORD" \
+curl --form token="$PASSWORD" \
 	--form email=hessu@hes.iki.fi \
+	--form file=@aprsc.tgz \
 	--form version="$VERSION" \
-	--form description="" \
-	http://scan5.coverity.com/cgi-bin/upload.py
+        --form description="" \
+        https://scan.coverity.com/builds?project=aprsc
 
 rm -f aprsc.tgz
 

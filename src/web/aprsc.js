@@ -1,6 +1,14 @@
 <!--
 
-var options = {};
+// add additional language codes here, in the end of the list:
+var lang_list = ['en', 'fi'];
+// and, if necessary, add one new line in the beginning here,
+// for dialect mapping (en_US, en_GB to en):
+var lang_map = {
+	'en_*': 'en',
+	'fi_*': 'fi',
+	'*': 'en' // DO NOT remove or change the default mapping to 'en'
+};
 
 function isUndefined(v)
 {
@@ -342,14 +350,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 		$translateProvider.useUrlLoader("/strings");
 		$translateProvider.useSanitizeValueStrategy('escape');
 		$translateProvider.preferredLanguage('en');
-		$translateProvider.registerAvailableLanguageKeys(
-			// add additional language codes here:
-			['en', 'fi'], {
-			// and here, for dialect mapping (en_US, en_GB to en):
-			'en_*': 'en',
-			'fi_*': 'fi',
-			'*': 'en'
-		}).determinePreferredLanguage();
+		$translateProvider.registerAvailableLanguageKeys(lang_list, lang_map).determinePreferredLanguage();
 	}).
 	run(function() {
 		console.log('aprsc module run');

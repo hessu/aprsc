@@ -816,6 +816,19 @@ static void http_server_free(void)
 		event_base_free(libbase);
 		libbase = NULL;
 	}
+	
+	if (http_language_files && http_language_count) {
+		int i;
+		for (i = 0; i < http_language_count; i++) {
+			hfree(http_language_files[i]->name);
+			hfree(http_language_files[i]->filename);
+			hfree(http_language_files[i]);
+			http_language_files[i] = NULL;
+		}
+		hfree(http_language_files);
+		http_language_files = NULL;
+		http_language_count = 0;
+	}
 }
 
 /*

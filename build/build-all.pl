@@ -7,6 +7,8 @@ use Time::HiRes qw(time sleep);
 use IO::Socket::INET;
 
 my @platforms = (
+	'ubuntu-1604-i386',
+	'ubuntu-1604-amd64',
 	'ubuntu-1404-i386',
 	'ubuntu-1404-amd64',
 	'ubuntu-1204-i386',
@@ -143,7 +145,7 @@ sub vm_build($$$)
 	print "... extract sources ...\n";
 	system("ssh $vm 'cd buildtmp && tar xvfz $d_tgz'") == 0 or die "vm source extract failed: $?\n";
 	print "... build ...\n";
-	system("ssh $vm 'cd buildtmp/$dir/src && ./configure && make make-deb'") == 0 or die "vm build phase failed: $?\n";
+	system("ssh $vm 'cd buildtmp/$dir/src && ./configure && DEB_BUILD_HARDENING=1 make make-deb'") == 0 or die "vm build phase failed: $?\n";
 	print "... download packages ...\n";
 	system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
 	mkdir($dir_build_down) || die "Could not mkdir $dir_build_down: $!\n";

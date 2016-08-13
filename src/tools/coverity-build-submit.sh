@@ -2,7 +2,7 @@
 
 set -e
 
-export PATH=$PATH:/opt/src/c/cov-analysis-linux64-6.5.1/bin
+export PATH=$PATH:/opt/src/c/cov-analysis-linux64-8.5.0.2/bin
 
 make clean
 nice cov-build --dir cov-int make -j4

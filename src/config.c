@@ -1263,7 +1263,7 @@ int read_config(void)
 			failed = 1;
 		}
 		
-		if (test_directory(rundir)) {
+		if ((rundir) && test_directory(rundir)) {
 			hlog(LOG_CRIT, "Config: rundir %s is not a directory.", rundir);
 			failed = 1;
 		}

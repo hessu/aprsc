@@ -430,6 +430,7 @@ int make_uplink(struct uplink_config_t *l)
 	}
 	
 	/* Pick random address to start from */
+	// coverity[dont_call]  // squelch warning: not security sensitive use of random()
 	i = random() % addrc;
 	
 	/* Then lets try making socket and connection in address order */

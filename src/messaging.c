@@ -30,6 +30,7 @@ void messaging_generate_msgid(char *buf, int buflen)
 	int i, c;
 	
 	for (i = 0; i < buflen-1; i++) {
+		// coverity[dont_call]  // squelch warning: not security sensitive use of random(): APRS message-id
 		c = random() % (2*26 + 10); /* letters and numbers */
 		
 		if (c < 10)

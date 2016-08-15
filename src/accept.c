@@ -1207,8 +1207,10 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	}
 	/* distribute keepalive intervals for the existing old clients
 	 * but send them rather sooner than later */
+	// coverity[dont_call]  // squelch warning: not security sensitive use of random(): load distribution
 	c->keepalive = tick + (random() % (keepalive_interval/2));
 	/* distribute cleanup intervals over the next 2 minutes */
+	// coverity[dont_call]  // squelch warning: not security sensitive use of random(): load distribution
 	c->cleanup = tick + (random() % 120);
 	
 	c->connect_time = time_connect->valueint;

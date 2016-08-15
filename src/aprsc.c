@@ -589,8 +589,10 @@ static void generate_instance_id(void)
 	
 	if (fd < 0) {
 		/* urandom failed for us, use something inferior */
-		for (l = 0; l < INSTANCE_ID_LEN; l++)
+		for (l = 0; l < INSTANCE_ID_LEN; l++) {
+			// coverity[dont_call]  // squelch warning: not security sensitive use of random()
 			s[l] = random() % 256;
+		}
 	}
 	
 	for (l = 0; l < INSTANCE_ID_LEN; l++) {
@@ -883,6 +885,7 @@ int main(int argc, char **argv)
 	
 	time_set_tick_and_now();
 	cleanup_tick = tick;
+	// coverity[dont_call]  // squelch warning: not security sensitive use of random()
 	version_tick = tick + random() % 60; /* some load distribution */
 	startup_tick = tick;
 	startup_time = now;

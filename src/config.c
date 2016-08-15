@@ -548,6 +548,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	/* Configure a listener */
 	li = hmalloc(sizeof(*li));
 	memset(li, 0, sizeof(*li));
+	// coverity[dont_call]  // squelch warning: not security sensitive use of random(): local id
 	li->id = random();
 	li->corepeer = 1;
 	li->name = hstrdup(argv[1]);
@@ -1126,6 +1127,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		l->id = old_l->id;
 	} else {
 		/* new config, assign new id */
+		// coverity[dont_call]  // squelch warning: not security sensitive use of random(): local id
 		l->id = random();
 	}
 	

@@ -617,15 +617,21 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	struct pbuf_t *pb_list;
 	struct pbuf_t *pb, *pbnext;
 	int n = 0;
+	int me;
 	
 	/* grab worker's list of packets */
-	pthread_mutex_lock(&w->pbuf_incoming_mutex);
+	if ((me = pthread_mutex_lock(&w->pbuf_incoming_mutex))) {
+		hlog(LOG_ERR, "dupecheck_drain_worker: could not lock pbuf_incoming_mutex: %s", strerror(me));
+		return 0;
+	}
 	pb_list = w->pbuf_incoming;
 	w->pbuf_incoming = NULL;
 	w->pbuf_incoming_last = &w->pbuf_incoming;
 	//int c = w->pbuf_incoming_count;
 	w->pbuf_incoming_count = 0;
-	pthread_mutex_unlock(&w->pbuf_incoming_mutex);
+	if ((me = pthread_mutex_unlock(&w->pbuf_incoming_mutex))) {
+		hlog(LOG_ERR, "dupecheck_drain_worker: could not unlock pbuf_incoming_mutex: %s", strerror(me));
+	}
 	
 	//hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
 	//     c, w->id, dupecheck_seqnum);

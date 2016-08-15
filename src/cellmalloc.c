@@ -208,13 +208,23 @@ void *cellmalloc(cellarena_t *ca)
 {
 	void *cp;
 	struct cellhead *ch;
+	int me;
 
-	if (ca->use_mutex)
-		pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_lock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellmalloc: could not lock mutex: %s", strerror(me));
+			return NULL;
+		}
+	}
 
 	while (!ca->free_head  || (ca->freecount < ca->minfree))
 		if (new_cellblock(ca)) {
-			pthread_mutex_unlock(&ca->mutex);
+			if (ca->use_mutex) {
+				if ((me = pthread_mutex_unlock(&ca->mutex))) {
+					hlog(LOG_ERR, "cellmalloc: could not unlock mutex: %s", strerror(me));
+				}
+			}
+			
 			return NULL;
 		}
 
@@ -228,8 +238,11 @@ void *cellmalloc(cellarena_t *ca)
 
 	ca->freecount -= 1;
 
-	if (ca->use_mutex)
-		pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_unlock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellmalloc: could not unlock mutex: %s", strerror(me));
+		}
+	}
 
 	// hlog(LOG_DEBUG, "cellmalloc(%p at %p) freecount %d", cellhead_to_clientptr(cp), ca, ca->freecount);
 
@@ -245,9 +258,14 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 {
 	int count;
 	struct cellhead *ch;
+	int me;
 
-	if (ca->use_mutex)
-		pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_lock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellmallocmany: could not lock mutex: %s", strerror(me));
+			return 0;
+		}
+	}
 
 	for (count = 0; count < numcells; ++count) {
 
@@ -255,9 +273,9 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 		       ca->freecount < ca->minfree) {
 			/* Out of free cells ? alloc new set */
 			if (new_cellblock(ca)) {
-			  /* Failed ! */
-			  hlog(LOG_ERR, "cellmallocmany: failed to allocate new block!");
-			  break;
+				/* Failed ! */
+				hlog(LOG_ERR, "cellmallocmany: failed to allocate new block!");
+				break;
 			}
 		}
 
@@ -283,8 +301,12 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 
 	}
 
-	if (ca->use_mutex)
-		pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_unlock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellmallocmany: could not unlock mutex: %s", strerror(me));
+			return count;
+		}
+	}
 
 	return count;
 }
@@ -293,6 +315,7 @@ int   cellmallocmany(cellarena_t *ca, void **array, int numcells)
 
 void  cellfree(cellarena_t *ca, void *p)
 {
+	int me;
 	struct cellhead *ch = clientptr_to_cellhead(p);
 	ch->next = NULL;
 #if CELLHEAD_DEBUG == 1
@@ -303,8 +326,12 @@ void  cellfree(cellarena_t *ca, void *p)
 
 	// hlog(LOG_DEBUG, "cellfree() %p to %p", p, ca);
 
-	if (ca->use_mutex)
-		pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_lock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellfree: could not lock mutex: %s", strerror(me));
+			return;
+		}
+	}
 
 	if (ca->lifo_policy) {
 	  /* Put the cell on free-head */
@@ -323,8 +350,11 @@ void  cellfree(cellarena_t *ca, void *p)
 
 	ca->freecount += 1;
 
-	if (ca->use_mutex)
-		pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_unlock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellfree: could not unlock mutex: %s", strerror(me));
+		}
+	}
 }
 
 /*
@@ -335,9 +365,14 @@ void  cellfree(cellarena_t *ca, void *p)
 void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 {
 	int count;
+	int me;
 
-	if (ca->use_mutex)
-		pthread_mutex_lock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_lock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellfreemany: could not lock mutex: %s", strerror(me));
+			return;
+		}
+	}
 
 	for (count = 0; count < numcells; ++count) {
 
@@ -370,8 +405,11 @@ void  cellfreemany(cellarena_t *ca, void **array, int numcells)
 
 	}
 
-	if (ca->use_mutex)
-		pthread_mutex_unlock(&ca->mutex);
+	if (ca->use_mutex) {
+		if ((me = pthread_mutex_unlock(&ca->mutex))) {
+			hlog(LOG_ERR, "cellfreemany: could not unlock mutex: %s", strerror(me));
+		}
+	}
 }
 
 void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status)

@@ -110,10 +110,17 @@ static MUTEX_TYPE *mutex_buf= NULL;
 
 static void ssl_thread_locking_function(int mode, int n, const char * file, int line)
 {
-	if (mode & CRYPTO_LOCK)
-		MUTEX_LOCK(mutex_buf[n]);
-	else
-		MUTEX_UNLOCK(mutex_buf[n]);
+	int me;
+	
+	if (mode & CRYPTO_LOCK) {
+		me = MUTEX_LOCK(mutex_buf[n]);
+		if (me)
+			hlog(LOG_ERR, "ssl: could not lock mutex %d: %s", n, strerror(me));
+	} else {
+		me = MUTEX_UNLOCK(mutex_buf[n]);
+		if (me)
+			hlog(LOG_ERR, "ssl: could not unlock mutex %d: %s", n, strerror(me));
+	}
 }
 
 static unsigned long ssl_thread_id_function(void)

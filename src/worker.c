@@ -42,8 +42,6 @@
 time_t now;	/* current time, updated by the main thread, MAY be spun around by NTP */
 time_t tick;	/* monotonous clock, may or may not be wallclock */
 
-extern int ibuf_size;
-
 struct worker_t *worker_threads;
 struct client_udp_t *udppeers;	/* list of listening/receiving UDP peer sockets */
 

@@ -271,7 +271,7 @@ struct client_udp_t {			/* UDP services can be available at multiple
  * the 30-second dupe check window. The current APRS-IS rate is somewhere around
  * 3-4 Kbytes/second, and then we have the operating system TCP socket buffers too.
  */
-#define FIXED_IOBUFS 1
+#define FIXED_IOBUFS 0
 #ifdef FIXED_IOBUFS
 #define OBUF_SIZE  8000
 #define IBUF_SIZE  8000

@@ -129,7 +129,7 @@ int maxclients = 500;			/* maximum number of clients */
 /* These two are not currently used. The fixed defines are in worker.h,
  * OBUF_SIZE and IBUF_SIZE.
  */
-int ibuf_size = 8100;			/* size of input buffer for clients */
+int ibuf_size = 8*1024;			/* size of input buffer for clients */
 int obuf_size = 8*1024;			/* size of output buffer for clients */
 
 int new_fileno_limit;
@@ -172,6 +172,8 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "logintimeout",	_CFUNC_ do_interval,	&client_login_timeout	},
 	{ "filelimit",		_CFUNC_ do_int,		&new_fileno_limit	},
 	{ "maxclients",		_CFUNC_ do_int,		&maxclients		},
+	{ "ibufsize",		_CFUNC_ do_int,		&ibuf_size		},
+	{ "obufsize",		_CFUNC_ do_int,		&obuf_size		},
 	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
 	{ "httpstatusoptions",	_CFUNC_ do_string,	&new_http_status_options	},

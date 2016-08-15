@@ -404,6 +404,8 @@ static struct pbuf_t *pbuf_get(struct worker_t *self, int len)
 
 void incoming_flush(struct worker_t *self)
 {
+	int me;
+	
 	/* try grab the lock.. if it fails, we'll try again, either
 	 * in 200 milliseconds or after next input
 	 */
@@ -413,7 +415,9 @@ void incoming_flush(struct worker_t *self)
 	*self->pbuf_incoming_last = self->pbuf_incoming_local;
 	self->pbuf_incoming_last  = self->pbuf_incoming_local_last;
 	self->pbuf_incoming_count += self->pbuf_incoming_local_count;
-	pthread_mutex_unlock(&self->pbuf_incoming_mutex);
+        if ((me = pthread_mutex_unlock(&self->pbuf_incoming_mutex))) {
+                hlog(LOG_ERR, "incoming: could not unlock pbuf_incoming_mutex: %s", strerror(me));
+        }
 
 	//hlog( LOG_DEBUG, "incoming_flush() sent out %d packets", self->pbuf_incoming_local_count );
 

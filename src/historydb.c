@@ -281,6 +281,8 @@ int historydb_load(FILE *fp)
 	rwl_wrlock(&historydb_rwlock);
 	
 	while ((s = fgets(buf, sizeof(buf), fp))) {
+		// squelch warning: the json file is read from disk, written by ourself when starting live upgrade
+		// coverity[tainted_data]
 		if (historydb_load_entry(s) > 0)
 			ok++;
 		n++;

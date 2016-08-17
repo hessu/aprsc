@@ -667,6 +667,7 @@ int status_read_liveupgrade(void)
 	}
 	
 	/* decode JSON */
+	// coverity[tainted_data] // squelch warning: the json file is read from disk, written by ourself
 	cJSON *dec = cJSON_Parse(s);
 	if (!dec) {
 		hlog(LOG_ERR, "liveupgrade dump parsing failed");

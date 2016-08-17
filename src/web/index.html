@@ -207,7 +207,7 @@
       ng-click="changeSorting(clients_sort, k)">{{ 'TH_' + k | translate }} <span ng-class="sortIndicator(clients_sort, k)"></span></th>
   </tr>
 <tr ng-repeat="c in status.clients | orderBy : clients_sort.column : clients_sort.descending">
-  <td>{{ c.addr_loc }}</td>
+  <td>{{ c.addr_loc | onlyport }}</td>
   <td class='username'><a href="http://aprs.fi/?call={{ c.username }}" target="_blank">{{ c.username }}</a></td>
   <td><a ng-show="linkable(c)" ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a>
       <span ng-show="!linkable(c)">{{ c.addr_rem }}</span>

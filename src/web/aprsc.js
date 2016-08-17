@@ -93,7 +93,13 @@ var key_tooltips = {
 
 
 
-/* ******** NEW angular.js ********* */
+/* filters */
+
+/* return only port of an addr:port string */
+function onlyport(s)
+{
+	return s.substr(s.lastIndexOf(':') + 1);
+}
 
 function ratestr(rate)
 {
@@ -359,6 +365,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 app.filter('duration', function() { return dur_str; });
 app.filter('datetime', function() { return timestr; });
 app.filter('ratestr', function() { return ratestr; });
+app.filter('onlyport', function() { return onlyport; });
 
 app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', function($scope, $http, graphs, ngDialog, $sce) {
 	console.log('aprsc init');

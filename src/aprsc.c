@@ -144,7 +144,10 @@ void parse_cmdline(int argc, char *argv[])
 		case 'o':
 			i = pick_loglevel(optarg, log_destnames);
 			if (i > -1)
-				log_dest = 1 << (i-1);
+				if (i == 0)
+					log_dest = 0;
+				else
+					log_dest = 1 << (i-1);
 			else {
 				fprintf(stderr, "Log destination unknown: \"%s\"\n", optarg);
 				failed = 1;

@@ -125,8 +125,8 @@ CentOS: Installing using yum
 -------------------------------
 
 This installation procedure has only been tested on CentOS 6.8 and 7.0. It
-should probably work from 6.0 to 6.8 on both i386 and x86_64 platforms. 7.0
-builds are only available for x86_64 currently.
+should probably work from 6.0 to 6.8 on both i386 and x86\_64 platforms. 7.0
+builds are only available for x86\_64 currently.
 
 The following commands assume you're running them as a regular user, and the
 sudo tool is used to run individual commands as root.  sudo will ask you for

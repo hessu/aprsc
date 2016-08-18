@@ -8,6 +8,7 @@ aprsc is "officially" "supported" on the following platforms:
 * Debian oldstable (7.0, "wheezy"): i386, x86_64, armhf Raspberry Pi (armv6l)
 * Ubuntu LTS (12.04, 14.04, 16.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
+* CentOS 7: x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
 anything newer than that.
@@ -123,8 +124,9 @@ any warnings or errors.
 CentOS: Installing using yum
 -------------------------------
 
-This installation procedure has only been tested on CentOS 6.3. It should
-probably work from 6.0 to 6.3, on both i386 and x86_64 platforms.
+This installation procedure has only been tested on CentOS 6.8 and 7.0. It
+should probably work from 6.0 to 6.8 on both i386 and x86_64 platforms. 7.0
+builds are only available for x86_64 currently.
 
 The following commands assume you're running them as a regular user, and the
 sudo tool is used to run individual commands as root.  sudo will ask you for

@@ -13,10 +13,10 @@ my @platforms = (
 	'ubuntu-1404-amd64',
 	'ubuntu-1204-i386',
 	'ubuntu-1204-amd64',
-	'ubuntu-1004-i386',
-	'ubuntu-1004-amd64',
-	'debian-60-i386',
-	'debian-60-amd64',
+#	'ubuntu-1004-i386',
+#	'ubuntu-1004-amd64',
+#	'debian-60-i386',
+#	'debian-60-amd64',
 	'debian-70-i386',
 	'debian-70-amd64',
 	'debian-70-armhf',
@@ -24,12 +24,16 @@ my @platforms = (
 	'debian-80-amd64',
 	'centos-63-i686',
 	'centos-63-x86_64',
+	'centos-70-x86_64',
 );
 
 my %platconf = (
 	'debian-70-armhf' => {
 		'novm' => 1,
 		'port' => 10022
+	},
+	'centos-70-x86_64' => {
+		'dest' => 'centos/7/x86_64'
 	},
 	'centos-63-i686' => {
 		'dest' => 'centos/6/i386'

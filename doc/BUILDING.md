@@ -76,6 +76,7 @@ Extract it:
 Go to the newly-created directory and configure the build:
 
     $ cd aprsc-1.0.0 (or whatever)
+    $ cd src
     $ ./configure
 
 At this point the configuration either succeeds or fails. If it fails, it is

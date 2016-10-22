@@ -81,6 +81,8 @@ my @pkts = (
 # javap4 drops these, javap3 allows
 #	"SRC-111>DST,DIGI-0,qAR,$login:>should drop, too long SSID in srccall",
 #	"EL-DH5FFL>DST,DIGI-0,qAR,$login:>should drop, much too long SSID in srccall",
+# javap3/javap4/aprsc all allow really long srccalls, surprisingly
+#	"OH5FFLONG>DST,DIGI,qAR,$login:>should drop, too long srccall",
 	# disallowed source callsigns
 	"N0CALL>DST,DIGI,qAR,$login:>should drop, N0CALL as source callsign",
 	"NOCALL>DST,DIGI,qAR,$login:>should drop, NOCALL as source callsign",

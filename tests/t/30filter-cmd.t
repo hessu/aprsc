@@ -131,7 +131,7 @@ ok($ack, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :ackbx$/);
 $reply = $i_rx->getline_noncomment(2);
 #warn "received reply: $reply\n";
 # SERVER>APJS40,TCPIP*,qAZ,TESTING::N5CAL-2  :filter b/OZ*/ZZ* active{839
-ok($reply, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :filter.*active{.*$/);
+ok($reply, qr/^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :filter.*active\{.*$/);
 
 
 # disconnect

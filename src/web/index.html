@@ -188,8 +188,8 @@
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
-  <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.clients_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
-       / {{ (c.bytes_rx - status_prev.clients_id[c.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
+  <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.peers_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
+       / {{ (c.bytes_rx - status_prev.peers_id[c.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
   <td>{{ c.obuf_q }}</td>
   </tr>
 </table>

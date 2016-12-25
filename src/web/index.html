@@ -135,7 +135,7 @@
   <td>{{ l.bytes_tx }}</td>
   <td>{{ l.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (l.bytes_tx - status_prev.listeners_id[l.id].bytes_tx) / status.tick_dif | ratestr }}
-       / {{ (l.bytes_rx - status_prev.clisteners_id[l.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
+       / {{ (l.bytes_rx - status_prev.listeners_id[l.id].bytes_rx) / status.tick_dif | ratestr }}</span></td>
   </tr>
 </table>
 </div>

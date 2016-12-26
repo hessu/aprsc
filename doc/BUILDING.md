@@ -45,12 +45,42 @@ On Linux, aprsc can utilize POSIX capabilities to enable binding low
 library, and compiling against it requires it's development headers
 (package libcap-dev on Debian/Ubuntu).
 
+
+Building a .deb package
+--------------------------
+
+If you're building for a Debian or Ubuntu system, it's generally easiest to
+build a debian package and install it.  It'll make installation easy, since
+you'll get the package scripts to do the environment setup and upgrades for
+you.
+
+Download the latest source tree:
+
+    $ wget http://he.fi/aprsc/down/aprsc-latest.tar.gz
+    
+Extract it:
+
+    $ tar xvfz aprsc-latest.tar.gz
+    
+Go to the newly-created directory and configure the build:
+
+    $ cd aprsc-1.0.0 (or whatever)
+    $ cd src
+    $ ./configure
+    $ make make-deb
+
+As a result you'll get a nice .deb package, which you can install with:
+
+    $ sudo dpkg -i ../aprsc-something.deb
+
+
 Preparing the environment
 ----------------------------
 
 Create user account and group for aprsc. aprsc should be started as root,
 but a non-privileged user account must be provided, so that it can switch to
-that after starting up.
+that after starting up. Doing this is not required if you're installing a
+.deb or .rpm package - the package scripts take care of the setup.
 
 Linux (single command, all parameters are for adduser):
 

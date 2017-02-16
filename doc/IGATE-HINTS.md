@@ -23,7 +23,7 @@ The same packet will likely heard by other iGates, and those other iGates
 will not do the same modifications that you do, and then there will be two
 slightly different copies of the packet on the APRS network.
 
-*Solution:*
+***Solution:***
 
 Please do not modify packet data. Do not trim spaces from the end, do not
 remove non-ASCII characters. Just send everything on the first line, up to
@@ -47,7 +47,7 @@ truncating the packet and creating a *modified duplicate* of it. Another
 iGate does not truncate the packet, and there are now two copies of it, both
 getting forwarded over the APRS network.
 
-*Solution:*
+***Solution:***
 
 Instead of C-style string functions (strcmp, strcpy, strncat...), use binary
 safe memory comparison and copying functions (memcmp, memcpy, memchr...).
@@ -73,7 +73,7 @@ application retransmits that modified copy, possibly after re-encoding,
 there will be two slightly different packets again, since other applications
 will pass the original packet unmodified.
 
-*Solution:*
+***Solution:***
 
 Treat APRS packets as arrays or buffers of binary bytes.  Only after
 decoding the APRS packet, some fields such as the comment text and APRS text
@@ -94,7 +94,7 @@ The problem is that the APRS-IS servers sometimes come and go, and their IP
 addresses change. Many iGates are left running unsupervised for months,
 sometimes at remote locations.
 
-*Solution:*
+***Solution:***
 
 Implement DNS in the iGate.  Instruct the user to configure a round-robin
 DNS hostname as the APRS-IS server (such as rotate.aprs2.net), instead of an
@@ -117,7 +117,7 @@ and then use the IP address or addresses without doing a DNS lookup again.
 Caching IP addresses breaks load balancing and might leave the iGate
 unconnected if the server at that address does not work any more.
 
-*Solution:*
+***Solution:***
 
 Do not cache DNS responses. Do a new DNS lookup every time when making a new
 TCP connection to an APRS-IS server.

@@ -25,9 +25,9 @@ slightly different copies of the packet on the APRS network.
 
 ***Solution:***
 
-Please do not modify packet data. Do not trim spaces from the end, do not
-remove non-ASCII characters. Just send everything on the first line, up to
-the newline.
+Please do not modify packet data.  Do not trim spaces from the end, do not
+remove non-ASCII bytes such as 0x1C or 0x00.  Just send everything on the
+first line, up to the newline.
 
 
 Packets truncated by iGates due to C string handling
@@ -123,4 +123,30 @@ Do not cache DNS responses. Do a new DNS lookup every time when making a new
 TCP connection to an APRS-IS server.
 
 
+Multiple connections
+-----------------------
+
+A few well-meaning authors have also tried to connect to multiple APRS-IS
+servers at the same time, sending packets to both of them, and even in some
+case sending packets coming from one server to the second server.
+
+Unfortunately the APRS-IS network is not designed to handle this.  TCP
+connections often slow down a lot when a few packets are lost (TCP uses
+exponential backoff), and packets on one connection may be delayed for quite
+a while, without the application noticing.  Since the APRS-IS only detects
+duplicates within a 30-second window, having multiple concurrent connections
+creates a loop and will, every now and then, cause bursts of duplicate
+delayed packets.
+
+These delayed duplicates will then cause cars to jump back to their old
+positions on real-time map displays, and all sorts of other havoc.
+
+***Solution:***
+
+Only have a single connection to the APRS-IS active at any time.
+
+For the same reason, do not buffer packets when your APRS-IS uplink
+connection is down. Do not send them later when the connection recovers.
+Some other iGate has probably already sent them, and your delayed packets
+would cause moving vehicles to jump around in odd ways.
 

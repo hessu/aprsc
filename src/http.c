@@ -443,7 +443,7 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 	}
 	
 	int olen = ospace - ctx.avail_out;
-	hlog(LOG_DEBUG, "http_compress_gzip: compressed %d bytes to %d bytes: %.1f %%", ilen, olen, (float)olen / (float)ilen * 100.0);
+	//hlog(LOG_DEBUG, "http_compress_gzip: compressed %d bytes to %d bytes: %.1f %%", ilen, olen, (float)olen / (float)ilen * 100.0);
 	
 	(void)deflateEnd(&ctx);
 	

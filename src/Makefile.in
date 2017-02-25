@@ -134,6 +134,9 @@ testinstall:
 	mkdir -p ../tests/web ../tests/data ../tests/logs
 	cp -p $(subst src/,,$(WEBFILES)) ../tests/web/
 
+test: all testinstall
+	cd ../tests && make
+
 # -------------------------------------------------------------------- #
 
 .PHONY:	version_data.h
@@ -182,6 +185,7 @@ distclean: clean
 		debian/aprsc.substvars debian/changelog
 	rm -f ../*.deb ../*.changes
 	rm -f ../tests/data/* ../tests/logs/*
+	rm -rf ../tests/web/*
 
 aprsc: $(OBJS)
 	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)

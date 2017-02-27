@@ -86,77 +86,77 @@ istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,DIGI1*,qAR,$login:$data");
 
 ######
-# 15: send a packet with some whitespace in, the end, then test that the
+# 16: send a packet with some whitespace in, the end, then test that the
 # whitespace-trimmed version is dropped
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,DIGI1*,qAR,$login:xxx ",
 	"SRC>DST2,DIGI1*,qAR,$login:xxx ");
 
-# 16: make sure the whitespace-version gets dropped
+# 17: make sure the whitespace-version gets dropped
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,DIGI1*,qAR,$login:xxx",
 	"SRC>DST:dummy3", 1); # will pass (helper packet)
 
 ######
-# 17: send a packet with some 8-bit binary data, test that trimmed packets are dropped
+# 18: send a packet with some 8-bit binary data, test that trimmed packets are dropped
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,qAR,$login:latin1 \xC5\xC4\xD6 skandit",
 	"SRC>DST2,qAR,$login:latin1 \xC5\xC4\xD6 skandit");
 
-# 18: removed
+# 19: removed
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,qAR,$login:latin1  skandit",
 	"SRC>DST:latin1 dummy1", 1); # will pass (helper packet)
 
-# 19: replaced with spaces
+# 20: replaced with spaces
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,qAR,$login:latin1     skandit",
 	"SRC>DST:latin1 dummy2", 1); # will pass (helper packet)
 
-# 20: 8th bit trimmed
+# 21: 8th bit trimmed
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST2,qAR,$login:latin1 \x45\x44\x56 skandit",
 	"SRC>DST:latin1 dummy3", 1); # will pass (helper packet)
 
 ######
-# 21 send a packet with some low chars (< 0x20), test that trimmed packets are dropped
+# 22 send a packet with some low chars (< 0x20), test that trimmed packets are dropped
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:lowdata \x1C\x1D\x1Fend",
 	"SRC>DST3,qAR,$login:lowdata \x1C\x1D\x1Fend");
 
-# 22: removed
+# 23: removed
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:lowdata end",
 	"SRC>DST:low dummy1", 1); # will pass (helper packet)
 
-# 23: replaced with spaces
+# 24: replaced with spaces
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:lowdata    end",
 	"SRC>DST:low dummy2", 1); # will pass (helper packet)
 
 ######
-# 24 send a packet with some DEL chars (< 0x7f), test that trimmed packets are dropped
+# 25 send a packet with some DEL chars (< 0x7f), test that trimmed packets are dropped
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:del \x7F\x7Fend",
 	"SRC>DST3,qAR,$login:del \x7F\x7Fend");
 
-# 25: removed
+# 26: removed
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:del end",
 	"SRC>DST:del dummy1", 1); # will pass (helper packet)
 
-# 26: replaced with spaces
+# 27: replaced with spaces
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST3,qAR,$login:del   end",
 	"SRC>DST:del dummy2", 1); # will pass (helper packet)
 
 ######
-# 27: send a really long packet, and then a dupe copy
+# 28: send a really long packet, and then a dupe copy
 my $long = "SRC>LONG,qAR,$login:long ";
 $long .= "a" x (509-length($long));
 istest::txrx(\&ok, $i_tx, $i_rx, $long, $long);
 
-# 28: duplicate copy
+# 29: duplicate copy
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	$long,
 	"SRC>LONG:long dummy", 1); # will pass (helper packet)

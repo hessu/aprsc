@@ -923,7 +923,13 @@ int main(int argc, char **argv)
 	} else {
 		rlim.rlim_cur = rlim.rlim_max;
 		e = setrlimit(RLIMIT_NOFILE, &rlim);
+		if (e < 0) {
+			hlog(LOG_ERR, "Failed to set file number resource limit: %s", strerror(errno));
+		}
 		e = getrlimit(RLIMIT_NOFILE, &rlim);
+		if (e < 0) {
+			hlog(LOG_ERR, "Failed to verify modified file number resource limit: %s", strerror(errno));
+		}
 		fileno_limit = rlim.rlim_cur;
 	}
 

@@ -272,4 +272,30 @@ sub stop($)
 	return 1;
 }
 
+sub signal($$)
+{
+	my($self, $signal) = @_;
+	
+	if ($ENV{'PRODUCT_NORUN'}) {
+		return 1;
+	}
+	
+	my $ret = $self->check();
+	return $ret if ($ret ne 1);
+	
+	my $pid = $self->{'pid'};
+	
+	warn "\nsignalling product with $signal, pid $pid\n" if ($debug);
+	
+	my $hits = kill($signal, $pid);
+	if ($hits < 1) {
+		warn "\nksignal did not hit anything - not running, pid $pid\n" if ($debug);
+		return "Product is not running.";
+		$self->discard();
+		return undef;
+	}
+
+	return 1;
+}
+
 1;

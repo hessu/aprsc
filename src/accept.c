@@ -1019,7 +1019,7 @@ static int *accept_rx_err_map(cJSON *rx_err_labels, int *old_rxerrs_len)
 			
 			for (j = 0; j < INERR_BUCKETS; j++) {
 				if (strcmp(inerr_labels[j], rxerr->valuestring) == 0) {
-					hlog(LOG_DEBUG, "Mapped old rxerr index %d with new index %d: %s", i, j, rxerr->valuestring);
+					//hlog(LOG_DEBUG, "Mapped old rxerr index %d with new index %d: %s", i, j, rxerr->valuestring);
 					rxerr_map[i] = j;
 				}
 			}

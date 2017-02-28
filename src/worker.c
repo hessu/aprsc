@@ -1875,6 +1875,10 @@ void workers_stop(int stop_all)
 		 * It's cool enough to be able to reconfigure at all.
 		 */
 		w = worker_threads;
+		if (w == NULL) {
+			hlog(LOG_CRIT, "Cannot stop worker threads, none running");
+			abort();
+		}
 		while ((w) && (w->next))
 			w = w->next;
 		

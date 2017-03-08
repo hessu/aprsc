@@ -1,6 +1,6 @@
 
 #
-# Test HTTP status service, only on aprsc
+# Test live upgrade, only on aprsc
 #
 
 use Test;

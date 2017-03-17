@@ -156,7 +156,7 @@ version_data.h:
 
 # -------------------------------------------------------------------- #
 
-OBJS = aprsc.o accept.o worker.o errno.o \
+OBJS = aprsc.o accept.o worker.o errno_aprsc.o \
 	login.o incoming.o dupecheck.o outgoing.o \
 	clientlist.o client_heard.o \
 	parse_aprs.o parse_qc.o \

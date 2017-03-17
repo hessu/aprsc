@@ -29,7 +29,7 @@
 #include "xpoll.h"
 #include "rwlock.h"
 #include "cJSON.h"
-#include "errno.h"
+#include "errno_aprsc.h"
 #include "ssl.h"
 
 extern time_t now;	/* current wallclock time */

@@ -15,7 +15,7 @@
 
 #include <string.h>
 
-#include "errno.h"
+#include "errno_aprsc.h"
 
 const char *aprsc_errs[] = {
 	"aprsc success",

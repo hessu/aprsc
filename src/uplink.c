@@ -562,7 +562,6 @@ connerr:
 	l->client_ptr = (void *)c;
 	c->uplink_index = uplink_index;
 	c->fd    = fd;
-	c->addr  = sa;
 	c->ai_protocol = req.ai_protocol;
 	c->state = CSTATE_INIT;
 	/* use the default login handler */
@@ -584,6 +583,7 @@ connerr:
 	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
 	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
 	hfree(addr_s);
+	c->addr  = sa;
 
 	/* hex format of client's IP address + port */
 

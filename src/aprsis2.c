@@ -52,7 +52,7 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
 	 */
 	
 	int len = is2_message__get_packed_size(m);
-	hlog(LOG_DEBUG, "%s/%s: IS2: serialized length %d", c->addr_rem, c->username, len);
+	//hlog(LOG_DEBUG, "%s/%s: IS2: serialized length %d", c->addr_rem, c->username, len);
 	void *buf = is2_allocate_buffer(len);
 	is2_message__pack(m, buf + IS2_HEAD_LEN);
 	int r = c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
@@ -406,15 +406,13 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *
 	int r = 0;
 	ISPacket *p;
 	
-	hlog(LOG_DEBUG, "%s/%s: IS2: %d packets received in message",
-		c->addr_rem, c->username, m->n_is_packet);
+	//hlog(LOG_DEBUG, "%s/%s: IS2: %d packets received in message", c->addr_rem, c->username, m->n_is_packet);
 	
 	for (i = 0; i < m->n_is_packet; i++) {
 		p = m->is_packet[i];
 		
-		hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d",
-			c->addr_rem, c->username, p->type, p->is_packet_data.len);
-			
+		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
+		
 		if (p->type == ISPACKET__TYPE__IS_PACKET && p->has_is_packet_data) {
 			incoming_handler(self, c, IPPROTO_TCP, (char *)p->is_packet_data.data, p->is_packet_data.len);
 		}
@@ -603,9 +601,10 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		}
 		
 		if (IS2_HEAD_LEN + clen + IS2_TAIL_LEN > left) {
-			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Frame length points behind buffer end (%d+%d buflen %d): ",
-				c->addr_rem, c->username, clen, IS2_HEAD_LEN + IS2_TAIL_LEN, left);
-			/* this might get fixed when more data comes out from the pipe */
+			//hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Frame length points behind buffer end (%d+%d buflen %d): ", c->addr_rem, c->username, clen, IS2_HEAD_LEN + IS2_TAIL_LEN, left);
+			/* this might get fixed when more data comes out from the pipe, 
+			 * pretty normal at high volume
+			 */
 			break;
 		}
 		
@@ -615,7 +614,7 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 			return -1;
 		}
 		
-		hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
+		//hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 		
 		is2_unpack_message(self, c, this + IS2_HEAD_LEN, clen);
 		i += IS2_HEAD_LEN + clen + IS2_TAIL_LEN;
@@ -635,7 +634,7 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
 	/* trim away CR/LF */
 	len = len - 2;
 	
-	hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
+	//hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
 	
 	ProtobufCBinaryData data;
 	data.data = (uint8_t *)p;
@@ -645,7 +644,7 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
 	int i;
 	ISPacket **subs = hmalloc(sizeof(ISPacket*) * n);
 	for (i = 0; i < n; i++) {
-		hlog(LOG_DEBUG, "packing packet %d", i);
+		//hlog(LOG_DEBUG, "packing packet %d", i);
 		subs[i] = hmalloc(sizeof(ISPacket));
 		ispacket__init(subs[i]);
 		subs[i]->type = ISPACKET__TYPE__IS_PACKET;

@@ -1,0 +1,85 @@
+#
+# USE RCS !!!
+# $Id$
+#
+
+# Configuration for aprsc, an APRS-IS server for core servers
+
+ServerId   TESTING
+PassCode   31421
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+### Intervals #########
+# Interval specification format examples:
+# 600 (600 seconds), 5m, 2h, 1h30m, 1d3h15m24s, etc...
+
+# When no data is received from an upstream server in N seconds, switch to
+# another server
+UpstreamTimeout		10s
+
+# When no data is received from a downstream server in N seconds, disconnect
+ClientTimeout		48h
+
+### TCP listener ##########
+# Listen <socketname> <porttype> tcp <address to bind> <port>
+#	socketname: any name you wish to show up in logs and statistics
+#	porttype: one of:
+#		fullfeed - everything, after dupe filtering
+#		dupefeed - everything that comes in - with dupes!
+#		msgonly - messages only
+#		userfilter - user-specified filters
+#
+Listen "Full feed with CWOP"                      is2fullfeed    tcp ::0      56152   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port"                               is2igate       tcp 0.0.0.0  56580   acl "cfg-aprsc/acl-all.acl"
+
+### Uplink configuration ########
+# Uplink <name> <type> tcp <address> <port>
+#	name: a name of the server or service you're connecting
+#	type: one of:
+#		full - full feed
+#		ro   - read-only, do not transmit anything upstream
+#
+#Uplink full1 full tcp 127.0.0.1 10153
+
+# UDP peering, first address is my local address, the rest are remote.
+PeerGroup TEST udp 127.0.0.1:16404 \
+	SELF 127.0.0.1:16404 \
+	PEER1 127.0.0.1:16405 \
+	PEER2 127.0.0.1:16406
+PeerGroup TEST6 udp [::1]:16504 \
+	SELF6 [::1]:16504 \
+	PEER61 [::1]:16505 \
+	PEER62 [::1]:16506
+
+### HTTP listener ##########
+# Status port provides a status view to web browsers.
+# It starts up by default on 0.0.0.0:14501.
+HTTPStatus 127.0.0.1 55501
+# Upload port allows position uploads.
+# It does not start up by default.
+HTTPUpload 127.0.0.1 55080
+
+### Internals ############
+# Only use 3 threads in these basic tests, to keep startup/shutdown times
+# short.
+WorkerThreads 3
+
+# When running this server as super-user, the server can (in many systems)
+# increase several resource limits, and do other things that less privileged
+# server can not do.
+#
+# The FileLimit is resource limit on how many simultaneous connections and
+# some other internal resources the system can use at the same time.
+# If the server is not being run as super-user, this setting has no effect.
+#
+FileLimit        10000
+
+# Additional callsigns blocked
+DisallowSourceCall	N7CALL N8CALL* *DROP DRG* OH?DRU O*ZZZ
+DisallowLoginCall	LOGINA LOGINB *prrej mi*rej sufre*
+

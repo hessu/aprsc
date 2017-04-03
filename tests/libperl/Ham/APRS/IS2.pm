@@ -13,6 +13,8 @@ use Data::Dumper;
 
 use Google::ProtocolBuffers;
 
+Google::ProtocolBuffers->parsefile("../src/aprsis2.proto", { create_accessors => 1 });
+
 our $VERSION = '0.01';
 
 our $aprs_appname = "IS2";
@@ -59,7 +61,6 @@ sub new($$$;%)
 	$self->{'error'} = "No errors yet.";
 	$self->{'loginstate'} = 'init';
 	
- 	Google::ProtocolBuffers->parsefile("../src/aprsis2.proto", { create_accessors => 1 });
 	
 	return $self;
 }
@@ -214,8 +215,6 @@ sub connect($;%)
 	});
 	
 	$self->{'sock'}->blocking(1);
-	
-	my $login_request = $im->encode;
 	$self->is2_frame_out($im->encode);
 	$self->{'sock'}->blocking(0);
 	
@@ -262,6 +261,67 @@ sub connect($;%)
 	$self->{'error'} = "No LOGIN_REPLY received";
 	return 0;
 }
+
+sub send_packets($$)
+{
+	my($self, $packets) = @_;
+	
+	my @pq;
+	foreach my $p (@{ $packets }) {
+		push @pq, ISPacket->new({
+			'type' => ISPacket::Type::IS_PACKET(),
+			'is_packet_data' => $p
+		});
+	}
+	
+	my $im = IS2Message->new({
+		'type' => IS2Message::Type::IS_PACKET(),
+		'is_packet' => \@pq
+	});
+	
+	$self->{'sock'}->blocking(1);
+	$self->is2_frame_out($im->encode);
+	$self->{'sock'}->blocking(0);
+}
+
+sub get_packets($;$)
+{
+	my($self, $timeout) = @_;
+	
+	my $t = time();
+	
+	while (my $l = $self->is2_frame_in($timeout)) {
+		my $ips = $l->is_packet;
+		if ($l->type == IS2Message::Type::IS_PACKET()) {
+			if (!$ips) {
+				$self->{'error'} = "IS_PACKET type, but no packets";
+				return undef;
+			}
+			
+			my @pa;
+			
+			foreach my $ip (@{ $ips }) {
+				if ($ip->type != ISPacket::Type::IS_PACKET()) {
+					$self->{'error'} = sprintf("ISPacket type %d unsupported", $ip->type);
+					return undef;
+				}
+				
+				push @pa, $ip->is_packet_data;
+			}
+			
+			return @pa;
+		} else {
+			$self->{'error'} = "Wrong type of response received for LOGIN_REPLY: " . $l->type;
+			return 0;
+		}
+		
+		if (time() - $t > $timeout) {
+			$self->{'error'} = "Login command timed out";
+			return 0;
+		}
+	}
+}
+
 
 sub is2_frame_out($$)
 {

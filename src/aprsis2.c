@@ -85,11 +85,12 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
  *	Transmit a login reply to a new client
  */
 
-int is2_out_login_reply(struct worker_t *self, struct client_t *c, LoginReply__LoginResult result, LoginReply__LoginResultReason reason)
+int is2_out_login_reply(struct worker_t *self, struct client_t *c, LoginReply__LoginResult result, LoginReply__LoginResultReason reason, VerificationStatus verified)
 {
 	LoginReply lr = LOGIN_REPLY__INIT;
 	lr.result = result;
 	lr.result_code = reason;
+	lr.verified = verified;
 
 	IS2Message m = IS2_MESSAGE__INIT;
 	m.type = IS2_MESSAGE__TYPE__LOGIN_REPLY;
@@ -336,8 +337,20 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 	     (*c->app_version) ? c->app_version : ""
 	);
 	
+	VerificationStatus vs;
+	switch (c->validated) {
+	case VALIDATED_WEAK:
+		vs = VERIFICATION_STATUS__WEAK;
+		break;
+	case VALIDATED_STRONG:
+		vs = VERIFICATION_STATUS__WEAK;
+		break;
+	default:
+		vs = VERIFICATION_STATUS__NONE;
+	}
+	
 	/* tell the client he's good */
-	is2_out_login_reply(self, c, LOGIN_REPLY__LOGIN_RESULT__OK, LOGIN_REPLY__LOGIN_RESULT_REASON__NONE);
+	is2_out_login_reply(self, c, LOGIN_REPLY__LOGIN_RESULT__OK, LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
 	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);

@@ -407,28 +407,6 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *
 		}
 	}
 	
-	/*
-	KeepalivePing *ping = m->keepalive_ping;
-	if (!ping) {
-		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of ping failed",
-			c->addr_rem, c->username);
-		r = -1;
-		goto done;
-	}
-	
-	hlog(LOG_INFO, "%s/%s: IS2: Ping %s received: request_id %ul",
-		c->addr_rem, c->username,
-		(ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
-		ping->request_id);
-	
-	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
-		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
-		
-		r = is2_write_message(self, c, m);
-	}
-	*/
-	
-done:	
 	is2_message__free_unpacked(m, NULL);
 	return r;
 }

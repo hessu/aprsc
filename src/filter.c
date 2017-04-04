@@ -2554,6 +2554,43 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 }
 
 /*
+ *	Set filters for a client
+ */
+
+void filter_set(struct client_t *c, const char *s, const int len)
+{
+	int i, argc;
+	char *b;
+	char *argv[256];
+	struct filter_t *f;
+	
+	/* Discard old ones. */
+	f = c->neguserfilters;
+	filter_free(f);
+	c->neguserfilters = NULL;
+
+	f = c->posuserfilters;
+	c->posuserfilters = NULL;
+	filter_free(f);
+	
+	/* make a mutable copy that we can parse and modify safely */
+	b = hmalloc(len+2);
+	memcpy(b, s, len);
+	b[len] = 0;
+	
+	// archive a copy of the filters, for status display
+	strncpy(c->filter_s, b, FILTER_S_SIZE);
+	c->filter_s[FILTER_S_SIZE-1] = 0;
+	sanitize_ascii_string(c->filter_s);
+	
+	argc = parse_args( argv, b );
+	for (i = 0; i < argc; ++i) {
+		filter_parse(c, argv[i], 1); /* user filters */
+	}
+	hfree(b);
+}
+
+/*
  *	Send a reply to a filter command, either using a message or through a comment
  *	line on the IS stream
  */
@@ -2581,10 +2618,8 @@ static int filter_command_reply(struct worker_t *self, struct client_t *c, int i
  */
 int filter_commands(struct worker_t *self, struct client_t *c, int in_message, const char *s, int len)
 {
-	char *argv[256];
 	struct filter_t *f;
-	char *b, *p;
-	int i, argc;
+	char *p, *b;
 
 	/* skip over the #filter in the beginning of the command */
 	len -= 6;
@@ -2635,35 +2670,11 @@ int filter_commands(struct worker_t *self, struct client_t *c, int in_message, c
 	}
 
 	/* new filter definitions to supersede previous ones */
-
-	/* Discard old ones. */
-	f = c->neguserfilters;
-	filter_free(f);
-	c->neguserfilters = NULL;
-
-	f = c->posuserfilters;
-	c->posuserfilters = NULL;
-	filter_free(f);
-	// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
-	// FIXME: there is a danger of SEGV-blowing filter processing...
-
-	b = hmalloc(len+2);
-	memcpy(b, s, len);
-	b[len] = 0;
-	
-	// archive a copy of the filters, for status display
-	strncpy(c->filter_s, b, FILTER_S_SIZE);
-	c->filter_s[FILTER_S_SIZE-1] = 0;
-	sanitize_ascii_string(c->filter_s);
-	
-	argc = parse_args( argv, b );
-	for (i = 0; i < argc; ++i) {
-		filter_parse(c, argv[i], 1); /* user filters */
-	}
-	hfree(b);
+	filter_set(c, s, len);
 	
 	return filter_command_reply(self, c, in_message, "filter %s active", c->filter_s);
 }
+
 
 /*
  *	cellmalloc status

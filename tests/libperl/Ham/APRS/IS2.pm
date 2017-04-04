@@ -356,11 +356,13 @@ sub set_filter($$)
 {
 	my($self, $filter) = @_;
 	
+	my $reqid = int(rand(2**30));
+	
 	my $im = IS2Message->new({
 		'type' => IS2Message::Type::PARAMETER(),
 		'parameter' => IS2Parameter->new({
 			'type' => IS2Parameter::Type::PARAMETER_SET(),
-			'request_id' => 1, # todo: sequential
+			'request_id' => $reqid, # todo: sequential
 			'filter_string' => $filter
 		})
 	});
@@ -369,7 +371,40 @@ sub set_filter($$)
 	$self->is2_frame_out($im->encode);
 	$self->{'sock'}->blocking(0);
 	
-	return 1;
+	my $t = time();
+	while (my $l = $self->is2_frame_in()) {
+		my $rep = $l->parameter;
+		if ($l->type == IS2Message::Type::PARAMETER()) {
+			if (!$rep) {
+				$self->{'error'} = "PARAMETER type, but no parameter message";
+				return 0;
+			}
+			
+			if ($rep->request_id != $reqid) {
+				$self->{'error'} = "PARAMETER reply, wrong request id " . $rep->request_id . ", expected $reqid";
+				return 0;
+			}
+			
+			if ($rep->type != IS2Parameter::Type::PARAMETER_APPLIED()) {
+				$self->{'error'} = sprintf("filter set reply: not applied");
+				return 0;
+			}
+			
+			# todo: check sequence
+			return 1;
+		} else {
+			$self->{'error'} = "Wrong type of response received for PARAMETER_SET: " . $l->type;
+			return 0;
+		}
+		
+		if (time() - $t > 5) {
+			$self->{'error'} = "parameter command timed out";
+			return 0;
+		}
+	}
+	
+	$self->{'error'} = "No PARAMETER_APPLIED received";
+	return 0;
 }
 
 sub is2_frame_out($$)

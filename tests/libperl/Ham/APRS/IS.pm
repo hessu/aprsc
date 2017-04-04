@@ -340,6 +340,21 @@ sub getline_noncomment($;$)
 	}
 }
 
+sub send_packet($$)
+{
+	my($self, $line) = @_;
+	
+	return $self->sendline($line);
+}
+
+
+sub get_packet($;$)
+{
+	my($self, $timeout) = @_;
+	
+	return $self->getline_noncomment($timeout);
+}
+
 sub sendline($$;$$)
 {
 	my($self, $line, $raw, $noflush) = @_;

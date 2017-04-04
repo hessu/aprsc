@@ -14,6 +14,7 @@
 #include "clientlist.h"
 #include "login.h"
 #include "incoming.h"
+#include "filter.h"
 
 #define STX 0x02
 #define ETX 0x03
@@ -478,6 +479,49 @@ done:
 }
 
 /*
+ *	Incoming parameter set handler
+ */
+
+static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Message *m)
+{
+	int r = 0;
+	
+	IS2Parameter *par = m->parameter;
+	if (!par) {
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of parameter message failed: no parameter payload",
+			c->addr_rem, c->username);
+		r = -1;
+		goto done;
+	}
+	
+	if (par->type != IS2_PARAMETER__TYPE__PARAMETER_SET) {
+		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of parameter message failed: wrong type %d (not PARAMETER_SET)",
+			c->addr_rem, c->username, par->type);
+		r = -1;
+		goto done;
+	}
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Parameter set received: request_id %ul",
+		c->addr_rem, c->username, par->request_id);
+	
+	if (par->filter_string) {
+		filter_set(c, par->filter_string, strlen(par->filter_string));
+	}
+	
+	/*
+	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
+		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
+		
+		r = is2_write_message(self, c, m);
+	}
+	*/
+	
+done:	
+	is2_message__free_unpacked(m, NULL);
+	return r;
+}
+
+/*
  *	IS2 input handler, when waiting for an upstream server to
  *	transmit a server signature
  */
@@ -532,6 +576,9 @@ int is2_input_handler(struct worker_t *self, struct client_t *c, IS2Message *m)
 	switch (m->type) {
 		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
+			break;
+		case IS2_MESSAGE__TYPE__PARAMETER:
+			return is2_in_parameter(self, c, m);
 			break;
 		case IS2_MESSAGE__TYPE__IS_PACKET:
 			return is2_in_packet(self, c, m);

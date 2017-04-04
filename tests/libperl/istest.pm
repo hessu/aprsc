@@ -25,7 +25,7 @@ sub txrx($$$$$;$)
 	}
 	
 	warn "sending: $tx\n" if ($debug);
-	my $sent = $i_tx->sendline($tx);
+	my $sent = $i_tx->send_packet($tx);
 	
 	warn "sent\n" if ($debug);
 	
@@ -40,7 +40,7 @@ sub txrx($$$$$;$)
 	
 	warn "receiving\n" if ($debug);
 	
-	my $received = $i_rx->getline_noncomment();
+	my $received = $i_rx->get_packet();
 	
 	if (!defined $received) {
 		if ($i_rx->{'state'} eq 'connected') {
@@ -69,7 +69,7 @@ sub should_drop($$$$$;$$)
 	$drop_key .= ' drop.' . int(rand(1000000)) if (!$no_random_drop);
 	my $tx_drop = $tx . $drop_key;
 	warn "sending for drop: $tx_drop\n" if ($debug);
-	my $sent = $i_tx->sendline($tx_drop);
+	my $sent = $i_tx->send_packet($tx_drop);
 	
 	if (!$sent) {
 		&$ok($sent, 1, "Failed to send line to server: '$tx'");
@@ -80,14 +80,14 @@ sub should_drop($$$$$;$$)
 	my $helper_l = $helper;
 	$helper_l .= ' ' . $helper_key if (!$no_random_helper);
 	warn "sending for pass: $helper_l\n" if ($debug);
-	$sent = $i_tx->sendline($helper_l);
+	$sent = $i_tx->send_packet($helper_l);
 	
 	if (!$sent) {
 		&$ok($sent, 1, "Failed to send helper line to server: '$helper_l'");
 		return;
 	}
 	
-	my $received = $i_rx->getline_noncomment();
+	my $received = $i_rx->get_packet();
 	
 	if (!defined $received) {
 		if ($i_rx->{'state'} eq 'connected') {
@@ -135,7 +135,7 @@ sub should_drop($$$$$;$$)
 	}
 	
 	# since we received an extra packet, get one more line to receive the helper
-	$i_rx->getline_noncomment();
+	$i_rx->get_packet();
 }
 
 sub read_and_disconnect($)

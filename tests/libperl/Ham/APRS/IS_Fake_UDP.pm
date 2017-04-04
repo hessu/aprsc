@@ -132,7 +132,14 @@ sub sendline($$)
 {
 	my($self, $line) = @_;
 	
-	#warn "udp sendline: $line\n";
+	$self->send_packet($line);
+}
+
+sub send_packet($$)
+{
+	my($self, $line) = @_;
+	
+	#warn "udp send_packet: $line\n";
 	
 	return undef if ($self->{'state'} ne 'connected');
 	
@@ -142,6 +149,5 @@ sub sendline($$)
 	#warn "sent, returning 1\n";
 	return 1;
 }
-
 
 1;

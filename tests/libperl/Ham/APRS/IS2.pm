@@ -61,6 +61,7 @@ sub new($$$;%)
 	$self->{'error'} = "No errors yet.";
 	$self->{'loginstate'} = 'init';
 	
+	$self->{'pqueue_in'} = [];
 	
 	return $self;
 }
@@ -246,6 +247,10 @@ sub connect($;%)
 				return 0;
 			}
 			
+			if (defined $self->{'filter'}) {
+				return $self->set_filter($self->{'filter'});
+			}
+			
 			return 1;
 		} else {
 			$self->{'error'} = "Wrong type of response received for LOGIN_REPLY: " . $l->type;
@@ -284,6 +289,12 @@ sub send_packets($$)
 	$self->{'sock'}->blocking(0);
 }
 
+sub send_packet($)
+{
+	my($self, $packet) = @_;
+	$self->send_packets([$packet]);
+}
+
 sub get_packets($;$)
 {
 	my($self, $timeout) = @_;
@@ -311,17 +322,55 @@ sub get_packets($;$)
 			
 			return @pa;
 		} else {
-			$self->{'error'} = "Wrong type of response received for LOGIN_REPLY: " . $l->type;
-			return 0;
+			$self->{'error'} = "Wrong type of frame received: " . $l->type;
+			return undef;
 		}
 		
 		if (time() - $t > $timeout) {
-			$self->{'error'} = "Login command timed out";
-			return 0;
+			$self->{'error'} = "get_packets timed out";
+			return undef;
 		}
 	}
 }
 
+sub get_packet($;$)
+{
+	my($self, $timeout) = @_;
+	
+	if (@{ $self->{'pqueue_in'} }) {
+		return shift @{ $self->{'pqueue_in'} };
+	}
+	
+	my @p = $self->get_packets($timeout);
+	
+	if (@p) {
+		my $r = shift @p;
+		$self->{'pqueue_in'} = \@p;
+		return $r;
+	}
+	
+	return;
+}
+
+sub set_filter($$)
+{
+	my($self, $filter) = @_;
+	
+	my $im = IS2Message->new({
+		'type' => IS2Message::Type::PARAMETER(),
+		'parameter' => IS2Parameter->new({
+			'type' => IS2Parameter::Type::PARAMETER_SET(),
+			'request_id' => 1, # todo: sequential
+			'filter_string' => $filter
+		})
+	});
+	
+	$self->{'sock'}->blocking(1);
+	$self->is2_frame_out($im->encode);
+	$self->{'sock'}->blocking(0);
+	
+	return 1;
+}
 
 sub is2_frame_out($$)
 {

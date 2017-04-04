@@ -27,7 +27,7 @@ message LoginRequest {
 	optional string password = 2; // passcode or password
 	required string app_name = 3;
 	required string app_version = 4;
-	optional string filter_string = 5; // traditional filter string
+	// 5: unused
 	repeated string features_req = 6; // list of requested optional features
 }
 
@@ -131,6 +131,43 @@ message ISPacket {
 }
 
 //
+//	IS2 parameter control packet for setting connection parameters.
+//
+//	type = PARAMETER_CURRENT is sent by the server to inform the client
+//	of initial default parameter values after connection, or later on,
+//	if the server has to apply a new value without a client request.
+//
+//	type = PARAMETER_SET is for requesting the other end to set a
+//	new value for a parameter, such as the filter string.
+//
+//	type = PARAMETER_APPLIED is a reply to PARAMETER_SET, containing the
+//	the new value of a parameter. If the parsing failed partially,
+//	the change might have been partial.
+//
+//	type = PARAMETER_FAILED indicates that the parameter could not be
+//	set.
+//
+//	When a client sets a parameter, it can choose a sequential new
+//	request_id value. After applying the new setting, the
+//	APPLIED/FAILED response contains the same request_id value, so that the
+//	client can match the response to the request.
+//
+
+message IS2Parameter {
+	enum Type {
+		PARAMETER_CURRENT = 1; // this is the current value of the parameter
+		PARAMETER_SET = 2; // set a parameter to this value
+		PARAMETER_APPLIED = 3; // parameter has been set successfully
+		PARAMETER_FAILED = 4; // parameter change failed
+	}
+	
+	required Type type = 1;
+	optional int32 request_id = 2;
+	
+	optional string filter_string = 3;
+}
+
+//
 //	This is the main link-level container message being transmitted
 //	between peers (or clients and servers).
 //
@@ -147,6 +184,7 @@ message IS2Message {
 		LOGIN_REPLY = 4;
 		KEEPALIVE_PING = 5;
 		IS_PACKET = 6;
+		PARAMETER = 7;
 	}
 	
 	// Identifies which message is filled in.
@@ -163,5 +201,6 @@ message IS2Message {
 	optional LoginReply login_reply = 23;
 	optional KeepalivePing keepalive_ping = 24;
 	repeated ISPacket is_packet = 25;
+	optional IS2Parameter parameter = 26;
 }
 

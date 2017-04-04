@@ -501,20 +501,31 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Messag
 		goto done;
 	}
 	
-	hlog(LOG_INFO, "%s/%s: IS2: Parameter set received: request_id %ul",
-		c->addr_rem, c->username, par->request_id);
+	hlog(LOG_INFO, "%s/%s: IS2: Parameter set received: request_id %d%s",
+		c->addr_rem, c->username, par->request_id,
+		(par->filter_string) ? "filter_string" : "");
+	
+	/* prepare reply message */
+	IS2Parameter prep = IS2_PARAMETER__INIT;
+	prep.type = IS2_PARAMETER__TYPE__PARAMETER_FAILED;
+	prep.has_request_id = par->has_request_id;
+	if (prep.has_request_id)
+		prep.request_id = par->request_id;
+	IS2Message rm = IS2_MESSAGE__INIT;
+	rm.type = IS2_MESSAGE__TYPE__PARAMETER;
+	rm.parameter = &prep;
 	
 	if (par->filter_string) {
 		filter_set(c, par->filter_string, strlen(par->filter_string));
+		
+		prep.type = IS2_PARAMETER__TYPE__PARAMETER_APPLIED;
+		prep.filter_string = c->filter_s;
+	} else {
+		hlog(LOG_WARNING, "%s/%s: IS2: PARAMETER_SET: No parameters found for setting",
+			c->addr_rem, c->username);
 	}
 	
-	/*
-	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
-		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
-		
-		r = is2_write_message(self, c, m);
-	}
-	*/
+	r = is2_write_message(self, c, &rm);
 	
 done:	
 	is2_message__free_unpacked(m, NULL);

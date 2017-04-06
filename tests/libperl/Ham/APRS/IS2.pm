@@ -203,7 +203,7 @@ sub connect($;%)
 	}
 	
 	# send login request
-	my $lm = LoginRequest->new({
+	my $lm = IS2LoginRequest->new({
 		'username' => $self->{'mycall'},
 		'password' => $self->{'aprspass'},
 		'app_name' => $aprs_appname,
@@ -232,7 +232,7 @@ sub connect($;%)
 			#	defined $rep->result_code ? $rep->result_code : 0,
 			#	defined $rep->result_message ? $rep->result_message : '');
 			
-			if ($rep->result != LoginReply::LoginResult::OK()) {
+			if ($rep->result != IS2LoginReply::LoginResult::OK()) {
 				$self->{'error'} = sprintf("Login reply: login failed, code %d: %s",
 					defined $rep->result_code ? $rep->result_code : 0,
 					defined $rep->result_message ? $rep->result_message : '');

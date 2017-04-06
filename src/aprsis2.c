@@ -68,7 +68,7 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
 
 int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 {
-	ServerSignature sig = SERVER_SIGNATURE__INIT;
+	IS2ServerSignature sig = IS2_SERVER_SIGNATURE__INIT;
 	sig.username = serverid;
 	sig.app_name = verstr_progname;
 	sig.app_version = version_build;
@@ -86,9 +86,9 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
  *	Transmit a login reply to a new client
  */
 
-int is2_out_login_reply(struct worker_t *self, struct client_t *c, LoginReply__LoginResult result, LoginReply__LoginResultReason reason, VerificationStatus verified)
+int is2_out_login_reply(struct worker_t *self, struct client_t *c, IS2LoginReply__LoginResult result, IS2LoginReply__LoginResultReason reason, VerificationStatus verified)
 {
-	LoginReply lr = LOGIN_REPLY__INIT;
+	IS2LoginReply lr = IS2_LOGIN_REPLY__INIT;
 	lr.result = result;
 	lr.result_code = reason;
 	lr.verified = verified;
@@ -106,7 +106,7 @@ int is2_out_login_reply(struct worker_t *self, struct client_t *c, LoginReply__L
 
 static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
-	LoginReply *lr = m->login_reply;
+	IS2LoginReply *lr = m->login_reply;
 	if (!lr) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login reply failed",
 			c->addr_rem, c->username);
@@ -137,7 +137,7 @@ static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Mess
 
 static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
-	ServerSignature *sig = m->server_signature;
+	IS2ServerSignature *sig = m->server_signature;
 	if (!sig) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of server signature failed",
 			c->addr_rem, c->username);
@@ -174,7 +174,7 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 #endif
 	
 	/* Ok, we're happy with the uplink's server signature, let us login! */
-	LoginRequest lr = LOGIN_REQUEST__INIT;
+	IS2LoginRequest lr = IS2_LOGIN_REQUEST__INIT;
 	lr.username = serverid;
 	lr.app_name = verstr_progname;
 	lr.app_version = version_build;
@@ -233,7 +233,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 {
 	int rc = 0;
 	
-	LoginRequest *lr = m->login_request;
+	IS2LoginRequest *lr = m->login_request;
 	if (!lr) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login request failed",
 			c->addr_rem, c->username);
@@ -351,7 +351,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 	}
 	
 	/* tell the client he's good */
-	is2_out_login_reply(self, c, LOGIN_REPLY__LOGIN_RESULT__OK, LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
+	is2_out_login_reply(self, c, IS2_LOGIN_REPLY__LOGIN_RESULT__OK, IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
 	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);
@@ -434,8 +434,8 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
 	rdata.data = NULL;
 	rdata.len  = 0; 
 	
-	KeepalivePing ping = KEEPALIVE_PING__INIT;
-	ping.ping_type = KEEPALIVE_PING__PING_TYPE__REQUEST;
+	IS2KeepalivePing ping = IS2_KEEPALIVE_PING__INIT;
+	ping.ping_type = IS2_KEEPALIVE_PING__PING_TYPE__REQUEST;
 	ping.request_id = random();
 	ping.request_data = rdata;
 	
@@ -454,7 +454,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
 	int r = 0;
 	
-	KeepalivePing *ping = m->keepalive_ping;
+	IS2KeepalivePing *ping = m->keepalive_ping;
 	if (!ping) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of ping failed",
 			c->addr_rem, c->username);
@@ -464,11 +464,11 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 	
 	hlog(LOG_DEBUG, "%s/%s: IS2: Ping %s received: request_id %lu",
 		c->addr_rem, c->username,
-		(ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
+		(ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
 		ping->request_id);
 	
-	if (ping->ping_type == KEEPALIVE_PING__PING_TYPE__REQUEST) {
-		ping->ping_type = KEEPALIVE_PING__PING_TYPE__REPLY;
+	if (ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) {
+		ping->ping_type = IS2_KEEPALIVE_PING__PING_TYPE__REPLY;
 		
 		r = is2_write_message(self, c, m);
 	}

@@ -1,13 +1,13 @@
 
 //
-//	A server sends a ServerSignature to all new clients.
+//	A server sends an IS2ServerSignature to all new clients.
 //
 //	Future expansion space: the server may signal support for
 //	optional future extensions by providing a list of string IDs
 //	of supported features.
 //
 
-message ServerSignature {
+message IS2ServerSignature {
 	required string username = 1; // callsign-SSID
 	required string app_name = 2;
 	required string app_version = 3;
@@ -15,14 +15,14 @@ message ServerSignature {
 }
 
 //
-//	Clients can then request a login with a LoginRequest.
+//	Clients can then request a login with a IS2LoginRequest.
 //	
 //	features_req contains a list of features the client would like
 //	to enable for the connection (may only contain features
 //	listed supported by the server).
 //
 
-message LoginRequest {
+message IS2LoginRequest {
 	required string username = 1; // callsign-SSID
 	optional string password = 2; // passcode or password
 	required string app_name = 3;
@@ -45,7 +45,7 @@ enum VerificationStatus {
 }
 
 //
-//	Server replies to a LoginRequest with a LoginReply.
+//	Server replies to a IS2LoginRequest with a IS2LoginReply.
 //
 //	features_ack contains a list of optional features accepted
 //	by the server (may only contain features requested in features_req).
@@ -53,7 +53,7 @@ enum VerificationStatus {
 //	even if it would technically support them.
 //
 
-message LoginReply {
+message IS2LoginReply {
 	enum LoginResult {
 		FAIL = 0; // Login rejected, the client will be thrown out
 		OK = 1;
@@ -102,7 +102,7 @@ message LoginReply {
 //	whichever convenient local format and accuracy.
 //
 
-message KeepalivePing {
+message IS2KeepalivePing {
 	enum PingType {
 		REQUEST = 1;
 		REPLY = 2;
@@ -196,10 +196,10 @@ message IS2Message {
 	optional bytes signature = 3;
 	
 	// One of the following will be filled in. Just one.
-	optional ServerSignature server_signature = 21;
-	optional LoginRequest login_request = 22;
-	optional LoginReply login_reply = 23;
-	optional KeepalivePing keepalive_ping = 24;
+	optional IS2ServerSignature server_signature = 21;
+	optional IS2LoginRequest login_request = 22;
+	optional IS2LoginReply login_reply = 23;
+	optional IS2KeepalivePing keepalive_ping = 24;
 	repeated ISPacket is_packet = 25;
 	optional IS2Parameter parameter = 26;
 }

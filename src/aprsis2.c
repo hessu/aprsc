@@ -124,8 +124,6 @@ static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Mess
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);
 	
-	is2_message__free_unpacked(m, NULL);
-	
 	return 0;
 }
 
@@ -188,8 +186,6 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 	is2_write_message(self, c, &mr);
 	
 done:	
-	is2_message__free_unpacked(m, NULL);
-	
 	return 0;
 }
 
@@ -379,7 +375,6 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 	}
 	
 
-	is2_message__free_unpacked(m, NULL);
 	return rc;
 
 failed_login:
@@ -419,7 +414,6 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *
 		}
 	}
 	
-	is2_message__free_unpacked(m, NULL);
 	return r;
 }
 
@@ -474,7 +468,6 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 	}
 	
 done:	
-	is2_message__free_unpacked(m, NULL);
 	return r;
 }
 
@@ -528,7 +521,6 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Messag
 	r = is2_write_message(self, c, &rm);
 	
 done:	
-	is2_message__free_unpacked(m, NULL);
 	return r;
 }
 
@@ -552,7 +544,6 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
 			client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 	};
 	
-	is2_message__free_unpacked(m, NULL);
 	return 0;
 }
 
@@ -617,7 +608,11 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
 	}
 	
 	/* Call the current input message handler */
-	return c->is2_input_handler(self, c, m);
+	int r = c->is2_input_handler(self, c, m);
+	
+	is2_message__free_unpacked(m, NULL);
+	
+	return r;
 }
 
 /*

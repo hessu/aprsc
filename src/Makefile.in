@@ -163,7 +163,7 @@ OBJS = aprsc.o accept.o worker.o errno_aprsc.o \
 	messaging.o \
 	config.o netlib.o xpoll.o acl.o \
 	cfgfile.o passcode.o uplink.o \
-	rwlock.o hmalloc.o hlog.o \
+	rwlock.o hmalloc.o hlog.o random.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \

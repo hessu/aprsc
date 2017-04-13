@@ -554,18 +554,65 @@ static void check_uid(void)
  *	source and converting the binary data to lower-case alphanumeric
  */
 
-static void generate_instance_id(void)
+static int urandom_open(void)
 {
-	unsigned char s[INSTANCE_ID_LEN];
-	int fd, l;
-	char c;
-	unsigned seed;
-	struct timeval tv;
+	int fd;
 	
 	if ((fd = open("/dev/urandom", O_RDONLY)) == -1) {
 		hlog(LOG_ERR, "open(/dev/urandom) failed: %s", strerror(errno));
-		fd = -1;
 	}
+	
+	return fd;
+}
+
+static int urandom_alphanumeric(int fd, unsigned char *buf, int buflen)
+{
+	int l;
+	int len = buflen - 1;
+	unsigned char c;
+	
+	if (fd >= 0) {
+		/* generate instance id */
+		l = read(fd, buf, len);
+		if (l != len) {
+			hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", len, strerror(errno));
+			close(fd);
+			fd = -1;
+		}
+	}
+	
+	if (fd < 0) {
+		/* urandom failed for us, use something inferior */
+		for (l = 0; l < len; l++) {
+			// coverity[dont_call]  // squelch warning: not security sensitive use of random()
+			buf[l] = random() % 256;
+		}
+	}
+	
+	for (l = 0; l < len; l++) {
+		/* 256 is not divisible by 36, the distribution is slightly skewed,
+		 * but that's not serious.
+		 */
+		c = buf[l] % (26 + 10); /* letters and numbers */
+		if (c < 10)
+			c += 48; /* number */
+		else
+			c = c - 10 + 97; /* letter */
+		buf[l] = c;
+	}
+	
+	buf[len] = 0;
+	
+	return len;
+}
+
+static void generate_instance_id(void)
+{
+	int fd, l;
+	unsigned seed;
+	struct timeval tv;
+	
+	fd = urandom_open();
 	
 	/* seed the prng */
 	if (fd >= 0) {
@@ -585,36 +632,7 @@ static void generate_instance_id(void)
 	
 	srandom(seed);
 	
-	if (fd >= 0) {
-		/* generate instance id */
-		l = read(fd, s, INSTANCE_ID_LEN);
-		if (l != INSTANCE_ID_LEN) {
-			hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", INSTANCE_ID_LEN, strerror(errno));
-			close(fd);
-			fd = -1;
-		}
-	}
-	
-	if (fd < 0) {
-		/* urandom failed for us, use something inferior */
-		for (l = 0; l < INSTANCE_ID_LEN; l++) {
-			// coverity[dont_call]  // squelch warning: not security sensitive use of random()
-			s[l] = random() % 256;
-		}
-	}
-	
-	for (l = 0; l < INSTANCE_ID_LEN; l++) {
-		/* 256 is not divisible by 36, the distribution is slightly skewed,
-		 * but that's not serious.
-		 */
-		c = s[l] % (26 + 10); /* letters and numbers */
-		if (c < 10)
-			c += 48; /* number */
-		else
-			c = c - 10 + 97; /* letter */
-		instance_id[l] = c;
-	}
-	instance_id[INSTANCE_ID_LEN] = 0;
+	urandom_alphanumeric(fd, (unsigned char *)instance_id, INSTANCE_ID_LEN+1);
 	
 	if (fd >= 0)
 		close(fd);

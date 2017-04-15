@@ -938,7 +938,7 @@ int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len
  *	Put outgoing data in obuf
  */
 
-static int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len)
+static char *client_buffer_outgoing_allocate(struct client_t *c, int len)
 {
 	if (c->obuf_end + len > c->obuf_size) {
 		/* Oops, cannot append the data to the output buffer.
@@ -947,9 +947,7 @@ static int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c
 		 */
 		if (len > c->obuf_size - (c->obuf_end - c->obuf_start)) {
 			/* Oh crap, the data will not fit even if we move stuff. */
-			hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
-			client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
-			return -12;
+			return NULL;
 		}
 		
 		/* okay, move stuff to the beginning to make space in the end */
@@ -959,9 +957,23 @@ static int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c
 		c->obuf_start = 0;
 	}
 	
+	return c->obuf + c->obuf_end;
+}
+
+static int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	char *buf_tail = client_buffer_outgoing_allocate(c, len);
+	
+	if (buf_tail == NULL) {
+		hlog(LOG_DEBUG, "client_write(%s) can not fit new data in buffer; disconnecting", c->addr_rem);
+		client_close(self, c, CLIERR_OUTPUT_BUFFER_FULL);
+		return -12;
+	}
+	
 	/* copy data to the output buffer */
 	if (len > 0)
-		memcpy((void *)c->obuf + c->obuf_end, p, len);
+		memcpy(buf_tail, p, len);
+		
 	c->obuf_end += len;
 	
 	return 0;

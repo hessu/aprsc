@@ -15,6 +15,7 @@
 #include "login.h"
 #include "incoming.h"
 #include "filter.h"
+#include "random.h"
 
 #define STX 0x02
 #define ETX 0x03
@@ -717,5 +718,144 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
 	hfree(subs);
 	
 	return ret;
+}
+
+
+#define IS2_COREPEER_PROPOSAL_CHALLENGE_LEN 10
+
+int is2_corepeer_propose(struct worker_t *self, struct client_t *c)
+{
+	char buf[256];
+	
+	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: control: proposing IS2", c->addr_rem, c->username);
+	
+	if (!c->corepeer_is2_challenge)
+		c->corepeer_is2_challenge = hmalloc(IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
+	
+	urandom_alphanumeric(urandom_open(), (unsigned char *)c->corepeer_is2_challenge, IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
+	
+	int l = snprintf(buf, sizeof(buf), "# PEER2 v 2 hello %s vers %s %s token %s\r\n",
+		serverid, verstr_progname, version_build, c->corepeer_is2_challenge);
+	
+	if (l > sizeof(buf))
+		l = sizeof(buf) - 1;
+	
+	return c->write(self, c, buf, l);
+}
+
+typedef enum {
+        IS2_COREPEER_CONTROL_UNDEF,
+        IS2_COREPEER_CONTROL_HELLO,
+        IS2_COREPEER_CONTROL_OK
+} IS2CorepeerControlEnum;
+
+int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	int argc;
+	char *argv[256];
+	IS2CorepeerControlEnum type = IS2_COREPEER_CONTROL_UNDEF;
+	
+	hlog_packet(LOG_DEBUG, p, len, "%s/%s: IS2 UDP: control packet in: ", c->addr_rem, c->username);
+	p[len] = 0;
+	
+	/* parse to arguments */
+	if ((argc = parse_args_noshell(argv, p)) == 0)
+		return -1;
+	
+	
+	if (argc < 11) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, too few arguments: ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[1], "PEER2") != 0) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'PEER2': ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[2], "v") != 0) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'v': ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[3], "2") != 0) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, v != 2: ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[4], "hello") == 0) {
+		type = IS2_COREPEER_CONTROL_HELLO;
+	} else if (strcasecmp(argv[4], "ok") == 0) {
+		type = IS2_COREPEER_CONTROL_OK;
+	} else {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, unknown type: ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	char *peer_id = argv[5];
+	
+	if (strcmp(peer_id, c->username) != 0) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: PeerGroup config peer ID mismatch with ID reported by peer '%s'",
+			c->addr_rem, c->username, peer_id);
+	}
+	
+	if (strcasecmp(argv[6], "vers") != 0) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'vers': ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	if (strcasecmp(argv[9], "token") != 0) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'token': ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	char *token = argv[10];
+	if (!token) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no token present: ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	if (type == IS2_COREPEER_CONTROL_HELLO) {
+		/* the peer asks us whether we can do IS2 peering */
+		char buf[256];
+		
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: control: peer proposed IS2, responding OK", c->addr_rem, c->username);
+		
+		int l = snprintf(buf, sizeof(buf), "# PEER2 v 2 ok %s vers %s %s token %s\r\n",
+			serverid, verstr_progname, version_build, token);
+		
+		if (l > sizeof(buf))
+			l = sizeof(buf) - 1;
+		
+		if (!c->corepeer_is2) {
+			// If we're not yet in IS2 mode ourself, offer again soon
+			c->next_is2_peer_offer = tick + 3 + random() % 5;
+		}
+		
+		return c->write(self, c, buf, l);
+	}
+	
+	if (type == IS2_COREPEER_CONTROL_OK) {
+		/* the peer replies "I can do IS2" */
+		if (!c->corepeer_is2_challenge) {
+			hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP control 'ok' packet: no challenge stored, no 'hello' sent: ", c->addr_rem, c->username);
+			return -1;
+		}
+		
+		if (strcmp(token, c->corepeer_is2_challenge) != 0) {
+			hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP control 'ok' packet: challenge mismatch: ", c->addr_rem, c->username);
+			return -1;
+		}
+		
+		/* OK, enable */
+		c->corepeer_is2 = 1;
+		
+		/* Do send offers every 10 minutes away */
+		c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;
+		
+		hlog(LOG_INFO, "%s/%s: IS2 UDP peer mode enabled", c->addr_rem, c->username);
+	}
+	
+	return 0;
 }
 

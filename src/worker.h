@@ -528,6 +528,7 @@ extern struct client_udp_t *udppeers;
 extern void client_udp_free(struct client_udp_t *u);
 extern struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int portnum);
 extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int af, int portnum);
+extern int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len);
 
 extern void inbound_connects_account(const int add, struct portaccount_t *p);
 

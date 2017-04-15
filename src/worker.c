@@ -412,6 +412,9 @@ void client_free(struct client_t *c)
 
 	client_udp_free(c->udpclient);
 	clientlist_remove(c);
+	
+	if (c->corepeer_is2_challenge)
+		hfree(c->corepeer_is2_challenge);
 
 #ifdef USE_SSL
 	if (c->ssl_con)
@@ -949,19 +952,24 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	self->client_count--;
 }
 
+int udp_client_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	return udp_client_write(self, c, p, len-2);
+}
+
 int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
 	/* Every packet ends with CRLF, but they are not sent over UDP ! */
 	/* Existing system doesn't send keepalives via UDP.. */
-	int i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
+	int i = sendto( c->udpclient->fd, p, len, MSG_DONTWAIT,
 		    &c->udpaddr.sa, c->udpaddrlen );
 		    
 	if (i < 0) {
 		hlog(LOG_ERR, "UDP transmit error to %s udp port %d: %s",
 			c->addr_rem, c->udp_port, strerror(errno));
-	} else if (i != len -2) {
+	} else if (i != len) {
 		hlog(LOG_ERR, "UDP transmit incomplete to %s udp port %d: wrote %d of %d bytes, errno: %s",
-			c->addr_rem, c->udp_port, i, len-2, strerror(errno));
+			c->addr_rem, c->udp_port, i, len, strerror(errno));
 	}
 
 	// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
@@ -1052,7 +1060,7 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	
 	/* a TCP client with a udp downstream socket? */
 	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
-		return udp_client_write(self, c, p, len);
+		return udp_client_write_packet(self, c, p, len);
 	}
 	
 	/* Count the number of writes towards this client,  the keepalive
@@ -1248,6 +1256,11 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	
 	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
 		is2_corepeer_control_in(self, c, c->ibuf, r);
+		return 0;
+	}
+	
+	if (c->corepeer_is2) {
+		is2_corepeer_deframe_input(self, c, c->ibuf, r);
 		return 0;
 	}
 	
@@ -1583,7 +1596,8 @@ static void collect_new_clients(struct worker_t *self)
 			}
 			
 			c->handler_client_readable = &handle_corepeer_readable;
-			c->write_packet = c->write = &udp_client_write;
+			c->write_packet = &udp_client_write_packet;
+			c->write = &udp_client_write;
 			
 			continue;
 		}

@@ -27,18 +27,24 @@
  *	Allocate a buffer for a message, fill with head an tail
  */
 
+static void is2_setup_buffer(char *buf, int len)
+{
+	uint32_t *len_p = (uint32_t *)buf;
+	
+	*len_p = htonl(len);
+	
+	buf[0] = STX;
+	buf[IS2_HEAD_LEN + len] = ETX;
+}
+
 static void *is2_allocate_buffer(int len)
 {
 	/* total length of outgoing buffer */
 	int nlen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
 	
 	char *buf = hmalloc(nlen);
-	uint32_t *len_p = (uint32_t *)buf;
 	
-	*len_p = htonl(len);
-	
-	buf[0] = STX;
-	buf[nlen-1] = ETX;
+	is2_setup_buffer(buf, len);
 	
 	return (void *)buf;
 }
@@ -69,15 +75,19 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
 
 static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
-	/* Could optimize by writing directly on client obuf...
-	 * if it doesn't fit there, we're going to disconnect anyway.
-	 */
+	m->sequence = c->corepeer_is2_sequence++;
+	m->has_sequence = 1;
 	
 	int len = is2_message__get_packed_size(m);
-	void *buf = is2_allocate_buffer(len);
-	is2_message__pack(m, buf + IS2_HEAD_LEN);
-	int r = udp_client_write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
-	hfree(buf);
+	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
+	if (blen > c->obuf_size) {
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized IS2 frame length %d does not fit in obuf", c->addr_rem, c->username, blen);
+		return -1;
+	}
+	is2_setup_buffer(c->obuf, len);
+	
+	is2_message__pack(m, (void *)c->obuf + IS2_HEAD_LEN);
+	int r = udp_client_write(self, c, c->obuf, blen);
 	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized length %d, frame %d, wrote %d", c->addr_rem, c->username, len, len + IS2_HEAD_LEN + IS2_TAIL_LEN, r);
 	
 	return r;

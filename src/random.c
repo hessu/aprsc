@@ -41,7 +41,7 @@ int urandom_alphanumeric(int fd, unsigned char *buf, int buflen)
 		/* urandom failed for us, use something inferior */
 		for (l = 0; l < len; l++) {
 			// coverity[dont_call]  // squelch warning: not security sensitive use of random()
-			buf[l] = random() % 256;
+			buf[l] = random() % (26+10);
 		}
 	}
 	

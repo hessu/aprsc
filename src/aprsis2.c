@@ -23,6 +23,12 @@
 #define IS2_HEAD_LEN 4 /* STX + network byte order 24 bits uint to specify body length */
 #define IS2_TAIL_LEN 1 /* ETX */
 
+#define IS2_MINIMUM_FRAME_CONTENT_LEN 4
+#define IS2_MINIMUM_FRAME_LEN (IS2_HEAD_LEN + IS2_MINIMUM_FRAME_CONTENT_LEN + IS2_TAIL_LEN)
+#define IS2_MAXIMUM_FRAME_LEN 4096
+#define IS2_MAXIMUM_FRAME_CONTENT_LEN (IS2_MAXIMUM_FRAME_LEN - IS2_HEAD_LEN - IS2_TAIL_LEN)
+
+
 /*
  *	Allocate a buffer for a message, fill with head an tail
  */
@@ -37,6 +43,7 @@ static void is2_setup_buffer(char *buf, int len)
 	buf[IS2_HEAD_LEN + len] = ETX;
 }
 
+#if 0 // unused at the moment
 static void *is2_allocate_buffer(int len)
 {
 	/* total length of outgoing buffer */
@@ -48,6 +55,7 @@ static void *is2_allocate_buffer(int len)
 	
 	return (void *)buf;
 }
+#endif
 
 /*
  *	Write a message to a client, return result from c->write
@@ -55,18 +63,21 @@ static void *is2_allocate_buffer(int len)
 
 static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Message *m)
 {
-	/* Could optimize by writing directly on client obuf...
-	 * if it doesn't fit there, we're going to disconnect anyway.
-	 */
+	char buf[IS2_MAXIMUM_FRAME_LEN];
 	
 	int len = is2_message__get_packed_size(m);
-	//hlog(LOG_DEBUG, "%s/%s: IS2: serialized length %d", c->addr_rem, c->username, len);
-	void *buf = is2_allocate_buffer(len);
-	is2_message__pack(m, buf + IS2_HEAD_LEN);
-	int r = c->write(self, c, buf, len + IS2_HEAD_LEN + IS2_TAIL_LEN); // TODO: return value check!
-	hfree(buf);
+	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
 	
-	return r;
+	if (blen > IS2_MAXIMUM_FRAME_LEN) {
+		hlog(LOG_DEBUG, "%s/%s: IS2: serialized IS2 frame length %d too large, > %d", c->addr_rem, c->username, blen, IS2_MAXIMUM_FRAME_LEN);
+		return -1;
+	}
+	
+	//hlog(LOG_DEBUG, "%s/%s: IS2: serialized length %d", c->addr_rem, c->username, len);
+	is2_setup_buffer(buf, len);
+	is2_message__pack(m, (void *)buf + IS2_HEAD_LEN);
+	
+	return c->write(self, c, buf, blen);
 }
 
 /*
@@ -672,9 +683,6 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
  *	Scan client input buffer for valid IS2 frames, and
  *	process them.
  */
-
-#define IS2_MINIMUM_FRAME_CONTENT_LEN 4
-#define IS2_MINIMUM_FRAME_LEN (IS2_HEAD_LEN + IS2_MINIMUM_FRAME_CONTENT_LEN + IS2_TAIL_LEN)
 
 int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 {

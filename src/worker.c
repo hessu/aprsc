@@ -1238,13 +1238,17 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
 	 * UDP frame.
-	 * TODO: consider processing multiple packets from an UDP frame, split up by CRLF.
 	 */
 	for (i = 0; i < r; i++) {
 		if (c->ibuf[i] == '\r' || c->ibuf[i] == '\n') {
 			r = i;
 			break;
 		}
+	}
+	
+	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
+		is2_corepeer_control_in(self, c, c->ibuf, r);
+		return 0;
 	}
 	
 	c->handler_line_in(self, rc, IPPROTO_UDP, c->ibuf, r);
@@ -1689,8 +1693,27 @@ static void send_keepalives(struct worker_t *self)
 		cnext = c->next;
 
 		/* No keepalives on PEER links.. */
-		if ( c->state == CSTATE_COREPEER )
+		if ( c->state == CSTATE_COREPEER ) {
+			/* min/max limits for retry timer exponential backoff */
+			if (c->next_is2_peer_interval < COREPEER_IS2_PROPOSE_T_MIN)
+				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
+			if (c->next_is2_peer_interval > COREPEER_IS2_PROPOSE_T_MAX)
+				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MAX;
+			
+			if (!c->corepeer_is2 && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
+				c->next_is2_peer_offer = tick + c->next_is2_peer_interval + random() % 5;
+				c->next_is2_peer_interval *= 2;
+				
+				is2_corepeer_propose(self, c);
+			}
+			
+			if (c->corepeer_is2 && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
+				c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;
+				is2_corepeer_propose(self, c);
+			}
+			
 			continue;
+		}
 		
 		/* is it time to clean up? */
 		if (c->cleanup <= tick || c->cleanup > tick + 120+120) {

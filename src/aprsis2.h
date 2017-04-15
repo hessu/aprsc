@@ -15,5 +15,8 @@ extern int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, 
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 
+extern int is2_corepeer_propose(struct worker_t *self, struct client_t *c);
+extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
+
 #endif
 

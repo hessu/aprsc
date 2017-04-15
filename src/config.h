@@ -210,6 +210,8 @@ extern struct sockaddr_in6 uplink_bind_v6;		/* and the same for IPv6 */
 extern socklen_t uplink_bind_v6_len;
 
 #define MAX_COREPEERS		16
+#define COREPEER_IS2_PROPOSE_T_MIN	10
+#define COREPEER_IS2_PROPOSE_T_MAX	600
 
 /* http server config */
 

@@ -307,6 +307,8 @@ struct client_t {
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t cleanup;     /* Time of next cleanup */
+	time_t next_is2_peer_offer;
+	time_t next_is2_peer_interval;
 
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 	
@@ -361,6 +363,7 @@ struct client_t {
 	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
 	char  no_tx;        /* is the TX igate implementation broken and on our blacklist */
 	char  loc_known;    /* have we received a position packet from this client */
+	char  corepeer_is2; /* is the core peer in IS2 mode currently */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
@@ -420,6 +423,9 @@ struct client_t {
 	char	obuf[OBUF_SIZE];
 #endif
 	char filter_s[FILTER_S_SIZE];
+	
+	/* IS2 handshake random token */
+	char *corepeer_is2_challenge;
 };
 
 extern struct client_t *client_alloc(void);

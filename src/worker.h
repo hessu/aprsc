@@ -424,8 +424,8 @@ struct client_t {
 #endif
 	char filter_s[FILTER_S_SIZE];
 	
-	/* IS2 handshake random token */
-	char *corepeer_is2_challenge;
+	char *corepeer_is2_challenge;	/* IS2 handshake random token */
+	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */
 };
 
 extern struct client_t *client_alloc(void);

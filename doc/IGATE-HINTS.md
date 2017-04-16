@@ -27,7 +27,8 @@ slightly different copies of the packet on the APRS network.
 
 Please do not modify packet data.  Do not trim spaces from the end, do not
 remove non-ASCII bytes such as 0x1C or 0x00.  Just send everything on the
-first line, up to the newline.
+first line, up to the newline (either first CR or LF character seen in
+packet).
 
 
 Packets truncated by iGates due to C string handling

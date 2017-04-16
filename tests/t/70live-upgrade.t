@@ -6,7 +6,7 @@
 use Test;
 
 BEGIN {
-	plan tests => (!defined $ENV{'TEST_PRODUCT'} || $ENV{'TEST_PRODUCT'} =~ /aprsc/) ? 2 + 8 + 2 + 8 + 1 : 0;
+	plan tests => (!defined $ENV{'TEST_PRODUCT'} || $ENV{'TEST_PRODUCT'} =~ /aprsc/) ? 2 + 13 + 2 + 12 + 1 : 0;
 };
 
 if (defined $ENV{'TEST_PRODUCT'} && $ENV{'TEST_PRODUCT'} !~ /aprsc/) {
@@ -19,6 +19,7 @@ use LWP::UserAgent;
 use HTTP::Request::Common;
 use JSON::XS;
 use Ham::APRS::IS;
+use Ham::APRS::IS2;
 use Time::HiRes qw( sleep time );
 use istest;
 
@@ -33,7 +34,7 @@ $json->latin1(0);
 $json->ascii(1);
 $json->utf8(0);
 
-my $p = new runproduct('basic');
+my $p = new runproduct('is2-basic');
 
 ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
@@ -71,15 +72,28 @@ ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 $ret = $i_rx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
+# IS2 clients
+my $is2 = new Ham::APRS::IS2("localhost:56152", "N5CAL-4");
+ok(defined $is2, 1, "Failed to initialize Ham::APRS::IS2");
+
+$ret = $is2->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to connect to the server: " . $is2->{'error'});
+
+ok($is2->ping(), 1, "Failed to ping the IS2 server: " . $is2->{'error'});
+
 # send a packet, a duplicate, and a third dummy packet
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRC>DST,qAR,$login:foo1",
-	"SRC>DST,qAR,$login:foo1");
+my $uniq = "SRC>DST,qAR,$login:foo1";
+istest::txrx(\&ok, $i_tx, $i_rx, $uniq, $uniq);
 
 # 11: send the same packet with a different digi path and see that it is dropped
+my $helper = "SRC>DST,qAR,$login:dummy1";
 istest::should_drop(\&ok, $i_tx, $i_rx,
 	"SRC>DST,DIGI1*,qAR,$login:foo1", # should drop
-	"SRC>DST:dummy1", 1); # will pass (helper packet)
+	$helper, 1, 1); # will pass (helper packet)
+
+# the unique packet and the helper will appear on the IS2 full feed
+istest::rx(\&ok, $is2, $uniq, $uniq);
+istest::rx(\&ok, $is2, $helper, $helper);
 
 # delete old liveupgrade status file, ignore errors if it doesn't happen to exist yet
 my $liveupgrade_json_old = "data/liveupgrade.json.old";
@@ -99,15 +113,22 @@ while (time() < $wait_end && ! -e $liveupgrade_json_old) {
 #warn sprintf("waited %.3f s\n", time() - $wait_start);
 ok(-e $liveupgrade_json_old, 1, "live upgrade not done, timed out in $maxwait s, $liveupgrade_json_old not present");
 
+ok($is2->wait_signature(), 1, "IS2 server signature not received after upgrade: " . $is2->{'error'});
+
+ok($is2->ping(), 1, "Failed to ping the IS2 server: " . $is2->{'error'});
+
 # do the same test again - dupecheck cache has been lost in the
 # upgrade
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRC>DST,qAR,$login:foo1",
-	"SRC>DST,qAR,$login:foo1");
+istest::txrx(\&ok, $i_tx, $i_rx, $uniq, $uniq);
 
+$helper = "SRC>DST,qAR,$login:dummy2";
 istest::should_drop(\&ok, $i_tx, $i_rx,
-	"SRC>DST,DIGI1*,qAR,$login:foo1", # should drop
-	"SRC>DST:dumm21", 1); # will pass (helper packet)
+	$uniq, # should drop
+	$helper, 1, 1); # will pass (helper packet)
+
+# the unique packet and the helper will appear on the IS2 full feed
+istest::rx(\&ok, $is2, $uniq, $uniq);
+istest::rx(\&ok, $is2, $helper, $helper);
 
 # it takes some time for worker threads to accumulate statistics
 sleep(1.5);

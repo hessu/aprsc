@@ -2293,6 +2293,9 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	if (c->ai_protocol == IPPROTO_SCTP)
 		cJSON_AddStringToObject(jc, "proto", "sctp");
 	
+	if (c->flags & CLFLAGS_IS2)
+		cJSON_AddStringToObject(jc, "link", "is2");
+	
 #ifdef USE_SSL
 	if (c->cert_subject[0])
 		cJSON_AddStringToObject(jc, "cert_subject", c->cert_subject);

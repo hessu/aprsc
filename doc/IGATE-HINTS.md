@@ -85,6 +85,42 @@ for a network socket, do not set UTF-8 encoding for the APRS-IS socket.
 Treat it as a binary stream.
 
 
+iGates dropping duplicate packets unnecessarily
+-------------------------------------------------
+
+Since the APRS-IS servers normally drop all duplicate packets seen within 30
+seconds, many igates have adopted the same function, probably hoping to
+reduce server load.  Several implementations have been quite simple
+(calculating a 16-bit CRC, storing it, and checking for later packets having
+the same checksum).
+
+16-bit CRC has a fairly high chance of collisions - another completely
+different packet may have the same checksum and may get dropped.  With 16
+bits, there are 65536 different checksum values.  Given two different random
+packets, there is a 1-in-65536 chance that they have the same checksum. 
+Given 100 random packets, there is a whopping 7.3% chance that two packets
+will have the same checksum (for proof, see the
+[Birthday paradox](https://en.wikipedia.org/wiki/Birthday_problem)).
+
+The implementation on the APRS-IS servers is more complicated.  It takes
+into account various common packet corruptions, and is not as likely to do
+unnecessary drops.  On aprsc for example, a checksum/hash is used as a key
+to hash data structure, and the actual data contents of stored packets are
+compared before dropping as a duplicate.
+
+The servers can, in fact, benefit from having the duplicate packets
+available.  Duplicates can be extracted from the servers for improved
+network analysis ("who heard who") and in the future, servers could possibly
+do improved APRS message routing based on this information.
+
+***Solution:***
+
+Do not implement duplicate packet filtering in an RX igate (RF > APRS-IS). 
+Duplicate filtering only needs to be done when digipeating.  When doing TX
+igating (APRS-IS > RF) you might prefer to have a rate limit instead to
+prevent too many packets being sent overall, even if they are different.
+
+
 iGates not supporting DNS
 ----------------------------
 

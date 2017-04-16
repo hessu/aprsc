@@ -98,9 +98,12 @@ the same checksum).
 different packet may have the same checksum and may get dropped.  With 16
 bits, there are 65536 different checksum values.  Given two different random
 packets, there is a 1-in-65536 chance that they have the same checksum. 
-Given 100 random packets, there is a whopping 7.3% chance that two packets
-will have the same checksum (for proof, see the
-[Birthday paradox](https://en.wikipedia.org/wiki/Birthday_problem)).
+However, given 100 random packets, there is a 7.3% probability that two
+packets will have the same checksum.  Given 300 random packets, 49.6%
+probability that two *different* packets have the same CRC.  For proof, see
+the [Birthday paradox](https://en.wikipedia.org/wiki/Birthday_problem).
+When the igate is left running for weeks and months, some hash collisions
+and unnecessary packet drops will absolutely happen.
 
 The implementation on the APRS-IS servers is more complicated.  It takes
 into account various common packet corruptions, and is not as likely to do

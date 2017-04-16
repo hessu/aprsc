@@ -1089,6 +1089,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 {
 	cJSON *fd, *listener_id, *username, *time_connect, *tick_connect;
 	cJSON *state;
+	cJSON *link;
 	cJSON *addr_loc;
 	cJSON *udp_port;
 	cJSON *app_name, *app_version;
@@ -1146,6 +1147,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	client_heard = cJSON_GetObjectItem(client, "client_heard");
 	lat = cJSON_GetObjectItem(client, "lat");
 	lng = cJSON_GetObjectItem(client, "lng");
+	link = cJSON_GetObjectItem(client, "link");
 	
 	if (!(
 		(fd)
@@ -1211,15 +1213,30 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	
 	hfree(client_addr_s);
 	
+	if ((link) && (link->valuestring) && strcmp(link->valuestring, "is2") == 0) {
+		c->flags |= CLFLAGS_IS2;
+	}
+	
 	if (strcmp(state->valuestring, "connected") == 0) {
 		c->state   = CSTATE_CONNECTED;
-		c->handler_line_in = &incoming_handler;
+
+		/* use the default login handler */
+		if (c->flags & CLFLAGS_IS2)
+			c->is2_input_handler = &is2_input_handler;
+		else
+			c->handler_line_in = &incoming_handler;
+
 		strncpy(c->username, username->valuestring, sizeof(c->username));
 		c->username[sizeof(c->username)-1] = 0;
 		c->username_len = strlen(c->username);
 	} else if (strcmp(state->valuestring, "login") == 0) {
 		c->state   = CSTATE_LOGIN;
-		c->handler_line_in = &login_handler;
+		
+		/* use the default login handler */
+		if (c->flags & CLFLAGS_IS2)
+			c->is2_input_handler = &is2_input_handler_login;
+		else
+			c->handler_line_in = &login_handler;
 	} else {
 		hlog(LOG_ERR, "Live upgrade: Client %s is in invalid state '%s' (fd %d)", l->addr_s, state->valuestring, l->fd);
 		goto err;

@@ -14,6 +14,33 @@ use Data::Dumper;
 
 my $debug = 0;
 
+sub rx($$$$)
+{
+	my($ok, $i_rx, $tx, $rx) = @_;
+	
+	warn "receiving\n" if ($debug);
+	
+	my $received = $i_rx->get_packet();
+	
+	if (!defined $received) {
+		if ($i_rx->{'state'} eq 'connected') {
+			&$ok(1, 0, "Did not receive packet from server (timeout): '$tx'");
+		} else {
+			&$ok(1, 0, "Server RX connection error after sending: '$tx': " . $i_rx->{'error'});
+		}
+		return;
+	}
+	
+	warn "received '$rx'\n" if ($debug);
+	
+	if ($received ne $rx) {
+		&$ok($received, $rx, "Server returned wrong line");
+		return;
+	}
+	
+	&$ok(1, 1, "ok");
+}
+
 sub txrx($$$$$;$)
 {
 	my($ok, $i_tx, $i_rx, $tx, $rx, $random) = @_;
@@ -38,27 +65,7 @@ sub txrx($$$$$;$)
 		&$ok(1, 0, "Server TX connection error after sending: '$tx': " . $i_tx->{'error'});
 	}
 	
-	warn "receiving\n" if ($debug);
-	
-	my $received = $i_rx->get_packet();
-	
-	if (!defined $received) {
-		if ($i_rx->{'state'} eq 'connected') {
-			&$ok(1, 0, "Did not receive packet from server (timeout): '$tx'");
-		} else {
-			&$ok(1, 0, "Server RX connection error after sending: '$tx': " . $i_rx->{'error'});
-		}
-		return;
-	}
-	
-	warn "received '$rx'\n" if ($debug);
-	
-	if ($received ne $rx) {
-		&$ok($received, $rx, "Server returned wrong line");
-		return;
-	}
-	
-	&$ok(1, 1, "ok");
+	rx($ok, $i_rx, $tx, $rx);
 }
 
 sub should_drop($$$$$;$$)

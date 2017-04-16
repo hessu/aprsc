@@ -34,8 +34,10 @@ ClientTimeout		48h
 #		msgonly - messages only
 #		userfilter - user-specified filters
 #
-Listen "Full feed with CWOP"                      is2fullfeed    tcp ::0      56152   acl "cfg-aprsc/acl-all.acl"
-Listen "Igate port"                               is2igate       tcp 0.0.0.0  56580   acl "cfg-aprsc/acl-all.acl"
+Listen "Full feed with CWOP"                      fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port"                               igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
+Listen "IS2 Full feed with CWOP"                  is2fullfeed    tcp ::0      56152   acl "cfg-aprsc/acl-all.acl"
+Listen "IS2 Igate port"                           is2igate       tcp 0.0.0.0  56580   acl "cfg-aprsc/acl-all.acl"
 
 ### Uplink configuration ########
 # Uplink <name> <type> tcp <address> <port>

@@ -172,30 +172,11 @@ sub connect($;%)
 	
 	$self->{'sock'}->blocking(0);
 	
-	# wait for server signature
-	my $t = time();
-	while (my $l = $self->is2_frame_in()) {
-		my $sig = $l->server_signature;
-		
-		if ($l->type == IS2Message::Type::SERVER_SIGNATURE()) {
-			if (!$sig) {
-				$self->{'error'} = "SERVER_SIGNATURE type, but no server signature message";
-				return 0;
-			}
-			$self->{'loginstate'} = 'server_signature';
-  			#warn sprintf("got server signature: serverid '%s' app '%s' version '%s'\n",
-  			#	$sig->username, $sig->app_name, $sig->app_version);
-			last;
-		} else {
-			$self->{'error'} = "Wrong type of message received instead of SERVER_SIGNATURE: " . $l->type;
-			return 0;
-		}
-		
-		if (time() - $t > 5) {
-			$self->{'error'} = "Timed out waiting for server signature";
-			return 0;
-		}
+	if (!$self->wait_signature()) {
+		return 0;
 	}
+	
+	$self->{'loginstate'} = 'server_signature';
 	
 	if ($self->{'loginstate'} ne 'server_signature') {
 		$self->{'error'} = "Timed out waiting for server signature";
@@ -215,10 +196,9 @@ sub connect($;%)
 		'login_request' => $lm
 	});
 	
-	$self->{'sock'}->blocking(1);
 	$self->is2_frame_out($im->encode);
-	$self->{'sock'}->blocking(0);
 	
+	my $t = time();
 	while (my $l = $self->is2_frame_in()) {
 		my $rep = $l->login_reply;
 		if ($l->type == IS2Message::Type::LOGIN_REPLY()) {
@@ -284,9 +264,86 @@ sub send_packets($$)
 		'is_packet' => \@pq
 	});
 	
-	$self->{'sock'}->blocking(1);
 	$self->is2_frame_out($im->encode);
-	$self->{'sock'}->blocking(0);
+}
+
+sub wait_signature($)
+{
+	my($self) = @_;
+	
+	# wait for server signature
+	my $t = time();
+	while (my $l = $self->is2_frame_in()) {
+		my $sig = $l->server_signature;
+		
+		if ($l->type == IS2Message::Type::SERVER_SIGNATURE()) {
+			if (!$sig) {
+				$self->{'error'} = "SERVER_SIGNATURE type, but no server signature message";
+				return 0;
+			}
+			return 1;
+  			#warn sprintf("got server signature: serverid '%s' app '%s' version '%s'\n",
+  			#	$sig->username, $sig->app_name, $sig->app_version);
+		} else {
+			$self->{'error'} = "Wrong type of message received instead of SERVER_SIGNATURE: " . $l->type;
+			return 0;
+		}
+		
+		if (time() - $t > 5) {
+			$self->{'error'} = "Timed out waiting for server signature";
+			return 0;
+		}
+	}
+	
+	$self->{'error'} = "Failed to read server signature: $!";
+	return 0;
+}
+
+sub ping($)
+{
+	my($self) = @_;
+	
+	my $timeout = 2;
+	my $reqid = int(rand(2**30));
+	
+	my $im = IS2Message->new({
+		'type' => IS2Message::Type::KEEPALIVE_PING(),
+		'keepalive_ping' => IS2KeepalivePing->new({
+			'ping_type' => IS2KeepalivePing::PingType::REQUEST(),
+			'request_id' => $reqid,
+		})
+	});
+	
+	$self->is2_frame_out($im->encode);
+	
+	my $t = time();
+	
+	while (my $l = $self->is2_frame_in($timeout)) {
+		if ($l->type != IS2Message::Type::KEEPALIVE_PING()) {
+			warn "IS2 ping: Unexpected type of frame received: " . $l->type . "\n";
+			next;
+		}
+		
+		if (!defined $l->keepalive_ping) {
+			$self->{'error'} = "IS2 ping reply does not have keepalive_ping payload";
+			return undef;
+		}
+		
+		if ($l->keepalive_ping->ping_type != IS2KeepalivePing::PingType::REPLY()) {
+			$self->{'error'} = "IS2 ping: Wrong type of frame received: " . $l->type;
+			return undef;
+		}
+		
+		if ($l->keepalive_ping->request_id != $reqid) {
+			$self->{'error'} = "IS2 ping: Request id mismatch, sent $reqid, got " . $l->keepalive_ping->request_id;
+			return undef;
+		}
+		
+		return 1;
+	}
+	
+	$self->{'error'} = "ping get_packets timed out";
+	return undef;
 }
 
 sub send_packet($)
@@ -367,9 +424,7 @@ sub set_filter($$)
 		})
 	});
 	
-	$self->{'sock'}->blocking(1);
 	$self->is2_frame_out($im->encode);
-	$self->{'sock'}->blocking(0);
 	
 	my $t = time();
 	while (my $l = $self->is2_frame_in()) {
@@ -422,15 +477,19 @@ sub is2_frame_out($$)
 	
 	#warn "is2_frame_out: framelen $framelen\n";
 	
+	$self->{'sock'}->blocking(1);
 	if (!$self->{'sock'}->print(chr(0x02) . substr($framelen_i, 1) . $frame . chr(0x03))) {
 		$self->{'error'} = "Failed to write IS2 frame to $self->{host_port}: $!";
+		$self->{'sock'}->blocking(0);
 		return 0;
 	}
 	
 	if (!$self->{'sock'}->flush) {
 		$self->{'error'} = "Failed to flush IS2 frame to $self->{host_port}: $!";
+		$self->{'sock'}->blocking(0);
 		return 0;
 	}
+	$self->{'sock'}->blocking(0);
 }
 
 sub is2_frame_in($;$)
@@ -510,6 +569,7 @@ sub is2_frame_in($;$)
 		
 		if (time() > $end_t) {
 			#warn "is2_frame_in: timeout\n";
+			$self->{'error'} = "is2_frame_in timed out";
 			return undef;
 		}
 	}

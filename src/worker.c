@@ -389,6 +389,7 @@ struct client_t *client_alloc(void)
 	c->obuf_wtime = tick;
 	
 	c->cleanup   = tick + 120;
+	c->ping_rtt_sum = -1.0;
 
 	return c;
 }

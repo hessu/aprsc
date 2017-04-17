@@ -467,13 +467,29 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *
 int is2_out_ping(struct worker_t *self, struct client_t *c)
 {
 	ProtobufCBinaryData rdata;
-	rdata.data = NULL;
-	rdata.len  = 0; 
+
+#ifdef USE_CLOCK_GETTIME
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	tick = ts.tv_sec;
+	rdata.data = (void *)&ts;
+	rdata.len  = sizeof(ts);
+#else
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	tick = tv.tv_sec;
+	now = tv.tv_sec;
+	rdata.data = (void *)&tv;
+	rdata.len  = sizeof(tv);
+#endif
+	
+	c->ping_timeout = tick + IS2_PING_TIMEOUT;
 	
 	IS2KeepalivePing ping = IS2_KEEPALIVE_PING__INIT;
 	ping.ping_type = IS2_KEEPALIVE_PING__PING_TYPE__REQUEST;
-	ping.request_id = random();
+	ping.request_id = c->ping_request_id = random();
 	ping.request_data = rdata;
+	ping.has_request_data = 1;
 	
 	IS2Message m = IS2_MESSAGE__INIT;
 	m.type = IS2_MESSAGE__TYPE__KEEPALIVE_PING;
@@ -500,13 +516,53 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 	
 	hlog(LOG_DEBUG, "%s/%s: IS2: Ping %s received: request_id %lu",
 		c->addr_rem, c->username,
-		(ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) ? "Request" : "Reply",
+		(ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) ? "request" : "reply",
 		ping->request_id);
 	
 	if (ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) {
 		ping->ping_type = IS2_KEEPALIVE_PING__PING_TYPE__REPLY;
 		
 		r = is2_write_message(self, c, m);
+	}
+	
+	if (ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REPLY && ping->request_id == c->ping_request_id) {
+		double diff;
+#ifdef USE_CLOCK_GETTIME
+		struct timespec ts;
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		tick = ts.tv_sec;
+		
+		if (ping->request_data.len != sizeof(ts)) {
+			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %d expected %d)",
+				c->addr_rem, c->username, ping->request_data.len, sizeof(ts));
+			return -1;
+		}
+		
+		struct timespec *tx_ts = (void *)ping->request_data.data;
+		diff = (ts.tv_sec - tx_ts->tv_sec) + ((ts.tv_nsec - tx_ts->tv_nsec) / 1000000000.0);
+#else
+		struct timeval tv;
+		gettimeofday(&tv, NULL);
+		tick = tv.tv_sec;
+		now = tv.tv_sec;
+		
+		if (ping->request_data.len != sizeof(tv)) {
+			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %d expected %d)",
+				c->addr_rem, c->username, ping->request_data.len, sizeof(tv));
+			return -1;
+		}
+		
+		struct timeval *tx_tv = (void *)ping->request_data.data;
+		diff = (tv.tv_sec - tx_tv->tv_sec) + ((tv.tv_usec - tx_tv->tv_usec) / 1000000.0);
+#endif
+		if (c->ping_rtt_sum < -0.5) {
+			c->ping_rtt_sum = diff * IS2_PING_AVG_LEN;
+		} else {
+			c->ping_rtt_sum = c->ping_rtt_sum - c->ping_rtt_sum/IS2_PING_AVG_LEN + diff;
+		}
+		hlog(LOG_INFO, "%s/%s: IS2: Ping reply received, rtt %.1f ms avg %.1f ms",
+			c->addr_rem, c->username, diff * 1000.0, c->ping_rtt_sum*1000.0/IS2_PING_AVG_LEN);
+		
 	}
 	
 done:	

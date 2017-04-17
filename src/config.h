@@ -210,8 +210,10 @@ extern struct sockaddr_in6 uplink_bind_v6;		/* and the same for IPv6 */
 extern socklen_t uplink_bind_v6_len;
 
 #define MAX_COREPEERS		16
-#define COREPEER_IS2_PROPOSE_T_MIN	10
-#define COREPEER_IS2_PROPOSE_T_MAX	600
+#define COREPEER_IS2_PROPOSE_T_MIN	10 /* minimum/starting IS2 peering proposal timer, seconds */
+#define COREPEER_IS2_PROPOSE_T_MAX	600 /* max timer interval, cap for exponential backoff */
+#define IS2_PING_TIMEOUT	20 /* seconds */
+#define IS2_PING_AVG_LEN	10.0 /* number of samples */
 
 /* http server config */
 

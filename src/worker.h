@@ -309,7 +309,11 @@ struct client_t {
 	time_t cleanup;     /* Time of next cleanup */
 	time_t next_is2_peer_offer;
 	time_t next_is2_peer_interval;
-
+	
+	unsigned int ping_request_id; /* The req id of the last outgoing IS2 ping */
+	time_t ping_timeout; /* When the last IS2 ping times out */
+	double ping_rtt_sum; /* Weighted rtt average sum, seconds */
+	
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 	
 #ifdef USE_SSL

@@ -78,11 +78,16 @@ will pass the original packet unmodified.
 
 Treat APRS packets as arrays or buffers of binary bytes.  Only after
 decoding the APRS packet, some fields such as the comment text and APRS text
-message text should be UTF-8 decoded.
+message text should be UTF-8 decoded for the purpose of displaying it on a
+user interface.
 
 If your programming language or environment supports setting text encoding
 for a network socket, do not set UTF-8 encoding for the APRS-IS socket.
 Treat it as a binary stream.
+
+When iGating, digipeating or otherwise forwarding packets, forward the
+packet data payload as a binary buffer.  Do not decode and re-encode as
+UTF-8, as it may well break packets which do not happen to be UTF-8.
 
 
 iGates dropping duplicate packets unnecessarily

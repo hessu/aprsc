@@ -124,9 +124,12 @@ do improved APRS message routing based on this information.
 ***Solution:***
 
 Do not implement duplicate packet filtering in an RX igate (RF > APRS-IS). 
-Duplicate filtering only needs to be done when digipeating.  When doing TX
-igating (APRS-IS > RF) you might prefer to have a rate limit instead to
-prevent too many packets being sent overall, even if they are different.
+Send all locally received packets to the APRS-IS except when
+`NOGATE` or `RFONLY` is found in the packet's path.
+Duplicate filtering only needs to be done when preparing to transmit packets
+for digipeating.  When doing TX igating (APRS-IS > RF) you might prefer
+to have a rate limit instead to prevent too many packets being sent overall,
+even if they are different.
 
 
 iGates not supporting DNS

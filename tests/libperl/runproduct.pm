@@ -14,6 +14,8 @@ use warnings;
 use IPC::Open3;
 use POSIX ":sys_wait_h";
 use Data::Dumper;
+use Time::HiRes qw( time sleep );
+use IO::Socket::INET;
 
 my $debug = 0;
 
@@ -135,7 +137,7 @@ sub start($)
 	}
 	
 	# let it start...
-	sleep(0.4);
+	$self->wait_tcp_open("127.0.0.1:55501", 5);
 	
 	my $kid = waitpid($pid, WNOHANG);
 	
@@ -157,6 +159,28 @@ sub start($)
 	warn "\nproduct started, pid $pid\n" if ($debug);
 	
 	return 1;
+}
+
+sub wait_tcp_open($$$)
+{
+	my($self, $host_port, $timeout) = @_;
+	
+	my $fail_at = time() + $timeout;
+	
+	while (time() < $fail_at) {
+		my $sock = IO::Socket::INET->new($host_port);
+		if (defined($sock)) {
+			$sock->close();
+			#warn "Connected to $host_port successfully\n";
+			return 1;
+		}
+		
+		#warn "Failed to connect to $host_port: $!\n";
+
+		sleep(0.2);
+	}
+	
+	return 0;
 }
 
 sub discard($)

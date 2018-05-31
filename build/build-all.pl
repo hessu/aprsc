@@ -7,12 +7,13 @@ use Time::HiRes qw(time sleep);
 use IO::Socket::INET;
 
 my @platforms = (
+	'ubuntu-1804-amd64',
 	'ubuntu-1604-i386',
 	'ubuntu-1604-amd64',
 	'ubuntu-1404-i386',
 	'ubuntu-1404-amd64',
-	'ubuntu-1204-i386',
-	'ubuntu-1204-amd64',
+#	'ubuntu-1204-i386',
+#	'ubuntu-1204-amd64',
 #	'ubuntu-1004-i386',
 #	'ubuntu-1004-amd64',
 #	'debian-60-i386',

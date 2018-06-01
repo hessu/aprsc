@@ -85,11 +85,16 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 *	Quit processing the packet
 	 * }
 	 */
-	
 	if (q_type == 'Z') {
 		/* qAZ is for packets from client to server, to prevent redistribution */
 		hlog(LOG_DEBUG, "q: dropping due q_type %c%c", q_proto, q_type);
 		return INERR_Q_QAZ; /* drop the packet */
+	}
+
+	if (!q_start) {
+		/* BUG here because we should have caught this earlier */
+		hlog(LOG_DEBUG, "q: q_start not given, cannot go on.");
+		return INERR_Q_BUG;
 	}
 	
 	/*
@@ -97,19 +102,17 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * after the q construct
 	 */
 	qcallc = 0;
-	if (q_start) {
-		p = q_start + 4;
-		while (qcallc < MAX_Q_CALLS && p < path_end) {
-			while (p < path_end && *p == ',')
-				p++;
-			if (p == path_end)
-				break;
-			qcallv[qcallc++] = p;
-			while (p < path_end && *p != ',')
-				p++;
-		}
-		qcallv[qcallc] = p+1;
+	p = q_start + 4;
+	while (qcallc < MAX_Q_CALLS && p < path_end) {
+		while (p < path_end && *p == ',')
+			p++;
+		if (p == path_end)
+			break;
+		qcallv[qcallc++] = p;
+		while (p < path_end && *p != ',')
+			p++;
 	}
+	qcallv[qcallc] = p+1;
 	
 	/*
 	 * If ,SERVERLOGIN is found after the q construct:
@@ -121,14 +124,11 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * (note: if serverlogin is 'XYZ-1', it must not match XYZ-12, so we need to
 	 * match against ,SERVERLOGIN, or ,SERVERLOGIN:)
 	 */
-	
-	if (q_start) {
-		p = memmem(q_start+4, path_end-q_start-4, serverid, serverid_len);
-		if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
-			/* TODO: The reject log should really log the offending packet */
-			hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
-			return INERR_Q_QPATH_MYCALL; /* drop the packet */
-		}
+	p = memmem(q_start+4, path_end-q_start-4, serverid, serverid_len);
+	if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
+		/* TODO: The reject log should really log the offending packet */
+		hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
+		return INERR_Q_QPATH_MYCALL; /* drop the packet */
 	}
 	
 	/*

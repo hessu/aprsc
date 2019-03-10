@@ -84,7 +84,7 @@
 	"TH_filter": "Filter",
 	
 	"RXERR_DIALOG_TITLE": "{{ pkts_rx }} packets received",
-	"RXERR_DIALOG_MESSAGE": "{{ pkts_dup }} duplicates and {{ pkts_ign }} erroneus packets dropped.",
+	"RXERR_DIALOG_MESSAGE": "{{ pkts_dup }} duplicates and {{ pkts_ign }} erroneous packets dropped.",
 	
 	"RXERR_unknown": "Unknown error",
 	"RXERR_no_colon": "No colon (\":\") in packet",

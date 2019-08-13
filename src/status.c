@@ -480,8 +480,12 @@ int json_write_file(char *basename, const char *s)
 	
 	time(&start_t);
 	
-	snprintf(path, PATHLEN, "%s/%s.json", rundir, basename);
-	snprintf(tmppath, PATHLEN, "%s.tmp", path);
+	if (snprintf(path, PATHLEN, "%s/%s.json", rundir, basename) >= PATHLEN-1
+	    || snprintf(tmppath, PATHLEN, "%s.tmp", path) >= PATHLEN-1) {
+		hlog(LOG_ERR, "json file write failed: Too long path");
+		return -1;
+	}
+	
 	fp = fopen(tmppath,"w");
 	if (!fp) {
 		hlog(LOG_ERR, "json file write failed: Could not open %s for writing: %s", tmppath, strerror(errno));

@@ -616,12 +616,7 @@ static void generate_instance_id(void)
 }
 
 /*
- *	Preload resolver libraries before performing a chroot,
- *	so that we won't need copies of the .so files within the
- *	chroot.
- *
- *	This is done by doing a DNS lookup which "accidentally"
- *	phones home with the version information.
+ *	DNS lookup which phones home with version information.
  *
  *	Tin foil hats off. Version information and instance statistics
  *	make developers happy.
@@ -629,6 +624,7 @@ static void generate_instance_id(void)
 
 void version_report(const char *state)
 {
+#ifdef VERSION_REPORT_OVER_DNS
 	struct addrinfo hints;
 	struct addrinfo *ai;
 	char v[80];
@@ -672,6 +668,7 @@ void version_report(const char *state)
 		hlog(LOG_DEBUG, "DNS lookup of aprsc.he.fi failed: %s", gai_strerror(i));
 	if (ai)
 		freeaddrinfo(ai);
+#endif
 }
 
 /*

@@ -19,6 +19,7 @@
   owner /opt/aprsc/data/** rwk,
   /opt/aprsc/lib/** rm,
   /opt/aprsc/lib64/** rm,
+  /opt/aprsc/usr/lib/** rm,
   /opt/aprsc/var/core/* rwk,
 
   /dev/urandom r,

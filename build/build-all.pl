@@ -22,8 +22,6 @@ my @platforms = (
 	'debian-90-amd64',
 	'debian-100-i386',
 	'debian-100-amd64',
-	'centos-63-i686',
-	'centos-63-x86_64',
 	'centos-70-x86_64',
 );
 

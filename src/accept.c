@@ -1573,7 +1573,14 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		cJSON_AddNumberToObject(jl, "fd", l->fd);
 		cJSON_AddNumberToObject(jl, "id", l->id);
 		cJSON_AddStringToObject(jl, "name", l->name);
-		cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
+		if (l->ai_protocol == IPPROTO_UDP)
+			cJSON_AddStringToObject(jl, "proto", "udp");
+		else if (l->ai_protocol == IPPROTO_TCP)
+			cJSON_AddStringToObject(jl, "proto", "tcp");
+#ifdef USE_SCTP
+		else if (l->ai_protocol == IPPROTO_SCTP)
+			cJSON_AddStringToObject(jl, "proto", "sctp");
+#endif
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);
 		if (l->filter_s)
 			cJSON_AddStringToObject(jl, "filter", l->filter_s);

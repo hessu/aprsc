@@ -40,6 +40,8 @@ int dupecheck_running;
 pthread_t dupecheck_th;
 long dupecheck_cellgauge;
 
+int historydb_enabled;  /* historydb inserts enabled only if filtering available */
+
 int pbuf_global_count;
 int pbuf_global_dupe_count;
 
@@ -649,10 +651,15 @@ static int dupecheck_drain_worker(struct worker_t *w,
 		pbnext = pb->next; // it may get modified below..
 		
 		if (rc == 0) {
-			// put non-duplicate packet in history database
-			// and let filter module do it's thing
-			historydb_insert(pb);
-			filter_postprocess_dupefilter(pb);
+			/* put non-duplicate packet in history database
+			 * and let filter module do it's thing, if historydb
+			 * is enabled (disabled if no filtered listeners
+			 * configured, for memory savings)
+			 */
+			if (historydb_enabled) {
+				historydb_insert(pb);
+				filter_postprocess_dupefilter(pb);
+			}
 	
 			// Not duplicate
 			**pb_out_prevp = pb;

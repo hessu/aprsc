@@ -1447,6 +1447,7 @@ void accept_thread(void *asdf)
 			acceptpl = hmalloc(poll_n * sizeof(*acceptpl));
 			
 			n = 0;
+			int has_filtered_listeners_now = 0;
 			for (l = listen_list; (l); l = l->next) {
 				/* The accept thread does not poll() UDP sockets for core peers.
 				 * Worker 0 takes care of that, and processes the incoming packets.
@@ -1464,6 +1465,9 @@ void accept_thread(void *asdf)
 					fd = l->fd;
 				}
 				
+				if ((l->filter_s) || (l->client_flags & CLFLAGS_USERFILTEROK))
+					has_filtered_listeners_now = 1;
+				
 				hlog(LOG_DEBUG, "... %d: fd %d (%s)", n, fd, l->addr_s);
 				acceptpfd[n].fd = fd;
 				acceptpfd[n].events = POLLIN|POLLPRI|POLLERR|POLLHUP;
@@ -1471,6 +1475,9 @@ void accept_thread(void *asdf)
 				n++;
 			}
 			hlog(LOG_INFO, "Accept thread ready.");
+			historydb_enabled = has_filtered_listeners_now;
+			if (!historydb_enabled)
+				hlog(LOG_INFO, "Disabled historydb, listeners do not have filtering enabled.");
 			
 			/* stop the dupechecking and uplink threads while adjusting
 			 * the amount of workers... they walk the worker list, and

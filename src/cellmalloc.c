@@ -173,7 +173,6 @@ cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alig
 
 	pthread_mutex_init(&ca->mutex, NULL);
 
-	new_cellblock(ca); /* First block of cells, not yet need to be mutex protected */
 	while (ca->freecount < ca->minfree)
 		new_cellblock(ca); /* more until minfree is full */
 

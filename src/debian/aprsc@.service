@@ -9,6 +9,7 @@ ExecStartPre=/opt/aprsc/sbin/aprsc-prepare-chroot.sh
 ExecStart=/opt/aprsc/sbin/aprsc -n aprsc-%i -u aprsc -t /opt/aprsc -e info -o file -r logs -c etc/aprsc-%i.conf
 PIDFile=/opt/aprsc/logs/aprsc-%i.pid
 TimeoutStopSec=5
+RestartSec=5
 Restart=always
 User=root
 Group=root

@@ -1,11 +1,11 @@
 [Unit]
 Description="APRS-IS server #%i"
-After=network.target
+After=network.target aprsc-chroot.service
+Requires=aprsc-chroot.service
 Documentation=http://he.fi/aprsc/, man:aprsc(8)
 
 [Service]
 Type=simple
-ExecStartPre=/opt/aprsc/sbin/aprsc-prepare-chroot.sh
 ExecStart=/opt/aprsc/sbin/aprsc -n aprsc-%i -u aprsc -t /opt/aprsc -e info -o file -r logs -c etc/aprsc-%i.conf
 ExecReload=/bin/kill -USR1 $MAINPID
 PIDFile=/opt/aprsc/logs/aprsc-%i.pid

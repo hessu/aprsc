@@ -1,0 +1,14 @@
+[Unit]
+Description=APRS-IS server chroot environment
+After=network.target
+Documentation=http://he.fi/aprsc/, man:aprsc(8)
+
+[Service]
+Type=oneshot
+ExecStart=/opt/aprsc/sbin/aprsc-prepare-chroot.sh
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+Alias=aprsc-chroot.service

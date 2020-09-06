@@ -77,6 +77,7 @@ rm -rf $RPM_BUILD_ROOT
 %config(noreplace) /etc/sysconfig/aprsc
 /opt/aprsc/sbin/aprsc
 /opt/aprsc/sbin/aprsc_munin
+/opt/aprsc/sbin/aprsc-prepare-chroot.sh
 /opt/aprsc/web/*
 %dir /opt/aprsc/logs
 %dir /opt/aprsc/data

@@ -1,6 +1,7 @@
 [Unit]
 Description=APRS-IS server
-After=network.target aprsc-chroot.service
+After=network-online.target aprsc-chroot.service
+Wants=network-online.target
 Requires=aprsc-chroot.service
 Documentation=http://he.fi/aprsc/, man:aprsc(8)
 

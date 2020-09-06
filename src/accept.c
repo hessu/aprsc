@@ -57,6 +57,7 @@ static struct listen_t *listen_list;
 
 int accept_shutting_down;
 int accept_reconfiguring;
+time_t accept_reconfigure_after_tick = 0;
 
 /* pseudoworker + pseudoclient for incoming UDP packets */
 struct worker_t *udp_worker = NULL;
@@ -296,10 +297,10 @@ static int open_listener(struct listen_config_t *lc)
 	
 	if (lc->ai->ai_socktype == SOCK_DGRAM &&
 	    lc->ai->ai_protocol == IPPROTO_UDP) {
-		/* UDP listenting is not quite same as TCP listening.. */
+		/* UDP listening is not quite same as TCP listening.. */
 		i = open_udp_listener(l, lc->ai);
 	} else if (lc->ai->ai_socktype == SOCK_STREAM && lc->ai->ai_protocol == IPPROTO_TCP) {
-		/* TCP listenting... */
+		/* TCP listening... */
 		i = open_tcp_listener(l, lc->ai, "TCP");
 #ifdef USE_SCTP
 	} else if (lc->ai->ai_socktype == SOCK_STREAM &&
@@ -317,6 +318,11 @@ static int open_listener(struct listen_config_t *lc)
 	if (i < 0) {
 		hlog(LOG_DEBUG, "... failed");
 		listener_free(l);
+		/* trigger reconfiguration after 30 seconds; probably an IP
+		 * address that we tried to bind was not yet configured and
+		 * it'll appear later in the boot process
+		 */
+		accept_reconfigure_after_tick = tick + 30;
 		return -1;
 	}
 	
@@ -1501,6 +1507,10 @@ void accept_thread(void *asdf)
 			/* accept liveupgrade clients */
 			if (liveupgrade_status)
 				accept_liveupgrade_accept();
+		} else if (accept_reconfigure_after_tick != 0 && accept_reconfigure_after_tick <= tick) {
+			hlog(LOG_INFO, "Trying to reconfigure listeners due to a previous failure");
+			accept_reconfiguring = 1;
+			accept_reconfigure_after_tick = 0;
 		}
 		
 		/* check for new connections */

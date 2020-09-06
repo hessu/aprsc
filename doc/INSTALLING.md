@@ -50,10 +50,12 @@ You'll need to figure out the codename of your distribution.  The command
 "lsb_release -c" should provide the codename.  Here's a list of distribution
 versions and their codenames:
 
+* Ubuntu 20.04 LTS: focal
+* Ubuntu 18.04 LTS: bionic
 * Ubuntu 16.04 LTS: xenial
-* Ubuntu 14.04 LTS: trusty
+* Debian 10.0: buster
+* Debian 9.0: stretch
 * Debian 8.0: jessie
-* Debian 7.0: wheezy
 
 Other versions are currently not supported.
 
@@ -97,8 +99,8 @@ Before starting aprsc edit the configuration file, which can be found in
 document for instructions.
 
 If your distribution has systemd (try 'systemctl' to find out if you do),
-proceed with the systemd instructions. If not, proceed with the non-systemd
-instructions.
+proceed with the systemd instructions.  If not, proceed with the
+old-fashioned non-systemd instructions.
 
 Startup with systemd
 -----------------------
@@ -114,6 +116,10 @@ To start it up:
 To shut it down:
 
     sudo systemctl stop aprsc
+
+To perform a restart:
+
+    sudo systemctl restart aprsc
 
 
 Startup the old-fashioned way

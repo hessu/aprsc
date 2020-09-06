@@ -35,6 +35,8 @@ extern void filter_wx_dump(FILE *fp);
 
 extern int  filter_cellgauge;
 
+extern int have_filtered_listeners;
+
 extern float filter_lat2rad(float lat);
 extern float filter_lon2rad(float lon);
 

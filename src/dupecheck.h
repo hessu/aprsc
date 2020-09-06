@@ -41,7 +41,6 @@ extern long long dupecheck_dupecount; /* statistics counter */
 extern long long dupecheck_dupetypes[DTYPE_MAX+1];
 extern long      dupecheck_cellgauge; /* statistics gauge   */
 
-extern int historydb_enabled;
 extern int dupecheck_eventfd;
 
 extern int  outgoing_lag_report(struct worker_t *self, int*lag, int*dupelag);

@@ -239,6 +239,7 @@ cellarena_t *filter_entrycall_cells;
 cellarena_t *filter_wx_cells;
 #endif
 
+int have_filtered_listeners;  /* do we have any filtered listeners, do we need to support them */
 
 #define HIST_LOOKUP_INTERVAL 10 /* Cache historydb position lookups this much seconds on
 				  each filter entry referring to some
@@ -801,9 +802,12 @@ static void filter_keyhashes(struct pbuf_t *pb)
 
 void filter_preprocess_dupefilter(struct pbuf_t *pbuf)
 {
+	// TODO: could probably skip filter_check_tcpip, and possibly filter_keyhashes too if no filtered listeners
 	filter_check_tcpip(pbuf);
-	filter_entrycall_insert(pbuf);
-	filter_wx_insert(pbuf);
+	if (have_filtered_listeners) {
+		filter_entrycall_insert(pbuf);
+		filter_wx_insert(pbuf);
+	}
 	filter_keyhashes(pbuf);
 }
 

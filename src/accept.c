@@ -1475,8 +1475,8 @@ void accept_thread(void *asdf)
 				n++;
 			}
 			hlog(LOG_INFO, "Accept thread ready.");
-			historydb_enabled = has_filtered_listeners_now;
-			if (!historydb_enabled)
+			have_filtered_listeners = has_filtered_listeners_now;
+			if (!have_filtered_listeners)
 				hlog(LOG_INFO, "Disabled historydb, listeners do not have filtering enabled.");
 			
 			/* stop the dupechecking and uplink threads while adjusting

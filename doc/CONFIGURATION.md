@@ -58,7 +58,11 @@ adjusted without a restart.
 
 To reload configuration, execute the `reload` option of the startup script.
 
-On Ubuntu or Debian:
+On Ubuntu or Debian (systemd):
+
+    sudo systemctl reload aprsc
+
+On Ubuntu or Debian, old-fashioned:
 
     sudo service aprsc reload
 

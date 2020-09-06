@@ -4,9 +4,9 @@ Installing aprsc
 
 aprsc is "officially" "supported" on the following platforms:
 
-* Debian stable (8.0, "jessie"): i386, x86_64
-* Debian oldstable (7.0, "wheezy"): i386, x86_64, armhf Raspberry Pi (armv6l)
-* Ubuntu LTS (14.04, 16.04): i386 and x86_64
+* Debian stable (10.0, "buster"): i386, x86_64
+* Debian oldstable (9.0, "stretch"): i386, x86_64
+* Ubuntu LTS (14.04, 16.04, 18.04, 20.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
 * CentOS 7: x86_64
 

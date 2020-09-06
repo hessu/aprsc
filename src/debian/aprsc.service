@@ -1,0 +1,35 @@
+[Unit]
+Description=APRS-IS server
+After=network.target
+Documentation=http://he.fi/aprsc/, man:aprsc(8)
+
+[Service]
+Type=simple
+ExecStartPre=/opt/aprsc/sbin/aprsc-prepare-chroot.sh
+ExecStart=/opt/aprsc/sbin/aprsc -u aprsc -t /opt/aprsc -e info -o file -r logs -c etc/aprsc.conf
+PIDFile=/opt/aprsc/logs/aprsc.pid
+TimeoutStopSec=5
+Restart=always
+User=root
+Group=root
+LimitNOFILE=65535
+#PrivateDevices=yes
+#ProtectHome=yes
+#ReadOnlyDirectories=/
+#ReadWriteDirectories=-/var/lib/aprsc
+
+#NoNewPrivileges=true
+#CapabilityBoundingSet=CAP_SETGID CAP_SETUID CAP_SYS_RESOURCE
+MemoryDenyWriteExecute=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ProtectSystem=true
+#ReadWriteDirectories=-/etc/aprsc
+
+[Install]
+WantedBy=multi-user.target
+Alias=aprsc.service

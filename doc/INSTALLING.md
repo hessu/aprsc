@@ -96,6 +96,29 @@ Before starting aprsc edit the configuration file, which can be found in
 /opt/aprsc/etc/aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)
 document for instructions.
 
+If your distribution has systemd (try 'systemctl' to find out if you do),
+proceed with the systemd instructions. If not, proceed with the non-systemd
+instructions.
+
+Startup with systemd
+-----------------------
+
+Enable the service:
+
+    sudo systemctl enable aprsc
+
+To start it up:
+
+    sudo systemctl start aprsc
+
+To shut it down:
+
+    sudo systemctl stop aprsc
+
+
+Startup the old-fashioned way
+--------------------------------
+
 To enable startup, edit /etc/default/aprsc and change STARTAPRSC="no" to
 "yes". There should not be any need to touch the other options at this time.
 

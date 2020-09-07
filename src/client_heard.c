@@ -36,6 +36,8 @@
 #include "cellmalloc.h"
 #include "keyhash.h"
 
+#define MAX_HEARD_PER_CLIENT 2000
+
 //#define HEARD_DEBUG
 
 #ifdef HEARD_DEBUG
@@ -101,12 +103,16 @@ static void heard_list_update(struct client_t *c, char *call, int call_len, time
 		}
 	}
 	
+	/* sanity limit */
+	if (*entrycount >= MAX_HEARD_PER_CLIENT)
+		return;
+
 	/* Not found, insert. */
 	DLOG(LOG_DEBUG, "heard_list_update fd %d %s: inserting %.*s", c->fd, which, call_len, call);
 #ifndef _FOR_VALGRIND_
 	h = cellmalloc(client_heard_cells);
 	if (!h) {
-	        hlog(LOG_ERR, "heard_list_update: cellmalloc failed");
+	        DLOG(LOG_ERR, "heard_list_update: cellmalloc failed");
 	        return;
 	}
 #else	

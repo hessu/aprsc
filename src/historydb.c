@@ -75,9 +75,6 @@ void historydb_init(void)
 /* Called only under WR-LOCK */
 static void historydb_free(struct history_cell_t *p)
 {
-	if (p->packet != p->packetbuf)
-		hfree(p->packet);
-
 #ifndef _FOR_VALGRIND_
 	cellfree( historydb_cells, p );
 #else
@@ -87,7 +84,7 @@ static void historydb_free(struct history_cell_t *p)
 }
 
 /* Called only under WR-LOCK */
-static struct history_cell_t *historydb_alloc(int packet_len)
+static struct history_cell_t *historydb_alloc(void)
 {
 	++historydb_cellgauge;
 #ifndef _FOR_VALGRIND_
@@ -120,17 +117,12 @@ static int historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 {
 	int klen;
 	char key[CALLSIGNLEN_MAX+1];
-	int plen;
-	char packet[PACKETLEN_MAX+3];
 	
 	/* create a null-terminated key string */
 	klen = (hp->keylen < CALLSIGNLEN_MAX) ? hp->keylen : CALLSIGNLEN_MAX;
 	strncpy(key, hp->key, klen);
 	key[klen] = 0;
-	plen = hp->packetlen > PACKETLEN_MAX ? PACKETLEN_MAX : hp->packetlen;
-	strncpy(packet, hp->packet, plen);
-	packet[plen] = 0;
-	
+
 	cJSON *js = cJSON_CreateObject();
 	cJSON_AddNumberToObject(js, "arrivaltime", hp->arrivaltime);
 	cJSON_AddStringToObject(js, "key", key);
@@ -138,7 +130,6 @@ static int historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 	cJSON_AddNumberToObject(js, "flags", hp->flags);
 	cJSON_AddNumberToObject(js, "lat", (double)hp->lat);
 	cJSON_AddNumberToObject(js, "lon", (double)hp->lon);
-	cJSON_AddStringToObject(js, "packet", packet);
 	
 	/* the tree is built, print it out to a malloc'ed string */
 	char *out = cJSON_PrintUnformatted(js);
@@ -155,9 +146,9 @@ static int historydb_dump_entry(FILE *fp, struct history_cell_t *hp)
 static int historydb_load_entry(char *s)
 {
 	cJSON *j;
-	cJSON *arrivaltime, *key, *packettype, *flags, *lat, *lon, *packet;
+	cJSON *arrivaltime, *key, *packettype, *flags, *lat, *lon;
 	struct history_cell_t *cp;
-	int keylen, packetlen;
+	int keylen;
 	uint32_t h1, h2, i;
 	time_t expirytime   = tick - lastposition_storetime;
 	
@@ -173,10 +164,9 @@ static int historydb_load_entry(char *s)
 	flags = cJSON_GetObjectItem(j, "flags");
 	lat = cJSON_GetObjectItem(j, "lat");
 	lon = cJSON_GetObjectItem(j, "lon");
-	packet = cJSON_GetObjectItem(j, "packet");
 	
 	/* make sure all required keys are present */
-	if (!((arrivaltime) && (key) && (packettype) && (flags) && (lat) && (lon) && (packet)))
+	if (!((arrivaltime) && (key) && (packettype) && (flags) && (lat) && (lon)))
 		goto fail;
 	
 	/* check types of items */
@@ -185,8 +175,7 @@ static int historydb_load_entry(char *s)
 		|| packettype->type != cJSON_Number
 		|| flags->type != cJSON_Number
 		|| lat->type != cJSON_Number
-		|| lon->type != cJSON_Number
-		|| packet->type != cJSON_String) {
+		|| lon->type != cJSON_Number) {
 			goto fail;
 	}
 	
@@ -196,10 +185,9 @@ static int historydb_load_entry(char *s)
 	}
 	
 	keylen = strlen(key->valuestring);
-	packetlen = strlen(packet->valuestring);
 	
 	/* ok, we're going to add this one - allocate, fill and push */
-	cp = historydb_alloc(packetlen);
+	cp = historydb_alloc();
 	if (!cp) {
 		hlog(LOG_ERR, "historydb_load_entry: cellmalloc failed");
 		goto fail;
@@ -221,14 +209,7 @@ static int historydb_load_entry(char *s)
 	cp->arrivaltime = arrivaltime->valueint;
 	cp->packettype  = packettype->valueint;
 	cp->flags       = flags->valueint;
-	cp->packetlen   = packetlen;
-	cp->packet      = cp->packetbuf; /* default case */
-	if (cp->packetlen > sizeof(cp->packetbuf)) {
-		/* Needs bigger buffer */
-		cp->packet = hmalloc( cp->packetlen );
-	}
-	memcpy( cp->packet, packet->valuestring, packetlen );
-	
+
 	/* ok, insert it in the hash table */
 	cp->next = historydb_hash[i];
 	historydb_hash[i] = cp;
@@ -416,16 +397,6 @@ int historydb_insert(struct pbuf_t *pb)
 				cp->arrivaltime = pb->t;
 				cp->packettype  = pb->packettype;
 				cp->flags       = pb->flags;
-				cp->packetlen   = pb->packet_len;
-
-				if ( cp->packet != cp->packetbuf )
-					hfree( cp->packet );
-				cp->packet = cp->packetbuf; /* default case */
-				if ( cp->packetlen > sizeof(cp->packetbuf) ) {
-					/* Needs bigger buffer */
-					cp->packet = hmalloc( cp->packetlen );
-				}
-				memcpy( cp->packet, pb->data, cp->packetlen );
 			}
 		    }
 		} // .. else no match, advance hp..
@@ -434,7 +405,7 @@ int historydb_insert(struct pbuf_t *pb)
 
 	if (!cp1 && !isdead) {
 		// Not found on this chain, append it!
-		cp = historydb_alloc(pb->packet_len);
+		cp = historydb_alloc();
 		if (!cp) {
 			hlog(LOG_ERR, "historydb: cellmalloc failed");
 			rwl_wrunlock(&historydb_rwlock);
@@ -452,13 +423,6 @@ int historydb_insert(struct pbuf_t *pb)
 		cp->arrivaltime = pb->t;
 		cp->packettype  = pb->packettype;
 		cp->flags       = pb->flags;
-		cp->packetlen   = pb->packet_len;
-		cp->packet      = cp->packetbuf; /* default case */
-		if (cp->packetlen > sizeof(cp->packetbuf)) {
-			/* Needs bigger buffer */
-			cp->packet = hmalloc( cp->packetlen );
-		}
-		memcpy( cp->packet, pb->data, cp->packetlen );
 
 		*hp = cp; 
 	}

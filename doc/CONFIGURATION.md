@@ -301,6 +301,33 @@ within HTML page.
     HTTPStatusOptions ShowEmail=1
 
 
+### Whitelisting logins  and packets ###
+
+The following options allow the server operator to allow logins and packets
+from specific callsigns.  Both options support 'glob' type wildcards ('*'
+matches 0 or more any characters, '?' matches exactly one any character). 
+The examples below are examples only - there is currently, by default, no need
+to have the example callsigns blocked.
+
+Separate multiple callsigns with spaces.
+
+AllowLoginCall rejects logins by the specified callsign. Callsigns which
+are not valid callsigns on the APRS-IS (non-alphanumeric, too long, etc) are
+rejected by default.
+
+    AllowLoginCall P1RAT* P?ROT*
+
+AllowSourceCall makes the server drop packets sent by the given source
+callsign, even though they were injected at a different server.  The
+following callsigns are dropped by default: N0CALL* NOCALL* SERVER*
+
+    AllowSourceCall P1RAT* P?ROT*
+
+Allowed Logins take precedence over Disallow so you are able to disallow blocks
+of addresses or convert to whitelist only by doing the following.
+    DisallowLoginCall *
+    AllowLoginCall AB1CD
+
 ### Rejecting logins and packets ###
 
 The following options allow the server operator to reject logins and packets

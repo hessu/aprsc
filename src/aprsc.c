@@ -9,7 +9,7 @@
  */
 
 #define HELPS	"Usage: aprsc [-t <chrootdir>] [-u <setuid user>] [-c <cfgfile>] [-f (fork)]\n" \
-	" [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>]\n" \
+	" [-n <logname>] [-e <loglevel>] [-o <logdest>] [-r <logdir>] [-p <pidfile>]\n" \
 	" [-y (try config)] [-h (help)]\n"
 
 #include <pthread.h>
@@ -83,7 +83,7 @@ void parse_cmdline(int argc, char *argv[])
 	int s, i;
 	int failed = 0;
 	
-	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:DyZe:o:?h")) != -1) {
+	while ((s = getopt(argc, argv, "c:ft:u:n:r:d:DyZe:o:p:?h")) != -1) {
 	switch (s) {
 		case 'c':
 			if (cfgfile && cfgfile != def_cfgfile)
@@ -152,6 +152,11 @@ void parse_cmdline(int argc, char *argv[])
 				fprintf(stderr, "Log destination unknown: \"%s\"\n", optarg);
 				failed = 1;
 			}
+			break;
+		case 'p':
+			if (pidfile)
+				hfree(pidfile);
+			pidfile= hstrdup(optarg);
 			break;
 		case '?':
 		case 'h':

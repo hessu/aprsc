@@ -20,6 +20,7 @@ when installing aprsc from a binary package.
     and debugging, or "syslog" for syslogd)
  *  `-r logs` - log file directory, log files are placed in /opt/aprsc/logs
  *  `-c etc/aprsc.conf` - configuration file location
+ *  `-p /opt/aprsc/logs/aprsc.pid` - specify path to generated pid file, default path is logdir/aprsc.pid
  *  `-y` - try to parse the configuration, report success or error,
     quit after reading configuration. Useful for validating your
     configuration before restarting aprsc.

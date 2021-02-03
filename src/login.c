@@ -31,6 +31,11 @@ static const char *disallow_login_usernames[] = {
 	NULL
 };
 
+/* a static list of usernames which are allowed to log in */
+static const char *allow_login_usernames[] = {
+	NULL
+};
+
 /* a static list of unmaintained applications which receive some
  * special "treatment"
  */
@@ -55,6 +60,7 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 	char *argv[256];
 	int i;
 	int username_len;
+	int whitelisted = 0; 
 	
 	/* parse to arguments */
 	if ((argc = parse_args_noshell(argv, s)) == 0)
@@ -77,19 +83,33 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 		hlog(LOG_WARNING, "%s: %s: Invalid login string, too long 'user' username: '%s'", addr_rem, log_source, *username);
 		return -1;
 	}
-	
-	/* check the username against a static list of disallowed usernames */
-	for (i = 0; (disallow_login_usernames[i]); i++) {
-		if (strcasecmp(*username, disallow_login_usernames[i]) == 0) {
-			hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed", addr_rem, log_source, *username);
-			return -1;
+
+	/* check the username against a static list of allowed usernames */
+	for (i = 0; (allow_login_usernames[i]); i++) {
+		if (strcasecmp(*username, allow_login_usernames[i]) == 0) {
+			whitelisted = 1;
 		}
 	}
 	
-	/* check the username against a dynamic list of disallowed usernames */
-	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, *username, username_len)) {
-		hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed due to config", addr_rem, log_source, *username);
-		return -1;
+	/* check the username against a dynamic list of allowed usernames */
+	if (allow_login_glob && check_call_glob_match(allow_login_glob, *username, username_len)) {
+		whitelisted = 1;
+	}
+	
+	/* check the username against a static list of disallowed usernames */
+	if (whitelisted == 0) {
+		for (i = 0; (disallow_login_usernames[i]); i++) {
+			if (strcasecmp(*username, disallow_login_usernames[i]) == 0) {
+				hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed", addr_rem, log_source, *username);
+				return -1;
+			}
+		}
+		
+		/* check the username against a dynamic list of disallowed usernames */
+		if (disallow_login_glob && check_call_glob_match(disallow_login_glob, *username, username_len)) {
+			hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed due to config", addr_rem, log_source, *username);
+			return -1;
+		}
 	}
 	
 	/* make sure the callsign is OK on the APRS-IS */
@@ -208,10 +228,12 @@ int login_setup_udp_feed(struct client_t *c, int port)
 
 int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len)
 {
-	int argc;
+	int argc, whitelisted;
 	char *argv[256];
 	int i, rc;
 	
+	whitelisted = 0;
+
 	/* make it null-terminated for our string processing */
 	/* TODO: do not modify incoming stream - make s a const char! */
 	char *e = s + len;
@@ -252,21 +274,35 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	strncpy(c->username, username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);
-	
-	/* check the username against a static list of disallowed usernames */
-	for (i = 0; (disallow_login_usernames[i]); i++) {
-		if (strcasecmp(c->username, disallow_login_usernames[i]) == 0) {
-			hlog(LOG_WARNING, "%s: Login by user '%s' not allowed", c->addr_rem, c->username);
-			rc = client_printf(self, c, "# Login by user not allowed\r\n");
-			goto failed_login;
+
+	/* check the username against a static list of allowed usernames */
+	for (i = 0; (allow_login_usernames[i]); i++) {
+		if (strcasecmp(c->username, allow_login_usernames[i]) == 0) {
+			whitelisted = 1;
 		}
 	}
 	
-	/* check the username against a dynamic list of disallowed usernames */
-	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, c->username, c->username_len)) {
-		hlog(LOG_WARNING, "%s: Login by user '%s' not allowed due to config", c->addr_rem, c->username);
-		rc = client_printf(self, c, "# Login by user not allowed\r\n");
-		goto failed_login;
+	/* check the username against a dynamic list of allowed usernames */
+	if (allow_login_glob && check_call_glob_match(allow_login_glob, c->username, c->username_len)) {
+		whitelisted = 1;
+	}
+	
+	/* check the username against a static list of disallowed usernames */
+	if (whitelisted == 0) {
+		for (i = 0; (disallow_login_usernames[i]); i++) {
+			if (strcasecmp(c->username, disallow_login_usernames[i]) == 0) {
+				hlog(LOG_WARNING, "%s: Login by user '%s' not allowed", c->addr_rem, c->username);
+				rc = client_printf(self, c, "# Login by user not allowed\r\n");
+				goto failed_login;
+			}
+		}
+		
+		/* check the username against a dynamic list of disallowed usernames */
+		if (disallow_login_glob && check_call_glob_match(disallow_login_glob, c->username, c->username_len)) {
+			hlog(LOG_WARNING, "%s: Login by user '%s' not allowed due to config", c->addr_rem, c->username);
+			rc = client_printf(self, c, "# Login by user not allowed\r\n");
+			goto failed_login;
+		}
 	}
 	
 	/* make sure the callsign is OK on the APRS-IS */
@@ -306,7 +342,6 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		}
 	}
 #endif
-	
 	
 	int given_passcode = -1;
 	
@@ -402,6 +437,13 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 		}
 	}
 	
+
+	if (disallow_unverified && !(c->validated)) {
+		hlog(LOG_INFO, "%s: Login by unverified user '%s' not allowed", c->addr_rem, username);
+		rc = client_printf(self, c, "# Login by unverified user not allowed\r\n");
+		goto failed_login;
+	}
+
 	/* clean up the filter string so that it doesn't contain invalid
 	 * UTF-8 or other binary stuff. */
 	sanitize_ascii_string(c->filter_s);

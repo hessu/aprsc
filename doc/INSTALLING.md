@@ -75,7 +75,7 @@ Next, add the gpg key used to sign the packages by running the following
 commands at your command prompt.  This will enable strong authentication of
 the aprsc packages - apt-get will cryptographically validate them.
 
-    gpg --keyserver keys.gnupg.net --recv C51AA22389B5B74C3896EF3CA72A581E657A2B8D
+    gpg --keyserver keyserver.ubuntu.com --recv C51AA22389B5B74C3896EF3CA72A581E657A2B8D
     gpg --export C51AA22389B5B74C3896EF3CA72A581E657A2B8D | sudo apt-key add -
 
 Next, download the package indexes:

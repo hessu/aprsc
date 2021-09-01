@@ -1480,7 +1480,7 @@ int read_config(void)
 		return -1;
 	
 	if (!pidfile) {
-		s = hmalloc(strlen(log_dir) + 10 + 3);
+		s = hmalloc(strlen(log_dir) + 1 + strlen(logname) + 4 + 1);
 		sprintf(s, "%s/%s.pid", log_dir, logname);
 		
 		pidfile = s;

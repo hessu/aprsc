@@ -6,7 +6,7 @@ aprsc is "officially" "supported" on the following platforms:
 
 * Debian stable (10.0, "buster"): i386, x86_64
 * Debian oldstable (9.0, "stretch"): i386, x86_64
-* Ubuntu LTS (14.04, 16.04, 18.04, 20.04): i386 and x86_64
+* Ubuntu LTS (18.04, 20.04): i386 and x86_64
 * CentOS 6: i386 and x86_64
 * CentOS 7: x86_64
 
@@ -52,10 +52,8 @@ versions and their codenames:
 
 * Ubuntu 20.04 LTS: focal
 * Ubuntu 18.04 LTS: bionic
-* Ubuntu 16.04 LTS: xenial
 * Debian 10.0: buster
 * Debian 9.0: stretch
-* Debian 8.0: jessie
 
 Other versions are currently not supported.
 

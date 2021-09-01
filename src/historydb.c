@@ -90,7 +90,7 @@ static struct history_cell_t *historydb_alloc(void)
 #ifndef _FOR_VALGRIND_
 	return cellmalloc( historydb_cells );
 #else
-	return hmalloc(sizeof(struct history_cell_t)+packet_len);
+	return hmalloc(sizeof(struct history_cell_t));
 #endif
 }
 

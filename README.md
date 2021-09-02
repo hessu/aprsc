@@ -3,7 +3,8 @@ aprsc - an APRS-IS server in C
 ==============================
 
 Automatic build and test result:
-[![Build Status](https://travis-ci.org/hessu/aprsc.svg?branch=master)](https://travis-ci.org/hessu/aprsc)
+![Build Status](https://github.com/hessu/aprsc/actions/workflows/tests.yml/badge.svg)
+
 
 You're looking at the source code of aprsc, an open-source APRS-IS
 server.

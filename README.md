@@ -2,7 +2,6 @@
 aprsc - an APRS-IS server in C
 ==============================
 
-Automatic build and test result:
 ![Build Status](https://github.com/hessu/aprsc/actions/workflows/tests.yml/badge.svg)
 
 

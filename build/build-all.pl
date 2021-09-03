@@ -11,17 +11,12 @@ my @platforms = (
 	'ubuntu-1804-amd64',
 	'ubuntu-1604-i386',
 	'ubuntu-1604-amd64',
-	'ubuntu-1404-i386',
-	'ubuntu-1404-amd64',
-#	'debian-70-i386',
-#	'debian-70-amd64',
-#	'debian-70-armhf',
-	'debian-80-i386',
-	'debian-80-amd64',
 	'debian-90-i386',
 	'debian-90-amd64',
 	'debian-100-i386',
 	'debian-100-amd64',
+	'debian-110-i386',
+	'debian-110-amd64',
 	'centos-70-x86_64',
 );
 
@@ -38,6 +33,15 @@ my %platconf = (
 	},
 	'centos-63-x86_64' => {
 		'dest' => 'centos/6/x86_64'
+	},
+	'ubuntu-1804-amd64' => {
+		'virtualisation' => 'lxd'
+	},
+	'debian-110-i386' => {
+		'virtualisation' => 'lxd'
+	},
+	'debian-110-amd64' => {
+		'virtualisation' => 'lxd'
 	}
 );
 
@@ -56,7 +60,7 @@ my $dir_upload_repo_rpm = '/data/www/aprsc-dist/html/aprsc/rpm';
 
 my $debug = 0;
 my $virsh = "virsh -c qemu:///system";
-
+my $lxc = "lxc";
 
 
 sub tcp_wait($$)
@@ -92,6 +96,18 @@ sub vm_state($$)
 	my $pconf = (defined $platconf{$dist}) ? $platconf{$dist} : {};
 	return "running" if ($pconf->{'novm'});
 	
+	if (($pconf->{"virtualisation"} || "kvm") eq "lxd") {
+		my $state = `$lxc info $vm`;
+		
+		$state =~ s/.*Status:\s+(.*?)\s+.*$/$1/sg;
+		$state =~ s/Stopped/shut off/;
+		$state =~ s/Running/running/;
+		
+		print "vm $vm: $state\n";
+		
+		return $state;
+	}
+	
 	my $state = `$virsh domstate $vm`;
 	
 	$state =~ s/\s+$//s;
@@ -99,6 +115,22 @@ sub vm_state($$)
 	print "vm $vm: $state\n";
 	
 	return $state;
+}
+
+sub vm_start($$)
+{
+	my($dist, $vm) = @_;
+	
+	my $pconf = (defined $platconf{$dist}) ? $platconf{$dist} : {};
+	return if ($pconf->{'novm'});
+	
+	if (($pconf->{"virtualisation"} || "kvm") eq "lxd") {
+		system "$lxc start $vm";
+		return 1;
+	}
+	
+	system "$virsh start $vm";
+	return 1;
 }
 
 sub vm_up($$)
@@ -111,8 +143,7 @@ sub vm_up($$)
 	my $state = vm_state($dist, $vm);
 	
 	if ($state eq "shut off") {
-		system "$virsh start $vm";
-		return 1;
+		return vm_start($dist, $vm);
 	}
 	
 	if ($state eq "running") {
@@ -225,6 +256,11 @@ sub vm_shutdown($$)
 	my $state = vm_state($dist, $vm);
 	
 	if ($state eq "running") {
+		if (($pconf->{"virtualisation"} || "kvm") eq "lxd") {
+			system "$lxc stop $vm";
+			return 1;
+		}
+		
 		system "$virsh shutdown $vm";
 		return 1;
 	}

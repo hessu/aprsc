@@ -37,6 +37,9 @@ my %platconf = (
 	'ubuntu-1804-amd64' => {
 		'virtualisation' => 'lxd'
 	},
+	'ubuntu-2004-amd64' => {
+		'virtualisation' => 'lxd'
+	},
 	'debian-110-i386' => {
 		'virtualisation' => 'lxd'
 	},

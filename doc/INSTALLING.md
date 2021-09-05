@@ -52,6 +52,7 @@ versions and their codenames:
 
 * Ubuntu 20.04 LTS: focal
 * Ubuntu 18.04 LTS: bionic
+* Debian 11.0: bullseye
 * Debian 10.0: buster
 * Debian 9.0: stretch
 

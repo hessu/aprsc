@@ -4,8 +4,9 @@ Installing aprsc
 
 aprsc is "officially" "supported" on the following platforms:
 
-* Debian stable (10.0, "buster"): i386, x86_64
-* Debian oldstable (9.0, "stretch"): i386, x86_64
+* Debian stable (11.0, "bullseye"): i386, x86_64
+* Debian oldstable (10.0, "buster"): i386, x86_64
+* Debian oldoldstable (9.0, "stretch"): i386, x86_64
 * Ubuntu LTS (18.04, 20.04): i386 and x86_64
 * CentOS 7: x86_64
 
@@ -208,10 +209,4 @@ aprsc.conf.
 After startup, look at the log file for startup messages, watch out for
 any warnings or errors.
 
-
-Windows
-----------
-
-There is a beta-level build of aprsc for Windows.  Please refer to the
-[WINDOWS](WINDOWS.html) document for installation instructions.
 

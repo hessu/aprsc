@@ -290,7 +290,10 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	char validated;
 	int e;
 	int packet_len;
-	
+
+	/* prepare default response headers */
+	http_header_base(evhttp_request_get_output_headers(r), 0);
+
 	req_headers = evhttp_request_get_input_headers(r);
 	ctype = evhttp_find_header(req_headers, "Content-Type");
 	
@@ -381,7 +384,6 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	evbuffer_add(bufout, "ok\n", 3);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
-	http_header_base(headers, 0);
 	evhttp_add_header(headers, "Content-Type", "text/plain; charset=UTF-8");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", bufout);
@@ -535,6 +537,7 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
 	
 	json = cdata_json_string(query);
 	if (!json) {
+		http_header_base(evhttp_request_get_output_headers(r), 0);
 		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, no such counter");
 		return;
 	}
@@ -565,6 +568,7 @@ static void http_static_file(struct evhttp_request *r, const char *fname)
 	
 	fd = open(fname, 0, O_RDONLY);
 	if (fd < 0) {
+		http_header_base(evhttp_request_get_output_headers(r), 0);
 		if (errno == ENOENT) {
 			/* don't complain about missing motd.html - it's optional. */
 			int level = LOG_ERR;
@@ -653,6 +657,7 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 			
 	if (cmdp->name == NULL) {
 		hlog(LOG_DEBUG, "http static file request: 404: %s", uri);
+		http_header_base(evhttp_request_get_output_headers(r), 0);
 		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 		return;
 	}
@@ -694,6 +699,7 @@ static void http_strings(struct evhttp_request *r, const char *uri)
 	}
 	
 	hlog(LOG_DEBUG, "http strings query: 404: %s", uri);
+	http_header_base(evhttp_request_get_output_headers(r), 0);
 	evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 	
 	evhttp_clear_headers(&args);
@@ -747,11 +753,13 @@ static void http_router(struct evhttp_request *r, void *which_server)
 		}
 		
 		hlog(LOG_DEBUG, "http request on upload server for '%s': 404 not found", uri);
+		http_header_base(evhttp_request_get_output_headers(r), 0);
 		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
 		return;
 	}
 	
 	hlog(LOG_ERR, "http request on unknown server for '%s': 404 not found", uri);
+	http_header_base(evhttp_request_get_output_headers(r), 0);
 	evhttp_send_error(r, HTTP_NOTFOUND, "Server not found");
 	
 	return;

@@ -18,7 +18,7 @@
  *	Thanks!
  */
 
-#define VERSION_BRANCH ""
+#define VERSION_BRANCH "-2E0NNX-1"
 
 #endif
 

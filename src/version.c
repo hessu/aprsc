@@ -18,9 +18,6 @@ const char verstr_features[] =
 #ifdef XP_USE_EPOLL
 	" epoll"
 #endif
-#ifdef XP_USE_KQUEUE
-	" kqueue"
-#endif
 #ifdef XP_USE_POLL
 	" poll"
 #endif

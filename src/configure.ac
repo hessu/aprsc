@@ -77,8 +77,6 @@ AC_CHECK_HEADERS([alloca.h],    AC_DEFINE([HAVE_ALLOCA_H]))
 AC_CHECK_HEADERS([poll.h],      AC_DEFINE([HAVE_POLL_H]))
 dnl AC_CHECK_FUNC(ppoll,,[Probably have ppoll of Linux])
 AC_CHECK_HEADERS([sys/epoll.h], AC_DEFINE([HAVE_SYS_EPOLL_H]))
-AC_CHECK_HEADERS([sys/event.h], AC_DEFINE([HAVE_SYS_EVENT_H]))
-AC_CHECK_FUNC(kqueue, AC_DEFINE([HAVE_KQUEUE], [], [FreeBSD-style kqueue]))
 
 dnl SCTP checks
 AC_CHECK_HEADERS([netinet/sctp.h], AC_DEFINE([HAVE_NETINET_SCTP_H]))

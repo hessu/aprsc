@@ -30,9 +30,6 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* FreeBSD-style kqueue */
-#undef HAVE_KQUEUE
-
 /* Have libz */
 #undef HAVE_LIBZ
 
@@ -86,9 +83,6 @@
 
 /* Define to 1 if you have the <sys/eventfd.h> header file. */
 #undef HAVE_SYS_EVENTFD_H
-
-/* Define to 1 if you have the <sys/event.h> header file. */
-#undef HAVE_SYS_EVENT_H
 
 /* Define to 1 if you have the <sys/prctl.h> header file. */
 #undef HAVE_SYS_PRCTL_H

@@ -1,3 +1,4 @@
+syntax = "proto2";
 
 //
 //	A server sends an IS2ServerSignature to all new clients.

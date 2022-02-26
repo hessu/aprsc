@@ -152,14 +152,19 @@ static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Mess
 	if (!lr) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login reply failed",
 			c->addr_rem, c->username);
-		return 0;
+		return -1;
+	}
+	
+	if (lr->result != IS2_LOGIN_REPLY__LOGIN_RESULT__OK) {
+		hlog(LOG_INFO, "%s/%s: IS2: Login failed: '%s' (%d)",
+			c->addr_rem, c->username,
+			(lr->result_message) ? lr->result_message : "no reason", lr->result_code);
+		return -1;
 	}
 	
 	hlog(LOG_INFO, "%s/%s: IS2: Login reply received",
 		c->addr_rem, c->username);
-	
-	// TODO: handle negative responses
-	
+
 	/* ok, login succeeded, switch handler */
 	c->is2_input_handler = &is2_input_handler;
 	
@@ -594,7 +599,7 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Messag
 	
 	hlog(LOG_INFO, "%s/%s: IS2: Parameter set received: request_id %d%s",
 		c->addr_rem, c->username, par->request_id,
-		(par->filter_string) ? "filter_string" : "");
+		(par->filter_string) ? " filter_string" : "");
 	
 	/* prepare reply message */
 	IS2Parameter prep = IS2_PARAMETER__INIT;

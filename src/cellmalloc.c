@@ -71,6 +71,9 @@ int new_cellblock(cellarena_t *ca)
 	int i;
 	char *cb;
 
+	// If we already have allocated the maximum amount of blocks, do not even try.
+	if (ca->cellblocks_count >= CELLBLOCKS_MAX) return -1;
+
 #ifdef MEMDEBUG /* External backing-store files, unique ones for each cellblock,
 		   which at Linux names memory blocks in  /proc/nnn/smaps "file"
 		   with this filename.. */
@@ -102,8 +105,6 @@ int new_cellblock(cellarena_t *ca)
 #endif
 	if (cb == NULL || cb == (char*)-1)
 	  return -1;
-
-	if (ca->cellblocks_count >= CELLBLOCKS_MAX) return -1;
 
 	ca->cellblocks[ca->cellblocks_count++] = cb;
 

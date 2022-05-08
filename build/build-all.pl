@@ -376,7 +376,7 @@ if ($mode eq 'upload') {
 		}
 		if (%rpmdirs) {
 			system("ssh -t $upload_host 'for i in " . join(' ', sort keys %rpmdirs)
-				. "; do createrepo \$i; done'") == 0
+				. "; do createrepo_c \$i; done'") == 0
 				or die "YUM repository creation failed: $?\n";
 		}
 	#system("ssh -t $upload_host") == 0

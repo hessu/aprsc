@@ -9,8 +9,6 @@ use IO::Socket::INET;
 my @platforms = (
 	'ubuntu-2004-amd64',
 	'ubuntu-1804-amd64',
-	'ubuntu-1604-i386',
-	'ubuntu-1604-amd64',
 	'debian-90-i386',
 	'debian-90-amd64',
 	'debian-100-i386',

@@ -22,11 +22,17 @@
 #include <sys/epoll.h>
 
 #else
+#ifdef HAVE_SYS_EVENT_H
+// Have FreeBSD <sys/event.h>
+#define XP_USE_KQUEUE 1
+#include <sys/event.h>
+
+#else
 
 #define XP_USE_POLL 1
 #define XP_INCREMENT 64 // The "struct pollfd" is _small_, avoid mem fragment
 #endif
-
+#endif
 
 #define XP_IN	1
 #define XP_OUT	2
@@ -41,8 +47,12 @@ struct xpoll_fd_t {
 #ifdef XP_USE_EPOLL
 	struct epoll_event ev;  // event flags for this fd.
 #else
+#ifdef XP_USE_KQUEUE
+	struct kevent ev;	// event object for kqueue/kevent
+#else
 #ifdef XP_USE_POLL
 	int pollfd_n;	/* index to xp->pollfd[] */
+#endif
 #endif
 #endif
 
@@ -62,9 +72,13 @@ struct xpoll_t {
   //	struct epoll_event events[MAX_EPOLL_EVENTS];
 
 #else
+#ifdef XP_USE_KQUEUE
+	int kq;
+#else
 #ifdef XP_USE_POLL
 	struct pollfd *pollfd;
 	int pollfd_len;
+#endif
 #endif
 #endif
 	int pollfd_used;

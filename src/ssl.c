@@ -279,9 +279,10 @@ static void ssl_info_callback(SSL *ssl, int where, int ret)
 int ssl_init(void)
 {
 	hlog(LOG_INFO, "Initializing OpenSSL, built against %s ...", OPENSSL_VERSION_TEXT);
-	
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	/* this is deprecated from OpenSSL 1.1.x and no replacement is needed. */
 	OPENSSL_config(NULL);
-	
+#endif
 	SSL_library_init();
 	SSL_load_error_strings();
 	

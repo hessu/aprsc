@@ -51,6 +51,8 @@
 #include <zlib.h>
 #endif
 
+static void http_send_reply_code(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len, int allow_compress, int http_code, char *http_code_text);
+
 /* supported HTTP transfer-encoding methods */
 #define HTTP_COMPR_GZIP 1
 
@@ -290,24 +292,27 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	char validated;
 	int e;
 	int packet_len;
-	
+
+	/* prepare default response headers */
+	http_header_base(evhttp_request_get_output_headers(r), 0);
+
 	req_headers = evhttp_request_get_input_headers(r);
 	ctype = evhttp_find_header(req_headers, "Content-Type");
 	
 	if (!ctype || strcasecmp(ctype, "application/octet-stream") != 0) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, wrong or missing content-type");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, wrong or missing content-type", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
 	clength = evhttp_find_header(req_headers, "Content-Length");
 	if (!clength) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, missing content-length");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, missing content-length", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
 	clength_i = atoi(clength);
 	if (clength_i > MAX_HTTP_POST_DATA) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, too large body");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, too large body", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
@@ -321,7 +326,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 		post[l] = 0;
 	
 	if (l != clength_i) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Body size does not match content-length");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, body size does not match content-length", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
@@ -329,17 +334,17 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	
 	packet_len = loginpost_split(post, l, &login_string, &packet);
 	if (packet_len == -1) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "No newline (LF) found in data");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, No newline (LF) found in data", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
 	if (!login_string) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "No login string in data");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, No login string in data", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
 	if (!packet) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "No packet data found in data");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, no packet data found in data", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
@@ -349,23 +354,23 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	/* process the login string */
 	validated = http_udp_upload_login(remote_host, login_string, &username, "HTTP POST");
 	if (validated < 0) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Invalid login string");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, invalid login string", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
 	if (validated != 1) {
-		evhttp_send_error(r, 403, "Invalid passcode");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Invalid passcode", 0, 1, 403, NULL);
 		return;
 	}
 	
 	/* packet size limits */
 	if (packet_len < PACKETLEN_MIN) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Packet too short");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, packet too short", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
 	if (packet_len > PACKETLEN_MAX-2) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Packet too long");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, packet too long", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
@@ -373,7 +378,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 
 	if (e < 0) {
 		hlog(LOG_DEBUG, "http incoming packet parse failure code %d: %s", e, packet);
-		evhttp_send_error(r, HTTP_BADREQUEST, "Packet parsing failure");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, packet parsing failure", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
@@ -381,7 +386,6 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	evbuffer_add(bufout, "ok\n", 3);
 	
 	struct evkeyvalq *headers = evhttp_request_get_output_headers(r);
-	http_header_base(headers, 0);
 	evhttp_add_header(headers, "Content-Type", "text/plain; charset=UTF-8");
 	
 	evhttp_send_reply(r, HTTP_OK, "OK", bufout);
@@ -451,13 +455,78 @@ static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 }
 #endif
 
+
 /*
- *	Transmit an OK HTTP response, given headers and data.
+ *	Return correct HTTP description for the code
+ */
+
+static char *http_get_code_text(int http_code)
+{
+	switch (http_code) {
+		case HTTP_OK:			/* 200 */ return "OK";
+		case HTTP_NOCONTENT:		/* 204 */ return "No content";
+		case HTTP_MOVEPERM:		/* 301 */ return "Moved permanently";
+		case HTTP_MOVETEMP:		/* 302 */ return "Found";
+		case HTTP_NOTMODIFIED:		/* 304 */ return "Not modified";
+		case HTTP_BADREQUEST:		/* 400 */ return "Bad request";
+		case 401:			/* 401 */ return "Unauthorized";
+		case 403:			/* 403 */ return "Forbidden";
+		case HTTP_NOTFOUND:		/* 404 */ return "Not found";
+		case HTTP_BADMETHOD:		/* 405 */ return "Method not allowed";
+		case HTTP_ENTITYTOOLARGE:	/* 413 */ return "Payload too large";
+		case HTTP_EXPECTATIONFAILED:	/* 417 */ return "Expectation failed";
+		case HTTP_INTERNAL:		/* 500 */ return "Internal server error";
+		case HTTP_NOTIMPLEMENTED:	/* 501 */ return "Not implemented";
+		case HTTP_SERVUNAVAIL:		/* 503 */ return "Service unavailable";
+		default:			return "Unknown";
+	};
+}
+
+
+/*
+ *	Construct an error page - may be templated later to look nicer
+ */
+
+static char *http_construct_error_page(char *data, int http_code, char *http_code_text)
+{
+	char buffer[1024];
+	char *s = NULL;
+
+	snprintf(buffer, sizeof(buffer), "<!doctype html public \"-//IETF//DTD HTML 2.0//EN\">\n" \
+		"<html><head>\n" \
+		"<title>%d %s</title>\n" \
+		"</head><body>\n" \
+		"<h1>%s</h1>\n" \
+		"<p>%s</p>\n" \
+		"<hr>\n" \
+		"</body></html>\n",
+		http_code, (http_code_text ? http_code_text : http_get_code_text(http_code)),
+		(http_code_text ? http_code_text : http_get_code_text(http_code)),
+		data);
+	s = hmalloc(strlen(buffer));
+	snprintf(s, strlen(buffer), "%s", buffer);
+	return s;
+}
+
+
+/*
+ *	Transmit a HTTP response, given headers and data.
+ *	May be OK or an error.
  *	Compress response, if possible.
  */
 
-static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len, int allow_compress)
+static void http_send_reply_code(struct evhttp_request *r, struct evkeyvalq *headers, char *data, int len, int allow_compress, int http_code, char *http_code_text)
 {
+	/* allow len=0 to be length of text (used for error codes) */
+	if (data && len == 0)
+		len = strlen(data);
+	if (http_code != HTTP_OK)
+	{
+		/* construct an error page */
+		data = http_construct_error_page(data, http_code, http_code_text);
+		if (data)
+			len = strlen(data);
+	}
 #ifdef HAVE_LIBZ
 	char *compr = NULL;
 	
@@ -467,7 +536,7 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 		int compr_type = http_check_req_compressed(r);
 		/*
 		if (compr_type)
-			hlog(LOG_DEBUG, "http_send_reply_ok, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
+			hlog(LOG_DEBUG, "http_send_reply_code, client supports transfer-encoding: %s", compr_type_strings[compr_type]);
 		*/
 		
 		if (compr_type == HTTP_COMPR_GZIP) {
@@ -493,13 +562,16 @@ static void http_send_reply_ok(struct evhttp_request *r, struct evkeyvalq *heade
 	struct evbuffer *buffer = evbuffer_new();
 	evbuffer_add(buffer, data, len);
 	
-	evhttp_send_reply(r, HTTP_OK, "OK", buffer);
+	evhttp_send_reply(r, http_code, (http_code_text ? http_code_text : http_get_code_text(http_code)), buffer);
 	evbuffer_free(buffer);
 
 #ifdef HAVE_LIBZ
 	if (compr)
 		hfree(compr);
 #endif
+	/* if we constructed an error page, free the memory */
+	if (data && http_code != HTTP_OK)
+		hfree(data);
 }
 
 
@@ -517,7 +589,7 @@ static void http_status(struct evhttp_request *r)
 	evhttp_add_header(headers, "Cache-Control", "max-age=9");
 	
 	json = status_json_string(0, 0);
-	http_send_reply_ok(r, headers, json, strlen(json), 1);
+	http_send_reply_code(r, headers, json, strlen(json), 1, HTTP_OK, "OK");
 	free(json);
 }
 
@@ -535,7 +607,8 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
 	
 	json = cdata_json_string(query);
 	if (!json) {
-		evhttp_send_error(r, HTTP_BADREQUEST, "Bad request, no such counter");
+		http_header_base(evhttp_request_get_output_headers(r), 0);
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Bad request, no such counter", 0, 1, HTTP_BADREQUEST, NULL);
 		return;
 	}
 	
@@ -544,7 +617,7 @@ static void http_counterdata(struct evhttp_request *r, const char *uri)
 	evhttp_add_header(headers, "Content-Type", "application/json; charset=UTF-8");
 	evhttp_add_header(headers, "Cache-Control", "max-age=58");
 	
-	http_send_reply_ok(r, headers, json, strlen(json), 1);
+	http_send_reply_code(r, headers, json, strlen(json), 1, HTTP_OK, "OK");
 	hfree(json);
 }
 
@@ -565,24 +638,25 @@ static void http_static_file(struct evhttp_request *r, const char *fname)
 	
 	fd = open(fname, 0, O_RDONLY);
 	if (fd < 0) {
+		http_header_base(evhttp_request_get_output_headers(r), 0);
 		if (errno == ENOENT) {
 			/* don't complain about missing motd.html - it's optional. */
 			int level = LOG_ERR;
 			if (strcmp(fname, "motd.html") == 0)
 				level = LOG_DEBUG;
 			hlog(level, "http static file '%s' not found: 404", fname);
-			evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+			http_send_reply_code(r, evhttp_request_get_output_headers(r), "Not found", 0, 1, HTTP_NOTFOUND, NULL);
 			return;
 		}
 		
 		hlog(LOG_ERR, "http static file '%s' could not be opened for reading: %s", fname, strerror(errno));
-		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Could not access file", 0, 1, HTTP_INTERNAL, NULL);
 		return;
 	}
 	
 	if (fstat(fd, &st) == -1) {
 		hlog(LOG_ERR, "http static file '%s' could not fstat() after opening: %s", fname, strerror(errno));
-		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Could not access file", 0, 1, HTTP_INTERNAL, NULL);
 		if (close(fd) < 0)
 			hlog(LOG_ERR, "http static file '%s' could not be closed after failed stat: %s", fname, strerror(errno));
 		return;
@@ -617,14 +691,14 @@ static void http_static_file(struct evhttp_request *r, const char *fname)
 	
 	if (close(fd) < 0) {
 		hlog(LOG_ERR, "http static file '%s' could not be closed after reading: %s", fname, strerror(errno));
-		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Could not access file", 0, 1, HTTP_INTERNAL, NULL);
 		hfree(buf);
 		return;
 	}
 	
 	if (n != file_size) {
 		hlog(LOG_ERR, "http static file '%s' could only read %d of %d bytes", fname, n, file_size);
-		evhttp_send_error(r, HTTP_INTERNAL, "Could not access file");
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Could not access file", 0, 1, HTTP_INTERNAL, NULL);
 		hfree(buf);
 		return;
 	}
@@ -635,7 +709,7 @@ static void http_static_file(struct evhttp_request *r, const char *fname)
 	else
 		allow_compress = 1;
 	
-	http_send_reply_ok(r, headers, buf, n, allow_compress);
+	http_send_reply_code(r, headers, buf, n, allow_compress, HTTP_OK, "OK");
 	hfree(buf);
 }
 
@@ -653,7 +727,8 @@ static void http_route_static(struct evhttp_request *r, const char *uri)
 			
 	if (cmdp->name == NULL) {
 		hlog(LOG_DEBUG, "http static file request: 404: %s", uri);
-		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+		http_header_base(evhttp_request_get_output_headers(r), 0);
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Not found", 0, 1, HTTP_NOTFOUND, NULL);
 		return;
 	}
 	
@@ -694,7 +769,8 @@ static void http_strings(struct evhttp_request *r, const char *uri)
 	}
 	
 	hlog(LOG_DEBUG, "http strings query: 404: %s", uri);
-	evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+	http_header_base(evhttp_request_get_output_headers(r), 0);
+	http_send_reply_code(r, evhttp_request_get_output_headers(r), "Not found", 0, 1, HTTP_NOTFOUND, NULL);
 	
 	evhttp_clear_headers(&args);
 	
@@ -747,12 +823,14 @@ static void http_router(struct evhttp_request *r, void *which_server)
 		}
 		
 		hlog(LOG_DEBUG, "http request on upload server for '%s': 404 not found", uri);
-		evhttp_send_error(r, HTTP_NOTFOUND, "Not found");
+		http_header_base(evhttp_request_get_output_headers(r), 0);
+		http_send_reply_code(r, evhttp_request_get_output_headers(r), "Not found", 0, 1, HTTP_NOTFOUND, NULL);
 		return;
 	}
 	
 	hlog(LOG_ERR, "http request on unknown server for '%s': 404 not found", uri);
-	evhttp_send_error(r, HTTP_NOTFOUND, "Server not found");
+	http_header_base(evhttp_request_get_output_headers(r), 0);
+	http_send_reply_code(r, evhttp_request_get_output_headers(r), "Server not found", 0, 1, HTTP_NOTFOUND, NULL);
 	
 	return;
 }

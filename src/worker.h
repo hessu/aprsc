@@ -297,7 +297,6 @@ struct client_t {
 
 	int    fd;
 	
-	int    uplink_index; /* uplink array index */
 	int    portnum;
 	int    listener_id;  /* which listener is this client connected to */
 	time_t connect_time;/* Time of connection, wallclock real time */

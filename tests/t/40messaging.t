@@ -18,7 +18,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 2 + 6 + 4 + 1 };
+BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 2 + 6 + 1 + 3 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -218,6 +218,25 @@ $rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:two gates", $login_tx, 
 istest::txrx(\&ok, $i_tx, $i_rx2, $tx, $rx);
 $read1 = $i_rx->getline_noncomment(1);
 ok($read1, $rx, "Got wrong message line from first rx port");
+
+#
+#### Test the g/ message recipient filter ####
+#
+
+# change filter
+$i_rx->sendline("#filter g/PREF*/FULLCAL");
+sleep(0.2);
+
+# the first message does not match filter, the second one does
+my $should_drop = sprintf("OH1SRC>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message", $login_tx, "NOMATCH");
+my $should_pass = sprintf("OH1SRC>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message", $login_tx, "FULLCAL");
+istest::should_drop(\&ok, $i_tx, $i_rx, $should_drop, $should_pass);
+
+# test wildcard in g/ filter
+$should_pass = sprintf("OH1SRC>APRS,qAR,%s::%-9.9s:message again", $login_tx, "PREFIX");
+istest::txrx(\&ok, $i_tx, $i_rx, $should_pass, $should_pass);
+$should_pass = sprintf("OH1SRC>APRS,qAR,%s::%-9.9s:message again", $login_tx, "PREF");
+istest::txrx(\&ok, $i_tx, $i_rx, $should_pass, $should_pass);
 
 
 # disconnect

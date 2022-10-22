@@ -45,7 +45,7 @@ sub txrx($$$$$)
 		return;
 	}
 	
-	#warn "received '$rx'\n";
+	warn "received '$rx'\n" if ($debug);
 	
 	if ($received ne $rx) {
 		&$ok($received, $rx, "Server returned wrong line");
@@ -61,7 +61,9 @@ sub should_drop($$$$$;$$)
 	
 	my $drop_key = '';
 	$drop_key .= ' drop.' . int(rand(1000000)) if (!$no_random_drop);
-	my $sent = $i_tx->sendline($tx . $drop_key);
+	my $tx_drop = $tx . $drop_key;
+	warn "sending for drop: $tx_drop\n" if ($debug);
+	my $sent = $i_tx->sendline($tx_drop);
 	
 	if (!$sent) {
 		&$ok($sent, 1, "Failed to send line to server: '$tx'");
@@ -71,6 +73,7 @@ sub should_drop($$$$$;$$)
 	my $helper_key = 'helper.' . int(rand(1000000));
 	my $helper_l = $helper;
 	$helper_l .= ' ' . $helper_key if (!$no_random_helper);
+	warn "sending for pass: $helper_l\n" if ($debug);
 	$sent = $i_tx->sendline($helper_l);
 	
 	if (!$sent) {
@@ -88,6 +91,7 @@ sub should_drop($$$$$;$$)
 		}
 		return;
 	}
+	warn "received: $received\n" if ($debug);
 	
 	my $tx2 = $tx;
 	$tx2 =~ s/([^>]+)>([^,]+),[^:]+(:.*)$/$1>$2$3/;

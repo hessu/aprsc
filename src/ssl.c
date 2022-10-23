@@ -109,7 +109,7 @@ int  ssl_session_cache_index;
 /* This array will store all of the mutexes available to OpenSSL. */
 static MUTEX_TYPE *mutex_buf= NULL;
 
-static void ssl_thread_locking_function(int mode, int n, const char * file, int line)
+void ssl_thread_locking_function(int mode, int n, const char * file, int line)
 {
 	int me;
 	
@@ -124,7 +124,7 @@ static void ssl_thread_locking_function(int mode, int n, const char * file, int 
 	}
 }
 
-static unsigned long ssl_thread_id_function(void)
+unsigned long ssl_thread_id_function(void)
 {
 	return ((unsigned long)THREAD_ID);
 }
@@ -279,8 +279,6 @@ static void ssl_info_callback(SSL *ssl, int where, int ret)
 int ssl_init(void)
 {
 	hlog(LOG_INFO, "Initializing OpenSSL, built against %s ...", OPENSSL_VERSION_TEXT);
-	
-	OPENSSL_config(NULL);
 	
 	SSL_library_init();
 	SSL_load_error_strings();

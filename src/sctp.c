@@ -287,8 +287,14 @@ int sctp_client_write(struct worker_t *self, struct client_t *c, char *p, int le
 		if (client_buffer_outgoing_data(self, c, p, len) == -12)
 			return -12;
 		clientaccount_add( c, IPPROTO_SCTP, 0, 0, len, 0, 0, 0);
+		if (c->obuf_writes > obuf_writes_threshold) {
+			// Lots and lots of writes, switch to buffering...
+			if (c->obuf_flushsize == 0) {
+				c->obuf_flushsize = c->obuf_size / 2;
+			}
+		}
 	}
-	
+
 	/* Is it over the flush size ? */
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
 		int to_send = c->obuf_end - c->obuf_start;

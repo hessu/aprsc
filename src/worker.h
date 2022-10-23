@@ -508,6 +508,8 @@ extern void workers_start(void);
 extern int keepalive_interval;
 extern int fileno_limit;
 
+extern int obuf_writes_threshold;
+
 extern struct client_udp_t *udpclients;
 extern struct client_udp_t *udppeers;
 extern void client_udp_free(struct client_udp_t *u);

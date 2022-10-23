@@ -121,19 +121,19 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_AVAILABLE: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_UNREACHABLE:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_UNREACHABLE: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_UNREACHABLE: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_REMOVED:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_REMOVED: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_REMOVED: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_ADDED:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_ADDED: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_ADDED: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_MADE_PRIM:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_MADE_PRIM: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_MADE_PRIM: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_CONFIRMED:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_CONFIRMED: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_CONFIRMED: %s", c->addr_rem, c->username, addr_s);
 		break;
 	default:
 		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected peer_addr_change %d: %s",

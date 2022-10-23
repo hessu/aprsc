@@ -2116,8 +2116,8 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 		if (c->ibuf_end > 0) {
 			s = hex_encode(c->ibuf, c->ibuf_end);
 			cJSON_AddStringToObject(jc, "ibuf", s);
-			hlog(LOG_DEBUG, "Encoded ibuf %d bytes: '%.*s'", c->ibuf_end, c->ibuf_end, c->ibuf);
-			hlog(LOG_DEBUG, "Hex: %s", s);
+			//hlog(LOG_DEBUG, "Encoded ibuf %d bytes: '%.*s'", c->ibuf_end, c->ibuf_end, c->ibuf);
+			//hlog(LOG_DEBUG, "Hex: %s", s);
 			hfree(s);
 		}
 		
@@ -2193,6 +2193,9 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 			
 		cJSON_AddStringToObject(jc, "mode", mode);
 	}
+
+	if (c->ai_protocol == IPPROTO_SCTP)
+		cJSON_AddStringToObject(jc, "proto", "sctp");
 	
 #ifdef USE_SSL
 	if (c->cert_subject[0])

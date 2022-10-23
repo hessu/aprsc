@@ -28,6 +28,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <resolv.h>
 
 #include "config.h"
 #include "version.h"
@@ -65,6 +68,33 @@ struct portaccount_t uplink_connects = {
   .mutex    = PTHREAD_MUTEX_INITIALIZER,
   .refcount = 99,	/* Global static blocks have extra-high initial refcount */
 };
+
+static struct timespec resolvconf_mtim = { .tv_sec = 0, .tv_nsec = 0 };
+static int resolvconf_reread = 0;
+
+// Work around a glibc bug where resolv.conf is not reread after being changed.
+#define RESOLV_CONF_PATH "/etc/resolv.conf"
+void consider_res_init(void) {
+	struct stat resolvconf_stat;
+	if (stat(RESOLV_CONF_PATH, &resolvconf_stat) == -1) {
+		hlog(LOG_WARNING, "Failed to stat " RESOLV_CONF_PATH ": %s", strerror(errno));
+		return;
+	}
+	if (resolvconf_mtim.tv_sec == resolvconf_stat.st_mtim.tv_sec
+	    && resolvconf_mtim.tv_nsec == resolvconf_stat.st_mtim.tv_nsec) {
+	    	return;
+	}
+	resolvconf_mtim = resolvconf_stat.st_mtim;
+
+	// only log on repeated inits; otherwise would be logged on every startup
+	if (resolvconf_reread)
+		hlog(LOG_INFO, RESOLV_CONF_PATH " has changed, initializing resolver again");
+	resolvconf_reread = 1;
+
+	if (res_init() != 0) {
+		hlog(LOG_ERR, "res_init failed, DNS resolver might have problems: %s", strerror(errno));
+	}
+}
 
 void uplink_client_free(struct uplink_client_t *uc)
 {
@@ -419,6 +449,8 @@ int make_uplink(struct uplink_config_t *l)
 	}
 
 	l->state = UPLINK_ST_CONNECTING;
+
+	consider_res_init(); // Work around a glibc bug where resolv.conf is not reread on change
 	i = getaddrinfo(l->host, l->port, &req, &ai);
 	if (i != 0) {
 		hlog(LOG_INFO, "Uplink %s: address resolving failure of '%s' '%s': %s", l->name, l->host, l->port, gai_strerror(i));

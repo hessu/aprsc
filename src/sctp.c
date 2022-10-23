@@ -86,10 +86,10 @@ static int sctp_rx_assoc_change(struct client_t *c, union sctp_notification *sn)
 {
 	switch (sn->sn_assoc_change.sac_state) {
 	case SCTP_COMM_UP:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_COMM_UP", c->addr_rem, c->username);
+		hlog(LOG_INFO, "%s/%s: SCTP COMM_UP - connection established", c->addr_rem, c->username);
 		break;
 	case SCTP_COMM_LOST:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_COMM_LOST", c->addr_rem, c->username);
+		hlog(LOG_INFO, "%s/%s: SCTP COMM_LOST - connection failed", c->addr_rem, c->username);
 		break;
 	case SCTP_RESTART:
 		hlog(LOG_DEBUG, "%s/%s: Received SCTP_RESTART", c->addr_rem, c->username);
@@ -118,22 +118,22 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 	switch (sn->sn_paddr_change.spc_state) {
 	case SCTP_ADDR_AVAILABLE:
-		hlog(LOG_DEBUG, "%s/%s: Received SCTP_ADDR_AVAILABLE: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_DEBUG, "%s/%s: SCTP peer address available: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_UNREACHABLE:
-		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_UNREACHABLE: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address unreachable: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_REMOVED:
-		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_REMOVED: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address removed: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_ADDED:
-		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_ADDED: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address added: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_MADE_PRIM:
-		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_MADE_PRIM: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address made primary: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_CONFIRMED:
-		hlog(LOG_INFO, "%s/%s: Received SCTP_ADDR_CONFIRMED: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address confirmed: %s", c->addr_rem, c->username, addr_s);
 		break;
 	default:
 		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected peer_addr_change %d: %s",
@@ -157,8 +157,8 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 	case SCTP_SHUTDOWN_EVENT: {
 		struct sctp_shutdown_event *shut;
 		shut = (struct sctp_shutdown_event *)m->msg_iov->iov_base; 
-		hlog(LOG_INFO, "SCTP shutdown on assoc id %d",  shut->sse_assoc_id); 
-		break; 
+		hlog(LOG_INFO, "%s/%s: SCTP shutdown on assoc id %d", c->addr_rem, c->username, shut->sse_assoc_id); 
+		return -1;
 	}
 	case SCTP_ASSOC_CHANGE:
 		return sctp_rx_assoc_change(c, sn);
@@ -173,11 +173,20 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 	case SCTP_PARTIAL_DELIVERY_EVENT:
 		hlog(LOG_DEBUG, "%s/%s: SCTP partial delivery event", c->addr_rem, c->username);
 		return 0;
+	case SCTP_ADAPTATION_INDICATION:
+		hlog(LOG_DEBUG, "%s/%s: SCTP adaptation indication", c->addr_rem, c->username);
+		return 0;
+	case SCTP_AUTHENTICATION_INDICATION:
+		hlog(LOG_DEBUG, "%s/%s: SCTP authentication indication", c->addr_rem, c->username);
+		return 0;
+	case SCTP_SENDER_DRY_EVENT:
+		hlog(LOG_DEBUG, "%s/%s: SCTP sender dry", c->addr_rem, c->username);
+		return 0;
+	default:
+		hlog(LOG_ERR, "%s/%s: sctp_rx_notification: Received unexpected notification: %d",
+			c->addr_rem, c->username, sn->sn_header.sn_type);
 	};
-	
-	hlog(LOG_ERR, "%s/%s: sctp_rx_notification: Received unexpected notification: %d",
-		c->addr_rem, c->username, sn->sn_header.sn_type);
-	
+
 	return -1;
 }
 
@@ -225,21 +234,20 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 			return 0;
 		}
 		
-		hlog(LOG_INFO, "sctp_readable: recvmsg returned %d: %s", e, strerror(errno));
-		
+		hlog(LOG_INFO, "%s/%s: sctp_readable: recvmsg returned %d: %s", c->addr_rem, c->username, e, strerror(errno));
 		client_close(self, c, errno);
 		return -1;
 	}
 	
 	if (e == 0) {
-		hlog( LOG_DEBUG, "sctp_readable: EOF from socket fd %d (%s @ %s)",
-		      c->fd, c->addr_rem, c->addr_loc );
+		hlog(LOG_DEBUG, "%s/%s: sctp_readable: EOF from socket fd %d",
+		      c->addr_rem, c->username, c->fd);
 		client_close(self, c, CLIERR_EOF);
 		return -1;
 	}
 	
 	if (inmsg.msg_flags & MSG_NOTIFICATION) {
-		hlog(LOG_DEBUG, "sctp_readable: got MSG_NOTIFICATION");
+		//hlog(LOG_DEBUG, "%s/%s: sctp_readable: got MSG_NOTIFICATION", c->addr_rem, c->username);
 		sctp_rx_notification(c, &inmsg);
 		return 0;
 	}
@@ -300,7 +308,7 @@ int sctp_client_write(struct worker_t *self, struct client_t *c, char *p, int le
 
 	/* All done ? */
 	if (c->obuf_start >= c->obuf_end) {
-		hlog(LOG_DEBUG, "%s/%s: client_write obuf empty", c->addr_rem, c->username, c->addr_rem);
+		//hlog(LOG_DEBUG, "%s/%s: client_write obuf empty", c->addr_rem, c->username, c->addr_rem);
 		c->obuf_start = 0;
 		c->obuf_end   = 0;
 	}
@@ -319,22 +327,22 @@ static int sctp_rx_assoc_change(struct listen_t *l, union sctp_notification *sn)
 {
 	switch (sn->sn_assoc_change.sac_state) {
 	case SCTP_COMM_UP:
-		hlog(LOG_DEBUG, "Received SCTP_COMM_UP");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_COMM_UP", c->addr_rem, c->username);
 		break;
 	case SCTP_COMM_LOST:
-		hlog(LOG_DEBUG, "Received SCTP_COMM_LOST");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_COMM_LOST", c->addr_rem, c->username);
 		break;
 	case SCTP_RESTART:
-		hlog(LOG_DEBUG, "Received SCTP_RESTART");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_RESTART", c->addr_rem, c->username);
 		break;
 	case SCTP_SHUTDOWN_COMP:
-		hlog(LOG_DEBUG, "Received SCTP_SHUTDOWN_COMP");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_SHUTDOWN_COMP", c->addr_rem, c->username);
 		break;
 	case SCTP_CANT_STR_ASSOC:
-		hlog(LOG_DEBUG, "Received SCTP_CANT_STR_ASSOC");
+		hlog(LOG_DEBUG, "%s/%s: Received SCTP_CANT_STR_ASSOC", c->addr_rem, c->username);
 		break;
 	default:
-		hlog(LOG_DEBUG, "Received assoc_change %d", sn->sn_assoc_change.sac_state);
+		hlog(LOG_DEBUG, "%s/%s: Received assoc_change %d", c->addr_rem, c->username, sn->sn_assoc_change.sac_state);
 		break;
 	}
 	
@@ -355,7 +363,7 @@ static int sctp_rx_notification(struct listen_t *l, struct msghdr *m)
 	case SCTP_SHUTDOWN_EVENT: {
 		struct sctp_shutdown_event *shut;
 		shut = (struct sctp_shutdown_event *)m->msg_iov->iov_base; 
-		hlog(LOG_INFO, "SCTP shutdown on assoc id %d",  shut->sse_assoc_id); 
+		hlog(LOG_INFO, "SCTP shutdown on assoc id %d",  shut->sse_assoc_id);
 		break; 
 	}
 	case SCTP_ASSOC_CHANGE:

@@ -16,7 +16,7 @@ jobs:
     
     - name: install deps
       run: |
-        sudo apt-get install -y libevent-dev perl-modules libio-socket-inet6-perl libjson-xs-perl libwww-perl
+        sudo apt-get install -y libevent-dev perl-modules libio-socket-inet6-perl libjson-xs-perl libwww-perl libsctp-dev
 
     - name: configure
       run: |

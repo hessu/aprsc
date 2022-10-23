@@ -960,7 +960,7 @@ static char *client_buffer_outgoing_allocate(struct client_t *c, int len)
 	return c->obuf + c->obuf_end;
 }
 
-static int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len)
+int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len)
 {
 	char *buf_tail = client_buffer_outgoing_allocate(c, len);
 	
@@ -1662,7 +1662,7 @@ static void send_keepalives(struct worker_t *self)
 			c->obuf_flushsize = flushlevel;
 		} else {
 			/* just fush if there was anything to write */
-			if (c->ai_protocol == IPPROTO_TCP) {
+			if (c->ai_protocol == IPPROTO_TCP || c->ai_protocol == IPPROTO_SCTP) {
 				rc = c->write(self, c, buf, 0);
 				if (rc < -2) continue; // destroyed..
 			}

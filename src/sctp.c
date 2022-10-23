@@ -245,8 +245,6 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 	}
 	
 	//hlog_packet(LOG_DEBUG, iov.iov_base, e, "sctp_readable: got data: ");
-	c->ibuf[e++] = '\r';
-	c->ibuf[e++] = '\n';
 	
 	return client_postread(self, c, e);
 }
@@ -268,27 +266,45 @@ int sctp_writable(struct worker_t *self, struct client_t *c)
 
 int sctp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	//hlog_packet(LOG_DEBUG, p, len, "client_write_sctp %d bytes: ", len);
+	//hlog_packet(LOG_DEBUG, p, len, "%s/%s: client_write_sctp %d bytes: ", c->addr_rem, c->username, len);
 	
-	if (len == 0)
-		return 0;
-		
-	clientaccount_add( c, IPPROTO_SCTP, 0, 0, len, 0, 0, 0);
-	
-	int i = send(c->fd, p, len-2, 0);
-	
-	if (i < 0) {
-		hlog(LOG_ERR, "SCTP transmit error to fd %d / %s: %s",
-			c->fd, c->addr_rem, strerror(errno));
-	} else if (i != len -2) {
-		hlog(LOG_ERR, "SCTP transmit incomplete to fd %d / %s: wrote %d of %d bytes, errno: %s",
-			c->fd, c->addr_rem, i, len-2, strerror(errno));
-	} else {
-		//hlog(LOG_DEBUG, "SCTP transmit ok to %s: %d bytes", c->addr_rem, i);
-		c->obuf_wtime = tick;
+	if (len > 0) {
+		c->obuf_writes++;
+		if (client_buffer_outgoing_data(self, c, p, len) == -12)
+			return -12;
+		clientaccount_add( c, IPPROTO_SCTP, 0, 0, len, 0, 0, 0);
 	}
 	
-	return i;
+	/* Is it over the flush size ? */
+	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
+		int to_send = c->obuf_end - c->obuf_start;
+		int i = send(c->fd, c->obuf + c->obuf_start, to_send, 0);
+		
+		if (i < 0) {
+			hlog(LOG_ERR, "%s/%s: SCTP transmit error to fd %d: %s",
+				c->addr_rem, c->username, c->fd, strerror(errno));
+			client_close(self, c, errno);
+			return -9;
+		} else if (i != to_send) {
+			// Incomplete write with SCTP is not great, as we might not have ordered delivery.
+			hlog(LOG_ERR, "%s/%s: SCTP transmit incomplete to fd %d: wrote %d of %d bytes, errno: %s",
+				c->addr_rem, c->username, c->fd, i, to_send, strerror(errno));
+			client_close(self, c, errno);
+			return -9;
+		} else {
+			//hlog(LOG_DEBUG, "%s/%s: SCTP transmit ok: %d bytes", c->addr_rem, c->username, i);
+		}
+		c->obuf_start += i;
+		c->obuf_wtime = tick;
+	}
+
+	/* All done ? */
+	if (c->obuf_start >= c->obuf_end) {
+		hlog(LOG_DEBUG, "%s/%s: client_write obuf empty", c->addr_rem, c->username, c->addr_rem);
+		c->obuf_start = 0;
+		c->obuf_end   = 0;
+	}
+	return len;
 }
 
 

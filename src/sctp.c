@@ -36,6 +36,12 @@ int sctp_set_client_sockopt(struct client_t *c)
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
+
+	int enable = 1;
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_NODELAY, &enable, sizeof(enable)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_NODELAY): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
 	
 	/* which notifications do we want? */
 	struct sctp_event_subscribe subscribe;

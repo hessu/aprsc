@@ -32,6 +32,16 @@ worker.h
 	marks duplicate packets as such. Dupecheck returns the packets to
 	the workers which then pass on them to the right clients.
 
+ssl.c
+	SSL/TLS encryption and authentication code for APRS-IS sockets.
+
+sctp.c
+	SCTP protocol support.  sctp(7) says: "Like TCP, SCTP provides
+	reliable, connection oriented data delivery with congestion control. 
+	Unlike TCP, SCTP also provides message boundary preservation,
+	ordered and unordered message delivery, multi-streaming and
+	multi-homing."
+
 login.c
 	Contains a login_handler() function which is called by the
 	worker thread to process an incoming "user" command from

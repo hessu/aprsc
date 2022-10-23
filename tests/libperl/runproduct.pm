@@ -27,7 +27,6 @@ my %products = (
 		'cfgdir' => 'cfg-aprsc',
 		'pidfile' => 'logs/aprsc.pid',
 		'env' => { 'APRSC_NO_VERSION_REPORT' => '1' }
-		
 	},
 	'javap' => {
 		'binary' => './javaprssrvr/java',
@@ -48,11 +47,11 @@ my %products = (
 	}
 );
 
-sub new($$)
+sub new($$;$)
 {
-	my($class, $config) = @_;
-	my $self = bless { @_ }, $class;
-	
+	my($class, $config, $instance) = @_;
+	my $self = bless { }, $class;
+  	
 	if (defined $ENV{'TEST_PRODUCT'}) {
 		$self->{'prod_name'} = $ENV{'TEST_PRODUCT'};
 	} else {
@@ -78,6 +77,14 @@ sub new($$)
 	
 	$self->{'cmdline'} = $prod->{'binary'} . ' ' . $prod->{'stdargs'} . ' '
 		. $prod->{'cfgfileargs'} . ' ' . $cfgfile;
+
+	if (defined $prod->{'pidfile'}) {
+		$self->{'pidfile'} = $prod->{'pidfile'};
+	}
+	if (defined $instance) {
+		$self->{'pidfile'} = $instance . '.pid';
+		$self->{'cmdline'} .= " -p " . $self->{'pidfile'};
+	}
 	
 	$self->{'error'} = 'No errors yet';
 	
@@ -101,8 +108,8 @@ sub start($)
 		return "Product already running.";
 	}
 	
-	if (defined $self->{'prod'}->{'pidfile'}) {
-		my $pf = $self->{'prod'}->{'pidfile'};
+	if (defined $self->{'pidfile'}) {
+		my $pf = $self->{'pidfile'};
 		if (open(PF, $pf)) {
 			my $pl = <PF>;
 			close(PF);

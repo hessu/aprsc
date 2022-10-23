@@ -491,6 +491,7 @@ extern void pbuf_dump(FILE *fp);
 extern void pbuf_dupe_dump(FILE *fp);
 
 extern int client_postread(struct worker_t *self, struct client_t *c, int r);
+extern int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len);
 
 extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
@@ -506,6 +507,8 @@ extern void workers_start(void);
 
 extern int keepalive_interval;
 extern int fileno_limit;
+
+extern int obuf_writes_threshold;
 
 extern struct client_udp_t *udpclients;
 extern struct client_udp_t *udppeers;

@@ -1,0 +1,42 @@
+
+# sctp hub
+
+ServerId   TESTING-1
+PassCode   31421
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+### Intervals #########
+# Interval specification format examples:
+# 600 (600 seconds), 5m, 2h, 1h30m, 1d3h15m24s, etc...
+
+# When no data is received from an upstream server in N seconds, switch to
+# another server
+UpstreamTimeout		90s
+
+# When no data is received from a downstream server in N seconds, disconnect
+ClientTimeout		48h
+
+### TCP listener ##########
+# Listen <socketname> <porttype> tcp <address to bind> <port>
+#	socketname: any name you wish to show up in logs and statistics
+#	porttype: one of:
+#		fullfeed - everything, after dupe filtering
+#		dupefeed - everything that comes in - with dupes!
+#		msgonly - messages only
+#		userfilter - user-specified filters
+#
+Listen "Full feed"       fullfeed    tcp ::0      55152    acl "cfg-aprsc/acl-all.acl"
+Listen "Full feed SCTP"  fullfeed    sctp ::0      55152   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port"      igate       tcp 0.0.0.0  55582   acl "cfg-aprsc/acl-all.acl"
+
+### HTTP listener ##########
+# Status port provides a status view to web browsers.
+# It starts up by default on 0.0.0.0:14501.
+HTTPStatus 127.0.0.1 55501
+
+

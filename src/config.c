@@ -1100,7 +1100,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	
 	/* SSL requires both a cert and a key */
 	if ((l->certfile && !l->keyfile) || (l->keyfile && !l->certfile)) {
-		hlog(LOG_ERR, "Listen: Only one of sslkey and sslcert defined for '%' - both needed for SSL", argv[1]);
+		hlog(LOG_ERR, "Listen: Only one of tlskey and tlscert defined for '%' - both needed for TLS", argv[1]);
 		free_listen_config(&l);
 		return -2;
 	}

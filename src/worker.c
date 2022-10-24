@@ -1561,7 +1561,7 @@ static void collect_new_clients(struct worker_t *self)
 #endif
 #ifdef USE_SSL
 		if (c->ssl_con) {
-			hlog(LOG_DEBUG, "collect_new_clients(worker %d): fd %d uses SSL", self->id, c->fd);
+			hlog(LOG_DEBUG, "collect_new_clients(worker %d): fd %d uses TLS", self->id, c->fd);
 			c->handler_client_readable = &ssl_readable;
 			c->handler_client_writable = &ssl_writable;
 			c->write = &ssl_client_write;
@@ -1825,12 +1825,12 @@ void worker_thread(struct worker_t *self)
 	
 	if (self->shutting_down == 2) {
 		/* live upgrade: must free all UDP client structs - we need to close the UDP listener fd. */
-		/* Must also disconnect all SSL clients - the SSL crypto state cannot be moved over. */
+		/* Must also disconnect all TLS clients - the TLS crypto state cannot be moved over. */
 		struct client_t *c, *next;
 		for (c = self->clients; (c); c = next) {
 			next = c->next;
 #ifdef USE_SSL
-			/* SSL client? */
+			/* TLS client? */
 			if (c->ssl_con) {
 				client_close(self, c, CLIOK_THREAD_SHUTDOWN);
 				continue;

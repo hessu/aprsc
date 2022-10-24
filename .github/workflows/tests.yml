@@ -36,6 +36,6 @@ jobs:
     - name: Run tests
       run: |
         cd tests
-        make test
+        make test aggrtest
 
   

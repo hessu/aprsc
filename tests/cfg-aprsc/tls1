@@ -1,6 +1,6 @@
 
-ServerId   TESTING
-PassCode   31421
+ServerId   TLS1
+PassCode   29855
 MyEmail    email@example.com
 MyAdmin    "Admin, N0CALL"
 
@@ -14,7 +14,7 @@ RunDir data
 
 # When no data is received from an upstream server in N seconds, switch to
 # another server
-UpstreamTimeout		10s
+UpstreamTimeout		60s
 
 # When no data is received from a downstream server in N seconds, disconnect
 ClientTimeout		48h
@@ -28,13 +28,10 @@ ClientTimeout		48h
 #		msgonly - messages only
 #		userfilter - user-specified filters
 #
-Listen "Full feed with CWOP"                      fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl"
-Listen "Full feed with CWOP, UDP"                 fullfeed    udp ::0      55152
-Listen "Igate port"                               igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
-Listen "Igate port, UDP"                          igate       udp 0.0.0.0  55580
-Listen "Client-only port"                         clientonly  tcp 0.0.0.0  55581
-Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
-Listen "UDP submit port"                          udpsubmit   udp ::0      55080
+Listen "Full feed TLS"     fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl" \
+	sslkey cfg-aprsc/tls1-key.pem sslcert cfg-aprsc/tls1-cert.pem sslca tls-testca/cacert.pem
+Listen "Igate port TLS"    igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl" \
+	sslkey cfg-aprsc/tls1-key.pem sslcert cfg-aprsc/tls1-cert.pem sslca tls-testca/cacert.pem
 
 ### Uplink configuration ########
 # Uplink <name> <type> tcp <address> <port>
@@ -46,14 +43,10 @@ Listen "UDP submit port"                          udpsubmit   udp ::0      55080
 Uplink full1 full tcp 127.0.0.1 10153
 
 # UDP peering, first address is my local address, the rest are remote.
-PeerGroup TEST udp 127.0.0.1:16404 \
+PeerGroup TLS1 udp 127.0.0.1:16404 \
 	SELF 127.0.0.1:16404 \
 	PEER1 127.0.0.1:16405 \
 	PEER2 127.0.0.1:16406
-PeerGroup TEST6 udp [::1]:16504 \
-	SELF6 [::1]:16504 \
-	PEER61 [::1]:16505 \
-	PEER62 [::1]:16506
 
 ### HTTP listener ##########
 # Status port provides a status view to web browsers.
@@ -68,17 +61,4 @@ HTTPUpload 127.0.0.1 55080
 # short.
 WorkerThreads 3
 
-# When running this server as super-user, the server can (in many systems)
-# increase several resource limits, and do other things that less privileged
-# server can not do.
-#
-# The FileLimit is resource limit on how many simultaneous connections and
-# some other internal resources the system can use at the same time.
-# If the server is not being run as super-user, this setting has no effect.
-#
-FileLimit        10000
-
-# Additional callsigns blocked
-DisallowSourceCall	N7CALL N8CALL* *DROP DRG* OH?DRU O*ZZZ
-DisallowLoginCall	LOGINA LOGINB *prrej mi*rej sufre*
 

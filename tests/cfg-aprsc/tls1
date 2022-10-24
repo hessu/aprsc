@@ -29,9 +29,9 @@ ClientTimeout		48h
 #		userfilter - user-specified filters
 #
 Listen "Full feed TLS"     fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl" \
-	sslkey cfg-aprsc/tls1-key.pem sslcert cfg-aprsc/tls1-cert.pem sslca tls-testca/cacert.pem
+	tlskey cfg-aprsc/tls1-key.pem tlscert cfg-aprsc/tls1-cert.pem tlsca tls-testca/cacert.pem
 Listen "Igate port TLS"    igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl" \
-	sslkey cfg-aprsc/tls1-key.pem sslcert cfg-aprsc/tls1-cert.pem sslca tls-testca/cacert.pem
+	tlskey cfg-aprsc/tls1-key.pem tlscert cfg-aprsc/tls1-cert.pem tlsca tls-testca/cacert.pem
 
 ### Uplink configuration ########
 # Uplink <name> <type> tcp <address> <port>

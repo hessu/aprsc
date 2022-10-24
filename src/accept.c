@@ -44,7 +44,7 @@
 #include "clientlist.h"
 #include "client_heard.h"
 #include "keyhash.h"
-#include "ssl.h"
+#include "tls.h"
 #include "sctp.h"
 
 #ifdef USE_SCTP
@@ -328,19 +328,19 @@ static int open_listener(struct listen_config_t *lc)
 	
 	hlog(LOG_DEBUG, "... ok, bound");
 	
-	/* Set up an SSL context if necessary */
+	/* Set up a TLS context if necessary */
 #ifdef USE_SSL
 	if (lc->keyfile && lc->certfile) {
 		l->ssl = ssl_alloc();
 		
 		if (ssl_create(l->ssl, (void *)l)) {
-			hlog(LOG_ERR, "Failed to create SSL context for '%s*': %s", lc->name, l->addr_s);
+			hlog(LOG_ERR, "Failed to create TLS context for '%s*': %s", lc->name, l->addr_s);
 			listener_free(l);
 			return -1;
 		}
 		
 		if (ssl_certificate(l->ssl, lc->certfile, lc->keyfile)) {
-			hlog(LOG_ERR, "Failed to load SSL key and certificates for '%s*': %s", lc->name, l->addr_s);
+			hlog(LOG_ERR, "Failed to load TLS key and certificates for '%s*': %s", lc->name, l->addr_s);
 			listener_free(l);
 			return -1;
 		}
@@ -348,13 +348,13 @@ static int open_listener(struct listen_config_t *lc)
 		/* optional client cert validation */
 		if (lc->cafile) {
 			if (ssl_ca_certificate(l->ssl, lc->cafile, 2)) {
-				hlog(LOG_ERR, "Failed to load trusted SSL CA certificates for '%s*': %s", lc->name, l->addr_s);
+				hlog(LOG_ERR, "Failed to load trusted TLS CA certificates for '%s*': %s", lc->name, l->addr_s);
 				listener_free(l);
 				return -1;
 			}
 		}
 		
-		hlog(LOG_INFO, "SSL initialized for '%s': %s%s", lc->name, l->addr_s, (lc->cafile) ? " (client validation enabled)" : "");
+		hlog(LOG_INFO, "TLS initialized for '%s': %s%s", lc->name, l->addr_s, (lc->cafile) ? " (client validation enabled)" : "");
 	}
 #endif
 	
@@ -1311,7 +1311,7 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	/* Add the client to the client list. */
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {
-		/* TODO: If old connection is SSL validated, and this one is not, do not disconnect it. */
+		/* TODO: If old connection is TLS validated, and this one is not, do not disconnect it. */
 		hlog(LOG_INFO, "fd %d: Disconnecting duplicate validated client with username '%s'", old_fd, c->username);
 		shutdown(old_fd, SHUT_RDWR);
 	}

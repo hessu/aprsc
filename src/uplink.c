@@ -43,7 +43,7 @@
 #include "incoming.h"
 #include "outgoing.h"
 #include "filter.h"
-#include "ssl.h"
+#include "tls.h"
 
 int uplink_reconfiguring;
 int uplink_shutting_down;
@@ -262,11 +262,11 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	/* check the server name against certificate */
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert subject", c->addr_rem, c->username);
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert subject", c->addr_rem, c->username);
 		int ssl_res = ssl_validate_peer_cert_phase2(c);
 		
 		if (ssl_res != 0) {
-			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			hlog(LOG_WARNING, "%s/%s: TLS server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
 			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
 			return 0;
 		}
@@ -301,11 +301,11 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating SSL server cert against CA", c->addr_rem, c->username);
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert against CA", c->addr_rem, c->username);
 		int ssl_res = ssl_validate_peer_cert_phase1(c);
 		
 		if (ssl_res != 0) {
-			hlog(LOG_WARNING, "%s/%s: SSL server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			hlog(LOG_WARNING, "%s/%s: TLS server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
 			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
 			return 0;
 		}
@@ -351,14 +351,14 @@ int config_uplink_ssl_setup(struct uplink_config_t *l)
 	l->ssl = ssl_alloc();
 	
 	if (ssl_create(l->ssl, (void *)l)) {
-		hlog(LOG_ERR, "Uplink: Failed to create SSL context for '%s*'", l->name);
+		hlog(LOG_ERR, "Uplink: Failed to create TLS context for '%s*'", l->name);
 		return -1;
 	}
 	
 	/* optional client cert for server-side validation */
 	if (l->certfile && l->keyfile) {
 		if (ssl_certificate(l->ssl, l->certfile, l->keyfile)) {
-			hlog(LOG_ERR, "Uplink '%s': Failed to load SSL certificatess", l->name);
+			hlog(LOG_ERR, "Uplink '%s': Failed to load TLS certificatess", l->name);
 			ssl_free(l->ssl);
 			l->ssl = NULL;
 			return -1;
@@ -368,14 +368,14 @@ int config_uplink_ssl_setup(struct uplink_config_t *l)
 	/* optional server cert validation */
 	if (l->cafile) {
 		if (ssl_ca_certificate(l->ssl, l->cafile, 2)) {
-			hlog(LOG_ERR, "Uplink '%s': Failed to load trusted SSL CA certificates", l->name);
+			hlog(LOG_ERR, "Uplink '%s': Failed to load trusted TLS CA certificates", l->name);
 			ssl_free(l->ssl);
 			l->ssl = NULL;
 			return -1;
 		}
 	}
 	
-	hlog(LOG_INFO, "Uplink %s: SSL initialized%s%s",
+	hlog(LOG_INFO, "Uplink %s: TLS initialized%s%s",
 		l->name,
 		(l->cafile) ? ", server validated" : "",
 		(l->certfile) ? ", client cert loaded" : "");
@@ -412,15 +412,15 @@ int make_uplink(struct uplink_config_t *l)
 #ifdef USE_SSL	
 	/* SSL requires both a cert and a key, or none at all */
 	if ((l->certfile && !l->keyfile) || (l->keyfile && !l->certfile)) {
-		hlog(LOG_ERR, "Uplink %s: Only one of sslkey and sslcert defined - both needed for SSL authentication", l->name);
+		hlog(LOG_ERR, "Uplink %s: Only one of tlskey and tlscert defined - both needed for TLS authentication", l->name);
 		return -2;
 	}
 	
-	/* todo: allow triggering SSL without client auth */
+	/* todo: allow triggering TLS without client auth */
 	if (l->keyfile && l->certfile) {
 		if (!l->ssl) {
 			if (config_uplink_ssl_setup(l)) {
-				hlog(LOG_ERR, "Uplink '%s': SSL setup failed", l->name);
+				hlog(LOG_ERR, "Uplink '%s': TLS setup failed", l->name);
 				return -2;
 			}
 		}
@@ -667,7 +667,7 @@ connerr:
 
 	l->state = UPLINK_ST_CONNECTED;
 	
-	/* set up SSL if necessary */
+	/* set up TLS if necessary */
 #ifdef USE_SSL
 	if (l->ssl) {
 		if (ssl_create_connection(l->ssl, c, 1))

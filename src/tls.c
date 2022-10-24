@@ -64,7 +64,7 @@
  */
 
 #include "config.h"
-#include "ssl.h"
+#include "tls.h"
 #include "hlog.h"
 #include "hmalloc.h"
 #include "worker.h"
@@ -109,7 +109,7 @@ int  ssl_session_cache_index;
 /* This array will store all of the mutexes available to OpenSSL. */
 static MUTEX_TYPE *mutex_buf= NULL;
 
-static void ssl_thread_locking_function(int mode, int n, const char * file, int line)
+void ssl_thread_locking_function(int mode, int n, const char * file, int line)
 {
 	int me;
 	
@@ -124,7 +124,7 @@ static void ssl_thread_locking_function(int mode, int n, const char * file, int 
 	}
 }
 
-static unsigned long ssl_thread_id_function(void)
+unsigned long ssl_thread_id_function(void)
 {
 	return ((unsigned long)THREAD_ID);
 }
@@ -261,14 +261,14 @@ static void ssl_info_callback(SSL *ssl, int where, int ret)
 	}
 	
 	if (where & SSL_CB_HANDSHAKE_START) {
-		hlog(LOG_INFO, "%s/%d: SSL handshake start", c->addr_rem, c->fd);
+		hlog(LOG_INFO, "%s/%d: TLS handshake start", c->addr_rem, c->fd);
 		if (ssl_conn->handshaked) {
 			ssl_conn->renegotiation = 1;
 		}
 	}
 	
 	if (where & SSL_CB_HANDSHAKE_DONE) {
-		hlog(LOG_INFO, "%s/%d: SSL handshake done", c->addr_rem, c->fd);
+		hlog(LOG_INFO, "%s/%d: TLS handshake done", c->addr_rem, c->fd);
 	}
 }
 
@@ -279,8 +279,6 @@ static void ssl_info_callback(SSL *ssl, int where, int ret)
 int ssl_init(void)
 {
 	hlog(LOG_INFO, "Initializing OpenSSL, built against %s ...", OPENSSL_VERSION_TEXT);
-	
-	OPENSSL_config(NULL);
 	
 	SSL_library_init();
 	SSL_load_error_strings();
@@ -452,20 +450,20 @@ int ssl_create(struct ssl_t *ssl, void *data)
 int ssl_certificate(struct ssl_t *ssl, const char *certfile, const char *keyfile)
 {
 	if (SSL_CTX_use_certificate_chain_file(ssl->ctx, certfile) == 0) {
-		hlog(LOG_ERR, "Error while loading SSL certificate chain file \"%s\"", certfile);
+		hlog(LOG_ERR, "Error while loading TLS certificate chain file \"%s\"", certfile);
 		ssl_error(LOG_ERR, "SSL_CTX_use_certificate_chain_file");
 		return -1;
 	}
 	
 	
 	if (SSL_CTX_use_PrivateKey_file(ssl->ctx, keyfile, SSL_FILETYPE_PEM) == 0) {
-		hlog(LOG_ERR, "Error while loading SSL private key file \"%s\"", keyfile);
+		hlog(LOG_ERR, "Error while loading TLS private key file \"%s\"", keyfile);
 		ssl_error(LOG_ERR, "SSL_CTX_use_PrivateKey_file");
 		return -1;
 	}
 	
 	if (!SSL_CTX_check_private_key(ssl->ctx)) {
-		hlog(LOG_ERR, "SSL private key (%s) does not work with this certificate (%s)", keyfile, certfile);
+		hlog(LOG_ERR, "TLS private key (%s) does not work with this certificate (%s)", keyfile, certfile);
 		ssl_error(LOG_ERR, "SSL_CTX_check_private_key");
 		return -1;
 	}
@@ -646,7 +644,7 @@ int ssl_validate_peer_cert_phase1(struct client_t *c)
 	
 	if (rc != X509_V_OK) {
 		/* client gave a certificate, but it's not valid */
-		hlog(LOG_DEBUG, "%s/%s: Peer SSL certificate verification error %d: %s",
+		hlog(LOG_DEBUG, "%s/%s: Peer TLS certificate verification error %d: %s",
 			c->addr_rem, c->username, rc, X509_verify_cert_error_string(rc));
 		c->ssl_con->ssl_err_code = rc;
 		return SSL_VALIDATE_CLIENT_CERT_UNVERIFIED;
@@ -742,7 +740,7 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
 	
 	ret = 0;
-	hlog(LOG_INFO, "%s/%s: Peer validated using SSL certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
+	hlog(LOG_INFO, "%s/%s: Peer validated using TLS certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
 		c->addr_rem, c->username, subject, subj_call, (subj_cn) ? subj_cn : "(none)", issuer);
 	
 	/* store copies of cert subject and issuer */
@@ -903,7 +901,7 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts SSL renegotiation?), calling ssl_write", c->fd);
+		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts TLS renegotiation?), calling ssl_write", c->fd);
 		return ssl_write(self, c);
 	}
 	
@@ -911,7 +909,7 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	c->ssl_con->no_send_shutdown = 1;
 	
 	if (sslerr == SSL_ERROR_ZERO_RETURN || ERR_peek_error() == 0) {
-		hlog(LOG_DEBUG, "ssl_readable fd %d: peer shutdown SSL cleanly", c->fd);
+		hlog(LOG_DEBUG, "ssl_readable fd %d: peer shutdown TLS cleanly", c->fd);
 		client_close(self, c, CLIERR_EOF);
 		return -1;
 	}

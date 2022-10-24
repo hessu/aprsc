@@ -23,7 +23,7 @@
 #include "filter.h"
 #include "clientlist.h"
 #include "parse_qc.h"
-#include "ssl.h"
+#include "tls.h"
 
 /* a static list of usernames which are not allowed to log in */
 static const char *disallow_login_usernames[] = {
@@ -205,7 +205,7 @@ int login_setup_udp_feed(struct client_t *c, int port)
 #ifdef USE_SSL
 static int login_client_validate_cert(struct worker_t *self, struct client_t *c)
 {
-	hlog(LOG_DEBUG, "%s/%s: login: doing SSL client cert validation", c->addr_rem, c->username);
+	hlog(LOG_DEBUG, "%s/%s: login: doing TLS client cert validation", c->addr_rem, c->username);
 	int ssl_res = ssl_validate_peer_cert_phase1(c);
 	if (ssl_res == 0)
 		ssl_res = ssl_validate_peer_cert_phase2(c);
@@ -215,7 +215,7 @@ static int login_client_validate_cert(struct worker_t *self, struct client_t *c)
 		return 1;
 	}
 	
-	hlog(LOG_WARNING, "%s/%s: SSL client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+	hlog(LOG_WARNING, "%s/%s: TLS client cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
 	int rc;
 	if (ssl_res == SSL_VALIDATE_CLIENT_CERT_UNVERIFIED)
 		rc = client_printf(self, c, "# Client certificate not accepted: %s\r\n", X509_verify_cert_error_string(c->ssl_con->ssl_err_code));

@@ -37,7 +37,7 @@
 #include "hmalloc.h"
 #include "hlog.h"
 #include "config.h"
-#include "ssl.h"
+#include "tls.h"
 #include "accept.h"
 #include "uplink.h"
 #include "worker.h"

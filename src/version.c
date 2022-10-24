@@ -4,7 +4,7 @@
 #include "version_branch.h"
 #include "config.h"
 #include "xpoll.h"
-#include "ssl.h"
+#include "tls.h"
 
 const char version_build[] = VERSION "-" SRCVERSION VERSION_BRANCH;
 const char verstr[]        = PROGNAME " " VERSION "-" SRCVERSION VERSION_BRANCH;

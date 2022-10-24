@@ -167,7 +167,7 @@ OBJS = aprsc.o accept.o worker.o errno_aprsc.o \
 	keyhash.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \
-	http.o ssl.o sctp.o version.o \
+	http.o tls.o sctp.o version.o \
 	@LIBOBJS@
 
 clean:

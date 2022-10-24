@@ -64,7 +64,7 @@
  */
 
 #include "config.h"
-#include "ssl.h"
+#include "tls.h"
 #include "hlog.h"
 #include "hmalloc.h"
 #include "worker.h"

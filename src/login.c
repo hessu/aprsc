@@ -23,7 +23,7 @@
 #include "filter.h"
 #include "clientlist.h"
 #include "parse_qc.h"
-#include "ssl.h"
+#include "tls.h"
 
 /* a static list of usernames which are not allowed to log in */
 static const char *disallow_login_usernames[] = {

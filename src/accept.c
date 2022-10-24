@@ -44,7 +44,7 @@
 #include "clientlist.h"
 #include "client_heard.h"
 #include "keyhash.h"
-#include "ssl.h"
+#include "tls.h"
 #include "sctp.h"
 
 #ifdef USE_SCTP

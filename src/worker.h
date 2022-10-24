@@ -30,7 +30,7 @@
 #include "rwlock.h"
 #include "cJSON.h"
 #include "errno_aprsc.h"
-#include "ssl.h"
+#include "tls.h"
 
 extern time_t now;	/* current wallclock time */
 extern time_t tick;	/* clocktick - monotonously increasing for timers, not affected by NTP et al */

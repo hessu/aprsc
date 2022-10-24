@@ -32,7 +32,7 @@
 #include "worker.h"
 #include "filter.h"
 #include "parse_qc.h"
-#include "ssl.h"
+#include "tls.h"
 
 char def_cfgfile[] = "aprsc.conf";
 char def_webdir[] = "web";

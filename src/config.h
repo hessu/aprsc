@@ -24,7 +24,7 @@
 
 #include "ac-hdrs.h"
 #include "acl.h"
-#include "ssl.h"
+#include "tls.h"
 
 #ifndef AI_PASSIVE
 #include "netdb6.h"

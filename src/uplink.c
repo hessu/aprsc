@@ -43,7 +43,7 @@
 #include "incoming.h"
 #include "outgoing.h"
 #include "filter.h"
-#include "ssl.h"
+#include "tls.h"
 
 int uplink_reconfiguring;
 int uplink_shutting_down;

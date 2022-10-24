@@ -679,10 +679,10 @@ err:
 }
 
 /*
- *	Uplink ssl string option handler
+ *	Uplink tls string option handler
  */
 
-int config_uplink_ssl(char **argv, int argc, int *i, const char *key, char **dst)
+int config_uplink_tls(char **argv, int argc, int *i, const char *key, char **dst)
 {
 #ifdef USE_SSL
 	(*i)++;
@@ -768,23 +768,23 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	l->state = UPLINK_ST_UNKNOWN;
 	
 	for (i = 6; i < argc; i++) {
-		if (strcasecmp(argv[i], "sslkey") == 0) {
-			if (config_uplink_ssl(argv, argc, &i, "sslkey", (char **)&l->keyfile)) {
+		if (strcasecmp(argv[i], "tlskey") == 0 || strcasecmp(argv[i], "sslkey") == 0) {
+			if (config_uplink_tls(argv, argc, &i, "tlskey", (char **)&l->keyfile)) {
 				free_uplink_config(&l);
 				return -2;
 			}
-		} else if (strcasecmp(argv[i], "sslcert") == 0) {
-			if (config_uplink_ssl(argv, argc, &i, "sslcert", (char **)&l->certfile)) {
+		} else if (strcasecmp(argv[i], "tlscert") == 0 || strcasecmp(argv[i], "sslcert") == 0) {
+			if (config_uplink_tls(argv, argc, &i, "tlscert", (char **)&l->certfile)) {
 				free_uplink_config(&l);
 				return -2;
 			}
-		} else if (strcasecmp(argv[i], "sslca") == 0) {
-			if (config_uplink_ssl(argv, argc, &i, "sslca", (char **)&l->cafile)) {
+		} else if (strcasecmp(argv[i], "tlsca") == 0 || strcasecmp(argv[i], "sslca") == 0) {
+			if (config_uplink_tls(argv, argc, &i, "tlsca", (char **)&l->cafile)) {
 				free_uplink_config(&l);
 				return -2;
 			}
-		} else if (strcasecmp(argv[i], "sslcrl") == 0) {
-			if (config_uplink_ssl(argv, argc, &i, "sslcrl", (char **)&l->crlfile)) {
+		} else if (strcasecmp(argv[i], "tlscrl") == 0 || strcasecmp(argv[i], "sslcrl") == 0) {
+			if (config_uplink_tls(argv, argc, &i, "tlscrl", (char **)&l->crlfile)) {
 				free_uplink_config(&l);
 				return -2;
 			}
@@ -900,7 +900,7 @@ int config_parse_listen_filter(struct listen_config_t *l, char *filt_string, cha
 	return 0;
 }
 
-int config_listen_ssl(char **argv, int argc, int *i, const char *key, char **dst)
+int config_listen_tls(char **argv, int argc, int *i, const char *key, char **dst)
 {
 #ifdef USE_SSL
 	(*i)++;
@@ -1067,23 +1067,23 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 			}
 
 			
-		} else if (strcasecmp(argv[i], "sslkey") == 0) {
-			if (config_listen_ssl(argv, argc, &i, "sslkey", (char **)&l->keyfile)) {
+		} else if (strcasecmp(argv[i], "tlskey") == 0 || strcasecmp(argv[i], "sslkey") == 0) {
+			if (config_listen_tls(argv, argc, &i, "tlskey", (char **)&l->keyfile)) {
 				free_listen_config(&l);
 				return -2;
 			}
-		} else if (strcasecmp(argv[i], "sslcert") == 0) {
-			if (config_listen_ssl(argv, argc, &i, "sslcert", (char **)&l->certfile)) {
+		} else if (strcasecmp(argv[i], "tlscert") == 0 || strcasecmp(argv[i], "sslcert") == 0) {
+			if (config_listen_tls(argv, argc, &i, "tlscert", (char **)&l->certfile)) {
 				free_listen_config(&l);
 				return -2;
 			}
-		} else if (strcasecmp(argv[i], "sslca") == 0) {
-			if (config_listen_ssl(argv, argc, &i, "sslca", (char **)&l->cafile)) {
+		} else if (strcasecmp(argv[i], "tlsca") == 0 || strcasecmp(argv[i], "sslca") == 0) {
+			if (config_listen_tls(argv, argc, &i, "tlsca", (char **)&l->cafile)) {
 				free_listen_config(&l);
 				return -2;
 			}
-		} else if (strcasecmp(argv[i], "sslcrl") == 0) {
-			if (config_listen_ssl(argv, argc, &i, "sslcrl", (char **)&l->crlfile)) {
+		} else if (strcasecmp(argv[i], "tlscrl") == 0 || strcasecmp(argv[i], "sslcrl") == 0) {
+			if (config_listen_tls(argv, argc, &i, "tlscrl", (char **)&l->crlfile)) {
 				free_listen_config(&l);
 				return -2;
 			}

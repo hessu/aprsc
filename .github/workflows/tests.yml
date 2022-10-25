@@ -16,7 +16,14 @@ jobs:
     
     - name: install deps
       run: |
-        sudo apt-get install -y libevent-dev perl-modules libio-socket-inet6-perl libjson-xs-perl libwww-perl libsctp-dev openssl
+        sudo apt-get install -y libevent-dev \
+            perl perl-modules libio-socket-inet6-perl libjson-xs-perl \
+            libwww-perl \
+            libparse-recdescent-perl \
+            libprotobuf-c-dev protobuf-c-compiler libprotoc-dev \
+            libprotobuf-dev protobuf-compiler cmake \
+            libsctp-dev \
+            openssl
 
     - name: configure
       run: |

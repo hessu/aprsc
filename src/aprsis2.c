@@ -61,11 +61,11 @@ static void *is2_allocate_buffer(int len)
  *	Write a message to a client, return result from c->write
  */
 
-static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	char buf[IS2_MAXIMUM_FRAME_LEN];
 	
-	int len = is2_message__get_packed_size(m);
+	int len = aprsis2__is2_message__get_packed_size(m);
 	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
 	
 	if (blen > IS2_MAXIMUM_FRAME_LEN) {
@@ -75,7 +75,7 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
 	
 	//hlog(LOG_DEBUG, "%s/%s: IS2: serialized length %d", c->addr_rem, c->username, len);
 	is2_setup_buffer(buf, len);
-	is2_message__pack(m, (void *)buf + IS2_HEAD_LEN);
+	aprsis2__is2_message__pack(m, (void *)buf + IS2_HEAD_LEN);
 	
 	return c->write(self, c, buf, blen);
 }
@@ -84,12 +84,12 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, IS2Messa
  *	Write an UDP message to a client, return result from c->write
  */
 
-static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	m->sequence = c->corepeer_is2_sequence++;
 	m->has_sequence = 1;
 	
-	int len = is2_message__get_packed_size(m);
+	int len = aprsis2__is2_message__get_packed_size(m);
 	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
 	if (blen > c->obuf_size) {
 		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized IS2 frame length %d does not fit in obuf", c->addr_rem, c->username, blen);
@@ -97,7 +97,7 @@ static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c,
 	}
 	is2_setup_buffer(c->obuf, len);
 	
-	is2_message__pack(m, (void *)c->obuf + IS2_HEAD_LEN);
+	aprsis2__is2_message__pack(m, (void *)c->obuf + IS2_HEAD_LEN);
 	int r = udp_client_write(self, c, c->obuf, blen);
 	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized length %d, frame %d, wrote %d", c->addr_rem, c->username, len, len + IS2_HEAD_LEN + IS2_TAIL_LEN, r);
 	
@@ -110,15 +110,16 @@ static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c,
 
 int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 {
-	IS2ServerSignature sig = IS2_SERVER_SIGNATURE__INIT;
+	Aprsis2__IS2ServerSignature sig = APRSIS2__IS2_SERVER_SIGNATURE__INIT;
 	sig.username = serverid;
 	sig.app_name = verstr_progname;
 	sig.app_version = version_build;
 	sig.n_features = 0;
 	sig.features = NULL;
 	
-	IS2Message m = IS2_MESSAGE__INIT;
-	m.type = IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	m.has_type = 1;
+	m.type = APRSIS2__IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
 	m.server_signature = &sig;
 	
 	return is2_write_message(self, c, &m);
@@ -128,15 +129,19 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
  *	Transmit a login reply to a new client
  */
 
-int is2_out_login_reply(struct worker_t *self, struct client_t *c, IS2LoginReply__LoginResult result, IS2LoginReply__LoginResultReason reason, VerificationStatus verified)
+int is2_out_login_reply(struct worker_t *self, struct client_t *c, Aprsis2__IS2LoginReply__LoginResult result, Aprsis2__IS2LoginReply__LoginResultReason reason, Aprsis2__VerificationStatus verified)
 {
-	IS2LoginReply lr = IS2_LOGIN_REPLY__INIT;
+	Aprsis2__IS2LoginReply lr = APRSIS2__IS2_LOGIN_REPLY__INIT;
+	lr.has_result = 1;
+	lr.has_result_code = 1;
+	lr.has_verified = 1;
 	lr.result = result;
 	lr.result_code = reason;
 	lr.verified = verified;
 
-	IS2Message m = IS2_MESSAGE__INIT;
-	m.type = IS2_MESSAGE__TYPE__LOGIN_REPLY;
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	m.has_type = 1;
+	m.type = APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REPLY;
 	m.login_reply = &lr;
 	
 	return is2_write_message(self, c, &m);
@@ -146,16 +151,16 @@ int is2_out_login_reply(struct worker_t *self, struct client_t *c, IS2LoginReply
  *	Receive a login reply
  */
 
-static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_in_login_reply(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
-	IS2LoginReply *lr = m->login_reply;
+	Aprsis2__IS2LoginReply *lr = m->login_reply;
 	if (!lr) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login reply failed",
 			c->addr_rem, c->username);
 		return -1;
 	}
 	
-	if (lr->result != IS2_LOGIN_REPLY__LOGIN_RESULT__OK) {
+	if (lr->result != APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK) {
 		hlog(LOG_INFO, "%s/%s: IS2: Login failed: '%s' (%d)",
 			c->addr_rem, c->username,
 			(lr->result_message) ? lr->result_message : "no reason", lr->result_code);
@@ -180,9 +185,9 @@ static int is2_in_login_reply(struct worker_t *self, struct client_t *c, IS2Mess
  *	- if ok, continue by sending a login command
  */
 
-static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
-	IS2ServerSignature *sig = m->server_signature;
+	Aprsis2__IS2ServerSignature *sig = m->server_signature;
 	if (!sig) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of server signature failed",
 			c->addr_rem, c->username);
@@ -219,15 +224,16 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, IS
 #endif
 	
 	/* Ok, we're happy with the uplink's server signature, let us login! */
-	IS2LoginRequest lr = IS2_LOGIN_REQUEST__INIT;
+	Aprsis2__IS2LoginRequest lr = APRSIS2__IS2_LOGIN_REQUEST__INIT;
 	lr.username = serverid;
 	lr.app_name = verstr_progname;
 	lr.app_version = version_build;
 	lr.n_features_req = 0;
 	lr.features_req = NULL;
 	
-	IS2Message mr = IS2_MESSAGE__INIT;
-	mr.type = IS2_MESSAGE__TYPE__LOGIN_REQUEST;
+	Aprsis2__IS2Message mr = APRSIS2__IS2_MESSAGE__INIT;
+	mr.has_type = 1;
+	mr.type = APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REQUEST;
 	mr.login_request = &lr;
 	
 	is2_write_message(self, c, &mr);
@@ -272,11 +278,11 @@ static int is2_login_client_validate_cert(struct worker_t *self, struct client_t
  *	Incoming login request
  */
 
-static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int rc = 0;
 	
-	IS2LoginRequest *lr = m->login_request;
+	Aprsis2__IS2LoginRequest *lr = m->login_request;
 	if (!lr) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login request failed",
 			c->addr_rem, c->username);
@@ -381,20 +387,20 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, IS2Me
 	     (*c->app_version) ? c->app_version : ""
 	);
 	
-	VerificationStatus vs;
+	Aprsis2__VerificationStatus vs;
 	switch (c->validated) {
 	case VALIDATED_WEAK:
-		vs = VERIFICATION_STATUS__WEAK;
+		vs = APRSIS2__VERIFICATION_STATUS__WEAK;
 		break;
 	case VALIDATED_STRONG:
-		vs = VERIFICATION_STATUS__WEAK;
+		vs = APRSIS2__VERIFICATION_STATUS__STRONG;
 		break;
 	default:
-		vs = VERIFICATION_STATUS__NONE;
+		vs = APRSIS2__VERIFICATION_STATUS__NONE;
 	}
 	
 	/* tell the client he's good */
-	is2_out_login_reply(self, c, IS2_LOGIN_REPLY__LOGIN_RESULT__OK, IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
+	is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
 	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);
@@ -443,11 +449,11 @@ failed_login:
  *	Incoming packet handler
  */
 
-static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int i;
 	int r = 0;
-	ISPacket *p;
+	Aprsis2__ISPacket *p;
 	
 	//hlog(LOG_DEBUG, "%s/%s: IS2: %d packets received in message", c->addr_rem, c->username, m->n_is_packet);
 	
@@ -456,7 +462,7 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, IS2Message *
 		
 		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
 		
-		if (p->type == ISPACKET__TYPE__IS_PACKET && p->has_is_packet_data) {
+		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->has_is_packet_data) {
 			incoming_handler(self, c, IPPROTO_TCP, (char *)p->is_packet_data.data, p->is_packet_data.len);
 		}
 	}
@@ -490,14 +496,17 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
 	
 	c->ping_timeout = tick + IS2_PING_TIMEOUT;
 	
-	IS2KeepalivePing ping = IS2_KEEPALIVE_PING__INIT;
-	ping.ping_type = IS2_KEEPALIVE_PING__PING_TYPE__REQUEST;
+	Aprsis2__IS2KeepalivePing ping = APRSIS2__IS2_KEEPALIVE_PING__INIT;
+	ping.ping_type = APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REQUEST;
+	ping.has_ping_type = 1;
 	ping.request_id = c->ping_request_id = random();
+	ping.has_request_id = 1;
 	ping.request_data = rdata;
 	ping.has_request_data = 1;
 	
-	IS2Message m = IS2_MESSAGE__INIT;
-	m.type = IS2_MESSAGE__TYPE__KEEPALIVE_PING;
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	m.has_type = 1;
+	m.type = APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING;
 	m.keepalive_ping = &ping;
 	
 	return is2_write_message(self, c, &m);
@@ -507,11 +516,11 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
  *	Incoming ping handler, responds with a reply when a request is received
  */
 
-static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int r = 0;
 	
-	IS2KeepalivePing *ping = m->keepalive_ping;
+	Aprsis2__IS2KeepalivePing *ping = m->keepalive_ping;
 	if (!ping) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of ping failed",
 			c->addr_rem, c->username);
@@ -521,16 +530,16 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, IS2Message *m)
 	
 	hlog(LOG_DEBUG, "%s/%s: IS2: Ping %s received: request_id %lu",
 		c->addr_rem, c->username,
-		(ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) ? "request" : "reply",
+		(ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) ? "request" : "reply",
 		ping->request_id);
 	
-	if (ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) {
-		ping->ping_type = IS2_KEEPALIVE_PING__PING_TYPE__REPLY;
+	if (ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) {
+		ping->ping_type = APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REPLY;
 		
 		r = is2_write_message(self, c, m);
 	}
 	
-	if (ping->ping_type == IS2_KEEPALIVE_PING__PING_TYPE__REPLY && ping->request_id == c->ping_request_id) {
+	if (ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REPLY && ping->request_id == c->ping_request_id) {
 		double diff;
 #ifdef USE_CLOCK_GETTIME
 		struct timespec ts;
@@ -578,11 +587,11 @@ done:
  *	Incoming parameter set handler
  */
 
-static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Message *m)
+static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int r = 0;
 	
-	IS2Parameter *par = m->parameter;
+	Aprsis2__IS2Parameter *par = m->parameter;
 	if (!par) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of parameter message failed: no parameter payload",
 			c->addr_rem, c->username);
@@ -590,7 +599,7 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Messag
 		goto done;
 	}
 	
-	if (par->type != IS2_PARAMETER__TYPE__PARAMETER_SET) {
+	if (par->type != APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_SET) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of parameter message failed: wrong type %d (not PARAMETER_SET)",
 			c->addr_rem, c->username, par->type);
 		r = -1;
@@ -602,19 +611,21 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, IS2Messag
 		(par->filter_string) ? " filter_string" : "");
 	
 	/* prepare reply message */
-	IS2Parameter prep = IS2_PARAMETER__INIT;
-	prep.type = IS2_PARAMETER__TYPE__PARAMETER_FAILED;
+	Aprsis2__IS2Parameter prep = APRSIS2__IS2_PARAMETER__INIT;
+	prep.has_type = 1;
+	prep.type = APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_FAILED;
 	prep.has_request_id = par->has_request_id;
 	if (prep.has_request_id)
 		prep.request_id = par->request_id;
-	IS2Message rm = IS2_MESSAGE__INIT;
-	rm.type = IS2_MESSAGE__TYPE__PARAMETER;
+	Aprsis2__IS2Message rm = APRSIS2__IS2_MESSAGE__INIT;
+	rm.has_type = 1;
+	rm.type = APRSIS2__IS2_MESSAGE__TYPE__PARAMETER;
 	rm.parameter = &prep;
 	
 	if (par->filter_string) {
 		filter_set(c, par->filter_string, strlen(par->filter_string));
 		
-		prep.type = IS2_PARAMETER__TYPE__PARAMETER_APPLIED;
+		prep.type = APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_APPLIED;
 		prep.filter_string = c->filter_s;
 	} else {
 		hlog(LOG_WARNING, "%s/%s: IS2: PARAMETER_SET: No parameters found for setting",
@@ -632,14 +643,14 @@ done:
  *	transmit a server signature
  */
 
-int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, IS2Message *m)
+int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	switch (m->type) {
-		case IS2_MESSAGE__TYPE__SERVER_SIGNATURE:
+		case APRSIS2__IS2_MESSAGE__TYPE__SERVER_SIGNATURE:
 			return is2_in_server_signature(self, c, m);
-		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+		case APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
-		case IS2_MESSAGE__TYPE__LOGIN_REPLY:
+		case APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REPLY:
 			return is2_in_login_reply(self, c, m);
 		default:
 			hlog(LOG_WARNING, "%s/%s: IS2: connect: unknown message type %d",
@@ -654,13 +665,13 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
  *	IS2 input handler, when waiting for a login command
  */
  
-int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Message *m)
+int is2_input_handler_login(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	switch (m->type) {
-		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+		case APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
 			break;
-		case IS2_MESSAGE__TYPE__LOGIN_REQUEST:
+		case APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REQUEST:
 			return is2_in_login_request(self, c, m);
 			break;
 		default:
@@ -676,16 +687,16 @@ int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Messag
  *	IS2 input handler, connected state
  */
  
-int is2_input_handler(struct worker_t *self, struct client_t *c, IS2Message *m)
+int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	switch (m->type) {
-		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+		case APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
 			break;
-		case IS2_MESSAGE__TYPE__PARAMETER:
+		case APRSIS2__IS2_MESSAGE__TYPE__PARAMETER:
 			return is2_in_parameter(self, c, m);
 			break;
-		case IS2_MESSAGE__TYPE__IS_PACKET:
+		case APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET:
 			return is2_in_packet(self, c, m);
 			break;
 		default:
@@ -701,13 +712,13 @@ int is2_input_handler(struct worker_t *self, struct client_t *c, IS2Message *m)
  *	IS2 input handler, corepeer state
  */
  
-int is2_input_handler_corepeer(struct worker_t *self, struct client_t *c, IS2Message *m)
+int is2_input_handler_corepeer(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	switch (m->type) {
-		case IS2_MESSAGE__TYPE__KEEPALIVE_PING:
+		case APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
 			break;
-		case IS2_MESSAGE__TYPE__IS_PACKET:
+		case APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET:
 			return is2_in_packet(self, c, m);
 			break;
 		default:
@@ -725,7 +736,7 @@ int is2_input_handler_corepeer(struct worker_t *self, struct client_t *c, IS2Mes
 
 static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *buf, int len)
 {
-	IS2Message *m = is2_message__unpack(NULL, len, buf);
+	Aprsis2__IS2Message *m = aprsis2__is2_message__unpack(NULL, len, buf);
 	if (!m) {
 		hlog_packet(LOG_WARNING, buf, len, "%s/%s: IS2: unpacking of message failed: ",
 			c->addr_rem, c->username);
@@ -735,7 +746,7 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
 	/* Call the current input message handler */
 	int r = c->is2_input_handler(self, c, m);
 	
-	is2_message__free_unpacked(m, NULL);
+	aprsis2__is2_message__free_unpacked(m, NULL);
 	
 	return r;
 }
@@ -845,31 +856,33 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
  *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
  */
 
-static int is2_encode_packet(IS2Message *m, ProtobufCBinaryData *data, char *p, int len)
+static int is2_encode_packet(Aprsis2__IS2Message *m, ProtobufCBinaryData *data, char *p, int len)
 {
 	data->data = (uint8_t *)p;
 	data->len  = len;
 	
 	int n = 1; // just one packet
 	int i;
-	ISPacket **subs = hmalloc(sizeof(ISPacket*) * n);
+	Aprsis2__ISPacket **subs = hmalloc(sizeof(Aprsis2__ISPacket*) * n);
 	for (i = 0; i < n; i++) {
 		//hlog(LOG_DEBUG, "packing packet %d", i);
-		subs[i] = hmalloc(sizeof(ISPacket));
-		ispacket__init(subs[i]);
-		subs[i]->type = ISPACKET__TYPE__IS_PACKET;
+		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
+		aprsis2__ispacket__init(subs[i]);
+		subs[i]->has_type = 1;
+		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
 		subs[i]->has_is_packet_data = 1;
 		subs[i]->is_packet_data = *data;
 	}
 	
-	m->type = IS2_MESSAGE__TYPE__IS_PACKET;
+	m->has_type = 1;
+	m->type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
 	m->n_is_packet = n;
 	m->is_packet = subs;
 	
 	return i;
 }
 
-void is2_free_encoded_packets(IS2Message *m)
+void is2_free_encoded_packets(Aprsis2__IS2Message *m)
 {
 	int i;
 	
@@ -886,7 +899,7 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
 	
 	//hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
 	
-	IS2Message m = IS2_MESSAGE__INIT;
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
 	ProtobufCBinaryData data;
 	is2_encode_packet(&m, &data, p, len);
 	
@@ -910,7 +923,7 @@ int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, char *p
 	
 	//hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
 	
-	IS2Message m = IS2_MESSAGE__INIT;
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
 	ProtobufCBinaryData data;
 	is2_encode_packet(&m, &data, p, len);
 	

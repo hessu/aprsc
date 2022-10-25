@@ -1,4 +1,6 @@
-syntax = "proto2";
+syntax = "proto3";
+
+package aprsis2;
 
 //
 //	A server sends an IS2ServerSignature to all new clients.
@@ -9,9 +11,9 @@ syntax = "proto2";
 //
 
 message IS2ServerSignature {
-	required string username = 1; // callsign-SSID
-	required string app_name = 2;
-	required string app_version = 3;
+	string username = 1; // callsign-SSID
+	string app_name = 2;
+	string app_version = 3;
 	repeated string features = 4; // list of supported optional features
 }
 
@@ -24,10 +26,10 @@ message IS2ServerSignature {
 //
 
 message IS2LoginRequest {
-	required string username = 1; // callsign-SSID
-	optional string password = 2; // passcode or password
-	required string app_name = 3;
-	required string app_version = 4;
+	string username = 1; // callsign-SSID
+	string password = 2; // passcode or password
+	string app_name = 3;
+	string app_version = 4;
 	// 5: unused
 	repeated string features_req = 6; // list of requested optional features
 }
@@ -83,10 +85,10 @@ message IS2LoginReply {
 		CERT_EXPIRED = 5;
 	}
 	
-	required LoginResult result = 1;
-	required VerificationStatus verified = 2;
-	optional LoginResultReason result_code = 3;
-	optional string result_message = 4; // english descriptive
+	LoginResult result = 1;
+	VerificationStatus verified = 2;
+	LoginResultReason result_code = 3;
+	string result_message = 4; // english descriptive
 	repeated string features_ack = 5; // list of agreed optional features
 }
 
@@ -105,13 +107,14 @@ message IS2LoginReply {
 
 message IS2KeepalivePing {
 	enum PingType {
+		UNDEFINED = 0;
 		REQUEST = 1;
 		REPLY = 2;
 	}
 	
-	required PingType ping_type = 1;
-	required uint32 request_id = 2;
-	optional bytes request_data = 3;
+	PingType ping_type = 1;
+	uint32 request_id = 2;
+	bytes request_data = 3;
 }
 
 //
@@ -120,15 +123,16 @@ message IS2KeepalivePing {
 
 message ISPacket {
 	enum Type {
+		UNDEFINED = 0;
 		// Traditional APRS-IS format with embedded Q construct
 		IS_PACKET = 2;
 	}
 	
 	// Identifies which message is filled in.
-	required Type type = 1;
+	Type type = 1;
 	
 	// packet data in traditional APRS-IS format, without CRLF
-	optional bytes is_packet_data = 2;
+	bytes is_packet_data = 2;
 }
 
 //
@@ -156,16 +160,17 @@ message ISPacket {
 
 message IS2Parameter {
 	enum Type {
+		PARAMETER_UNDEFINED = 0;
 		PARAMETER_CURRENT = 1; // this is the current value of the parameter
 		PARAMETER_SET = 2; // set a parameter to this value
 		PARAMETER_APPLIED = 3; // parameter has been set successfully
 		PARAMETER_FAILED = 4; // parameter change failed
 	}
 	
-	required Type type = 1;
-	optional int32 request_id = 2;
+	Type type = 1;
+	int32 request_id = 2;
 	
-	optional string filter_string = 3;
+	string filter_string = 3;
 }
 
 //
@@ -180,6 +185,7 @@ message IS2Parameter {
 
 message IS2Message {
 	enum Type {
+		UNDEFINED = 0;
 		SERVER_SIGNATURE = 2;
 		LOGIN_REQUEST = 3;
 		LOGIN_REPLY = 4;
@@ -189,19 +195,19 @@ message IS2Message {
 	}
 	
 	// Identifies which message is filled in.
-	required Type type = 1;
+	Type type = 1;
 	
 	// For UDP packets, a sequence number may be transmitted
-	optional uint32 sequence = 2;
+	uint32 sequence = 2;
 	// For UDP packets, a HMAC signature may be transmitted
-	optional bytes signature = 3;
+	bytes signature = 3;
 	
 	// One of the following will be filled in. Just one.
-	optional IS2ServerSignature server_signature = 21;
-	optional IS2LoginRequest login_request = 22;
-	optional IS2LoginReply login_reply = 23;
-	optional IS2KeepalivePing keepalive_ping = 24;
+	IS2ServerSignature server_signature = 21;
+	IS2LoginRequest login_request = 22;
+	IS2LoginReply login_reply = 23;
+	IS2KeepalivePing keepalive_ping = 24;
 	repeated ISPacket is_packet = 25;
-	optional IS2Parameter parameter = 26;
+	IS2Parameter parameter = 26;
 }
 

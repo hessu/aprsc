@@ -11,9 +11,11 @@ use IO::Socket::INET;
 use IO::Select;
 use Data::Dumper;
 
-use Google::ProtocolBuffers;
+use Google::ProtocolBuffers::Dynamic;
 
-Google::ProtocolBuffers->parsefile("../src/aprsis2.proto", { create_accessors => 1 });
+my $pf = Google::ProtocolBuffers::Dynamic->new("../src");
+$pf->load_file("aprsis2.proto");
+$pf->map({package => "aprsis2", prefix => "APRSIS2"});
 
 our $VERSION = '0.01';
 
@@ -184,15 +186,15 @@ sub connect($;%)
 	}
 	
 	# send login request
-	my $lm = IS2LoginRequest->new({
+	my $lm = APRSIS2::IS2LoginRequest->new({
 		'username' => $self->{'mycall'},
 		'password' => $self->{'aprspass'},
 		'app_name' => $aprs_appname,
 		'app_version' => $VERSION
 	});
 	
-	my $im = IS2Message->new({
-		'type' => IS2Message::Type::LOGIN_REQUEST(),
+	my $im = APRSIS2::IS2Message->new({
+		'type' => APRSIS2::IS2Message::Type::LOGIN_REQUEST(),
 		'login_request' => $lm
 	});
 	
@@ -200,8 +202,8 @@ sub connect($;%)
 	
 	my $t = time();
 	while (my $l = $self->is2_frame_in()) {
-		my $rep = $l->login_reply;
-		if ($l->type == IS2Message::Type::LOGIN_REPLY()) {
+		if ($l->get_type() == APRSIS2::IS2Message::Type::LOGIN_REPLY()) {
+			my $rep = $l->get_login_reply();
 			if (!$rep) {
 				$self->{'error'} = "LOGIN_REPLY type, but no login_reply message";
 				return 0;
@@ -212,18 +214,18 @@ sub connect($;%)
 			#	defined $rep->result_code ? $rep->result_code : 0,
 			#	defined $rep->result_message ? $rep->result_message : '');
 			
-			if ($rep->result != IS2LoginReply::LoginResult::OK()) {
+			if ($rep->get_result() != APRSIS2::IS2LoginReply::LoginResult::OK()) {
 				$self->{'error'} = sprintf("Login reply: login failed, code %d: %s",
-					defined $rep->result_code ? $rep->result_code : 0,
-					defined $rep->result_message ? $rep->result_message : '');
+					defined $rep->get_result_code() ? $rep->get_result_code() : 0,
+					defined $rep->get_result_message() ? $rep->get_result_message() : '');
 				return 0;
 			}
 			
-			if ($self->{'aprspass'} != -1 && $rep->verified < 1) {
+			if ($self->{'aprspass'} != -1 && $rep->get_verified() < 1) {
 				$self->{'error'} = sprintf("Login reply: login not verified (%d), code %d: %s",
-					$rep->verified,
-					defined $rep->result_code ? $rep->result_code : 0,
-					defined $rep->result_message ? $rep->result_message : '');
+					$rep->get_verified(),
+					defined $rep->get_result_code() ? $rep->get_result_code() : 0,
+					defined $rep->get_result_message() ? $rep->get_result_message() : '');
 				return 0;
 			}
 			
@@ -253,14 +255,14 @@ sub send_packets($$)
 	
 	my @pq;
 	foreach my $p (@{ $packets }) {
-		push @pq, ISPacket->new({
-			'type' => ISPacket::Type::IS_PACKET(),
+		push @pq, APRSIS2::ISPacket->new({
+			'type' => APRSIS2::ISPacket::Type::IS_PACKET(),
 			'is_packet_data' => $p
 		});
 	}
 	
-	my $im = IS2Message->new({
-		'type' => IS2Message::Type::IS_PACKET(),
+	my $im = APRSIS2::IS2Message->new({
+		'type' => APRSIS2::IS2Message::Type::IS_PACKET(),
 		'is_packet' => \@pq
 	});
 	
@@ -274,9 +276,9 @@ sub wait_signature($)
 	# wait for server signature
 	my $t = time();
 	while (my $l = $self->is2_frame_in()) {
-		my $sig = $l->server_signature;
+		my $sig = $l->get_server_signature();
 		
-		if ($l->type == IS2Message::Type::SERVER_SIGNATURE()) {
+		if ($l->get_type() == APRSIS2::IS2Message::Type::SERVER_SIGNATURE()) {
 			if (!$sig) {
 				$self->{'error'} = "SERVER_SIGNATURE type, but no server signature message";
 				return 0;
@@ -285,7 +287,7 @@ sub wait_signature($)
   			#warn sprintf("got server signature: serverid '%s' app '%s' version '%s'\n",
   			#	$sig->username, $sig->app_name, $sig->app_version);
 		} else {
-			$self->{'error'} = "Wrong type of message received instead of SERVER_SIGNATURE: " . $l->type;
+			$self->{'error'} = "Wrong type of message received instead of SERVER_SIGNATURE: " . $l->get_type();
 			return 0;
 		}
 		
@@ -306,10 +308,10 @@ sub ping($)
 	my $timeout = 2;
 	my $reqid = int(rand(2**30));
 	
-	my $im = IS2Message->new({
-		'type' => IS2Message::Type::KEEPALIVE_PING(),
-		'keepalive_ping' => IS2KeepalivePing->new({
-			'ping_type' => IS2KeepalivePing::PingType::REQUEST(),
+	my $im = APRSIS2::IS2Message->new({
+		'type' => APRSIS2::IS2Message::Type::KEEPALIVE_PING(),
+		'keepalive_ping' => APRSIS2::IS2KeepalivePing->new({
+			'ping_type' => APRSIS2::IS2KeepalivePing::PingType::REQUEST(),
 			'request_id' => $reqid,
 		})
 	});
@@ -319,23 +321,24 @@ sub ping($)
 	my $t = time();
 	
 	while (my $l = $self->is2_frame_in($timeout)) {
-		if ($l->type != IS2Message::Type::KEEPALIVE_PING()) {
-			warn "IS2 ping: Unexpected type of frame received: " . $l->type . "\n";
+		if ($l->get_type() != APRSIS2::IS2Message::Type::KEEPALIVE_PING()) {
+			warn "IS2 ping: Unexpected type of frame received: " . $l->get_type() . "\n";
 			next;
 		}
 		
-		if (!defined $l->keepalive_ping) {
+		my $ping = $l->get_keepalive_ping();
+		if (!defined $ping) {
 			$self->{'error'} = "IS2 ping reply does not have keepalive_ping payload";
 			return undef;
 		}
 		
-		if ($l->keepalive_ping->ping_type != IS2KeepalivePing::PingType::REPLY()) {
-			$self->{'error'} = "IS2 ping: Wrong type of frame received: " . $l->type;
+		if ($ping->get_ping_type() != APRSIS2::IS2KeepalivePing::PingType::REPLY()) {
+			$self->{'error'} = "IS2 ping: Wrong type of ping frame received: " . $ping->get_ping_time();
 			return undef;
 		}
 		
-		if ($l->keepalive_ping->request_id != $reqid) {
-			$self->{'error'} = "IS2 ping: Request id mismatch, sent $reqid, got " . $l->keepalive_ping->request_id;
+		if ($ping->get_request_id() != $reqid) {
+			$self->{'error'} = "IS2 ping: Request id mismatch, sent $reqid, got " . $ping->get_request_id();
 			return undef;
 		}
 		
@@ -359,8 +362,8 @@ sub get_packets($;$)
 	my $t = time();
 	
 	while (my $l = $self->is2_frame_in($timeout)) {
-		my $ips = $l->is_packet;
-		if ($l->type == IS2Message::Type::IS_PACKET()) {
+		if ($l->get_type() == APRSIS2::IS2Message::Type::IS_PACKET()) {
+			my $ips = $l->get_is_packet_list();
 			if (!$ips) {
 				$self->{'error'} = "IS_PACKET type, but no packets";
 				return undef;
@@ -369,17 +372,17 @@ sub get_packets($;$)
 			my @pa;
 			
 			foreach my $ip (@{ $ips }) {
-				if ($ip->type != ISPacket::Type::IS_PACKET()) {
-					$self->{'error'} = sprintf("ISPacket type %d unsupported", $ip->type);
+				if ($ip->get_type() != APRSIS2::ISPacket::Type::IS_PACKET()) {
+					$self->{'error'} = sprintf("ISPacket type %d unsupported", $ip->get_type());
 					return undef;
 				}
 				
-				push @pa, $ip->is_packet_data;
+				push @pa, $ip->get_is_packet_data();
 			}
 			
 			return @pa;
 		} else {
-			$self->{'error'} = "Wrong type of frame received: " . $l->type;
+			$self->{'error'} = "Wrong type of frame received: " . $l->get_type();
 			return undef;
 		}
 		
@@ -415,10 +418,10 @@ sub set_filter($$)
 	
 	my $reqid = int(rand(2**30));
 	
-	my $im = IS2Message->new({
-		'type' => IS2Message::Type::PARAMETER(),
-		'parameter' => IS2Parameter->new({
-			'type' => IS2Parameter::Type::PARAMETER_SET(),
+	my $im = APRSIS2::IS2Message->new({
+		'type' => APRSIS2::IS2Message::Type::PARAMETER(),
+		'parameter' => APRSIS2::IS2Parameter->new({
+			'type' => APRSIS2::IS2Parameter::Type::PARAMETER_SET(),
 			'request_id' => $reqid, # todo: sequential
 			'filter_string' => $filter
 		})
@@ -428,19 +431,19 @@ sub set_filter($$)
 	
 	my $t = time();
 	while (my $l = $self->is2_frame_in()) {
-		my $rep = $l->parameter;
-		if ($l->type == IS2Message::Type::PARAMETER()) {
+		if ($l->get_type() == APRSIS2::IS2Message::Type::PARAMETER()) {
+			my $rep = $l->get_parameter();
 			if (!$rep) {
 				$self->{'error'} = "PARAMETER type, but no parameter message";
 				return 0;
 			}
 			
-			if ($rep->request_id != $reqid) {
-				$self->{'error'} = "PARAMETER reply, wrong request id " . $rep->request_id . ", expected $reqid";
+			if ($rep->get_request_id() != $reqid) {
+				$self->{'error'} = "PARAMETER reply, wrong request id " . $rep->get_request_id() . ", expected $reqid";
 				return 0;
 			}
 			
-			if ($rep->type != IS2Parameter::Type::PARAMETER_APPLIED()) {
+			if ($rep->get_type() != APRSIS2::IS2Parameter::Type::PARAMETER_APPLIED()) {
 				$self->{'error'} = sprintf("filter set reply: not applied");
 				return 0;
 			}
@@ -448,7 +451,7 @@ sub set_filter($$)
 			# todo: check sequence
 			return 1;
 		} else {
-			$self->{'error'} = "Wrong type of response received for PARAMETER_SET: " . $l->type;
+			$self->{'error'} = "Wrong type of response received for PARAMETER_SET: " . $l->get_type();
 			return 0;
 		}
 		
@@ -528,8 +531,8 @@ sub is2_frame_in($;$)
 				my $frame = substr($self->{'ibuf'}, 4, $frame_len);
 				$self->{'ibuf'} = substr($self->{'ibuf'}, $need_bytes);
 				
-				my $is2_msg = IS2Message->decode($frame);
-				
+				my $is2_msg = APRSIS2::IS2Message->decode($frame);
+				#warn "decoded: " . Dumper($is2_msg) . "\n";
 				#warn "left in ibuf: " . length($self->{'ibuf'}) . "\n";
 				return $is2_msg;
 			}

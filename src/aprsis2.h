@@ -4,9 +4,9 @@
 
 #include "worker.h"
 
-extern int is2_input_handler_login(struct worker_t *self, struct client_t *c, IS2Message *m);
-extern int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, IS2Message *m);
-extern int is2_input_handler(struct worker_t *self, struct client_t *c, IS2Message *m);
+extern int is2_input_handler_login(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+extern int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+extern int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
 
 extern int is2_out_server_signature(struct worker_t *self, struct client_t *c);
 extern int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at);

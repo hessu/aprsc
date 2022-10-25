@@ -371,7 +371,7 @@ struct client_t {
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
-	int	(*is2_input_handler) (struct worker_t *self, struct client_t *c, IS2Message *message);
+	int	(*is2_input_handler) (struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *message);
 	int	(*handler_consume_input) (struct worker_t *self, struct client_t *c, int start_at);
 	int	(*write) (struct worker_t *self, struct client_t *c, char *p, int len);
 	int	(*write_packet) (struct worker_t *self, struct client_t *c, char *p, int len);

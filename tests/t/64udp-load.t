@@ -36,10 +36,8 @@ ok($ret, 1, "Failed to connect to the server: " . $i_full->{'error'});
 
 # test ##########################
 
-my $flush_interval = 500;
-#$flush_interval = 300;
-my $bytelimit = 128*1024;
-#my $bytelimit = 4096;
+my $flush_interval = 300;
+my $bytelimit = 64*1024;
 my $window = 12*1024;
 #my $max_speed = 500; # packets /s
 

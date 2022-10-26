@@ -1245,16 +1245,6 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	clientaccount_add_rx(rc, IPPROTO_UDP, r, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
 	rc->last_read = tick;
 	
-	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
-	 * UDP frame.
-	 */
-	for (i = 0; i < r; i++) {
-		if (c->ibuf[i] == '\r' || c->ibuf[i] == '\n') {
-			r = i;
-			break;
-		}
-	}
-	
 	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
 		is2_corepeer_control_in(self, c, c->ibuf, r);
 		return 0;
@@ -1263,6 +1253,16 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	if (c->corepeer_is2) {
 		is2_corepeer_deframe_input(self, c, c->ibuf, r);
 		return 0;
+	}
+	
+	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
+	 * UDP frame.
+	 */
+	for (i = 0; i < r; i++) {
+		if (c->ibuf[i] == '\r' || c->ibuf[i] == '\n') {
+			r = i;
+			break;
+		}
 	}
 	
 	c->handler_line_in(self, rc, IPPROTO_UDP, c->ibuf, r);

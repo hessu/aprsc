@@ -280,6 +280,9 @@ struct client_udp_t {			/* UDP services can be available at multiple
 #define IBUF_SIZE  8000
 #endif
 
+#define APRSIS2_OBUF_PACKETS 20
+#define APRSIS2_OBUF_SIZE 2048
+
 struct client_t {
 	struct client_t *next;
 	struct client_t **prevp;
@@ -427,7 +430,12 @@ struct client_t {
 	char	obuf[OBUF_SIZE];
 #endif
 	char filter_s[FILTER_S_SIZE];
-	
+
+	char *is2_obuf;
+	int is2_obuf_packet_lengths[APRSIS2_OBUF_PACKETS];
+	int is2_obuf_packets;
+	int is2_obuf_end;
+
 	char *corepeer_is2_challenge;	/* IS2 handshake random token */
 	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */
 };

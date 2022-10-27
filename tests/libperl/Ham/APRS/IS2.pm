@@ -333,7 +333,7 @@ sub ping($)
 		}
 		
 		if ($ping->get_ping_type() != APRSIS2::IS2KeepalivePing::PingType::REPLY()) {
-			$self->{'error'} = "IS2 ping: Wrong type of ping frame received: " . $ping->get_ping_time();
+			$self->{'error'} = "IS2 ping: Wrong type of ping frame received: " . $ping->get_ping_type();
 			return undef;
 		}
 		
@@ -361,7 +361,7 @@ sub get_packets($;$)
 	
 	my $t = time();
 	
-	while (my $l = $self->is2_frame_in($timeout)) {
+	while (my $l = $self->is2_frame_in_nonping($timeout)) {
 		if ($l->get_type() == APRSIS2::IS2Message::Type::IS_PACKET()) {
 			my $ips = $l->get_is_packet_list();
 			if (!$ips) {
@@ -377,7 +377,12 @@ sub get_packets($;$)
 					return undef;
 				}
 				
-				push @pa, $ip->get_is_packet_data();
+				my $pd = $ip->get_is_packet_data();
+				if (!defined $pd) {
+					$self->{'error'} = "ISPacket with no packet data received";
+					return undef;
+				}
+				push @pa, $pd;
 			}
 			
 			return @pa;
@@ -391,6 +396,8 @@ sub get_packets($;$)
 			return undef;
 		}
 	}
+	warn "get_packets got undef with is2_frame_in_nonping\n";
+	return undef;
 }
 
 sub get_packet($;$)
@@ -574,6 +581,52 @@ sub is2_frame_in($;$)
 			#warn "is2_frame_in: timeout\n";
 			$self->{'error'} = "is2_frame_in timed out";
 			return undef;
+		}
+	}
+}
+
+sub is2_frame_in_nonping($;$)
+{
+	my($self, $timeout) = @_;
+	
+	return undef if ($self->{'state'} ne 'connected');
+	
+	$timeout = 5 if (!defined $timeout);
+	
+	my $end_t = time() + $timeout;
+	while (1) {
+		my $l = $self->is2_frame_in($timeout);
+		return $l if (!defined $l);
+
+		if ($l->get_type() == APRSIS2::IS2Message::Type::KEEPALIVE_PING()) {
+			warn "received ping, replying\n";
+			my $ping = $l->get_keepalive_ping();
+			if (!defined $ping) {
+				$self->{'error'} = "IS2 ping does not have keepalive_ping payload";
+				return undef;
+			}
+			
+			if ($ping->get_ping_type() != APRSIS2::IS2KeepalivePing::PingType::REQUEST()) {
+				$self->{'error'} = "IS2 ping: Wrong type of ping frame received: " . $ping->get_ping_type();
+				return undef;
+			}
+			
+			my $im = APRSIS2::IS2Message->new({
+				'type' => APRSIS2::IS2Message::Type::KEEPALIVE_PING(),
+				'keepalive_ping' => APRSIS2::IS2KeepalivePing->new({
+					'ping_type' => APRSIS2::IS2KeepalivePing::PingType::REPLY(),
+					'request_id' => $ping->get_request_id(),
+					'request_data' => $ping->get_request_data()
+				})
+			});
+			$self->is2_frame_out($im->encode);
+			if (time() > $end_t) {
+				warn "is2_frame_in_nonping: timeout\n";
+				$self->{'error'} = "is2_frame_in_nonping timed out";
+				return undef;
+			}
+		} else {
+			return $l;
 		}
 	}
 }

@@ -403,6 +403,8 @@ void client_free(struct client_t *c)
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
 #endif
+	if (c->is2_obuf)
+		hfree(c->is2_obuf);
 
 	filter_free(c->posdefaultfilters);
 	filter_free(c->negdefaultfilters);
@@ -1744,6 +1746,9 @@ static void send_keepalives(struct worker_t *self)
 			c->keepalive = tick + keepalive_interval;
 			
 			if (c->flags & CLFLAGS_IS2) {
+				if (c->is2_obuf_packets)
+					if (is2_obuf_flush(self, c) < 0)
+						continue;
 				if (is2_out_ping(self, c) < -2)
 					continue; // destroyed
 			} else {
@@ -1756,6 +1761,8 @@ static void send_keepalives(struct worker_t *self)
 			c->obuf_flushsize = flushlevel;
 		} else {
 			/* just fush if there was anything to write */
+			if (c->is2_obuf_packets)
+				is2_obuf_flush(self, c);
 			if (c->ai_protocol == IPPROTO_TCP || c->ai_protocol == IPPROTO_SCTP) {
 				rc = c->write(self, c, buf, 0);
 				if (rc < -2) continue; // destroyed..

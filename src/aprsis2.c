@@ -57,6 +57,14 @@ static void *is2_allocate_buffer(int len)
 }
 #endif
 
+static void is2_allocate_obuf(struct client_t *c)
+{
+	// deallocated in client_free()
+	c->is2_obuf = hmalloc(APRSIS2_OBUF_SIZE);
+	c->is2_obuf_packets = 0;
+	c->is2_obuf_end = 0;
+}
+
 /*
  *	Write a message to a client, return result from c->write
  */
@@ -169,6 +177,8 @@ static int is2_in_login_reply(struct worker_t *self, struct client_t *c, Aprsis2
 	
 	hlog(LOG_INFO, "%s/%s: IS2: Login reply received",
 		c->addr_rem, c->username);
+
+	is2_allocate_obuf(c);
 
 	/* ok, login succeeded, switch handler */
 	c->is2_input_handler = &is2_input_handler;
@@ -401,6 +411,8 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	
 	/* tell the client he's good */
 	is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
+
+	is2_allocate_obuf(c);
 	
 	/* mark as connected and classify */
 	worker_mark_client_connected(self, c);
@@ -891,10 +903,11 @@ void is2_free_encoded_packets(Aprsis2__IS2Message *m)
 		
 	hfree(m->is_packet);
 }
- 
-int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+
+/* 
+int is2_write_packet_unbuffered(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	/* trim away CR/LF */
+	// trim away CR/LF
 	len = len - 2;
 	
 	//hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
@@ -908,6 +921,69 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
 	is2_free_encoded_packets(&m);
 	
 	return ret;
+}
+*/
+
+int is2_obuf_flush(struct worker_t *self, struct client_t *c)
+{
+	//hlog(LOG_DEBUG, "%s/%s: IS2: flushing obuf of %d bytes, %d packets", c->addr_rem, c->username, c->is2_obuf_end, c->is2_obuf_packets);
+
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	ProtobufCBinaryData data[APRSIS2_OBUF_PACKETS];
+
+	Aprsis2__ISPacket **subs = hmalloc(sizeof(Aprsis2__ISPacket*) * c->is2_obuf_packets);
+	int current_obuf_ofs = 0;
+	for (int i = 0; i < c->is2_obuf_packets; i++) {
+		//hlog(LOG_DEBUG, "packing packet %d", i);
+		data[i].len = c->is2_obuf_packet_lengths[i];
+		data[i].data = (uint8_t *) &c->is2_obuf[current_obuf_ofs];
+		current_obuf_ofs += c->is2_obuf_packet_lengths[i];
+
+		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
+		aprsis2__ispacket__init(subs[i]);
+		subs[i]->has_type = 1;
+		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
+		subs[i]->has_is_packet_data = 1;
+		subs[i]->is_packet_data = data[i];
+	}
+	
+	m.has_type = 1;
+	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
+	m.n_is_packet = c->is2_obuf_packets;
+	m.is_packet = subs;
+	
+	int ret = is2_write_message(self, c, &m);
+	
+	is2_free_encoded_packets(&m);
+	c->is2_obuf_end = 0;
+	c->is2_obuf_packets = 0;
+	
+	return ret;
+}
+
+int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	// trim away CR/LF
+	len = len - 2;
+	
+	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
+		int write_ret = is2_obuf_flush(self, c);
+		if (write_ret < 0)
+			return write_ret;
+	}
+
+	if (c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
+		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet of %d bytes in obuf", c->addr_rem, c->username, len);
+		return -12; // TODO: is this the correct return code?
+	}
+
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet of %d bytes to obuf", c->addr_rem, c->username, len);
+
+	memcpy(c->is2_obuf + c->is2_obuf_end, p, len);
+	c->is2_obuf_packet_lengths[c->is2_obuf_packets] = len;
+	c->is2_obuf_packets++;
+	c->is2_obuf_end += len;
+	return 0;
 }
 
 /*

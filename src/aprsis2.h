@@ -13,6 +13,7 @@ extern int is2_deframe_input(struct worker_t *self, struct client_t *c, int star
 extern int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *ibuf, int len);
 
 extern int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len);
+extern int is2_obuf_flush(struct worker_t *self, struct client_t *c);
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 

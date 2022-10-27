@@ -36,7 +36,7 @@ sleep(0.5);
 
 my $flush_interval = 1000;
 #$flush_interval = 30;
-my $bytelimit = 4*1024*1024;
+my $bytelimit = 20*1024*1024;
 my $window = 64*1024;
 #my $window = 2*1024;
 my $outstanding = 0;
@@ -69,8 +69,15 @@ while ($txl < $bytelimit) {
 		$txf++;
 	}
 	
-	while (($outstanding > $window) && (my @rx = $i_rx->get_packets(1))) {
+	while (($outstanding > $window) && (my @rx = $i_rx->get_packets(5))) {
 		$rxf++;
+		if (!@rx) {
+			last;
+		}
+		if ($#rx < 0) {
+			warn "IS2 receiver failed: " . $i_rx->{'error'};
+			last;
+		}
 		foreach my $p (@rx) {
 			my $exp = shift @l;
 			if ($exp ne $p) {
@@ -94,12 +101,24 @@ if ($txq_l > 0) {
 }
 
 warn "reading the rest, have received $rxn packets, sent $txn\n";
-while (($outstanding > 0) && (my @rx = $i_rx->get_packets(0.5))) {
+while (($outstanding > 0) && (my @rx = $i_rx->get_packets(5.5))) {
 	$rxf++;
+	if (!@rx) {
+		last;
+	}
+	if ($#rx < 0) {
+		warn "IS2 receiver failed: " . $i_rx->{'error'};
+		last;
+	}
 	foreach my $p (@rx) {
 		my $exp = shift @l;
+		if (!defined $p) {
+			warn "Ouch, undefined packet\n";
+			next;
+		}
 		if ($exp ne $p) {
 			warn "Ouch, received wrong packet: $p\n";
+			next;
 		}
 		my $rx_l = length($p);
 		$outstanding -= $rx_l;

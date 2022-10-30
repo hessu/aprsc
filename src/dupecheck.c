@@ -95,7 +95,6 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[2002];
 	int n, n1, n2, lag;
-	time_t lastage1 = 0, lastage2 = 0;
 
 	time_t expire2 = tick - pbuf_global_dupe_expiration;
 	time_t expire1 = tick - pbuf_global_expiration;
@@ -107,13 +106,20 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global;
+
+#ifdef GLOBAL_PBUF_PURGER_STATS
+	time_t lastage1 = 0, lastage2 = 0;
 	if (pb)
 		lastage1 = pb->t;
+#endif
+
 	n = 0;
 	n1 = 0;
 	while ( pbuf_global_count > pbuf_global_count_limit && pb ) {
 
+#ifdef GLOBAL_PBUF_PURGER_STATS
 		lastage1 = pb->t;
+#endif
 		if (pb->t >= expire1)
 			break; // stop at newer than expire1
 			
@@ -139,13 +145,16 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global_dupe;
+#ifdef GLOBAL_PBUF_PURGER_STATS
 	if (pb)
 		lastage2 = pb->t;
+#endif
 	n = 0;
 	n2 = 0;
 	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb ) {
-
+#ifdef GLOBAL_PBUF_PURGER_STATS
 		lastage2 = pb->t;
+#endif
 		if (pb->t >= expire2)
 			break; // stop at newer than expire2
 		lag = pbuf_seqnum_lag(dupecheck_dupe_seqnum, pb->seqnum);
@@ -169,15 +178,13 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		pbuf_free_many(freeset, n);
 	}
 
+#ifdef GLOBAL_PBUF_PURGER_STATS
 	// debug printout time...  map "undefined" lag values to zero.
 
-	//if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
-	//if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
-
+	if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
+	if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
 	if (lastage1 == 0) lastage1 = tick+2; // makes printout of "-2" (or "-1")
 	if (lastage2 == 0) lastage2 = tick+2;
-	
-	/*
 
 	static int show_zeros = 1;
 
@@ -194,7 +201,7 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		else
 			show_zeros = 1;
 	}
-	*/
+#endif
 }
 
 
@@ -413,6 +420,7 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	
 	/********************************************/
 	/* remove spaces from the end of the packet */
+	// TODO: unnecessary tb1, we can just use ib for this. Skip the memcpy.
 	memcpy(tb1, ib, ilen);
 	tlen1 = ilen;
 	while (tlen1 > 0 && tb1[tlen1-1] == ' ')
@@ -428,6 +436,7 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	 * tb2: 8th bit is cleared
 	 * tb3: 8th bit replaced with a space
 	 */
+	// TODO: Check for DELs and low bytes in this loop, and skip those steps if none are found.
 	tlen1 = tlen2 = tlen3 = 0;
 	for (i = 0; i < ilen; i++) {
 		c = ib[i] & 0x7F;
@@ -618,6 +627,7 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	struct pbuf_t *pb, *pbnext;
 	int n = 0;
 	int me;
+	int pb_out_count_local = 0, pb_out_dupe_count_local = 0;
 	
 	/* grab worker's list of packets */
 	if ((me = pthread_mutex_lock(&w->pbuf_incoming_mutex))) {
@@ -635,16 +645,14 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	
 	//hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
 	//     c, w->id, dupecheck_seqnum);
-	
+
+	// check that the first packet isn't very old, it indicates we're not doing well
+	if ((pb_list) && tick - pb_list->t > 10) {
+		hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
+			pb_list->seqnum, tick - pb_list->t, w->id, pb_list->packet_len-2, pb_list->data);
+	}
+
 	for (pb = pb_list; (pb); pb = pbnext) {
-		if (pb->t > tick + 1) {
-			hlog(LOG_ERR, "dupecheck: drain got packet from future %d with t %d > tick %d, worker %d!\n%*s",
-				pb->seqnum, pb->t, tick, w->id, pb->packet_len-2, pb->data);
-		} else if (tick - pb->t > 10) {
-			hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
-				pb->seqnum, tick - pb->t, w->id, pb->packet_len-2, pb->data);
-		}
-		
 		int rc = dupecheck(pb);
 		pbnext = pb->next; // it may get modified below..
 		
@@ -664,18 +672,21 @@ static int dupecheck_drain_worker(struct worker_t *w,
 			*pb_out_prevp = &pb->next;
 			*pb_out_last  = pb;
 			pb->seqnum = ++dupecheck_seqnum;
-			*pb_out_count = *pb_out_count + 1;
+			pb_out_count_local++;
 		} else {
 			// Duplicate
 			**pb_out_dupe_prevp = pb;
 			*pb_out_dupe_prevp = &pb->next;
 			*pb_out_dupe_last  = pb;
 			pb->seqnum = ++dupecheck_dupe_seqnum;
-			*pb_out_dupe_count = *pb_out_dupe_count + 1;
+			pb_out_dupe_count_local++;
 			//hlog(LOG_DEBUG, "is duplicate");
 		}
 		n++;
 	}
+
+	*pb_out_count += pb_out_count_local;
+	*pb_out_dupe_count += pb_out_dupe_count_local;
 	
 	return n;
 }

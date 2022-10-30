@@ -401,11 +401,8 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	int tlen1, tlen2, tlen3;
 	int i;
 	char c;
-	
-	/* TODO: dupecheck_mangle_store: Check for the necessity to do
-	 * any futher packet scans when doing the initial scan
-	 * (check for 8-bit / low data => optimize /shortcut)
-	 */
+	int have_del = 0;
+	int have_low_values = 0;
 	
 	ilen = addrlen + datalen;
 	
@@ -420,15 +417,13 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	
 	/********************************************/
 	/* remove spaces from the end of the packet */
-	// TODO: unnecessary tb1, we can just use ib for this. Skip the memcpy.
-	memcpy(tb1, ib, ilen);
 	tlen1 = ilen;
-	while (tlen1 > 0 && tb1[tlen1-1] == ' ')
+	while (tlen1 > 0 && ib[tlen1-1] == ' ')
 		--tlen1;
 	
 	if (tlen1 != ilen) {
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen1, tlen1, tb1);
-		dupecheck_add_buf(tb1, tlen1, DTYPE_SPACE_TRIM);
+		dupecheck_add_buf(ib, tlen1, DTYPE_SPACE_TRIM);
 	}
 	
 	/*************************/
@@ -436,10 +431,21 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	 * tb2: 8th bit is cleared
 	 * tb3: 8th bit replaced with a space
 	 */
-	// TODO: Check for DELs and low bytes in this loop, and skip those steps if none are found.
+
+	/* Check for the necessity to do
+	 * any futher packet scans when doing the initial scan
+	 * (check for DEL bytes / low data => optimize /shortcut)
+	 */
+
 	tlen1 = tlen2 = tlen3 = 0;
 	for (i = 0; i < ilen; i++) {
-		c = ib[i] & 0x7F;
+		c = ib[i];
+		if (c == 0x7F)
+			have_del = 1;
+		if (c < 0x20 && c > 0)
+			have_low_values = 1;
+
+		c = c & 0x7F;
 		tb2[tlen2++] = c;
 		if (ib[i] != c) {
 			/* high bit is on */
@@ -464,50 +470,54 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	 * tb1: Low data (0 <= x < 0x20 deleted
 	 * tb2: Low data replaced with spaces
 	 */
-	tlen1 = tlen2 = 0;
-	for (i = 0; i < ilen; i++) {
-		c = ib[i];
-		if (c < 0x20 && c > 0) {
-			/* low data, tb2 gets a space and tb1 gets nothing */
-			tb2[tlen2++] = ' ';
-		} else {
-			/* regular stuff */
-			tb1[tlen1++] = c;
-			tb2[tlen2++] = c;
+	if (have_low_values) {
+		tlen1 = tlen2 = 0;
+		for (i = 0; i < ilen; i++) {
+			c = ib[i];
+			if (c < 0x20 && c > 0) {
+				/* low data, tb2 gets a space and tb1 gets nothing */
+				tb2[tlen2++] = ' ';
+			} else {
+				/* regular stuff */
+				tb1[tlen1++] = c;
+				tb2[tlen2++] = c;
+			}
 		}
-	}
-	
-	if (tlen1 != ilen) {
-		/* if there was low data, store it */
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
-		dupecheck_add_buf(tb1, tlen1, DTYPE_LOWDATA_STRIP);
-		dupecheck_add_buf(tb2, tlen2, DTYPE_LOWDATA_SPACED);
+
+		if (tlen1 != ilen) {
+			/* if there was low data, store it */
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+			dupecheck_add_buf(tb1, tlen1, DTYPE_LOWDATA_STRIP);
+			dupecheck_add_buf(tb2, tlen2, DTYPE_LOWDATA_SPACED);
+		}
 	}
 	
 	/**********************************************
 	 * tb1: Del characters (0x7f) deleted
 	 * tb2: Del characters replaced with spaces
 	 */
-	tlen1 = tlen2 = 0;
-	for (i = 0; i < ilen; i++) {
-		c = ib[i];
-		if (c == 0x7f) {
-			/* low data, tb2 gets a space and tb1 gets nothing */
-			tb2[tlen2++] = ' ';
-		} else {
-			/* regular stuff */
-			tb1[tlen1++] = c;
-			tb2[tlen2++] = c;
+	if (have_del) {
+		tlen1 = tlen2 = 0;
+		for (i = 0; i < ilen; i++) {
+			c = ib[i];
+			if (c == 0x7f) {
+				/* low data, tb2 gets a space and tb1 gets nothing */
+				tb2[tlen2++] = ' ';
+			} else {
+				/* regular stuff */
+				tb1[tlen1++] = c;
+				tb2[tlen2++] = c;
+			}
 		}
-	}
-	
-	if (tlen1 != ilen) {
-		/* if there was low data, store it */
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
-		dupecheck_add_buf(tb1, tlen1, DTYPE_DEL_STRIP);
-		dupecheck_add_buf(tb2, tlen2, DTYPE_DEL_SPACED);
+		
+		if (tlen1 != ilen) {
+			/* if there was low data, store it */
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+			dupecheck_add_buf(tb1, tlen1, DTYPE_DEL_STRIP);
+			dupecheck_add_buf(tb2, tlen2, DTYPE_DEL_SPACED);
+		}
 	}
 	
 	return 0;

@@ -1189,7 +1189,7 @@ in_drop:
 	/* Account the one incoming packet.
 	 * Incoming bytes were already accounted earlier.
 	 */
-	clientaccount_add(c, l4proto, 0, 1, 0, 0, (e < 0) ? e : 0, 0);
+	clientaccount_add_rx(c, l4proto, 0, 1, (e < 0) ? e : 0, 0);
 	
 	return 0;
 }

@@ -964,15 +964,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		hlog(LOG_DEBUG, "packet too long after inserting new Q construct (%d bytes, max %d)", new_len, PACKETLEN_MAX_LARGE);
 		return INERR_LONG_PACKET;
 	}
-	
+
+	/* get a new packet buffer of the correct size; it is zeroed by pbuf_get. */
 	pb = pbuf_get(self, new_len);
 	if (!pb) {
 		// This should never happen... LOG_CRIT error logged in pbuf_get()
 		//hlog(LOG_DEBUG, "pbuf_get failed to get packet buffer");
 		return INERR_OUT_OF_PBUFS; // No room :-(
 	}
-	pb->next = NULL; // OPTIMIZE: pbuf arrives pre-zeroed, this could be removed maybe?
-	pb->flags = 0;
 	
 	/* store the source reference */
 	pb->origin = c;
@@ -1189,7 +1188,7 @@ in_drop:
 	/* Account the one incoming packet.
 	 * Incoming bytes were already accounted earlier.
 	 */
-	clientaccount_add(c, l4proto, 0, 1, 0, 0, (e < 0) ? e : 0, 0);
+	clientaccount_add_rx(c, l4proto, 0, 1, (e < 0) ? e : 0, 0);
 	
 	return 0;
 }

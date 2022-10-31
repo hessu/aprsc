@@ -95,7 +95,6 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	struct pbuf_t *pb, *pb2;
 	struct pbuf_t *freeset[2002];
 	int n, n1, n2, lag;
-	time_t lastage1 = 0, lastage2 = 0;
 
 	time_t expire2 = tick - pbuf_global_dupe_expiration;
 	time_t expire1 = tick - pbuf_global_expiration;
@@ -107,13 +106,20 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global;
+
+#ifdef GLOBAL_PBUF_PURGER_STATS
+	time_t lastage1 = 0, lastage2 = 0;
 	if (pb)
 		lastage1 = pb->t;
+#endif
+
 	n = 0;
 	n1 = 0;
 	while ( pbuf_global_count > pbuf_global_count_limit && pb ) {
 
+#ifdef GLOBAL_PBUF_PURGER_STATS
 		lastage1 = pb->t;
+#endif
 		if (pb->t >= expire1)
 			break; // stop at newer than expire1
 			
@@ -139,13 +145,16 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 	}
 
 	pb = pbuf_global_dupe;
+#ifdef GLOBAL_PBUF_PURGER_STATS
 	if (pb)
 		lastage2 = pb->t;
+#endif
 	n = 0;
 	n2 = 0;
 	while ( pbuf_global_dupe_count > pbuf_global_dupe_count_limit && pb ) {
-
+#ifdef GLOBAL_PBUF_PURGER_STATS
 		lastage2 = pb->t;
+#endif
 		if (pb->t >= expire2)
 			break; // stop at newer than expire2
 		lag = pbuf_seqnum_lag(dupecheck_dupe_seqnum, pb->seqnum);
@@ -169,15 +178,13 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		pbuf_free_many(freeset, n);
 	}
 
+#ifdef GLOBAL_PBUF_PURGER_STATS
 	// debug printout time...  map "undefined" lag values to zero.
 
-	//if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
-	//if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
-
+	if (pbuf_lag      == 2000000000) pbuf_lag      = 0;
+	if (pbuf_dupe_lag == 2000000000) pbuf_dupe_lag = 0;
 	if (lastage1 == 0) lastage1 = tick+2; // makes printout of "-2" (or "-1")
 	if (lastage2 == 0) lastage2 = tick+2;
-	
-	/*
 
 	static int show_zeros = 1;
 
@@ -194,7 +201,7 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
 		else
 			show_zeros = 1;
 	}
-	*/
+#endif
 }
 
 
@@ -394,11 +401,8 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	int tlen1, tlen2, tlen3;
 	int i;
 	char c;
-	
-	/* TODO: dupecheck_mangle_store: Check for the necessity to do
-	 * any futher packet scans when doing the initial scan
-	 * (check for 8-bit / low data => optimize /shortcut)
-	 */
+	int have_del = 0;
+	int have_low_values = 0;
 	
 	ilen = addrlen + datalen;
 	
@@ -413,14 +417,13 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	
 	/********************************************/
 	/* remove spaces from the end of the packet */
-	memcpy(tb1, ib, ilen);
 	tlen1 = ilen;
-	while (tlen1 > 0 && tb1[tlen1-1] == ' ')
+	while (tlen1 > 0 && ib[tlen1-1] == ' ')
 		--tlen1;
 	
 	if (tlen1 != ilen) {
 		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed %d spaces: '%.*s'", ilen-tlen1, tlen1, tb1);
-		dupecheck_add_buf(tb1, tlen1, DTYPE_SPACE_TRIM);
+		dupecheck_add_buf(ib, tlen1, DTYPE_SPACE_TRIM);
 	}
 	
 	/*************************/
@@ -428,9 +431,21 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	 * tb2: 8th bit is cleared
 	 * tb3: 8th bit replaced with a space
 	 */
+
+	/* Check for the necessity to do
+	 * any futher packet scans when doing the initial scan
+	 * (check for DEL bytes / low data => optimize /shortcut)
+	 */
+
 	tlen1 = tlen2 = tlen3 = 0;
 	for (i = 0; i < ilen; i++) {
-		c = ib[i] & 0x7F;
+		c = ib[i];
+		if (c == 0x7F)
+			have_del = 1;
+		if (c < 0x20 && c > 0)
+			have_low_values = 1;
+
+		c = c & 0x7F;
 		tb2[tlen2++] = c;
 		if (ib[i] != c) {
 			/* high bit is on */
@@ -455,50 +470,54 @@ static int dupecheck_mangle_store(const char *addr, int addrlen, const char *dat
 	 * tb1: Low data (0 <= x < 0x20 deleted
 	 * tb2: Low data replaced with spaces
 	 */
-	tlen1 = tlen2 = 0;
-	for (i = 0; i < ilen; i++) {
-		c = ib[i];
-		if (c < 0x20 && c > 0) {
-			/* low data, tb2 gets a space and tb1 gets nothing */
-			tb2[tlen2++] = ' ';
-		} else {
-			/* regular stuff */
-			tb1[tlen1++] = c;
-			tb2[tlen2++] = c;
+	if (have_low_values) {
+		tlen1 = tlen2 = 0;
+		for (i = 0; i < ilen; i++) {
+			c = ib[i];
+			if (c < 0x20 && c > 0) {
+				/* low data, tb2 gets a space and tb1 gets nothing */
+				tb2[tlen2++] = ' ';
+			} else {
+				/* regular stuff */
+				tb1[tlen1++] = c;
+				tb2[tlen2++] = c;
+			}
 		}
-	}
-	
-	if (tlen1 != ilen) {
-		/* if there was low data, store it */
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
-		dupecheck_add_buf(tb1, tlen1, DTYPE_LOWDATA_STRIP);
-		dupecheck_add_buf(tb2, tlen2, DTYPE_LOWDATA_SPACED);
+
+		if (tlen1 != ilen) {
+			/* if there was low data, store it */
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+			dupecheck_add_buf(tb1, tlen1, DTYPE_LOWDATA_STRIP);
+			dupecheck_add_buf(tb2, tlen2, DTYPE_LOWDATA_SPACED);
+		}
 	}
 	
 	/**********************************************
 	 * tb1: Del characters (0x7f) deleted
 	 * tb2: Del characters replaced with spaces
 	 */
-	tlen1 = tlen2 = 0;
-	for (i = 0; i < ilen; i++) {
-		c = ib[i];
-		if (c == 0x7f) {
-			/* low data, tb2 gets a space and tb1 gets nothing */
-			tb2[tlen2++] = ' ';
-		} else {
-			/* regular stuff */
-			tb1[tlen1++] = c;
-			tb2[tlen2++] = c;
+	if (have_del) {
+		tlen1 = tlen2 = 0;
+		for (i = 0; i < ilen; i++) {
+			c = ib[i];
+			if (c == 0x7f) {
+				/* low data, tb2 gets a space and tb1 gets nothing */
+				tb2[tlen2++] = ' ';
+			} else {
+				/* regular stuff */
+				tb1[tlen1++] = c;
+				tb2[tlen2++] = c;
+			}
 		}
-	}
-	
-	if (tlen1 != ilen) {
-		/* if there was low data, store it */
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
-		//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
-		dupecheck_add_buf(tb1, tlen1, DTYPE_DEL_STRIP);
-		dupecheck_add_buf(tb2, tlen2, DTYPE_DEL_SPACED);
+		
+		if (tlen1 != ilen) {
+			/* if there was low data, store it */
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: removed  %d low chars: '%.*s'", ilen-tlen1, tlen1, tb1);
+			//hlog(LOG_DEBUG, "dupecheck_mangle_store: replaced %d low chars: '%.*s'", ilen-tlen1, tlen2, tb2);
+			dupecheck_add_buf(tb1, tlen1, DTYPE_DEL_STRIP);
+			dupecheck_add_buf(tb2, tlen2, DTYPE_DEL_SPACED);
+		}
 	}
 	
 	return 0;
@@ -618,6 +637,7 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	struct pbuf_t *pb, *pbnext;
 	int n = 0;
 	int me;
+	int pb_out_count_local = 0, pb_out_dupe_count_local = 0;
 	
 	/* grab worker's list of packets */
 	if ((me = pthread_mutex_lock(&w->pbuf_incoming_mutex))) {
@@ -635,16 +655,14 @@ static int dupecheck_drain_worker(struct worker_t *w,
 	
 	//hlog(LOG_DEBUG, "Dupecheck got %d packets from worker %d; n=%d",
 	//     c, w->id, dupecheck_seqnum);
-	
+
+	// check that the first packet isn't very old, it indicates we're not doing well
+	if ((pb_list) && tick - pb_list->t > 10) {
+		hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
+			pb_list->seqnum, tick - pb_list->t, w->id, pb_list->packet_len-2, pb_list->data);
+	}
+
 	for (pb = pb_list; (pb); pb = pbnext) {
-		if (pb->t > tick + 1) {
-			hlog(LOG_ERR, "dupecheck: drain got packet from future %d with t %d > tick %d, worker %d!\n%*s",
-				pb->seqnum, pb->t, tick, w->id, pb->packet_len-2, pb->data);
-		} else if (tick - pb->t > 10) {
-			hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
-				pb->seqnum, tick - pb->t, w->id, pb->packet_len-2, pb->data);
-		}
-		
 		int rc = dupecheck(pb);
 		pbnext = pb->next; // it may get modified below..
 		
@@ -664,18 +682,21 @@ static int dupecheck_drain_worker(struct worker_t *w,
 			*pb_out_prevp = &pb->next;
 			*pb_out_last  = pb;
 			pb->seqnum = ++dupecheck_seqnum;
-			*pb_out_count = *pb_out_count + 1;
+			pb_out_count_local++;
 		} else {
 			// Duplicate
 			**pb_out_dupe_prevp = pb;
 			*pb_out_dupe_prevp = &pb->next;
 			*pb_out_dupe_last  = pb;
 			pb->seqnum = ++dupecheck_dupe_seqnum;
-			*pb_out_dupe_count = *pb_out_dupe_count + 1;
+			pb_out_dupe_count_local++;
 			//hlog(LOG_DEBUG, "is duplicate");
 		}
 		n++;
 	}
+
+	*pb_out_count += pb_out_count_local;
+	*pb_out_dupe_count += pb_out_dupe_count_local;
 	
 	return n;
 }

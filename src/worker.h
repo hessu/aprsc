@@ -523,7 +523,8 @@ extern void port_accounter_drop(struct portaccount_t *p);
 
 extern char *strsockaddr(const struct sockaddr *sa, const int addr_len);
 extern char *hexsockaddr(const struct sockaddr *sa, const int addr_len);
-extern void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr, int rxdupes);
+extern void clientaccount_add_rx(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int rxerr, int rxdupes);
+extern void clientaccount_add_tx(struct client_t *c, int l4proto, int txbytes, int txpackets);
 
 extern void json_add_rxerrs(cJSON *root, const char *key, long long vals[]);
 extern int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *peers, cJSON *totals, cJSON *memory);

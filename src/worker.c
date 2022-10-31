@@ -660,7 +660,7 @@ char *hexsockaddr(const struct sockaddr *sa, const int addr_len)
 	return hstrdup(eb);
 }
 
-void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int txbytes, int txpackets, int rxerr, int rxdupes)
+void clientaccount_add_rx(struct client_t *c, int l4proto, int rxbytes, int rxpackets, int rxerr, int rxdupes)
 {
 	struct portaccount_t *pa = NULL;
 	int rxdrops = 0;
@@ -674,9 +674,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 	
 	/* worker local accounters do not need locks */
 	c->localaccount.rxbytes   += rxbytes;
-	c->localaccount.txbytes   += txbytes;
 	c->localaccount.rxpackets += rxpackets;
-	c->localaccount.txpackets += txpackets;
 	c->localaccount.rxdupes   += rxdupes;
 	if (rxdrops) {
 		c->localaccount.rxdrops += 1;
@@ -692,9 +690,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 	if (pa) {
 #ifdef HAVE_SYNC_FETCH_AND_ADD
 		__sync_fetch_and_add(&pa->rxbytes, rxbytes);
-		__sync_fetch_and_add(&pa->txbytes, txbytes);
 		__sync_fetch_and_add(&pa->rxpackets, rxpackets);
-		__sync_fetch_and_add(&pa->txpackets, txpackets);
 		__sync_fetch_and_add(&pa->rxdupes, rxdupes);
 		if (rxdrops) {
 			__sync_fetch_and_add(&pa->rxdrops, 1);
@@ -703,9 +699,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		pa->rxbytes   += rxbytes;
-		pa->txbytes   += txbytes;
 		pa->rxpackets += rxpackets;
-		pa->txpackets += txpackets;
 		pa->rxdupes   += rxdupes;
 		if (rxdrops) {
 			pa->rxdrops += 1;
@@ -729,9 +723,7 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 	
 #ifdef HAVE_SYNC_FETCH_AND_ADD
 	__sync_fetch_and_add(&proto->rxbytes, rxbytes);
-	__sync_fetch_and_add(&proto->txbytes, txbytes);
 	__sync_fetch_and_add(&proto->rxpackets, rxpackets);
-	__sync_fetch_and_add(&proto->txpackets, txpackets);
 	if (rxdrops) {
 		__sync_fetch_and_add(&proto->rxdrops, 1);
 		__sync_fetch_and_add(&proto->rxerrs[rxerr], 1);
@@ -739,13 +731,59 @@ void clientaccount_add(struct client_t *c, int l4proto, int rxbytes, int rxpacke
 #else
 	// FIXME: MUTEX !! -- this may or may not need locks..
 	proto->rxbytes   += rxbytes;
-	proto->txbytes   += txbytes;
 	proto->rxpackets += rxpackets;
-	proto->txpackets += txpackets;
 	if (rxdrops) {
 		proto->rxdrops += 1;
 		proto->rxerrs[rxerr] += 1;
 	}
+#endif
+}
+
+void clientaccount_add_tx(struct client_t *c, int l4proto, int txbytes, int txpackets)
+{
+	struct portaccount_t *pa = NULL;
+	
+	/* worker local accounters do not need locks */
+	c->localaccount.txbytes   += txbytes;
+	c->localaccount.txpackets += txpackets;
+	
+	if (l4proto == IPPROTO_UDP && c->udpclient && c->udpclient->portaccount) {
+		pa = c->udpclient->portaccount;
+	} else if (c->portaccount) {
+		pa = c->portaccount;
+	}
+	
+	if (pa) {
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+		__sync_fetch_and_add(&pa->txbytes, txbytes);
+		__sync_fetch_and_add(&pa->txpackets, txpackets);
+#else
+		// FIXME: MUTEX !! -- this may or may not need locks..
+		pa->txbytes   += txbytes;
+		pa->txpackets += txpackets;
+#endif
+	}
+	
+	struct portaccount_t *proto;
+	
+	if (l4proto == IPPROTO_TCP)
+		proto = &client_connects_tcp;
+	else if (l4proto == IPPROTO_UDP)
+		proto = &client_connects_udp;
+#ifdef USE_SCTP
+	else if (l4proto == IPPROTO_SCTP)
+		proto = &client_connects_sctp;
+#endif
+	else
+		return;
+	
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+	__sync_fetch_and_add(&proto->txbytes, txbytes);
+	__sync_fetch_and_add(&proto->txpackets, txpackets);
+#else
+	// FIXME: MUTEX !! -- this may or may not need locks..
+	proto->txbytes   += txbytes;
+	proto->txpackets += txpackets;
 #endif
 }
 
@@ -929,7 +967,7 @@ int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len
 	// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
 
 	if (i > 0)
-		clientaccount_add( c, IPPROTO_UDP, 0, 0, i, 0, 0, 0);
+		clientaccount_add_tx( c, IPPROTO_UDP, i, 0);
 		
 	return i;
 }
@@ -990,7 +1028,7 @@ static int ssl_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	c->obuf_writes++;
 	
 	if (len > 0)
-		clientaccount_add( c, c->ai_protocol, 0, 0, len, 0, 0, 0);
+		clientaccount_add_tx( c, c->ai_protocol, len, 0);
 	
 	if (client_buffer_outgoing_data(self, c, p, len) == -12)
 		return -12;
@@ -1029,7 +1067,7 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 		 * will be incremented only when we actually transmit a packet
 		 * instead of a keepalive.
 		 */
-		clientaccount_add( c, c->ai_protocol, 0, 0, len, 0, 0, 0);
+		clientaccount_add_tx( c, c->ai_protocol, len, 0);
 	}
 	
 	if (client_buffer_outgoing_data(self, c, p, len) == -12)
@@ -1195,7 +1233,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	hlog(LOG_DEBUG, "worker thread passing UDP packet from %s to handler: %*s", addrs, r, c->ibuf);
 	hfree(addrs);
 	*/
-	clientaccount_add( rc, IPPROTO_UDP, r, 0, 0, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
+	clientaccount_add_rx(rc, IPPROTO_UDP, r, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
 	rc->last_read = tick;
 	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
@@ -1256,7 +1294,7 @@ static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
 
 int client_postread(struct worker_t *self, struct client_t *c, int r)
 {
-	clientaccount_add(c, c->ai_protocol, r, 0, 0, 0, 0, 0); /* Number of packets is now unknown,
+	clientaccount_add_rx(c, c->ai_protocol, r, 0, 0, 0); /* Number of packets is now unknown,
 					     byte count is collected.
 					     The incoming_handler() will account
 					     packets. */

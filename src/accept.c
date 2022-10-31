@@ -702,7 +702,7 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	
 	udp_pseudoclient->portaccount = l->portaccount;
 	e = pseudoclient_push_packet(udp_worker, udp_pseudoclient, username, packet, packet_len);
-	clientaccount_add(udp_pseudoclient, IPPROTO_UDP, len, 1, 0, 0, (e < 0) ? e : 0, 0);
+	clientaccount_add_rx(udp_pseudoclient, IPPROTO_UDP, len, 1, (e < 0) ? e : 0, 0);
 	udp_pseudoclient->portaccount = NULL;
 	
 	if (e < 0)

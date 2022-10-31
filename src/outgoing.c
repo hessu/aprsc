@@ -31,9 +31,9 @@ static inline void send_single(struct worker_t *self, struct client_t *c, char *
 	 * its TCP or SCTP or something.
 	 */
 	if (c->udp_port && c->udpclient)
-		clientaccount_add( c, IPPROTO_UDP, 0, 0, 0, 1, 0, 0);
+		clientaccount_add_tx( c, IPPROTO_UDP, 0, 1);
 	else
-		clientaccount_add( c, c->ai_protocol, 0, 0, 0, 1, 0, 0);
+		clientaccount_add_tx( c, c->ai_protocol, 0, 1);
 	
 	c->write(self, c, data, len);
 }
@@ -79,7 +79,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		/* OPTIMIZE: we walk through all clients for each dupe - how to find it quickly? */
 		for (c = self->clients; (c); c = c->next) {
 			if (c == origin) {
-				clientaccount_add(c, -1, 0, 0, 0, 0, 0, 1);
+				clientaccount_add_rx(c, -1, 0, 0, 0, 1);
 				break;
 			}
 		}

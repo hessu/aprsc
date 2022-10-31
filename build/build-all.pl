@@ -7,6 +7,7 @@ use Time::HiRes qw(time sleep);
 use IO::Socket::INET;
 
 my @platforms = (
+	'ubuntu-2204-amd64',
 	'ubuntu-2004-amd64',
 	'ubuntu-1804-amd64',
 	'debian-90-i386',
@@ -36,6 +37,9 @@ my %platconf = (
 		'virtualisation' => 'lxd'
 	},
 	'ubuntu-2004-amd64' => {
+		'virtualisation' => 'lxd'
+	},
+	'ubuntu-2204-amd64' => {
 		'virtualisation' => 'lxd'
 	},
 	'debian-110-i386' => {

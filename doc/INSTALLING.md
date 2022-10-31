@@ -7,7 +7,7 @@ aprsc is "officially" "supported" on the following platforms:
 * Debian stable (11.0, "bullseye"): i386, x86_64
 * Debian oldstable (10.0, "buster"): i386, x86_64
 * Debian oldoldstable (9.0, "stretch"): i386, x86_64
-* Ubuntu LTS (18.04, 20.04): x86_64
+* Ubuntu LTS (18.04, 20.04, 22.04): x86_64
 * CentOS 7: x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
@@ -50,6 +50,7 @@ You'll need to figure out the codename of your distribution.  The command
 "lsb_release -c" should provide the codename.  Here's a list of distribution
 versions and their codenames:
 
+* Ubuntu 22.04 LTS: jammy
 * Ubuntu 20.04 LTS: focal
 * Ubuntu 18.04 LTS: bionic
 * Debian 11.0: bullseye

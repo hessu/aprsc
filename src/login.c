@@ -104,7 +104,7 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 	for (i = 2; i < argc; i++) {
 		if (strcasecmp(argv[i], "pass") == 0) {
 			if (++i >= argc) {
-				hlog(LOG_WARNING, "%s (%s): %s: No passcode after pass command", addr_rem, log_source, username);
+				hlog(LOG_WARNING, "%s (%s): %s: No passcode after pass command", addr_rem, log_source, *username);
 				break;
 			}
 			
@@ -114,7 +114,7 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 					validated = 1;
 		} else if (strcasecmp(argv[i], "vers") == 0) {
 			if (i+2 >= argc) {
-				hlog(LOG_DEBUG, "%s (%s): %s: No application name and version after vers command", addr_rem, username, log_source);
+				hlog(LOG_DEBUG, "%s (%s): %s: No application name and version after vers command", addr_rem, *username, log_source);
 				break;
 			}
 			

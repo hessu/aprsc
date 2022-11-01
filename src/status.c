@@ -511,7 +511,7 @@ int json_write_file(char *basename, const char *s)
 	/* check if we're having I/O delays */
 	time(&end_t);
 	if (end_t - start_t > 2) {
-		hlog(LOG_ERR, "json file update took %d seconds", end_t - start_t);
+		hlog(LOG_ERR, "json file update took %ld seconds", end_t - start_t);
 	}
 	
 	return 0;
@@ -593,7 +593,7 @@ int status_dump_file(void)
 	/* check if we're having delays */
 	time(&end_t);
 	if (end_t - start_t > 2) {
-		hlog(LOG_ERR, "status counters update took %d seconds", end_t - start_t);
+		hlog(LOG_ERR, "status counters update took %ld seconds", end_t - start_t);
 	}
 	
 	return 0;

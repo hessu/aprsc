@@ -197,7 +197,7 @@ static void ssl_error(int level, const char *msg)
 		ERR_error_string_n(n, errstr, sizeof(errstr));
 		errstr[sizeof(errstr)-1] = 0;
 		
-		hlog(level, "%s (%d): %s", msg, n, errstr);
+		hlog(level, "%s (%ld): %s", msg, n, errstr);
 	}
 }
 

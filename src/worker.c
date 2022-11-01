@@ -824,7 +824,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	
 	// TODO: log validation status, ssl status, ssl cert info, tcp/sctp
 	
-	hlog( LOG_INFO, "%s %s %s (%s) closed after %d s: %s, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, worker %d%s%s%s%s",
+	hlog( LOG_INFO, "%s %s %s (%s) closed after %ld s: %s, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, worker %d%s%s%s%s",
 	      ( (c->flags & CLFLAGS_UPLINKPORT)
 			  ? ((c->state == CSTATE_COREPEER) ? "Peer" : "Uplink") : "Client" ),
 			  	protocol_str(c),
@@ -1856,7 +1856,7 @@ void worker_thread(struct worker_t *self)
 
 #if 1
 		if (t7-t1 > 1 || t7-t1 < 0) // only report if the delay is over 1 seconds.  they are a LOT rarer
-		  hlog( LOG_DEBUG, "Worker thread %d loop step delays:  dt2: %d  dt3: %d  dt4: %d  dt5: %d  dt6: %d  dt7: %d",
+		  hlog( LOG_DEBUG, "Worker thread %d loop step delays:  dt2: %ld  dt3: %ld  dt4: %ld  dt5: %ld  dt6: %ld  dt7: %ld",
 			self->id, t2-t1, t3-t1, t4-t1, t5-t1, t6-t1, t7-t1 );
 #endif
 	}

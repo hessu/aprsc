@@ -658,7 +658,7 @@ static int dupecheck_drain_worker(struct worker_t *w,
 
 	// check that the first packet isn't very old, it indicates we're not doing well
 	if ((pb_list) && tick - pb_list->t > 10) {
-		hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
+		hlog(LOG_ERR, "dupecheck: drain got packet %d aged %ld sec from worker %d\n%*s",
 			pb_list->seqnum, tick - pb_list->t, w->id, pb_list->packet_len-2, pb_list->data);
 	}
 

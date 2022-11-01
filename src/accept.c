@@ -779,7 +779,7 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 	/* text format of servers' connected IP address + port */
 	if (getsockname(fd, &sa_loc.sa, &addr_len_loc) == 0) { /* Fails very rarely.. */
 		if (addr_len_loc > sizeof(sa_loc))
-			hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s truncated local address of %d to %d bytes", c->addr_rem, addr_len_loc, sizeof(sa_loc));
+			hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s truncated local address of %d to %ld bytes", c->addr_rem, addr_len_loc, sizeof(sa_loc));
 		/* present my socket end address as a malloced string... */
 		s = strsockaddr( &sa_loc.sa, addr_len_loc );
 	} else {
@@ -913,14 +913,14 @@ static void do_accept(struct listen_t *l)
 	 */
 	if (l->portaccount->gauge >= l->clients_max || inbound_connects.gauge >= maxclients) {
 		if (inbound_connects.gauge >= maxclients) {
-			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: MaxClients reached (%d)", l->addr_s, fd, s, inbound_connects.gauge);
+			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: MaxClients reached (%ld)", l->addr_s, fd, s, inbound_connects.gauge);
 			/* The "if" is here only to silence a compiler warning
 			 * about ignoring the result value. We're really
 			 * disconnecting the client right now, so we don't care.
 			 */
 			if (write(fd, "# Server full\r\n", 15)) {};
 		} else {
-			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients on Listener (%d)", l->addr_s, fd, s, l->portaccount->gauge);
+			hlog(LOG_INFO, "%s - Denied client on fd %d from %s: Too many clients on Listener (%ld)", l->addr_s, fd, s, l->portaccount->gauge);
 			if (write(fd, "# Port full\r\n", 13)) {};
 		}
 		close(fd);

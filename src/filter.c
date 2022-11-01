@@ -554,7 +554,7 @@ static int filter_wx_insert(struct pbuf_t *pb)
 	const int keylen = pb->srccall_end - key;
 	uint32_t hash;
 	int idx;
-        char uckey[CALLSIGNLEN_MAX+1];
+        char uckey[CALLSIGNLEN_MAX+1] = "";
 
 	/* If it is not a WX packet without position, we are not intrerested */
 	if (!((pb->packettype & T_WX) && !(pb->flags & F_HASPOS)))

@@ -419,6 +419,8 @@ static int http_check_req_compressed(struct evhttp_request *r)
 static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 {
 	z_stream ctx;
+
+	memset(&ctx, 0, sizeof(ctx));
 	
 	ctx.zalloc = Z_NULL;
 	ctx.zfree = Z_NULL;

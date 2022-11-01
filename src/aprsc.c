@@ -567,7 +567,7 @@ static void generate_instance_id(void)
 	if (fd >= 0) {
 		l = read(fd, &seed, sizeof(seed));
 		if (l != sizeof(seed)) {
-			hlog(LOG_ERR, "read(/dev/urandom, %d) for seed failed: %s", sizeof(seed), strerror(errno));
+			hlog(LOG_ERR, "read(/dev/urandom, %lu) for seed failed: %s", sizeof(seed), strerror(errno));
 			close(fd);
 			fd = -1;
 		}
@@ -801,14 +801,14 @@ void time_thread(void *asdf)
 		
 		double slept = timeval_diff(sleep_start, sleep_end);
 		if (slept > 0.90)
-			hlog(LOG_WARNING, "time keeping: sleep of %d ms took %.6f s!", sleep_req.tv_nsec / 1000 / 1000, slept);
+			hlog(LOG_WARNING, "time keeping: sleep of %ld ms took %.6f s!", sleep_req.tv_nsec / 1000 / 1000, slept);
 		
 		/* catch some oddities with time keeping */
 		if (tick != previous_tick) {
 			if (previous_tick > tick) {
-				hlog(LOG_WARNING, "time keeping: Time jumped backward by %d seconds!", previous_tick - tick);
+				hlog(LOG_WARNING, "time keeping: Time jumped backward by %ld seconds!", previous_tick - tick);
 			} else if (previous_tick < tick-1) {
-				hlog(LOG_WARNING, "time keeping: Time jumped forward by %d seconds!", tick - previous_tick);
+				hlog(LOG_WARNING, "time keeping: Time jumped forward by %ld seconds!", tick - previous_tick);
 			}
 			
 			previous_tick = tick;

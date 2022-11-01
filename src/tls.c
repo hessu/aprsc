@@ -197,7 +197,7 @@ static void ssl_error(int level, const char *msg)
 		ERR_error_string_n(n, errstr, sizeof(errstr));
 		errstr[sizeof(errstr)-1] = 0;
 		
-		hlog(level, "%s (%d): %s", msg, n, errstr);
+		hlog(level, "%s (%ld): %s", msg, n, errstr);
 	}
 }
 
@@ -395,28 +395,10 @@ int ssl_create(struct ssl_t *ssl, void *data)
 	SSL_CTX_set_options(ssl->ctx, SSL_OP_SINGLE_DH_USE);
 	
 	/* SSL protocols not configurable for now */
-	int protocols = SSL_PROTOCOLS;
-	
-	if (!(protocols & NGX_SSL_SSLv2)) {
-		SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_SSLv2);
-	}
-	if (!(protocols & NGX_SSL_SSLv3)) {
-		SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_SSLv3);
-	}
-	if (!(protocols & NGX_SSL_TLSv1)) {
-		SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_TLSv1);
-	}
-	
-#ifdef SSL_OP_NO_TLSv1_1
-	if (!(protocols & NGX_SSL_TLSv1_1)) {
-		SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_TLSv1_1);
-	}
-#endif
-#ifdef SSL_OP_NO_TLSv1_2
-	if (!(protocols & NGX_SSL_TLSv1_2)) {
-		SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_TLSv1_2);
-	}
-#endif
+	SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_SSLv3);
+	SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_TLSv1);
+	SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_TLSv1_1);
 
 #ifdef SSL_OP_NO_COMPRESSION
 	SSL_CTX_set_options(ssl->ctx, SSL_OP_NO_COMPRESSION);

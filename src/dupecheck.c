@@ -658,7 +658,7 @@ static int dupecheck_drain_worker(struct worker_t *w,
 
 	// check that the first packet isn't very old, it indicates we're not doing well
 	if ((pb_list) && tick - pb_list->t > 10) {
-		hlog(LOG_ERR, "dupecheck: drain got packet %d aged %d sec from worker %d\n%*s",
+		hlog(LOG_ERR, "dupecheck: drain got packet %d aged %ld sec from worker %d\n%*s",
 			pb_list->seqnum, tick - pb_list->t, w->id, pb_list->packet_len-2, pb_list->data);
 	}
 
@@ -711,9 +711,8 @@ static void dupecheck_thread(void)
 	struct worker_t *w;
 	struct pbuf_t *pb_out, **pb_out_prevp, *pb_out_last;
 	struct pbuf_t *pb_out_dupe, **pb_out_dupe_prevp, *pb_out_dupe_last;
-	int n;
 	int e;
-	int c, d;
+	int c;
 	int pb_out_count, pb_out_dupe_count;
 	time_t cleanup_tick = tick;
 
@@ -740,7 +739,6 @@ static void dupecheck_thread(void)
 	hlog(LOG_INFO, "Dupecheck thread ready.");
 
 	while (!dupecheck_shutting_down) {
-		n = d = 0;
 		pb_out       = NULL;
 		pb_out_prevp = &pb_out;
 		pb_out_dupe  = NULL;
@@ -754,21 +752,21 @@ static void dupecheck_thread(void)
 			if (!w->pbuf_incoming)
 				continue;
 			
-			n += dupecheck_drain_worker(w,
+			dupecheck_drain_worker(w,
 				&pb_out_prevp, &pb_out_last,
 				&pb_out_dupe_prevp, &pb_out_dupe_last,
 				&pb_out_count, &pb_out_dupe_count);
 		}
 		
 		if ((http_worker) && http_worker->pbuf_incoming) {
-			n += dupecheck_drain_worker(http_worker,
+			dupecheck_drain_worker(http_worker,
 				&pb_out_prevp, &pb_out_last,
 				&pb_out_dupe_prevp, &pb_out_dupe_last,
 				&pb_out_count, &pb_out_dupe_count);
 		}
 		
 		if ((udp_worker) && udp_worker->pbuf_incoming) {
-			n += dupecheck_drain_worker(udp_worker,
+			dupecheck_drain_worker(udp_worker,
 				&pb_out_prevp, &pb_out_last,
 				&pb_out_dupe_prevp, &pb_out_dupe_last,
 				&pb_out_count, &pb_out_dupe_count);
@@ -846,8 +844,6 @@ static void dupecheck_thread(void)
 			dupecheck_cleanup();
 		}
 
-		// if (n > 0)
-		//    hlog(LOG_DEBUG, "Dupecheck did analyze %d packets, found %d duplicates", n, pb_out_dupe_count);
 		/* sleep a little */
 #ifdef USE_EVENTFD
 		int p = poll(&dupecheck_eventfd_poll, 1, 1000);

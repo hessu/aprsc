@@ -419,6 +419,8 @@ static int http_check_req_compressed(struct evhttp_request *r)
 static int http_compress_gzip(char *in, int ilen, char *out, int ospace)
 {
 	z_stream ctx;
+
+	memset(&ctx, 0, sizeof(ctx));
 	
 	ctx.zalloc = Z_NULL;
 	ctx.zfree = Z_NULL;
@@ -855,7 +857,7 @@ void lang_scan(void)
 	if (ret == 0) {
 		int i;
 		
-		hlog(LOG_DEBUG, "%d language files found", globbuf.gl_pathc);
+		hlog(LOG_DEBUG, "%ld language files found", globbuf.gl_pathc);
 		
 		new_language_files = hmalloc(sizeof(*new_language_files) * globbuf.gl_pathc);
 		memset(new_language_files, 0, sizeof(*new_language_files) * globbuf.gl_pathc);

@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 42 };
+BEGIN { plan tests => 2 + 6 + 2*12 + 5 + 16 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -16,19 +16,30 @@ ok(defined $p, 1, "Failed to initialize product runner");
 ok($p->start(), 1, "Failed to start product");
 
 
-my $login = "N5CAL-1";
+my $login_plain = "N5CAL-1";
+my $login_tls = "N5CAL-2";
 my $server_call = "TESTING";
-my $i_tx = new Ham::APRS::IS("localhost:55580", $login);
+my $i_tx = new Ham::APRS::IS("localhost:55580", $login_plain);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-my $i_rx = new Ham::APRS::IS("localhost:55152", "N5CAL-2");
+my $i_tx_tls = new Ham::APRS::IS("localhost:55582", $login_tls,
+	'tlskey' => "cfg-aprsc/tls-client-key.pem",
+	'tlscert' => "cfg-aprsc/tls-client-cert.pem",
+	'tlsca' => "tls-testca/cacert.pem",
+	'tlshost' => "tls1host.example.com",
+	);
+ok(defined $i_tx_tls, 1, "Failed to initialize Ham::APRS::IS with TLS");
+
+my $i_rx = new Ham::APRS::IS("localhost:55152", "N5CAL-5");
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 
-# connect, initially to the client-only port 55581
+# connect, initially to the igate port
 
 my $ret;
 $ret = $i_tx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_tx->{'error'});
+$ret = $i_tx_tls->connect('retryuntil' => 8);
+ok($ret, 1, "Failed to connect to the server: " . $i_tx_tls->{'error'});
 $ret = $i_rx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
@@ -39,106 +50,110 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 # their digipeater path truncated away and replaced with ,TCPIP* and
 # then the Q construct.
 
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"$login>DST:tcpip-path-replace1",
-	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace1");
+foreach my $tx_login ([$i_tx, $login_plain], [$i_tx_tls, $login_tls]) {
+	my($tx, $login) = @{ $tx_login };
+	istest::txrx(\&ok, $tx, $i_rx,
+		"$login>DST:tcpip-path-replace1",
+		"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace1", 1);
 
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"$login>DST,DIGI1,DIGI5*:tcpip-path-replace2",
-	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace2");
+	istest::txrx(\&ok, $tx, $i_rx,
+		"$login>DST,DIGI1,DIGI5*:tcpip-path-replace2",
+		"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace2", 1);
 
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"$login>DST,TCPIP*:tcpip-path-replace3",
-	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace3");
+	istest::txrx(\&ok, $tx, $i_rx,
+		"$login>DST,TCPIP*:tcpip-path-replace3",
+		"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace3", 1);
 
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"$login>DST,qAR,$login:tcpip-path-replace4",
-	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace4");
+	istest::txrx(\&ok, $tx, $i_rx,
+		"$login>DST,qAR,$login:tcpip-path-replace4",
+		"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace4", 1);
 
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"$login>DST,WIDE2-2,qAR,$login:tcpip-path-replace5",
-	"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace5");
+	istest::txrx(\&ok, $tx, $i_rx,
+		"$login>DST,WIDE2-2,qAR,$login:tcpip-path-replace5",
+		"$login>DST,TCPIP*,qAC,TESTING:tcpip-path-replace5", 1);
+
+	#
+	# All packets
+	# {
+	#    Place into TNC-2 format
+	#    If a q construct is last in the path (no call following the qPT)
+	#       delete the qPT
+	# }
+	#  ... and will continue to add qAO
+	#
+	# This test intentionally has a qAR without a trailing call, and
+	# it'll be converted to a qAO:
+
+	istest::txrx(\&ok, $tx, $i_rx,
+		"SRC>DST,DIGI1,DIGI5*,qAR:a4ufy",
+		"SRC>DST,DIGI1,DIGI5*,qAS,$login:a4ufy", 1);
+
+	# It's not in the algorithm, but:
+	# if a path element after the q construct has a '*' or other crap
+	# in the callsign, the packet is dropped.
+
+	istest::should_drop(\&ok, $tx, $i_rx,
+		"SRCCALL>DST,DIGI1*,qAR,GATES*:testing * after Q construct",
+		"SRC>DST:dummy", 1); # will pass (helper packet)
+
+	#
+	#    If the packet entered the server from a verified client-only connection AND the FROMCALL does not match the login:
+	#    {
+	#        if a q construct exists in the packet
+	#            if the q construct is at the end of the path AND it equals ,qAR,login
+	#                (1) Replace qAR with qAo
+	#            (5) else: skip to "all packets with q constructs")
+	#        else if the path is terminated with ,I
+	#        {
+	#            if the path is terminated with ,login,I
+	#                (2) Replace ,login,I with qAo,login
+	#            else
+	#                (3) Replace ,VIACALL,I with qAr,VIACALL
+	#        }
+	#        else
+	#            (4) Append ,qAO,login
+	#        Skip to "All packets with q constructs"
+	#    }
+	#    
+
+	# (1)
+	istest::txrx(\&ok, $tx, $i_rx,
+		"SRCCALL>DST,DIGI1*,qAR,$login:testing (1)",
+		"SRCCALL>DST,DIGI1*,qAR,$login:testing (1)", 1);
+	# (2)
+	istest::txrx(\&ok, $tx, $i_rx,
+		"SRCCALL>DST,DIGI1*,$login,I:testing (2)",
+		"SRCCALL>DST,DIGI1*,qAR,$login:testing (2)", 1);
+	# (3)
+	istest::txrx(\&ok, $tx, $i_rx,
+		"SRCCALL>DST,DIGI1*,IGATE,I:testing (3)",
+		"SRCCALL>DST,DIGI1*,qAr,IGATE:testing (3)", 1);
+	# (4)
+	istest::txrx(\&ok, $tx, $i_rx,
+		"SRCCALL>DST,DIGI1*:testing (4)",
+		"SRCCALL>DST,DIGI1*,qAS,$login:testing (4)", 1);
+
+	# (5) - any other (even unknown) q construct is passed intact
+	istest::txrx(\&ok, $tx, $i_rx,
+		"SRCCALL>DST,DIGI1*,qAF,$login:testing (5)",
+		"SRCCALL>DST,DIGI1*,qAF,$login:testing (5)", 1);
+}
 
 #
-# All packets
-# {
-#    Place into TNC-2 format
-#    If a q construct is last in the path (no call following the qPT)
-#       delete the qPT
-# }
-#  ... and will continue to add qAO
-#
-# This test intentionally has a qAR without a trailing call, and
-# it'll be converted to a qAO:
-
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRC>DST,DIGI1,DIGI5*,qAR:a4ufy",
-	"SRC>DST,DIGI1,DIGI5*,qAS,$login:a4ufy");
-
-# It's not in the algorithm, but:
-# if a path element after the q construct has a '*' or other crap
-# in the callsign, the packet is dropped.
-
-istest::should_drop(\&ok, $i_tx, $i_rx,
-	"SRCCALL>DST,DIGI1*,qAR,GATES*:testing * after Q construct",
-	"SRC>DST:dummy"); # will pass (helper packet)
-
-#
-#    If the packet entered the server from a verified client-only connection AND the FROMCALL does not match the login:
-#    {
-#        if a q construct exists in the packet
-#            if the q construct is at the end of the path AND it equals ,qAR,login
-#                (1) Replace qAR with qAo
-#            (5) else: skip to "all packets with q constructs")
-#        else if the path is terminated with ,I
-#        {
-#            if the path is terminated with ,login,I
-#                (2) Replace ,login,I with qAo,login
-#            else
-#                (3) Replace ,VIACALL,I with qAr,VIACALL
-#        }
-#        else
-#            (4) Append ,qAO,login
-#        Skip to "All packets with q constructs"
-#    }
-#    
-
-# (1)
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRCCALL>DST,DIGI1*,qAR,$login:testing (1)",
-	"SRCCALL>DST,DIGI1*,qAR,$login:testing (1)");
-# (2)
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRCCALL>DST,DIGI1*,$login,I:testing (2)",
-	"SRCCALL>DST,DIGI1*,qAR,$login:testing (2)");
-# (3)
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRCCALL>DST,DIGI1*,IGATE,I:testing (3)",
-	"SRCCALL>DST,DIGI1*,qAr,IGATE:testing (3)");
-# (4)
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRCCALL>DST,DIGI1*:testing (4)",
-	"SRCCALL>DST,DIGI1*,qAS,$login:testing (4)");
-
-# (5) - any other (even unknown) q construct is passed intact
-istest::txrx(\&ok, $i_tx, $i_rx,
-	"SRCCALL>DST,DIGI1*,qAF,$login:testing (5)",
-	"SRCCALL>DST,DIGI1*,qAF,$login:testing (5)");
-
-#
-# reconnect to the non-client-only port
+# reconnect to a full-feed port
 #
 
 $ret = $i_tx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
-$i_tx = new Ham::APRS::IS("localhost:55152", $login);
+$i_tx = new Ham::APRS::IS("localhost:55152", $login_plain);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 $ret = $i_tx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_tx->{'error'});
 
+
 # for loop testing, also make a second connection
 my $login_second = "MYC4LL-5";
-$i_tx2 = new Ham::APRS::IS("localhost:55152", $login_second);
+my $i_tx2 = new Ham::APRS::IS("localhost:55152", $login_second);
 ok(defined $i_tx2, 1, "Failed to initialize Ham::APRS::IS");
 $ret = $i_tx2->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect twice to the server: " . $i_tx->{'error'});
@@ -161,7 +176,7 @@ ok($ret, 1, "Failed to connect twice to the server: " . $i_tx->{'error'});
 #        Else
 #            (b2) Change from ,VIACALL,I to ,qAr,VIACALL
 #    }
-
+my $login = $login_plain;
 istest::txrx(\&ok, $i_tx, $i_rx,
 	"SRC>DST,DIGI1,DIGI5*,$login,I:Asdf (b1)",
 	"SRC>DST,DIGI1,DIGI5*,qAR,$login:Asdf (b1)");
@@ -312,6 +327,8 @@ $ret = $i_rx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
 $ret = $i_tx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_tx->{'error'});
+$ret = $i_tx_tls->disconnect();
+ok($ret, 1, "Failed to disconnect from the server: " . $i_tx_tls->{'error'});
 
 # stop
 

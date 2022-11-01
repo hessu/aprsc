@@ -14,9 +14,15 @@ use Data::Dumper;
 
 my $debug = 0;
 
-sub txrx($$$$$)
+sub txrx($$$$$;$)
 {
-	my($ok, $i_tx, $i_rx, $tx, $rx) = @_;
+	my($ok, $i_tx, $i_rx, $tx, $rx, $random) = @_;
+
+	if ($random) {
+		my $uniq = ' uniq.' . time() . '.' . int(rand(1000000));
+		$tx .= $uniq;
+		$rx .= $uniq;
+	}
 	
 	warn "sending: $tx\n" if ($debug);
 	my $sent = $i_tx->sendline($tx);

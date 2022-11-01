@@ -584,6 +584,7 @@ connerr:
 		close(fd);
 		fd = -1;
 		hfree(addr_s);
+		addr_s = NULL;
 	}
 
 	freeaddrinfo(ai); /* Not needed anymore.. */
@@ -598,6 +599,7 @@ connerr:
 		hlog(LOG_ERR, "Uplink %s: client_alloc() failed, too many clients", l->name);
 		close(fd);
 		l->state = UPLINK_ST_NOT_LINKED;
+		hfree(addr_s);
 		return -3; /* No successfull connection at any address.. */
 	}
 	
@@ -619,26 +621,33 @@ connerr:
 	   on us in which case it gets abandoned a bit further below. */
 
 	addr_len = sizeof(sa);
-	getpeername(fd, (struct sockaddr *)&sa, &addr_len);
-	//s = strsockaddr( &sa.sa, addr_len ); /* server side address */
-	strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
-	c->addr_rem[sizeof(c->addr_rem)-1] = 0;
-	hfree(addr_s);
-	c->addr  = sa;
+	if (getpeername(fd, (struct sockaddr *)&sa, &addr_len) == -1) {
+		hlog(LOG_ERR, "Uplink %s: Failed to get socket peer name: %s", l->name, strerror(errno));
+	} else {
+		//s = strsockaddr( &sa.sa, addr_len ); /* server side address */
+		strncpy(c->addr_rem, addr_s, sizeof(c->addr_rem));
+		c->addr_rem[sizeof(c->addr_rem)-1] = 0;
+		hfree(addr_s);
+		addr_s = NULL;
+		c->addr  = sa;
 
-	/* hex format of client's IP address + port */
-
-	char *s = hexsockaddr( &sa.sa, addr_len );
-	strncpy(c->addr_hex, s, sizeof(c->addr_hex));
-	c->addr_hex[sizeof(c->addr_hex)-1] = 0;
-	hfree(s);
+		/* hex format of client's IP address + port */
+		char *s = hexsockaddr( &sa.sa, addr_len );
+		strncpy(c->addr_hex, s, sizeof(c->addr_hex));
+		c->addr_hex[sizeof(c->addr_hex)-1] = 0;
+		hfree(s);
+	}
 
 	addr_len = sizeof(sa);
-	getsockname(fd, (struct sockaddr *)&sa, &addr_len);
-	s = strsockaddr( &sa.sa, addr_len ); /* client side address */
-	strncpy(c->addr_loc, s, sizeof(c->addr_loc));
-	c->addr_loc[sizeof(c->addr_loc)-1] = 0;
-	hfree(s);
+	if (getsockname(fd, (struct sockaddr *)&sa, &addr_len) == -1) {
+		hlog(LOG_ERR, "Uplink %s: Failed to get local socket address: %s", l->name, strerror(errno));
+		c->addr_loc[0] = 0;
+	} else {
+		char *s = strsockaddr( &sa.sa, addr_len ); /* client side address */
+		strncpy(c->addr_loc, s, sizeof(c->addr_loc));
+		c->addr_loc[sizeof(c->addr_loc)-1] = 0;
+		hfree(s);
+	}
 
 	hlog(LOG_INFO, "Uplink %s: %s: Connection established on fd %d using source address %s", l->name, c->addr_rem, c->fd, c->addr_loc);
 
@@ -698,6 +707,8 @@ err:
 	if (uc)
 		uplink_client_free(uc);
 	l->state = UPLINK_ST_NOT_LINKED;
+	if (addr_s)
+		hfree(addr_s);
 	return -1;
 }
 

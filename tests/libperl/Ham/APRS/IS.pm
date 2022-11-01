@@ -9,6 +9,7 @@ use Time::HiRes qw( time sleep );
 use IO::Handle '_IOFBF';
 use IO::Socket::INET;
 use IO::Select;
+use IO::Socket::SSL;
 use Data::Dumper;
 
 our $VERSION = '0.01';
@@ -43,6 +44,10 @@ sub new($$$;%)
 	$self->{'mycall'} = $mycall;
 	$self->{'filter'} = $options{'filter'} if (defined $options{'filter'});
 	$self->{'udp'} = $options{'udp'} if (defined $options{'udp'});
+	$self->{'tlscert'} = $options{'tlscert'} if (defined $options{'tlscert'});
+	$self->{'tlskey'} = $options{'tlskey'} if (defined $options{'tlskey'});
+	$self->{'tlsca'} = $options{'tlsca'} if (defined $options{'tlsca'});
+	$self->{'tlshost'} = $options{'tlshost'} if (defined $options{'tlshost'});
 	
 	if ($options{'nopass'}) {
 		$self->{'aprspass'} = -1;
@@ -120,7 +125,17 @@ sub connect($;%)
 	}
 	
 	while (!defined $self->{'sock'}) {
-		$self->{'sock'} = IO::Socket::INET->new($self->{'host_port'});
+		if (defined $self->{'tlskey'} && defined $self->{'tlscert'} && defined $self->{'tlsca'}) {
+			$self->{'sock'} = IO::Socket::SSL->new(
+				PeerAddr => $self->{'host_port'},
+				SSL_verifycn_name => $self->{'tlshost'},
+				SSL_ca_file => $self->{'tlsca'},
+				SSL_cert_file => $self->{'tlscert'},
+				SSL_key_file => $self->{'tlskey'},
+			);
+		} else {
+			$self->{'sock'} = IO::Socket::INET->new($self->{'host_port'});
+		}
 		
 		if (!defined($self->{'sock'})) {
 			$self->{'error'} = "Failed to connect to $self->{host_port}: $!";

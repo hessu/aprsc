@@ -40,7 +40,7 @@ const char verstr_features[] =
 	" valgrind"
 #endif
 #ifdef USE_SSL
-	" ssl"
+	" tls"
 #endif
 #ifdef USE_SCTP
 	" sctp"

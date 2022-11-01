@@ -240,20 +240,17 @@ if test "$ac_cv_search_deflate" = "-lz"; then
 fi
 
 dnl Check for openssl
-AC_ARG_WITH(openssl, [  --with-openssl[=DIR]    Include OpenSSL support (requires OpenSSL >= 0.9.7)], [with_openssl=$withval], [with_openssl=no])
+AC_CHECK_HEADERS([openssl/ssl.h])
+AC_SEARCH_LIBS(TLSv1_server_method, ssl, AC_DEFINE(HAVE_TLSV1_SERVER_METHOD, 1, [OpenSSL 0.9.7 or later]))
+AC_SEARCH_LIBS(X509_free, crypto, AC_DEFINE(HAVE_X509_FREE, 1, [OpenSSL 0.9.7 or later]))
 AC_SUBST(LIBSSL)
 AC_SUBST(LIBCRYPTO)
-if test "$with_openssl" != "no" ; then
-  AC_CHECK_HEADERS([openssl/ssl.h])
-  AC_SEARCH_LIBS(TLSv1_server_method, ssl, AC_DEFINE(HAVE_TLSV1_SERVER_METHOD, 1, [OpenSSL 0.9.7 or later]))
-  AC_SEARCH_LIBS(X509_free, crypto, AC_DEFINE(HAVE_X509_FREE, 1, [OpenSSL 0.9.7 or later]))
-  
-  if test "$ac_cv_search_TLSv1_server_method" = "-lssl"; then
-    LIBSSL="-lssl"
-  fi
-  if test "$ac_cv_search_X509_free" = "-lcrypto"; then
-    LIBCRYPTO="-lcrypto"
-  fi
+
+if test "$ac_cv_search_TLSv1_server_method" = "-lssl"; then
+  LIBSSL="-lssl"
+fi
+if test "$ac_cv_search_X509_free" = "-lcrypto"; then
+  LIBCRYPTO="-lcrypto"
 fi
 
 dnl Output files

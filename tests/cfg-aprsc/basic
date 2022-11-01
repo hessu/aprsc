@@ -28,13 +28,19 @@ ClientTimeout		48h
 #		msgonly - messages only
 #		userfilter - user-specified filters
 #
-Listen "Full feed with CWOP"                      fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl"
-Listen "Full feed with CWOP, UDP"                 fullfeed    udp ::0      55152
-Listen "Igate port"                               igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
-Listen "Igate port, UDP"                          igate       udp 0.0.0.0  55580
-Listen "Client-only port"                         clientonly  tcp 0.0.0.0  55581
-Listen "Duplicates"                               dupefeed    tcp 0.0.0.0  55153
-Listen "UDP submit port"                          udpsubmit   udp ::0      55080
+Listen "Full feed with"        fullfeed    tcp ::0      55152   acl "cfg-aprsc/acl-all.acl"
+Listen "Full feed with, UDP"   fullfeed    udp ::0      55152
+Listen "Full feed, TLS"        fullfeed    tcp ::0      55154   acl "cfg-aprsc/acl-all.acl" \
+	tlskey cfg-aprsc/tls1-key.pem tlscert cfg-aprsc/tls1-cert.pem tlsca tls-testca/cacert.pem
+Listen "Igate port"            igate       tcp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port, UDP"       igate       udp 0.0.0.0  55580
+Listen "Client-only port"      clientonly  tcp 0.0.0.0  55581
+Listen "Igate port, TLS"       igate       tcp 0.0.0.0  55582 \
+	tlskey cfg-aprsc/tls1-key.pem tlscert cfg-aprsc/tls1-cert.pem tlsca tls-testca/cacert.pem
+Listen "Client-only port, TLS" clientonly  tcp 0.0.0.0  55583 \
+	tlskey cfg-aprsc/tls1-key.pem tlscert cfg-aprsc/tls1-cert.pem tlsca tls-testca/cacert.pem
+Listen "Duplicates"            dupefeed    tcp 0.0.0.0  55153
+Listen "UDP submit port"       udpsubmit   udp ::0      55080
 
 ### Uplink configuration ########
 # Uplink <name> <type> tcp <address> <port>

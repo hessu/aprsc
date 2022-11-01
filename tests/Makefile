@@ -31,7 +31,7 @@ aggrtest:
 	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" $(AGGREGATOR_FILES)
 
 tls-testca: tls-testca/cacert.pem
-tls-testcert: tls-testca cfg-aprsc/tls1-cert.pem
+tls-testcert: tls-testca cfg-aprsc/tls1-cert.pem cfg-aprsc/tls-client-cert.pem
 
 tls-testca/serial:
 	mkdir -p tls-testca tmp
@@ -43,7 +43,7 @@ tls-testca/cacert.pem: tls-testca/serial
 	openssl req -x509 -new -nodes -newkey rsa:2048 -keyout tls-testca/private/cakey.pem -sha256 -days 7300 \
 		-subj "/O=aprsc TEST/OU=Testing Department/CN=Testing CA" -out tls-testca/cacert.pem
 
-cfg-aprsc/tls1-cert.pem:
+cfg-aprsc/tls1-cert.pem: tls-testca/cacert.pem
 	openssl req -new -config tls-openssl.conf \
 		-keyout cfg-aprsc/tls1-key.pem -out tmp/tls1-req.pem \
 		-newkey rsa:2048 -nodes -sha256 \
@@ -51,5 +51,15 @@ cfg-aprsc/tls1-cert.pem:
 
 	openssl ca -config tls-openssl.conf -batch \
 		-in tmp/tls1-req.pem -out cfg-aprsc/tls1-cert.pem \
+		-days 3650
+
+cfg-aprsc/tls-client-cert.pem: tls-testca/cacert.pem
+	openssl req -new -config tls-openssl.conf \
+		-keyout cfg-aprsc/tls-client-key.pem -out tmp/tls-client-req.pem \
+		-newkey rsa:2048 -nodes -sha256 \
+		-subj "/O=aprsc TEST/callSign=N5CAL"
+
+	openssl ca -config tls-openssl.conf -batch \
+		-in tmp/tls-client-req.pem -out cfg-aprsc/tls-client-cert.pem \
 		-days 3650
 

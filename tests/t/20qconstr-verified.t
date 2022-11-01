@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 2 + 6 + 2*12 + 5 + 16 + 4 };
+BEGIN { plan tests => 2 + 4 + 1*12 + 4 + 16 + 4 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -22,13 +22,13 @@ my $server_call = "TESTING";
 my $i_tx = new Ham::APRS::IS("localhost:55580", $login_plain);
 ok(defined $i_tx, 1, "Failed to initialize Ham::APRS::IS");
 
-my $i_tx_tls = new Ham::APRS::IS("localhost:55582", $login_tls,
-	'tlskey' => "cfg-aprsc/tls-client-key.pem",
-	'tlscert' => "cfg-aprsc/tls-client-cert.pem",
-	'tlsca' => "tls-testca/cacert.pem",
-	'tlshost' => "tls1host.example.com",
-	);
-ok(defined $i_tx_tls, 1, "Failed to initialize Ham::APRS::IS with TLS");
+#my $i_tx_tls = new Ham::APRS::IS("localhost:55582", $login_tls,
+#	'tlskey' => "cfg-aprsc/tls-client-key.pem",
+#	'tlscert' => "cfg-aprsc/tls-client-cert.pem",
+#	'tlsca' => "tls-testca/cacert.pem",
+#	'tlshost' => "tls1host.example.com",
+#	);
+#ok(defined $i_tx_tls, 1, "Failed to initialize Ham::APRS::IS with TLS");
 
 my $i_rx = new Ham::APRS::IS("localhost:55152", "N5CAL-5");
 ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
@@ -38,8 +38,8 @@ ok(defined $i_rx, 1, "Failed to initialize Ham::APRS::IS");
 my $ret;
 $ret = $i_tx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_tx->{'error'});
-$ret = $i_tx_tls->connect('retryuntil' => 8);
-ok($ret, 1, "Failed to connect to the server: " . $i_tx_tls->{'error'});
+#$ret = $i_tx_tls->connect('retryuntil' => 8);
+#ok($ret, 1, "Failed to connect to the server: " . $i_tx_tls->{'error'});
 $ret = $i_rx->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 
@@ -50,7 +50,8 @@ ok($ret, 1, "Failed to connect to the server: " . $i_rx->{'error'});
 # their digipeater path truncated away and replaced with ,TCPIP* and
 # then the Q construct.
 
-foreach my $tx_login ([$i_tx, $login_plain], [$i_tx_tls, $login_tls]) {
+#foreach my $tx_login ([$i_tx, $login_plain], [$i_tx_tls, $login_tls]) {
+foreach my $tx_login ([$i_tx, $login_plain]) {
 	my($tx, $login) = @{ $tx_login };
 	istest::txrx(\&ok, $tx, $i_rx,
 		"$login>DST:tcpip-path-replace1",
@@ -327,8 +328,8 @@ $ret = $i_rx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_rx->{'error'});
 $ret = $i_tx->disconnect();
 ok($ret, 1, "Failed to disconnect from the server: " . $i_tx->{'error'});
-$ret = $i_tx_tls->disconnect();
-ok($ret, 1, "Failed to disconnect from the server: " . $i_tx_tls->{'error'});
+#$ret = $i_tx_tls->disconnect();
+#ok($ret, 1, "Failed to disconnect from the server: " . $i_tx_tls->{'error'});
 
 # stop
 

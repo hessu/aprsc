@@ -280,6 +280,9 @@ int ssl_init(void)
 {
 	hlog(LOG_INFO, "Initializing OpenSSL, built against %s ...", OPENSSL_VERSION_TEXT);
 	
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+	OPENSSL_config(NULL);
+#endif
 	SSL_library_init();
 	SSL_load_error_strings();
 	

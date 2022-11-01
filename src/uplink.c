@@ -122,8 +122,9 @@ void close_uplinkers(void)
 		hlog( LOG_ERR, "close_uplinkers(): could not lock uplink_client_mutex: %s", strerror(rc) );
 		return;
 	}
-	
-	for (struct uplink_client_t *uc = uplink_clients; (uc); uc = uc->next) {
+
+	struct uplink_client_t *uc;
+	for (uc = uplink_clients; (uc); uc = uc->next) {
 		if (uc->client && uc->client->fd >= 0) {
 			hlog( LOG_DEBUG, "Closing uplinking socket (fd %d) %s ...", uc->client->fd, uc->client->addr_rem );
 			shutdown(uc->client->fd, SHUT_RDWR);
@@ -167,7 +168,8 @@ void uplink_close(struct client_t *c, int errnum)
 		}
 	}
 
-	for (struct uplink_client_t *uc = uplink_clients; (uc); uc = uc->next) {
+	struct uplink_client_t *uc;
+	for (uc = uplink_clients; (uc); uc = uc->next) {
 		if (uc->client == c) {
 			uplink_client_free(uc);
 			break;

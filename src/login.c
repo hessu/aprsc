@@ -42,6 +42,13 @@ static const char *quirks_mode_blacklist[] = {
 	NULL
 };
 
+/* known-broken applications which do not implement TX igate properly, do not pass packets downstream
+ */
+static const char *igate_tx_blacklist[] = {
+	"GW1000", /* Does not transmit 3rd party format on RF */
+	NULL
+};
+
 /*
  *	Parse the login string in a HTTP POST or UDP submit packet
  *	Argh, why are these not in standard POST parameters in HTTP?
@@ -163,8 +170,17 @@ void login_set_app_name(struct client_t *c, const char *app_name, const char *ap
 	strncpy(c->app_version, app_ver, sizeof(c->app_version));
 	c->app_version[sizeof(c->app_version)-1] = 0;
 	sanitize_ascii_string(c->app_version);
-	
+
 	/* check the application name against a static list of broken apps */
+	for (i = 0; (igate_tx_blacklist[i]); i++) {
+		if (prefixmatch(c->app_name, igate_tx_blacklist[i])) {
+			hlog(LOG_INFO, "%s/%s: Not transmitting packets to broken TX igate: %s %s",
+				c->addr_rem, c->username, c->app_name, c->app_version);
+			c->no_tx = 1;
+			break;
+		}
+	}
+
 	if (quirks_mode) {
         	c->quirks_mode = 1;
 		return;
@@ -173,13 +189,12 @@ void login_set_app_name(struct client_t *c, const char *app_name, const char *ap
 	c->quirks_mode = 0;
 	for (i = 0; (quirks_mode_blacklist[i]); i++) {
 		if (prefixmatch(c->app_name, quirks_mode_blacklist[i])) {
-			hlog(LOG_DEBUG, "%s/%s: Enabling quirks mode for application %s %s",
+			hlog(LOG_DEBUG, "%s/%s: Enabling quirks mode for application: %s %s",
 				c->addr_rem, c->username, c->app_name, c->app_version);
 			c->quirks_mode = 1;
 			break;
 		}
 	}
-	
 }
 
 int login_setup_udp_feed(struct client_t *c, int port)
@@ -431,7 +446,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	/* ok, login succeeded, switch handler */
 	c->handler_line_in = &incoming_handler; /* handler of all incoming APRS-IS data during a connection */
-	
+
 	rc = client_printf( self, c, "# logresp %s %s, server %s\r\n",
 			    username,
 			    (c->validated) ? "verified" : "unverified",

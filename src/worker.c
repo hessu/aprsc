@@ -2213,6 +2213,8 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	
 	if (c->quirks_mode)
 		cJSON_AddNumberToObject(jc, "quirks_mode", c->quirks_mode);
+	if (c->no_tx)
+		cJSON_AddNumberToObject(jc, "no_tx", c->no_tx);
 	
 	json_add_rxerrs(jc, "rx_errs", c->localaccount.rxerrs);
 	

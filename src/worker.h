@@ -355,6 +355,7 @@ struct client_t {
 	char  hidden;       /* is the user on a hidden listener socket, not shown on status */
 	char  failed_cmds;  /* how many login commands have failed */
 	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
+	char  no_tx;        /* is the TX igate implementation broken and on our blacklist */
 	char  loc_known;    /* have we received a position packet from this client */
 	
 	/* the current handler function for incoming lines */

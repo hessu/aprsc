@@ -120,6 +120,10 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			//hlog(LOG_DEBUG, "%d: not sending to client: originated from this socketsocket", c->fd);
 			continue;
 		}
+
+		/* Do not send packets to clients which we've blacklisted as broken. */
+		if (c->no_tx)
+			continue;
 		
 		send_single(self, c, pb->data, pb->packet_len);
 	}

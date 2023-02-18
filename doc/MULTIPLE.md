@@ -52,7 +52,7 @@ instance name.
 Defaults file and custom command line options
 ------------------------------------------------
 
-Edit `/etc/defaults/aprsc` and add a new parameter **DAEMON_OPTS_BASE** in
+Edit `/etc/default/aprsc` and add a new parameter **DAEMON_OPTS_BASE** in
 the end.  The parameter sets default command line options to all the
 additional instances, including our new `aprsc-foo`.  **DAEMON_OPTS_BASE**
 should have the same common options as **DAEMON_OPTS** - just remove the
@@ -79,7 +79,7 @@ start or stop by adding the instance name in the end: `sudo service aprsc
 start aprsc-foo`.
 
 If you wish to only start up specific instances automatically when the
-system boots up, list the instance names in `/etc/defaults/aprsc` parameter
+system boots up, list the instance names in `/etc/default/aprsc` parameter
 **AUTOSTART**:
 
     AUTOSTART="aprsc-foo aprsc-cwop"

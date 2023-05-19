@@ -46,6 +46,9 @@ On Linux, aprsc can utilize POSIX capabilities to enable binding low
 library, and compiling against it requires it's development headers
 (package libcap-dev on Debian/Ubuntu).
 
+For build a .deb package on Debian 11 debhelper, libssl-dev and libsctp-dev
+are also currently required and can be installed with apt.
+
 
 Building a .deb package
 --------------------------

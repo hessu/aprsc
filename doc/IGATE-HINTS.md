@@ -90,6 +90,43 @@ packet data payload as a binary buffer.  Do not decode and re-encode as
 UTF-8, as it may well break packets which do not happen to be UTF-8.
 
 
+Transmit-capable iGates causing packet loops
+----------------------------------------------
+
+Implementing a properly working transmit-capable iGate is not a simple task.
+Several naive iGates have simply transmitted packets received from the
+APRS-IS, unmodified, to RF. This causes two main issues:
+
+* A lot of unnecessary packets are transmitted to RF, possibly flooding
+  and overloading the channel.
+* Properly-working iGates near this broken iGate will assume the
+  originating callsigns of all those packets are reachable locally over
+  RF, and will join the flooding, by sending all message packets
+  destined to those callsigns to RF.  Messages targeted to stations
+  around the world will be transmitted to your local RF channel by
+  correctly-working iGates, if a faulty iGate makes them think they're
+  reachable locally on RF.
+
+
+***Solution:***
+
+When implementing a transmit-capable iGates, you **must** implement the
+correct algorithms to select which packets to transmit to RF.  All packets
+forwarded from the APRS-IS to RF **must** be converted to the **3rd party
+packet format** to prevent them from being looped back to APRS-IS.  This
+also prevents the sources of those messages to be considered reachable on RF
+by other iGates.
+
+If you wish to implement an APRS iGate, be sure to fully read the [APRS
+iGate spec](https://aprs-is.net/IGating.aspx), and the [iGate details
+page](https://aprs-is.net/IGateDetails.aspx), and fully understand it.  If
+there's something that you don't understand, please don't run or distribute
+your code before obtaining more information or help to understand it.
+
+This is extremely important when implementing a transmit-capable (APRS-IS ->
+RF) iGate.
+
+
 iGates dropping duplicate packets unnecessarily
 -------------------------------------------------
 

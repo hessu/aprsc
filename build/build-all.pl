@@ -10,12 +10,11 @@ my @platforms = (
 	'ubuntu-2204-amd64',
 	'ubuntu-2004-amd64',
 	'ubuntu-1804-amd64',
-	'debian-90-i386',
-	'debian-90-amd64',
 	'debian-100-i386',
 	'debian-100-amd64',
 	'debian-110-i386',
 	'debian-110-amd64',
+	'debian-120-amd64',
 	'centos-70-x86_64',
 );
 
@@ -46,6 +45,9 @@ my %platconf = (
 		'virtualisation' => 'lxd'
 	},
 	'debian-110-amd64' => {
+		'virtualisation' => 'lxd'
+	},
+	'debian-120-amd64' => {
 		'virtualisation' => 'lxd'
 	}
 );

@@ -282,6 +282,11 @@ static int open_listener(struct listen_config_t *lc)
 	l->corepeer = lc->corepeer;
 	l->client_flags = lc->client_flags;
 	l->clients_max = lc->clients_max;
+	// Clamp listener maxclients with global MaxClients
+	if (l->clients_max > maxclients) {
+		hlog(LOG_WARNING, "Listener '%s' has maxclients %d which is higher than global MaxClients %d - using global limit", lc->name, l->clients_max, maxclients);
+		l->clients_max = maxclients;
+	}
 	
 	l->portaccount = port_accounter_alloc();
 	

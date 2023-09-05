@@ -489,7 +489,7 @@ static int open_missing_listeners(void)
 {
 	struct listen_config_t *lc;
 	struct listen_t *l;
-	int opened = 0;
+	int failed = 0;
 	
 	for (lc = listen_config; (lc); lc = lc->next) {
 		if ((l = find_listener_random_id(lc->id))) {
@@ -498,18 +498,18 @@ static int open_missing_listeners(void)
 			continue;
 		}
 		
-		if (open_listener(lc) == 0)
-			opened++;
+		if (open_listener(lc) != 0)
+			failed++;
 	}
 	
-	return opened;
+	return failed;
 }
 
 static int close_removed_listeners(void)
 {
 	int closed = 0;
 		
-	hlog(LOG_DEBUG, "Closing removed listening sockets....");
+	hlog(LOG_DEBUG, "Closing removed listening sockets...");
 	struct listen_t *l, *next;
 	next = listen_list;
 	while (next) {
@@ -518,13 +518,16 @@ static int close_removed_listeners(void)
 		
 		struct listen_config_t *lc = find_listen_config_id(listen_config, l->id);
 		if (!lc) {
-			hlog(LOG_INFO, "Listener %d (%s) no longer in configuration, closing port....",
+			hlog(LOG_INFO, "Listener %d (%s) no longer in configuration, closing port...",
 				l->id, l->addr_s);
 			listener_free(l);
 			closed++;
 		}
 	}
-	
+
+	if (closed)
+		hlog(LOG_INFO, "Closed %d removed listeners.", closed);
+
 	return closed;
 }
 
@@ -1388,7 +1391,6 @@ void accept_thread(void *asdf)
 	int e, n;
 	struct pollfd *acceptpfd = NULL;
 	struct listen_t **acceptpl = NULL;
-	int listen_n = 0;
 	int poll_n = 0;
 	struct listen_t *l;
 
@@ -1426,13 +1428,13 @@ void accept_thread(void *asdf)
 	while (!accept_shutting_down) {
 		if (accept_reconfiguring) {
 			accept_reconfiguring = 0;
-			listen_n -= close_removed_listeners();
+			close_removed_listeners();
 			
 			/* start listening on the sockets */
-			listen_n += open_missing_listeners();
+			int failed_listeners = open_missing_listeners();
 			
-			if (listen_n < 1) {
-				hlog(LOG_CRIT, "Failed to listen on any ports.");
+			if (failed_listeners > 0) {
+				hlog(LOG_CRIT, "Failed to listen on %d configured listeners.", failed_listeners);
 				exit(2);
 			}
 			
@@ -1445,7 +1447,7 @@ void accept_thread(void *asdf)
 				if (!l->corepeer)
 					poll_n++;
 			
-			hlog(LOG_DEBUG, "Generating polling list for %d/%d listeners...", poll_n, listen_n);
+			hlog(LOG_DEBUG, "Generating polling list for %d listeners...", poll_n);
 			
 			/* array of FDs for poll() */
 			if (acceptpfd)

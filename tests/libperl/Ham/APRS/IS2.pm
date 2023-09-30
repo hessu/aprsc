@@ -50,6 +50,7 @@ sub new($$$;%)
 	$self->{'mycall'} = $mycall;
 	$self->{'filter'} = $options{'filter'} if (defined $options{'filter'});
 	$self->{'udp'} = $options{'udp'} if (defined $options{'udp'});
+	$self->{'udp-peer'} = $options{'udp-peer'} if (defined $options{'udp-peer'});
 	
 	if ($options{'nopass'}) {
 		$self->{'aprspass'} = -1;
@@ -80,6 +81,10 @@ sub disconnect($)
 {
 	my($self) = @_;
 	
+	if (defined $self->{'usock'}) {
+		return 0;
+	}
+
 	if (defined $self->{'sock'}) {
 		$self->{'sock'}->close;
 		undef $self->{'sock'};
@@ -266,7 +271,7 @@ sub send_packets($$)
 		'is_packet' => \@pq
 	});
 	
-	$self->is2_frame_out($im->encode);
+	return $self->is2_frame_out($im->encode);
 }
 
 sub wait_signature($)
@@ -352,7 +357,12 @@ sub ping($)
 sub send_packet($)
 {
 	my($self, $packet) = @_;
+
+	return undef if ($self->{'state'} ne 'connected');
+
 	$self->send_packets([$packet]);
+
+	return 1;
 }
 
 sub get_packets($;$)
@@ -487,19 +497,34 @@ sub is2_frame_out($$)
 	
 	#warn "is2_frame_out: framelen $framelen\n";
 	
-	$self->{'sock'}->blocking(1);
-	if (!$self->{'sock'}->print(chr(0x02) . substr($framelen_i, 1) . $frame . chr(0x03))) {
-		$self->{'error'} = "Failed to write IS2 frame to $self->{host_port}: $!";
+	my $is2_framed = chr(0x02) . substr($framelen_i, 1) . $frame . chr(0x03);
+
+	if ($self->{'usock'}) {
+		my $udp_frame_len = length($is2_framed);
+		if ($udp_frame_len > 1400) {
+			$self->{'error'} = "Attempted to write too large UDP frame: $udp_frame_len is over 1400 bytes";
+			return 0;
+		}
+		if (!$self->{'usock'}->send($is2_framed, 0, $self->{'dest'})) {
+			$self->{'error'} = "Failed to write IS2 frame to UDP socket: $!";
+			return 0;
+		}
+	} else {
+		$self->{'sock'}->blocking(1);
+		if (!$self->{'sock'}->print($is2_framed)) {
+			$self->{'error'} = "Failed to write IS2 frame to $self->{host_port}: $!";
+			$self->{'sock'}->blocking(0);
+			return 0;
+		}
+		
+		if (!$self->{'sock'}->flush) {
+			$self->{'error'} = "Failed to flush IS2 frame to $self->{host_port}: $!";
+			$self->{'sock'}->blocking(0);
+			return 0;
+		}
 		$self->{'sock'}->blocking(0);
-		return 0;
 	}
-	
-	if (!$self->{'sock'}->flush) {
-		$self->{'error'} = "Failed to flush IS2 frame to $self->{host_port}: $!";
-		$self->{'sock'}->blocking(0);
-		return 0;
-	}
-	$self->{'sock'}->blocking(0);
+	return 1;
 }
 
 sub is2_frame_in($;$)
@@ -509,6 +534,10 @@ sub is2_frame_in($;$)
 	return undef if ($self->{'state'} ne 'connected');
 	
 	$timeout = 5 if (!defined $timeout);
+
+	if (defined $self->{'usock'}) {
+		return $self->is2_udp_frame_in($timeout);
+	}
 	
 	my $end_t = time() + $timeout;
 	my $sock = $self->{'sock'};
@@ -583,6 +612,128 @@ sub is2_frame_in($;$)
 			return undef;
 		}
 	}
+}
+
+sub udp_frame_in($$)
+{
+	my($self, $timeout) = @_;
+
+	my $end_t = time() + $timeout;
+	my $sock = $self->{'usock'};
+	
+	while (1) {
+		my($rin, $rout, $ein, $eout) = ('', '', '', '');
+		vec($rin, fileno($self->{'usock'}), 1) = 1;
+		my $nfound = select($rout = $rin, undef, $eout = $ein, $timeout);
+		
+		if ($nfound) {
+			my $rbuf;
+			if (($rout & $rin) eq $rin) {
+				#warn "getline: got udp\n";
+				my $msg;
+				my $raddr = $self->{'usock'}->recv($msg, 1500);
+				my($port, $ipaddr) = sockaddr_in($raddr);
+				my $hishost = inet_ntoa($ipaddr);
+				#warn "got udp from $hishost $port: $msg\n";
+				return $msg;
+			}
+		}
+		
+		if (time() > $end_t) {
+			#warn "getline: timeout\n";
+			return undef;
+		}
+	}
+}
+
+sub is2_udp_frame_in($$)
+{
+	my($self, $timeout) = @_;
+
+	my $msg = $self->udp_frame_in($timeout);
+	if (defined $msg) {
+		if (substr($msg, 0, 2) eq "# ") {
+			return $self->is2_udp_corepeer_control_in($msg);
+		} else {
+			return $self->is2_udp_frame_decode($msg);
+		}
+	}
+	return $msg;
+}
+
+sub is2_udp_corepeer_control_in($$)
+{
+	my($self, $msg) = @_;
+
+	#warn "is2_udp_corepeer_control_in: $msg (end)\n";
+	# PEER2 v 2 hello TESTING vers aprsc 2.1.15-gfc61e9fM token eu068neq4f
+	# PEER2 v 2 ok TESTING vers aprsc 2.1.15-gfc61e9fM token hq736t7q63
+	if ($msg =~ /^# PEER2 v 2 ([^ ]+) ([^ ]+) vers ([^ ]+) ([^ ]+) token ([^ ]+)$/) {
+		my($operation, $peer_call, $peer_soft, $peer_vers, $rx_token) = ($1, $2, $3, $4, $5);
+
+		if ($operation eq "ok") {
+			#warn "is2_udp_corepeer_control_in PEER2 ok token $rx_token";
+			$self->{'corepeer-ok-rx'} = 1;
+		} elsif ($operation eq "hello") {
+			#warn "is2_udp_corepeer_control_in PEER2 hello token $rx_token, responding";
+			$self->{'corepeer-ok-tx'} = 1;
+		        my $hello = "# PEER2 v 2 ok " . $self->{'mycall'} . " vers perl-is1 1.0 token $rx_token";
+			if (!$self->send_udp_packet($hello)) {
+				return undef;
+			}
+		} else {
+			warn "is2_udp_corepeer_control_in unknown PEER2 operation: $operation token $rx_token\n";
+		}
+		if (defined $self->{'corepeer-ok-tx'} && defined $self->{'corepeer-ok-rx'}) {
+			#warn "is2_udp_corepeer_control_in is LINKED\n";
+		}
+	} else {
+		warn "unrecognized control message\n";
+	}
+	return undef;
+}
+
+sub is2_udp_frame_decode($$)
+{
+	my($self, $msg) = @_;
+
+	if (length($msg) < 6) {
+		$self->{'error'} = "IS2 UDP frame too short";
+		warn "is2_udp_frame_in: " . $self->{'error'} . "\n";
+		$self->disconnect();
+		return undef;
+	}
+	if (substr($msg, 0, 1) ne chr(0x02)) {
+		$self->{'error'} = "IS2 UDP frame does not start with STX";
+		warn "is2_udp_frame_in: " . $self->{'error'} . "\n";
+		$self->disconnect();
+		return undef;
+	}
+	my $frame_len_b = chr(0) . substr($msg, 1, 3);
+	my $frame_len = unpack('N', $frame_len_b);
+	#warn "frame len: $frame_len\n";
+	my $need_bytes = $frame_len + 5;
+
+	if (length($msg) < $need_bytes) {
+		$self->{'error'} = "IS2 UDP frame too short for message length";
+		#warn "is2_udp_frame_in: " . $self->{'error'} . "\n";
+		$self->disconnect();
+		return undef;
+	}
+
+	my $etx = substr($msg, 4 + $frame_len, 1);
+	if ($etx ne chr(0x03)) {
+		$self->{'error'} = "IS2 UDP frame does not end with ETX";
+		#warn "is2_udp_frame_in: " . $self->{'error'} . "\n";
+		$self->disconnect();
+		return undef;
+	}
+	
+	my $frame = substr($msg, 4, $frame_len);
+	
+	my $is2_msg = APRSIS2::IS2Message->decode($frame);
+	#warn "is2_udp_frame_in decoded: " . Dumper($is2_msg) . "\n";
+	return $is2_msg;
 }
 
 sub is2_frame_in_nonping($;$)
@@ -663,6 +814,93 @@ sub accepted($$)
 	$self->{'ibuf'} = '';
 }
 
+=head1 bind_and_listen()
+
+Listen on an UDP peergroup socket
+
+=cut
+
+sub bind_and_listen($)
+{
+	my($self) = @_;
+	
+	my($localaddr, $localport) = split(':', $self->{'host_port'}); # TODO: ipv6...
+	
+	$self->{'usock'} = IO::Socket::INET->new(
+		Proto => 'udp',
+		LocalPort => $localport,
+		LocalAddr => $localaddr,
+		ReuseAddr => 1,
+		ReeusePort => 1);
+	
+	if (!defined($self->{'usock'})) {
+		$self->{'error'} = "Failed to bind an UDP client socket: $@";
+		return 0;
+        }
+        
+        $self->{'usock'}->sockopt(SO_RCVBUF, 32768);
+        $self->{'usock'}->sockopt(SO_SNDBUF, 32768);
+        
+        warn "bound udp port $localaddr $localport, rcvbuf " .  $self->{'usock'}->sockopt(SO_RCVBUF)
+        	 . " sndbuf " . $self->{'usock'}->sockopt(SO_SNDBUF) . "\n";
+        
+        $self->{'state'} = 'connected';
+        return 1;
+}
+
+sub set_destination($$$)
+{
+        my($self, $hostport, $peer_call) = @_;
+        
+	my($host, $port) = split(':', $hostport); # TODO: ipv6...
+	
+	my $hisiaddr = inet_aton($host) || die "unknown host";
+	my $hispaddr = sockaddr_in($port, $hisiaddr);
+	
+	$self->{'dest'} = $hispaddr;
+	$self->{'peer_call'} = $hispaddr;
+}
+
+sub unbind($)
+{
+	my($self) = @_;
+	
+	undef $self->{'usock'};
+}
+
+sub send_udp_packet($$)
+{
+	my($self, $data) = @_;
+	
+	return undef if ($self->{'state'} ne 'connected');
+	
+	#warn "sending\n";
+	my $ret = $self->{'usock'}->send($data, 0, $self->{'dest'});
+	if (!$ret) {
+		$self->{'error'} = "Failed to send an UDP packet: $!";
+	}
+	return $ret;
+}
+
+sub is2_corepeer_negotiate($)
+{
+        my($self) = @_;
+        my $hello = "# PEER2 v 2 hello " . $self->{'mycall'} . " vers perl-is1 1.0 token hq736t7q63";
+        if (!$self->send_udp_packet($hello)) {
+        	return undef;
+        }
+	while (!$self->is2_corepeer_linked()) {
+		my $packet = $self->is2_udp_frame_in(10);
+	}
+        return 1;
+}
+
+sub is2_corepeer_linked($)
+{
+	my($self) = @_;
+
+	return (defined $self->{'corepeer-ok-tx'} && ($self->{'corepeer-ok-rx'}));
+}
 
 
 =head1 aprspass($callsign)

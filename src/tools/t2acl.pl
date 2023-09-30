@@ -53,7 +53,7 @@ sub isip6 {
 	
 	$s = "";
 	foreach $w (@l) {
-		if ($w =~ /[0-9a-f]{1-4}/) { return ""; }
+	        if ($w !~ /^[0-9a-f]{1,4}$/) { return ""; }
 		$repl = '0' x (4 - length($w));
 		$s .= pack("H4", "$repl$w");
 	}

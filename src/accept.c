@@ -1221,9 +1221,10 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 		c->state   = CSTATE_CONNECTED;
 
 		/* use the default login handler */
-		if (c->flags & CLFLAGS_IS2)
+		if (c->flags & CLFLAGS_IS2) {
+			is2_allocate_obuf(c);
 			c->is2_input_handler = &is2_input_handler;
-		else
+		} else
 			c->handler_line_in = &incoming_handler;
 
 		strncpy(c->username, username->valuestring, sizeof(c->username));
@@ -1233,9 +1234,10 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 		c->state   = CSTATE_LOGIN;
 		
 		/* use the default login handler */
-		if (c->flags & CLFLAGS_IS2)
+		if (c->flags & CLFLAGS_IS2) {
+			is2_allocate_obuf(c);
 			c->is2_input_handler = &is2_input_handler_login;
-		else
+		} else
 			c->handler_line_in = &login_handler;
 	} else {
 		hlog(LOG_ERR, "Live upgrade: Client %s is in invalid state '%s' (fd %d)", l->addr_s, state->valuestring, l->fd);

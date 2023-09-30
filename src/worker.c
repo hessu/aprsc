@@ -1598,6 +1598,7 @@ static void collect_new_clients(struct worker_t *self)
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d xfd %p", self->id, c->udpclient->fd, c->xfd);
 			}
 			
+			is2_allocate_obuf(c);
 			c->handler_client_readable = &handle_corepeer_readable;
 			c->write_packet = &udp_client_write_packet;
 			c->write = &udp_client_write;
@@ -1727,6 +1728,10 @@ static void send_keepalives(struct worker_t *self)
 			if (c->corepeer_is2 && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
 				c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;
 				is2_corepeer_propose(self, c);
+			}
+			if (c->corepeer_is2 && c->is2_obuf_packets) {
+				if (is2_corepeer_obuf_flush(self, c) < 0)
+					continue;
 			}
 			
 			continue;

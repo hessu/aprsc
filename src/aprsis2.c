@@ -57,7 +57,7 @@ static void *is2_allocate_buffer(int len)
 }
 #endif
 
-static void is2_allocate_obuf(struct client_t *c)
+void is2_allocate_obuf(struct client_t *c)
 {
 	// deallocated in client_free()
 	c->is2_obuf = hmalloc(APRSIS2_OBUF_SIZE);
@@ -961,6 +961,59 @@ int is2_obuf_flush(struct worker_t *self, struct client_t *c)
 	return ret;
 }
 
+int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
+{
+	//hlog(LOG_DEBUG, "%s/%s: IS2 corepeer: flushing obuf of %d bytes, %d packets", c->addr_rem, c->username, c->is2_obuf_end, c->is2_obuf_packets);
+
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	ProtobufCBinaryData data[APRSIS2_OBUF_PACKETS];
+
+	Aprsis2__ISPacket **subs = hmalloc(sizeof(Aprsis2__ISPacket*) * c->is2_obuf_packets);
+	int current_obuf_ofs = 0;
+	for (int i = 0; i < c->is2_obuf_packets; i++) {
+		//hlog(LOG_DEBUG, "packing packet %d", i);
+		data[i].len = c->is2_obuf_packet_lengths[i];
+		data[i].data = (uint8_t *) &c->is2_obuf[current_obuf_ofs];
+		current_obuf_ofs += c->is2_obuf_packet_lengths[i];
+
+		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
+		aprsis2__ispacket__init(subs[i]);
+		subs[i]->has_type = 1;
+		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
+		subs[i]->has_is_packet_data = 1;
+		subs[i]->is_packet_data = data[i];
+	}
+	
+	m.has_type = 1;
+	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
+	m.n_is_packet = c->is2_obuf_packets;
+	m.is_packet = subs;
+	
+	int ret = is2_corepeer_write_message(self, c, &m);
+	
+	is2_free_encoded_packets(&m);
+	c->is2_obuf_end = 0;
+	c->is2_obuf_packets = 0;
+	
+	return ret;
+}
+
+static int is2_append_obuf_packet(struct client_t *c, char *p, int len)
+{
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet of %d bytes to obuf", c->addr_rem, c->username, len);
+	if (c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
+		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet of %d bytes in obuf", c->addr_rem, c->username, len);
+		return -12; // TODO: is this the correct return code?
+	}
+
+	memcpy(c->is2_obuf + c->is2_obuf_end, p, len);
+	c->is2_obuf_packet_lengths[c->is2_obuf_packets] = len;
+	c->is2_obuf_packets++;
+	c->is2_obuf_end += len;
+
+	return 0;
+}
+
 int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
 {
 	// trim away CR/LF
@@ -972,18 +1025,7 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
 			return write_ret;
 	}
 
-	if (c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
-		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet of %d bytes in obuf", c->addr_rem, c->username, len);
-		return -12; // TODO: is this the correct return code?
-	}
-
-	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet of %d bytes to obuf", c->addr_rem, c->username, len);
-
-	memcpy(c->is2_obuf + c->is2_obuf_end, p, len);
-	c->is2_obuf_packet_lengths[c->is2_obuf_packets] = len;
-	c->is2_obuf_packets++;
-	c->is2_obuf_end += len;
-	return 0;
+	return is2_append_obuf_packet(c, p, len);
 }
 
 /*
@@ -997,17 +1039,13 @@ int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, char *p
 	/* trim away CR/LF */
 	len = len - 2;
 	
-	//hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
-	
-	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	ProtobufCBinaryData data;
-	is2_encode_packet(&m, &data, p, len);
-	
-	int ret = is2_corepeer_write_message(self, c, &m);
-	
-	is2_free_encoded_packets(&m);
-	
-	return ret;
+	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
+		int write_ret = is2_corepeer_obuf_flush(self, c);
+		if (write_ret < 0)
+			return write_ret;
+	}
+
+	return is2_append_obuf_packet(c, p, len);
 }
 
 
@@ -1087,6 +1125,7 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 	if (strcmp(peer_id, c->username) != 0) {
 		hlog(LOG_ERR, "%s/%s: IS2 UDP: PeerGroup config peer ID mismatch with ID reported by peer '%s'",
 			c->addr_rem, c->username, peer_id);
+		return -1;
 	}
 	
 	if (strcasecmp(argv[6], "vers") != 0) {
@@ -1119,7 +1158,7 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		
 		if (!c->corepeer_is2) {
 			// If we're not yet in IS2 mode ourself, offer again soon
-			c->next_is2_peer_offer = tick + 3 + random() % 5;
+			c->next_is2_peer_offer = tick + 1;
 		}
 		
 		return c->write(self, c, buf, l);

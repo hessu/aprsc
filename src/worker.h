@@ -143,6 +143,8 @@ struct pbuf_t {
 	char symbol[3]; /* 2(+1) chars of symbol, if any, NUL for not found */
 	char is_free;   /* 1: in global free list, 0: not in global free list */
 
+	Aprsis2__ISPacket is2packet;
+
 	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };
 

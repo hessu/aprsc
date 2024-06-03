@@ -95,7 +95,6 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2_
 static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	m->sequence = c->corepeer_is2_sequence++;
-	m->has_sequence = 1;
 	
 	int len = aprsis2__is2_message__get_packed_size(m);
 	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
@@ -126,7 +125,6 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 	sig.features = NULL;
 	
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	m.has_type = 1;
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__SERVER_SIGNATURE;
 	m.server_signature = &sig;
 	
@@ -140,15 +138,11 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
 int is2_out_login_reply(struct worker_t *self, struct client_t *c, Aprsis2__IS2LoginReply__LoginResult result, Aprsis2__IS2LoginReply__LoginResultReason reason, Aprsis2__VerificationStatus verified)
 {
 	Aprsis2__IS2LoginReply lr = APRSIS2__IS2_LOGIN_REPLY__INIT;
-	lr.has_result = 1;
-	lr.has_result_code = 1;
-	lr.has_verified = 1;
 	lr.result = result;
 	lr.result_code = reason;
 	lr.verified = verified;
 
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	m.has_type = 1;
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REPLY;
 	m.login_reply = &lr;
 	
@@ -242,7 +236,6 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	lr.features_req = NULL;
 	
 	Aprsis2__IS2Message mr = APRSIS2__IS2_MESSAGE__INIT;
-	mr.has_type = 1;
 	mr.type = APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REQUEST;
 	mr.login_request = &lr;
 	
@@ -474,8 +467,8 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 		
 		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
 		
-		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->has_is_packet_data) {
-			incoming_handler(self, c, IPPROTO_TCP, (char *)p->is_packet_data.data, p->is_packet_data.len);
+		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->is_packet_data.len > 0) {
+			incoming_handler(self, c, c->ai_protocol, (char *)p->is_packet_data.data, p->is_packet_data.len);
 		}
 	}
 	
@@ -510,14 +503,10 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
 	
 	Aprsis2__IS2KeepalivePing ping = APRSIS2__IS2_KEEPALIVE_PING__INIT;
 	ping.ping_type = APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REQUEST;
-	ping.has_ping_type = 1;
 	ping.request_id = c->ping_request_id = random();
-	ping.has_request_id = 1;
 	ping.request_data = rdata;
-	ping.has_request_data = 1;
 	
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	m.has_type = 1;
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING;
 	m.keepalive_ping = &ping;
 	
@@ -624,13 +613,9 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 	
 	/* prepare reply message */
 	Aprsis2__IS2Parameter prep = APRSIS2__IS2_PARAMETER__INIT;
-	prep.has_type = 1;
 	prep.type = APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_FAILED;
-	prep.has_request_id = par->has_request_id;
-	if (prep.has_request_id)
-		prep.request_id = par->request_id;
+	prep.request_id = par->request_id;
 	Aprsis2__IS2Message rm = APRSIS2__IS2_MESSAGE__INIT;
-	rm.has_type = 1;
 	rm.type = APRSIS2__IS2_MESSAGE__TYPE__PARAMETER;
 	rm.parameter = &prep;
 	
@@ -676,7 +661,7 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
 /*
  *	IS2 input handler, when waiting for a login command
  */
- 
+
 int is2_input_handler_login(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	switch (m->type) {
@@ -880,13 +865,10 @@ static int is2_encode_packet(Aprsis2__IS2Message *m, ProtobufCBinaryData *data, 
 		//hlog(LOG_DEBUG, "packing packet %d", i);
 		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
 		aprsis2__ispacket__init(subs[i]);
-		subs[i]->has_type = 1;
 		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
-		subs[i]->has_is_packet_data = 1;
 		subs[i]->is_packet_data = *data;
 	}
 	
-	m->has_type = 1;
 	m->type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
 	m->n_is_packet = n;
 	m->is_packet = subs;
@@ -941,13 +923,10 @@ int is2_obuf_flush(struct worker_t *self, struct client_t *c)
 
 		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
 		aprsis2__ispacket__init(subs[i]);
-		subs[i]->has_type = 1;
 		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
-		subs[i]->has_is_packet_data = 1;
 		subs[i]->is_packet_data = data[i];
 	}
 	
-	m.has_type = 1;
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
 	m.n_is_packet = c->is2_obuf_packets;
 	m.is_packet = subs;
@@ -978,13 +957,10 @@ int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
 
 		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
 		aprsis2__ispacket__init(subs[i]);
-		subs[i]->has_type = 1;
 		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
-		subs[i]->has_is_packet_data = 1;
 		subs[i]->is_packet_data = data[i];
 	}
 	
-	m.has_type = 1;
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
 	m.n_is_packet = c->is2_obuf_packets;
 	m.is_packet = subs;

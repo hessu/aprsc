@@ -2,12 +2,13 @@ Source: aprsc
 Section: hamradio
 Priority: extra
 Maintainer: Heikki Hannikainen <hessu@hes.iki.fi>
-Build-Depends: debhelper (>= 4), fakeroot (>= 1), lsb-release (>= 3), lsb-base (>= 3), libevent-dev, libssl-dev, libcap-dev, libz-dev, libsctp-dev
+Build-Depends: debhelper (>= 4), fakeroot (>= 1), lsb-release (>= 3), lsb-base (>= 3), libevent-dev, libssl-dev, libcap-dev, libz-dev, libsctp-dev,
+    libprotobuf-c-dev, protobuf-c-compiler
 Standards-Version: 3.7.2
 
 Package: aprsc
 Architecture: any
-Depends: ${shlibs:Depends}, adduser (>= 2), libwww-perl (>= 5), libjson-xs-perl (>= 2), libcap2-bin (>= 2), libsctp1 (>= 1)
+Depends: ${shlibs:Depends}, adduser (>= 2), libwww-perl (>= 5), libjson-xs-perl (>= 2), libcap2-bin (>= 2), libsctp1 (>= 1), libprotobuf-c
 Description: APRS-IS server
  aprsc is an APRS-IS server intended to be used on core and Tier2 servers.
  .

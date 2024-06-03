@@ -75,10 +75,7 @@ binary-arch: build install
 #	dh_installmime
 #	dh_python
 	dh_installinit
-	# this will work on ubuntu 18.04: dh_installsystemd
-	# but in the mean time:
-	cp -p $(CURDIR)/debian/aprsc@.service $(CURDIR)/debian/aprsc/lib/systemd/system/aprsc@.service
-	cp -p $(CURDIR)/debian/aprsc-chroot.service $(CURDIR)/debian/aprsc/lib/systemd/system/aprsc-chroot.service
+	dh_installsystemd
 #	dh_installcron
 #	dh_installinfo
 	dh_installman

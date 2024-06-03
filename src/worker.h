@@ -11,7 +11,9 @@
 #ifndef WORKER_H
 #define WORKER_H
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #ifndef __USE_UNIX98
 #define __USE_UNIX98 /* to get PTHREAD_MUTEX_RECURSIVE on Linux */
 #endif

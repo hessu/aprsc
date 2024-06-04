@@ -20,8 +20,7 @@ configure-stamp:
 		CC="gcc" \
 		CFLAGS="${CFLAGS}" \
 		AFLAGS="${CFLAGS} --noexecstack" \
-		LDFLAGS="${CFLAGS} -z noexecstack" \
-		--with-openssl
+		LDFLAGS="${CFLAGS} -z noexecstack"
 	touch configure-stamp
 
 

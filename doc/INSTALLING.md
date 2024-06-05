@@ -8,7 +8,7 @@ aprsc is "officially" "supported" on the following platforms:
 * Debian oldstable (11.0, "bullseye"): i386, x86_64
 * Debian oldoldstable (10.0, "buster"): i386, x86_64
 * Ubuntu LTS (20.04, 22.04, 24.04): x86_64
-* Fedora Core 38 and 40: x86_64
+* Fedora Core 39 and 40: x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
 anything newer than that.
@@ -132,7 +132,7 @@ any warnings or errors.
 Fedora Core: Installing using dnf
 ------------------------------------
 
-This installation procedure has only been tested on Fedora 38 and 40.
+This installation procedure has only been tested on Fedora 39 and 40.
 Builds are only available for x86\_64 currently.
 
 The following commands assume you're running them as a regular user, and the

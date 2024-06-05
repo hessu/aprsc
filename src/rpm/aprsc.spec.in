@@ -7,6 +7,7 @@ Group: Hamradio
 URL: https://groups.google.com/forum/#!forum/aprsc
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildRequires: systemd
 
 %description
 
@@ -46,16 +47,14 @@ mkdir -p $RPM_BUILD_ROOT/opt/aprsc/data
 mkdir -p $RPM_BUILD_ROOT/opt/aprsc/web
 mkdir -p $RPM_BUILD_ROOT/opt/aprsc/logs
 mkdir -p $RPM_BUILD_ROOT/opt/aprsc/dev
-mkdir -p $RPM_BUILD_ROOT/etc/init.d
-mkdir -p $RPM_BUILD_ROOT/etc/sysconfig
 mkdir -p $RPM_BUILD_ROOT%{_mandir}/man8
+mkdir -p $RPM_BUILD_ROOT%{_unitdir}
 
 cd src
 
 make install DESTDIR=$RPM_BUILD_ROOT
 
-install -m 755 rpm/aprsc.init    $RPM_BUILD_ROOT/etc/init.d/aprsc
-install -m 755 debian/aprsc.default $RPM_BUILD_ROOT/etc/sysconfig/aprsc
+install -m 755 debian/aprsc.service debian/aprsc@.service debian/aprsc-chroot.service $RPM_BUILD_ROOT%{_unitdir}
 
 gzip -9 $RPM_BUILD_ROOT/%{_mandir}/man8/*
 
@@ -71,8 +70,7 @@ rm -rf $RPM_BUILD_ROOT
 %doc doc/TODO
 %doc %{_mandir}/man8/aprsc.8.gz
 %config(noreplace) /opt/aprsc/etc/aprsc.conf
-%config(noreplace) /etc/init.d/aprsc
-%config(noreplace) /etc/sysconfig/aprsc
+%{_unitdir}/*.service
 /opt/aprsc/sbin/aprsc
 /opt/aprsc/sbin/aprsc_munin
 /opt/aprsc/sbin/aprsc-prepare-chroot.sh
@@ -121,10 +119,6 @@ munin_config() {
 	fi
 }
 
-init_chkconf() {
-	chkconfig aprsc on
-}
-
 create_lib_mountpoints() {
 	if [ -h /opt/aprsc/lib64 ]; then
 		rm /opt/aprsc/lib64
@@ -144,8 +138,6 @@ setup_chroot_devices
 #apparmor_config
 munin_config
 create_lib_mountpoints
-init_chkconf
-
 
 %changelog
 * Sat Jan 12 2008 Matti Aarnio - OH2MQK - KP20NG <oh2mqk@sral.fi> - 

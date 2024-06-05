@@ -101,6 +101,7 @@ fix_permissions() {
 }
 
 setup_chroot_devices() {
+	mkdir -p /opt/aprsc/dev
 	( cd /opt/aprsc/dev && cp -a /dev/urandom /dev/random /dev/null /dev/zero . )
 }
 

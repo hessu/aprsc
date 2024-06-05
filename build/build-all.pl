@@ -17,6 +17,8 @@ my @platforms = (
 	'debian-110-amd64',
 	'debian-120-amd64',
 	'centos-70-x86_64',
+	'fedora-39-x86_64',
+	'fedora-40-x86_64',
 );
 
 my %platconf = (
@@ -27,11 +29,13 @@ my %platconf = (
 	'centos-70-x86_64' => {
 		'dest' => 'centos/7/x86_64'
 	},
-	'centos-63-i686' => {
-		'dest' => 'centos/6/i386'
+	'fedora-39-x86_64' => {
+		'virtualisation' => 'lxd',
+		'dest' => 'fedora/39/x86_64'
 	},
-	'centos-63-x86_64' => {
-		'dest' => 'centos/6/x86_64'
+	'fedora-40-x86_64' => {
+		'virtualisation' => 'lxd',
+		'dest' => 'fedora/40/x86_64'
 	},
 	'ubuntu-1804-amd64' => {
 		'virtualisation' => 'lxd'
@@ -295,7 +299,7 @@ sub build($$)
 	print "Building $plat on $vm:\n";
 	
 	vm_up($plat, $vm);
-	if ($plat =~ /centos/) {
+	if ($plat =~ /(centos|fedora)/) {
 		vm_build_rpm($vm, $plat, $tgz);
 	} else {
 		vm_build($vm, $plat, $tgz);

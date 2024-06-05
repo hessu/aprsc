@@ -8,7 +8,7 @@ aprsc is "officially" "supported" on the following platforms:
 * Debian oldstable (11.0, "bullseye"): i386, x86_64
 * Debian oldoldstable (10.0, "buster"): i386, x86_64
 * Ubuntu LTS (18.04, 20.04, 22.04): x86_64
-* CentOS 7: x86_64
+* Fedora Core 38 and 40: x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
 anything newer than that.
@@ -122,93 +122,50 @@ To perform a restart:
     sudo systemctl restart aprsc
 
 
-Startup the old-fashioned way
---------------------------------
-
-To enable startup, edit /etc/default/aprsc and change STARTAPRSC="no" to
-"yes". There should not be any need to touch the other options at this time.
-
-Start it up:
-
-    sudo service aprsc start
-
-To shut it down:
-
-    sudo service aprsc stop
-
-To perform a restart:
-
-    sudo service aprsc restart
-
-When STARTAPRSC is set to YES in the /etc/default/aprsc file it will
-automatically start up when the system boots.  You'll find it's log file in
-/opt/aprsc/logs/aprsc.log.  Log rotation is already configured in
-aprsc.conf.
+You'll find it's log file in /opt/aprsc/logs/aprsc.log.  Log rotation is
+already configured in aprsc.conf.
 
 After startup, look at the log file for startup messages, watch out for
 any warnings or errors.
 
 
-CentOS: Installing using yum
--------------------------------
+Fedora Core: Installing using dnf
+------------------------------------
 
-This installation procedure has only been tested on CentOS 6.8 and 7.0. It
-should probably work from 6.0 to 6.8 on both i386 and x86\_64 platforms. 7.0
-builds are only available for x86\_64 currently.
+This installation procedure has only been tested on Fedora 38 and 40.
+Builds are only available for x86\_64 currently.
 
 The following commands assume you're running them as a regular user, and the
 sudo tool is used to run individual commands as root.  sudo will ask you for
 your password.
 
-As the first step, please configure aprsc's package repository in yum by
+As the first step, please configure aprsc's package repository in dnf by
 downloading the .repo configuration file and installing it.  The first
 command installs curl (if you don't have it already), and the second command
 uses curl to download the repository configuration to the right place.
 
-    sudo yum install curl
-    sudo curl -o /etc/yum.repos.d/aprsc.repo http://he.fi/aprsc/down/aprsc-centos.repo
+    sudo dnf install curl
+    sudo curl -o /etc/yum.repos.d/aprsc.repo http://he.fi/aprsc/down/aprsc-fedora.repo
 
 Then, install aprsc:
 
-    sudo yum install aprsc
+    sudo dnf install aprsc
 
 Whenever a new aprsc version is available, the upgrade can be performed
 automatically by running the upgrade command.  Your operating system can
 also be configured to upgrade packages automatically, or instruct you to
 upgrade when upgrades are available.
 
-    sudo yum upgrade
+    sudo dnf upgrade
 
 If aprsc upgrades happen very often (many times per day), you might have to
-tell yum to expire it's cache before executing the upgrade command:
+tell dnf to expire it's cache before executing the upgrade command:
 
-    sudo yum clean expire-cache
+    sudo dnf clean expire-cache
 
 Before starting aprsc edit the configuration file, which can be found in
 /opt/aprsc/etc/aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)
 document for instructions.
 
-To enable startup, edit /etc/sysconfig/aprsc and change STARTAPRSC="no" to
-"yes". There should not be any need to touch the other options at this time.
-
-Start it up:
-
-    sudo /etc/init.d/aprsc start
-
-To shut it down:
-
-    sudo /etc/init.d/aprsc stop
-
-To perform a restart after upgrading aprsc:
-
-    sudo /etc/init.d/aprsc restart
-
-When STARTAPRSC is set to YES in the /etc/sysconfig/aprsc file it will
-automatically start up when the system boots.  You'll find it's log file in
-/opt/aprsc/logs/aprsc.log.  Log rotation is already configured in
-aprsc.conf.
-
-After startup, look at the log file for startup messages, watch out for
-any warnings or errors.
-
+Then proceed with the "Startup with systemd" instructions above.
 

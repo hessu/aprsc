@@ -31,7 +31,7 @@ cd src
 	LDFLAGS="-g ${RPM_OPT_FLAGS} -z noexecstack"
 touch configure-stamp
 
-make
+make -j3
 
 rm -f build-stamp configure-stamp
 

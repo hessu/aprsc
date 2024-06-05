@@ -49,6 +49,11 @@ library, and compiling against it requires it's development headers
 For build a .deb package on Debian 11 debhelper, libssl-dev and libsctp-dev
 are also currently required and can be installed with apt.
 
+On Fedora Core, the following packages are required:
+
+    sudo dnf install @development-tools fedora-packager rpmdevtools \
+        libevent-devel openssl-devel lksctp-tools-devel \
+        protobuf-c-compiler protobuf-c-devel libcap-devel
 
 Building a .deb package
 --------------------------

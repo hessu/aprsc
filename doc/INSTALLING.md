@@ -59,21 +59,39 @@ versions and their codenames:
 
 Other versions are currently not supported.
 
-Next, add the following line in the end of your /etc/apt/sources.list file:
+Next, create a file called `/etc/apt/sources.list.d/aprsc.list` using your
+favourite text editor, and add the following line in it:
 
     deb http://aprsc-dist.he.fi/aprsc/apt DISTRIBUTION main
 
 Naturally, DISTRIBUTION needs to be replaced with your distributions
-codename (squeeze, or whatever).  You should see the codename appearing on
-other similar "deb" lines in sources.list.
+codename (bookworm, or whatever).  You should see the codename appearing on
+other similar "deb" lines in /etc/apt/sources.list.  It is possible to add
+the `deb` line in `sources.list` instead of `aprsc.list`, but having a
+separate file for additional repositories is preferable.
 
-Editing sources.list requires root privileges.  The following commands assume
-you're running them as a regular user, and the sudo tool is used to run
-individual commands as root.  sudo will ask you for your password.
+Editing sources.list.d files requires root privileges.  The following
+commands assume you're running them as a regular user, and the sudo tool is
+used to run individual commands as root.  sudo will ask you for your
+password.
 
 Next, add the gpg key used to sign the packages by running the following
 commands at your command prompt.  This will enable strong authentication of
 the aprsc packages - apt-get will cryptographically validate them.
+
+On newer distributions, such as Debian 12.0 and Ubuntu 22.04, where the
+`/etc/apt/trusted.gpg.d` directory is present, run the following commands:
+
+    gpg --keyserver keyserver.ubuntu.com --recv C51AA22389B5B74C3896EF3CA72A581E657A2B8D
+    sudo gpg --export C51AA22389B5B74C3896EF3CA72A581E657A2B8D > /etc/apt/trusted.gpg.d/aprsc.key.gpg
+
+If you get a warning saying `Key is stored in legacy trusted.gpg keyring`,
+it can be deleted from there like this:
+
+    sudo apt-key del C51AA22389B5B74C3896EF3CA72A581E657A2B8D
+
+On older distributions where `trusted.gpg.d` directory is not present, use
+the following commands instead:
 
     gpg --keyserver keyserver.ubuntu.com --recv C51AA22389B5B74C3896EF3CA72A581E657A2B8D
     gpg --export C51AA22389B5B74C3896EF3CA72A581E657A2B8D | sudo apt-key add -

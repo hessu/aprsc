@@ -955,9 +955,9 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	self->client_count--;
 }
 
-int udp_client_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+int udp_client_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	return udp_client_write(self, c, p, len-2);
+	return udp_client_write(self, c, pb->data, pb->packet_len-2);
 }
 
 int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
@@ -1061,11 +1061,6 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	
 	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
 	
-	/* a TCP client with a udp downstream socket? */
-	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
-		return udp_client_write_packet(self, c, p, len);
-	}
-	
 	/* Count the number of writes towards this client,  the keepalive
 	   manager monitors this counter to determine if the socket should be
 	   kept in BUFFERED mode, or written immediately every time.
@@ -1137,6 +1132,16 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	xpoll_outgoing(&self->xp, c->xfd, 1);
 	
 	return len; 
+}
+
+static int aprsis_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	/* a TCP client with a udp downstream socket? */
+	if (c->udp_port && c->udpclient) {
+		return udp_client_write_packet(self, c, pb);
+	}
+	
+	return c->write(self, c, pb->data, pb->packet_len);
 }
 
 /*
@@ -1641,7 +1646,7 @@ static void collect_new_clients(struct worker_t *self)
 			c->write_packet = &is2_write_packet;
 		} else {
 			c->handler_consume_input = &deframe_aprsis_input_lines;
-			c->write_packet = c->write;
+			c->write_packet = &aprsis_write_packet;
 		}
 		
 		/* The new client may end up destroyed right away, never mind it here.
@@ -1671,6 +1676,7 @@ static void collect_new_clients(struct worker_t *self)
 	hlog( LOG_DEBUG, "Worker %d accepted %d new clients, %d new connections, now total %d clients",
 	      self->id, i, self->xp.pollfd_used - n, self->client_count );
 }
+
 
 /* 
  *	Send keepalives to client sockets, run this once a second

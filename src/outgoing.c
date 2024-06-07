@@ -25,7 +25,7 @@
  *	should have a copy
  */
 
-static inline void send_single(struct worker_t *self, struct client_t *c, char *data, int len)
+static inline void send_single(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	/* if we're going to use the UDP sidechannel, account for UDP, otherwise
 	 * its TCP or SCTP or something.
@@ -35,7 +35,7 @@ static inline void send_single(struct worker_t *self, struct client_t *c, char *
 	else
 		clientaccount_add_tx( c, c->ai_protocol, 0, 1);
 	
-	c->write_packet(self, c, data, len);
+	c->write_packet(self, c, pb);
 }
 
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
@@ -62,6 +62,8 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 			/* if we have any dupe clients at all, generate a version with "dup\t"
 			 * prefix to avoid regular clients processing dupes
 			 */
+			/*
+			TODO: Fix dupe clients support for IS2 changes
 			char dupe_sendbuf[PACKETLEN_MAX+7];
 			memcpy(dupe_sendbuf, "dup\t", 4);
 			memcpy(dupe_sendbuf + 4, pb->data, pb->packet_len);
@@ -71,6 +73,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 				cnext = c->class_next; // client_write() MAY destroy the client object!
 				send_single(self, c, dupe_sendbuf, dupe_len);
 			}
+			*/
 		}
 		
 		/* Check if I have the client which sent this dupe, and
@@ -92,7 +95,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		for (c = self->clients_ups; (c); c = cnext) {
 			cnext = c->class_next; // client_write() MAY destroy the client object!
 			if (c != origin)
-				send_single(self, c, pb->data, pb->packet_len);
+				send_single(self, c, pb);
 		}
 	}
 	
@@ -125,7 +128,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		if (c->no_tx)
 			continue;
 		
-		send_single(self, c, pb->data, pb->packet_len);
+		send_single(self, c, pb);
 	}
 }
 

@@ -60,9 +60,9 @@ static void *is2_allocate_buffer(int len)
 void is2_allocate_obuf(struct client_t *c)
 {
 	// deallocated in client_free()
-	c->is2_obuf = hmalloc(APRSIS2_OBUF_SIZE);
+	c->is2_obuf = hmalloc(APRSIS2_OBUF_PACKETS * sizeof(struct pbuf_t *));
 	c->is2_obuf_packets = 0;
-	c->is2_obuf_end = 0;
+	c->is2_obuf_total_len = 0;
 }
 
 /*
@@ -848,11 +848,23 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 }
 
 /*
+ *	Prepare a pbuf to have an IS2 formatted packet, when handling an incoming packet
+ */
+
+void is2_pbuf_init_packet(struct pbuf_t *pb)
+{
+	aprsis2__ispacket__init(&pb->is2packet);
+	pb->is2packet.type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
+	pb->is2packet.is_packet_data.data = (uint8_t *)pb->data;
+	pb->is2packet.is_packet_data.len = pb->packet_len - 2; /* skip CR/LF */
+}
+
+/*
  *	Write a single packet to a client.
  *
  *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
  */
-
+/*
 static int is2_encode_packet(Aprsis2__IS2Message *m, ProtobufCBinaryData *data, char *p, int len)
 {
 	data->data = (uint8_t *)p;
@@ -875,16 +887,7 @@ static int is2_encode_packet(Aprsis2__IS2Message *m, ProtobufCBinaryData *data, 
 	
 	return i;
 }
-
-void is2_free_encoded_packets(Aprsis2__IS2Message *m)
-{
-	int i;
-	
-	for (i = 0; i < m->n_is_packet; i++)
-		hfree(m->is_packet[i]);
-		
-	hfree(m->is_packet);
-}
+*/
 
 /* 
 int is2_write_packet_unbuffered(struct worker_t *self, struct client_t *c, char *p, int len)
@@ -908,100 +911,65 @@ int is2_write_packet_unbuffered(struct worker_t *self, struct client_t *c, char 
 
 int is2_obuf_flush(struct worker_t *self, struct client_t *c)
 {
-	//hlog(LOG_DEBUG, "%s/%s: IS2: flushing obuf of %d bytes, %d packets", c->addr_rem, c->username, c->is2_obuf_end, c->is2_obuf_packets);
+	//hlog(LOG_DEBUG, "%s/%s: IS2: flushing obuf of %d packets, %d bytes", c->addr_rem, c->username, c->is2_obuf_packets, c->is2_obuf_total_len);
 
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	ProtobufCBinaryData data[APRSIS2_OBUF_PACKETS];
 
-	Aprsis2__ISPacket **subs = hmalloc(sizeof(Aprsis2__ISPacket*) * c->is2_obuf_packets);
-	int current_obuf_ofs = 0;
-	for (int i = 0; i < c->is2_obuf_packets; i++) {
-		//hlog(LOG_DEBUG, "packing packet %d", i);
-		data[i].len = c->is2_obuf_packet_lengths[i];
-		data[i].data = (uint8_t *) &c->is2_obuf[current_obuf_ofs];
-		current_obuf_ofs += c->is2_obuf_packet_lengths[i];
-
-		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
-		aprsis2__ispacket__init(subs[i]);
-		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
-		subs[i]->is_packet_data = data[i];
-	}
-	
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
 	m.n_is_packet = c->is2_obuf_packets;
-	m.is_packet = subs;
+	m.is_packet = c->is2_obuf;
 	
 	int ret = is2_write_message(self, c, &m);
 	
-	is2_free_encoded_packets(&m);
-	c->is2_obuf_end = 0;
 	c->is2_obuf_packets = 0;
+	c->is2_obuf_total_len = 0;
 	
 	return ret;
 }
 
 int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
 {
-	//hlog(LOG_DEBUG, "%s/%s: IS2 corepeer: flushing obuf of %d bytes, %d packets", c->addr_rem, c->username, c->is2_obuf_end, c->is2_obuf_packets);
+	//hlog(LOG_DEBUG, "%s/%s: IS2 corepeer: flushing obuf of %d packets, %d bytes", c->addr_rem, c->username, c->is2_obuf_packets, c->is2_obuf_total_len);
 
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	ProtobufCBinaryData data[APRSIS2_OBUF_PACKETS];
-
-	Aprsis2__ISPacket **subs = hmalloc(sizeof(Aprsis2__ISPacket*) * c->is2_obuf_packets);
-	int current_obuf_ofs = 0;
-	for (int i = 0; i < c->is2_obuf_packets; i++) {
-		//hlog(LOG_DEBUG, "packing packet %d", i);
-		data[i].len = c->is2_obuf_packet_lengths[i];
-		data[i].data = (uint8_t *) &c->is2_obuf[current_obuf_ofs];
-		current_obuf_ofs += c->is2_obuf_packet_lengths[i];
-
-		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
-		aprsis2__ispacket__init(subs[i]);
-		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
-		subs[i]->is_packet_data = data[i];
-	}
 	
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
 	m.n_is_packet = c->is2_obuf_packets;
-	m.is_packet = subs;
+	m.is_packet = c->is2_obuf;
 	
 	int ret = is2_corepeer_write_message(self, c, &m);
 	
-	is2_free_encoded_packets(&m);
-	c->is2_obuf_end = 0;
 	c->is2_obuf_packets = 0;
+	c->is2_obuf_total_len = 0;
 	
 	return ret;
 }
 
-static int is2_append_obuf_packet(struct client_t *c, char *p, int len)
+static int is2_append_obuf_packet(struct client_t *c, struct pbuf_t *pb)
 {
-	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet of %d bytes to obuf", c->addr_rem, c->username, len);
-	if (c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
-		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet of %d bytes in obuf", c->addr_rem, c->username, len);
+	// hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.is_packet_data.len);
+	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS) {
+		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet IS2 obuf", c->addr_rem, c->username);
 		return -12; // TODO: is this the correct return code?
 	}
 
-	memcpy(c->is2_obuf + c->is2_obuf_end, p, len);
-	c->is2_obuf_packet_lengths[c->is2_obuf_packets] = len;
+	c->is2_obuf[c->is2_obuf_packets] = &pb->is2packet;
 	c->is2_obuf_packets++;
-	c->is2_obuf_end += len;
+	c->is2_obuf_total_len += pb->is2packet.is_packet_data.len;
 
 	return 0;
 }
 
-int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	// trim away CR/LF
-	len = len - 2;
-	
-	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
+	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS
+	    || c->is2_obuf_total_len + pb->is2packet.is_packet_data.len >= APRSIS2_OBUF_MAX_LENGTH) {
 		int write_ret = is2_obuf_flush(self, c);
 		if (write_ret < 0)
 			return write_ret;
 	}
 
-	return is2_append_obuf_packet(c, p, len);
+	return is2_append_obuf_packet(c, pb);
 }
 
 /*
@@ -1010,18 +978,15 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, char *p, int len
  *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
  */
 
-int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, char *p, int len)
+int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	/* trim away CR/LF */
-	len = len - 2;
-	
-	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_end + len >= APRSIS2_OBUF_SIZE) {
+	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_total_len >= APRSIS2_OBUF_MAX_LENGTH) {
 		int write_ret = is2_corepeer_obuf_flush(self, c);
 		if (write_ret < 0)
 			return write_ret;
 	}
 
-	return is2_append_obuf_packet(c, p, len);
+	return is2_append_obuf_packet(c, pb);
 }
 
 

@@ -283,7 +283,7 @@ struct client_udp_t {			/* UDP services can be available at multiple
 #endif
 
 #define APRSIS2_OBUF_PACKETS 20
-#define APRSIS2_OBUF_SIZE 2048
+#define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of packets in IS2 obuf */
 
 struct client_t {
 	struct client_t *next;
@@ -379,7 +379,7 @@ struct client_t {
 	int	(*is2_input_handler) (struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *message);
 	int	(*handler_consume_input) (struct worker_t *self, struct client_t *c, int start_at);
 	int	(*write) (struct worker_t *self, struct client_t *c, char *p, int len);
-	int	(*write_packet) (struct worker_t *self, struct client_t *c, char *p, int len);
+	int	(*write_packet) (struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
 	
 	int	(*handler_client_readable) (struct worker_t *self, struct client_t *c);
 	int	(*handler_client_writable) (struct worker_t *self, struct client_t *c);
@@ -433,10 +433,9 @@ struct client_t {
 #endif
 	char filter_s[FILTER_S_SIZE];
 
-	char *is2_obuf;
-	int is2_obuf_packet_lengths[APRSIS2_OBUF_PACKETS];
+	Aprsis2__ISPacket **is2_obuf;
 	int is2_obuf_packets;
-	int is2_obuf_end;
+	int is2_obuf_total_len;
 
 	char *corepeer_is2_challenge;	/* IS2 handshake random token */
 	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */

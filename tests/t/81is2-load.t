@@ -53,7 +53,7 @@ my $txq_l = 0;
 my $start_t = time();
 
 while ($txl < $bytelimit) {
-	$s = "M" . ($txn % 10000 + 10) . ">APRS,qAR,$login_tx:!6028.51N/02505.68E# packet $txn blaa blaa blaa blaa END";
+	$s = "M" . ($txn % 10000 + 10) . ">APRS,qAR,$login_tx:!6028.51N/02505.68E# packet $txn " . ("A" x int(rand(150))) . " END";
 	push @l, $s;
 	my $sl = length($s);
 	$txl += $sl;

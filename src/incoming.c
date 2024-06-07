@@ -41,6 +41,7 @@
 #include "cellmalloc.h"
 #include "messaging.h"
 #include "dupecheck.h"
+#include "aprsis2.h"
 
 /* When adding labels here, remember to add the description strings in
  * web/aprsc.js rx_err_strings, and worker.h constants
@@ -1119,6 +1120,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
+
+	is2_pbuf_init_packet(pb);
 	
 	/* If the packet came in on a filtered port, mark the station as
 	 * heard on this port, so that messages can be routed to it.

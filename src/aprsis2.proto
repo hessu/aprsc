@@ -126,6 +126,9 @@ message ISPacket {
 		UNDEFINED = 0;
 		// Traditional APRS-IS format with embedded Q construct
 		IS_PACKET = 2;
+		// A duplicate copy of a packet, suppressed by dupe check
+		// algorithm
+		IS_PACKET_DUPLICATE = 3;
 	}
 	
 	// Identifies which message is filled in.

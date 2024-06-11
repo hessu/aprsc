@@ -206,14 +206,13 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	strncpy(c->app_version, sig->app_version, sizeof(c->app_version));
 	c->app_version[sizeof(c->app_version)-1] = 0;
 
-	/* TODO: enable by setting to 0 */
-	if (strcasecmp(sig->username, serverid) == 5) {
+	if (strcasecmp(sig->username, serverid) == 0) {
 		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, sig->username);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 		goto done;
 	}
 	
-	/* todo: validate server callsign with the q valid path algorithm */
+	/* TODO: validate server callsign with the q valid path algorithm */
 	
 	/* store the remote server's callsign as the "client username" */
 	strncpy(c->username, sig->username, sizeof(c->username));
@@ -332,8 +331,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	}
 	
 	/* make sure the client's callsign is not my Server ID */
-	// TODO: enable
-	if (strcasecmp(c->username, serverid) == 4) {
+	if (strcasecmp(c->username, serverid) == 0) {
 		hlog(LOG_WARNING, "%s: Invalid login string, username equals our serverid: '%s'", c->addr_rem, c->username);
 		//rc = client_printf(self, c, "# Login by user not allowed (our serverid)\r\n");
 		goto failed_login;
@@ -431,7 +429,6 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 		 */
 		shutdown(old_fd, SHUT_RDWR);
 	}
-	
 
 	return rc;
 

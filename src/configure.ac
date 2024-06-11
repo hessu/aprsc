@@ -69,7 +69,7 @@ AC_CHECK_HEADERS([sys/prctl.h], AC_DEFINE([HAVE_PRCTL_H], [], [Linux process con
 AC_SUBST(LIBCAP)
 AC_CHECK_LIB(cap,cap_init,[LIBCAP="-lcap"])
 
-dnl Check for 
+dnl Check for eventfd on Linux
 AC_CHECK_HEADERS([sys/eventfd.h], AC_DEFINE([HAVE_EVENTFD_H], [], [Linux event fd support]))
 
 dnl Checks for system headers
@@ -77,6 +77,9 @@ AC_CHECK_HEADERS([alloca.h],    AC_DEFINE([HAVE_ALLOCA_H]))
 AC_CHECK_HEADERS([poll.h],      AC_DEFINE([HAVE_POLL_H]))
 dnl AC_CHECK_FUNC(ppoll,,[Probably have ppoll of Linux])
 AC_CHECK_HEADERS([sys/epoll.h], AC_DEFINE([HAVE_SYS_EPOLL_H]))
+
+dnl Check for MacOS struct stat
+AC_CHECK_MEMBER([struct stat.st_mtimespec], AC_DEFINE([HAVE_STAT_ST_MTIMESPEC], [], [MacOS struct stat.st_mtimespec]))
 
 dnl SCTP checks
 AC_CHECK_HEADERS([netinet/sctp.h], AC_DEFINE([HAVE_NETINET_SCTP_H]))

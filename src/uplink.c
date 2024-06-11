@@ -80,11 +80,18 @@ void consider_res_init(void) {
 		hlog(LOG_WARNING, "Failed to stat " RESOLV_CONF_PATH ": %s", strerror(errno));
 		return;
 	}
-	if (resolvconf_mtim.tv_sec == resolvconf_stat.st_mtim.tv_sec
-	    && resolvconf_mtim.tv_nsec == resolvconf_stat.st_mtim.tv_nsec) {
+
+#ifdef HAVE_STAT_ST_MTIMESPEC
+#define ST_MTIMESPEC st_mtimespec
+#else
+#define ST_MTIMESPEC st_mtim
+#endif
+
+	if (resolvconf_mtim.tv_sec == resolvconf_stat.ST_MTIMESPEC.tv_sec
+	    && resolvconf_mtim.tv_nsec == resolvconf_stat.ST_MTIMESPEC.tv_nsec) {
 	    	return;
 	}
-	resolvconf_mtim = resolvconf_stat.st_mtim;
+	resolvconf_mtim = resolvconf_stat.ST_MTIMESPEC;
 
 	// only log on repeated inits; otherwise would be logged on every startup
 	if (resolvconf_reread)

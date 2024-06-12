@@ -365,11 +365,13 @@ sub send_packet($)
 	return 1;
 }
 
-sub get_packets($;$)
+sub get_packets($;$$)
 {
-	my($self, $timeout) = @_;
+	my($self, $timeout, $dupes) = @_;
 	
 	my $t = time();
+	
+	my $required_type = ($dupes) ? APRSIS2::ISPacket::Type::IS_PACKET_DUPLICATE() : APRSIS2::ISPacket::Type::IS_PACKET();
 	
 	while (my $l = $self->is2_frame_in_nonping($timeout)) {
 		if ($l->get_type() == APRSIS2::IS2Message::Type::IS_PACKET()) {
@@ -382,8 +384,8 @@ sub get_packets($;$)
 			my @pa;
 			
 			foreach my $ip (@{ $ips }) {
-				if ($ip->get_type() != APRSIS2::ISPacket::Type::IS_PACKET()) {
-					$self->{'error'} = sprintf("ISPacket type %d unsupported", $ip->get_type());
+				if ($ip->get_type() != $required_type) {
+					$self->{'error'} = sprintf("ISPacket type %d not expected", $ip->get_type());
 					return undef;
 				}
 				
@@ -410,15 +412,15 @@ sub get_packets($;$)
 	return undef;
 }
 
-sub get_packet($;$)
+sub get_packet($;$$)
 {
-	my($self, $timeout) = @_;
+	my($self, $timeout, $duplicates) = @_;
 	
 	if (@{ $self->{'pqueue_in'} }) {
 		return shift @{ $self->{'pqueue_in'} };
 	}
 	
-	my @p = $self->get_packets($timeout);
+	my @p = $self->get_packets($timeout, $duplicates);
 	
 	if (@p) {
 		my $r = shift @p;

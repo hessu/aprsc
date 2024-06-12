@@ -586,6 +586,7 @@ static int dupecheck(struct pbuf_t *pb)
 				//hlog(LOG_DEBUG, "Dupe: %.*s", pb->packet_len - 2, pb->data);
 				//hlog(LOG_DEBUG, "Orig: %.*s %.*s", addrlen, dp->addresses, datalen, dp->packet);
 				pb->flags |= F_DUPE;
+				pb->is2packet.type = APRSIS2__ISPACKET__TYPE__IS_PACKET_DUPLICATE;
 				filter_postprocess_dupefilter(pb);
 				if (dp->dtype >= 0 && dp->dtype < DTYPE_MAX)
 					dupecheck_dupetypes[dp->dtype]++;

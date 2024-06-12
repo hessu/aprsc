@@ -59,21 +59,10 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	if (pb->flags & F_DUPE) {
 		/* Duplicate packet. Don't send, unless client especially wants! */
 		if (self->clients_dupe) {
-			/* if we have any dupe clients at all, generate a version with "dup\t"
-			 * prefix to avoid regular clients processing dupes
-			 */
-			/*
-			TODO: Fix dupe clients support for IS2 changes
-			char dupe_sendbuf[PACKETLEN_MAX+7];
-			memcpy(dupe_sendbuf, "dup\t", 4);
-			memcpy(dupe_sendbuf + 4, pb->data, pb->packet_len);
-			int dupe_len = pb->packet_len + 4;
-			
 			for (c = self->clients_dupe; (c); c = cnext) {
 				cnext = c->class_next; // client_write() MAY destroy the client object!
-				send_single(self, c, dupe_sendbuf, dupe_len);
+				send_single(self, c, pb);
 			}
-			*/
 		}
 		
 		/* Check if I have the client which sent this dupe, and

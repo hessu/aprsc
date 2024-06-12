@@ -263,9 +263,9 @@ static struct dupe_record_t *dupecheck_db_alloc(int len)
 
 static void dupecheck_db_free(struct dupe_record_t *dp)
 {
-#ifndef _FOR_VALGRIND_
 	if (dp->packet != dp->packetbuf)
 		hfree(dp->packet);
+#ifndef _FOR_VALGRIND_
 	dp->next = dupecheck_free;
 	dupecheck_free = dp;
 	// cellfree(dupecheck_cells, dp);

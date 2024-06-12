@@ -1136,11 +1136,24 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 
 static int aprsis_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
+	if (pb->flags & F_DUPE) {
+		char dupe_sendbuf[PACKETLEN_MAX+7];
+		memcpy(dupe_sendbuf, "dup\t", 4);
+		memcpy(dupe_sendbuf + 4, pb->data, pb->packet_len);
+		int dupe_len = pb->packet_len + 4;
+		/* a TCP client with a udp downstream socket? */
+		if (c->udp_port && c->udpclient) {
+			return udp_client_write(self, c, dupe_sendbuf, dupe_len - 2);
+		}
+
+		return c->write(self, c, dupe_sendbuf, dupe_len);
+	}
+	
 	/* a TCP client with a udp downstream socket? */
 	if (c->udp_port && c->udpclient) {
 		return udp_client_write_packet(self, c, pb);
 	}
-	
+
 	return c->write(self, c, pb->data, pb->packet_len);
 }
 

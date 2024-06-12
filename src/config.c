@@ -961,6 +961,9 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_IS2;
 	} else if (strcasecmp(argv[2], "dupefeed") == 0) {
 	  clflags |= CLFLAGS_DUPEFEED;
+	} else if (strcasecmp(argv[2], "is2dupefeed") == 0) {
+	  clflags |= CLFLAGS_DUPEFEED;
+	  clflags |= CLFLAGS_IS2;
 	} else if (strcasecmp(argv[2], "clientonly") == 0) {
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_USERFILTEROK;

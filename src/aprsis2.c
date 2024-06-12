@@ -944,7 +944,7 @@ int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
 
 static int is2_append_obuf_packet(struct client_t *c, struct pbuf_t *pb)
 {
-	// hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.is_packet_data.len);
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, pb->is2packet.is_packet_data.len);
 	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS) {
 		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet IS2 obuf", c->addr_rem, c->username);
 		return -12; // TODO: is this the correct return code?

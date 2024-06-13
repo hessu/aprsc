@@ -84,6 +84,8 @@ binary-arch: build install
 #	dh_perl
 #	dh_makeshlibs
 	dh_installdeb
+	# Since compat 12, dh_installdeb insists conffiles may only live in /etc.
+	cat debian/conffiles >> $(CURDIR)/debian/aprsc/DEBIAN/conffiles
 	dh_shlibdeps
 	dh_gencontrol
 	dh_md5sums

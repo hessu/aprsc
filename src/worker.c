@@ -2252,8 +2252,6 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 	struct worker_t *w = worker_threads;
 	struct client_t *c;
 	int pe;
-	int client_heard_count = 0;
-	int client_courtesy_count = 0;
 	
 	while (w) {
 		if ((pe = pthread_mutex_lock(&w->clients_mutex))) {
@@ -2268,9 +2266,6 @@ int worker_client_list(cJSON *workers, cJSON *clients, cJSON *uplinks, cJSON *pe
 		cJSON_AddNumberToObject(jw, "pbuf_incoming_local_count", w->pbuf_incoming_local_count);
 		
 		for (c = w->clients; (c); c = c->next) {
-			client_heard_count += c->client_heard_count;
-			client_courtesy_count += c->client_courtesy_count;
-			
 			/* clients on hidden listener sockets are not shown */
 			/* if there are a huge amount of clients, don't list them
 			 * - cJSON takes huge amounts of CPU to build the list

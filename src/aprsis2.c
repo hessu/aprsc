@@ -465,10 +465,11 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
 		
 		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->is_packet_data.len > 0) {
-			incoming_handler(self, c, c->ai_protocol, (char *)p->is_packet_data.data, p->is_packet_data.len);
+			is2_incoming_handler(self, c, c->ai_protocol, p);
 		}
 	}
 	
+	// TODO: r is is always 0
 	return r;
 }
 
@@ -848,12 +849,14 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
  *	Prepare a pbuf to have an IS2 formatted packet, when handling an incoming packet
  */
 
-void is2_pbuf_init_packet(struct pbuf_t *pb)
+void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in)
 {
 	aprsis2__ispacket__init(&pb->is2packet);
 	pb->is2packet.type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
 	pb->is2packet.is_packet_data.data = (uint8_t *)pb->data;
 	pb->is2packet.is_packet_data.len = pb->packet_len - 2; /* skip CR/LF */
+	
+	// TODO: Copy additional fields of IS2 packet to the pbuf, if is2_packet_in is set
 }
 
 /*

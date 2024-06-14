@@ -23,7 +23,8 @@ extern int check_path_calls(const char *via_start, const char *path_end);
 
 extern void incoming_flush(struct worker_t *self);
 extern int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
-extern int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len);
+extern int is2_incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, Aprsis2__ISPacket *is2_packet);
+extern int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, Aprsis2__ISPacket *is2_packet);
 
 #ifndef _FOR_VALGRIND_
 extern void incoming_cell_stats(struct cellstatus_t *cellst_pbuf_small,

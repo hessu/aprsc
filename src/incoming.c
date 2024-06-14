@@ -738,6 +738,72 @@ static void client_loc_update(struct client_t *c, struct pbuf_t *pb)
 	c->loc_known = 1;
 }
 
+static int incoming_quirks(char *s, int len, char *quirked)
+{
+	/* rewritten packet */
+	char *np = quirked;
+	
+	// Easy pointer for comparing against far end..
+	char *packet_end = s + len;
+	
+	/* trim spaces and NULs from beginning */
+	char *p = s;
+	
+	while (p < packet_end && (*p == ' ' || *p == 0))
+		p++;
+	
+	if (p == packet_end)
+		return INERR_EMPTY;
+	
+	/* copy srccall, look for the '>' */
+	while (p < packet_end && *p != '>' && *p != ' ')
+		*np++ = *p++;
+	
+	/* skip spaces in end of srccall */
+	while (*p == ' ' && p < packet_end)
+		p++;
+	
+	if (*p != '>')
+		return INERR_NO_DST;
+	
+	/* copy path, removing trailing spaces from callsigns */
+	while (p < packet_end && *p != ':') {
+		/* copy path element */
+		while (p < packet_end && *p != ',' && *p != ':' && *p != ' ')
+			*np++ = *p++;
+		
+		/* if we found spaces, scan over them */
+		while (p < packet_end && *p == ' ')
+			p++;
+		
+		/* if the element ends with a comma, fine */
+		if (p < packet_end && *p == ',') {
+			*np++ = *p++;
+			continue;
+		}
+		
+		/* end of path? fine */
+		if (*p == ':')
+			continue;
+		
+		/* not fine. */
+		return INERR_INV_PATH_CALL;
+	}
+	
+	/* copy rest of packet */
+	while (p < packet_end)
+		*(np++) = *(p++);
+	
+	*np = 0;
+	if (np - quirked != len) {
+		hlog_packet(LOG_DEBUG, s, len, "borrked packet: ");
+		hlog_packet(LOG_DEBUG, quirked, np - quirked, "quirked packet: ");
+	}
+	
+	// return length
+	return np - quirked;
+}
+
 /*
  *	Parse an incoming packet.
  *
@@ -753,7 +819,7 @@ static void client_loc_update(struct client_t *c, struct pbuf_t *pb)
 // + the length of the IPv6 qAI appended address and our callsign
 #define PATH_APPEND_LEN 600
 
-int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
+int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, Aprsis2__ISPacket* is2_packet)
 {
 	struct pbuf_t *pb;
 	char *src_end; /* pointer to the > after srccall */
@@ -782,68 +848,10 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	 * the packet with extra spaces removed from packets
 	 */
 	if (c->quirks_mode) {
-		/* rewritten packet */
-		char *np = quirked;
-		
-		// Easy pointer for comparing against far end..
-		packet_end = s + len;
-		
-		/* trim spaces and NULs from beginning */
-		p = s;
-		
-		while (p < packet_end && (*p == ' ' || *p == 0))
-			p++;
-		
-		if (p == packet_end)
-			return INERR_EMPTY;
-		
-		/* copy srccall, look for the '>' */
-		while (p < packet_end && *p != '>' && *p != ' ')
-			*np++ = *p++;
-		
-		/* skip spaces in end of srccall */
-		while (*p == ' ' && p < packet_end)
-			p++;
-		
-		if (*p != '>')
-			return INERR_NO_DST;
-		
-		/* copy path, removing trailing spaces from callsigns */
-		while (p < packet_end && *p != ':') {
-			/* copy path element */
-			while (p < packet_end && *p != ',' && *p != ':' && *p != ' ')
-				*np++ = *p++;
-			
-			/* if we found spaces, scan over them */
-			while (p < packet_end && *p == ' ')
-				p++;
-			
-			/* if the element ends with a comma, fine */
-			if (p < packet_end && *p == ',') {
-				*np++ = *p++;
-				continue;
-			}
-			
-			/* end of path? fine */
-			if (*p == ':')
-				continue;
-			
-			/* not fine. */
-			return INERR_INV_PATH_CALL;
-		}
-		
-		/* copy rest of packet */
-		while (p < packet_end)
-			*(np++) = *(p++);
-		
-		*np = 0;
-		if (np - quirked != len) {
-			hlog_packet(LOG_DEBUG, s, len, "borrked packet: ");
-			hlog_packet(LOG_DEBUG, quirked, np - quirked, "quirked packet: ");
-		}
-		
+		len = incoming_quirks(s, len, quirked);
+		if (len <= 0)
+			return len;
 		s = quirked;
-		len = np - quirked;
 	}
 	
 	/* check for minimum length of packet */
@@ -1121,7 +1129,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
 
-	is2_pbuf_init_packet(pb);
+	is2_pbuf_init_packet(pb, is2_packet);
 	
 	/* If the packet came in on a filtered port, mark the station as
 	 * heard on this port, so that messages can be routed to it.
@@ -1177,15 +1185,51 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 		
 		return 0;
 	}
-	
+
 	/* parse and process the packet */
-	e = incoming_parse(self, c, s, len);
+	e = incoming_parse(self, c, s, len, NULL);
 
 in_drop:
 	if (e < 0) {
 		/* failed parsing */
 		hlog_packet(LOG_DEBUG, s, len, "%s/%s: Dropped packet (%d: %s) len %d: ",
 			c->addr_rem, c->username, e, incoming_strerror(e), len);
+	}
+	
+	/* Account the one incoming packet.
+	 * Incoming bytes were already accounted earlier.
+	 */
+	clientaccount_add_rx(c, l4proto, 0, 1, (e < 0) ? e : 0, 0);
+	
+	return 0;
+}
+
+/*
+ *	Handler called once for each input APRS-IS2 packet.
+ */
+
+int is2_incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, Aprsis2__ISPacket *is2_packet)
+{
+	int e;
+	
+	/* Make sure it looks somewhat like an APRS-IS packet... len is without CRLF.
+	 * Do not do PACKETLEN_MIN test here, since it would drop the 'filter'
+	 * commands.
+	 */
+	if (is2_packet->is_packet_data.len > PACKETLEN_MAX-2) {
+		e = INERR_LONG_PACKET;
+		goto in_drop;
+	}
+
+	/* parse and process the packet */
+	e = incoming_parse(self, c, (char *)is2_packet->is_packet_data.data, is2_packet->is_packet_data.len, is2_packet);
+
+in_drop:
+	if (e < 0) {
+		/* failed parsing */
+		hlog_packet(LOG_DEBUG, (char *)is2_packet->is_packet_data.data, is2_packet->is_packet_data.len,
+			"%s/%s: IS2 Dropped packet (%d: %s) len %d: ",
+			c->addr_rem, c->username, e, incoming_strerror(e), is2_packet->is_packet_data.len);
 	}
 	
 	/* Account the one incoming packet.

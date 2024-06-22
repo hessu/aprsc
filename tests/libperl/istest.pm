@@ -14,13 +14,21 @@ use Data::Dumper;
 
 my $debug = 0;
 
-sub rx($$$$)
+$Data::Dumper::Sortkeys = 1;
+
+
+sub rx($$$$;$)
 {
-	my($ok, $i_rx, $tx, $rx) = @_;
+	my($ok, $i_rx, $tx, $rx, $is2) = @_;
 	
 	warn "receiving\n" if ($debug);
 	
-	my $received = $i_rx->get_packet();
+	my $received;
+	if (defined $is2 && $is2) {
+		$received = $i_rx->get_packet(undef, 0, 1);
+	} else {
+		$received = $i_rx->get_packet();
+	}
 	
 	if (!defined $received) {
 		if ($i_rx->{'state'} eq 'connected') {
@@ -33,19 +41,19 @@ sub rx($$$$)
 	
 	warn "received '$rx'\n" if ($debug);
 	
-	if ($received ne $rx) {
-		&$ok($received, $rx, "Server returned wrong line");
+	if (!$i_rx->packet_is_equal($received, $rx)) {
+		&$ok(Dumper($received), Dumper($rx), "Server returned wrong line");
 		return;
 	}
 	
 	&$ok(1, 1, "ok");
 }
 
-sub txrx($$$$$;$)
+sub txrx($$$$$;$$)
 {
-	my($ok, $i_tx, $i_rx, $tx, $rx, $random) = @_;
+	my($ok, $i_tx, $i_rx, $tx, $rx, $random, $is2) = @_;
 
-	if ($random) {
+	if ($random && !$is2) {
 		my $uniq = ' uniq.' . time() . '.' . int(rand(1000000));
 		$tx .= $uniq;
 		$rx .= $uniq;
@@ -63,9 +71,10 @@ sub txrx($$$$$;$)
 	
 	if ($i_tx->{'state'} ne 'connected') {
 		&$ok(1, 0, "Server TX connection error after sending: '$tx': " . $i_tx->{'error'});
+		return;
 	}
 	
-	rx($ok, $i_rx, $tx, $rx);
+	rx($ok, $i_rx, $tx, $rx, $is2);
 }
 
 sub should_drop($$$$$;$$)

@@ -62,30 +62,30 @@ my($tx, $rx, $helper);
 
 # 8. first, verify that a message packet is not passed to a filtered port
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I::%-9.9s:message", $msg_dst);
-$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
+$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass1";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # 9. verify that a position packet from the message originator is not passed
 # to a filtered port
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I:!6428.51N/02545.98E#");
-$helper = "H1LP-5>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
+$helper = "H1LP-5>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass2";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # now, transmit a position packet on the receiving filtered port
-$tx = "$msg_dst-2>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
-$rx = "$msg_dst-2>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
+$tx = "$msg_dst-2>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass p1";
+$rx = "$msg_dst-2>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass p1";
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 sleep(1);
 
 # now, transmit a position packet on the receiving filtered port
-$tx = "$msg_dst>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
-$rx = "$msg_dst>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
+$tx = "$msg_dst>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass p2";
+$rx = "$msg_dst>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass p2";
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 # now, transmit a position packet on the receiving filtered port
-$tx = "$msg_dst-3>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass";
-$rx = "$msg_dst-3>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass";
+$tx = "$msg_dst-3>APRS,OH2RDG*,WIDE,$login_rx,I:!6028.51N/02505.68E# should pass p3";
+$rx = "$msg_dst-3>APRS,OH2RDG*,WIDE,qAR,$login_rx:!6028.51N/02505.68E# should pass p3";
 istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 
 # then, a message packet should magically pass!
@@ -128,7 +128,7 @@ istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
 
 # try a second complimentary position - it must be dropped.
 $tx = "$msg_src>APRS,OH2RDG*,WIDE,$login_tx,I:!5628.51N/00505.68E# should drop compl2";
-$helper = "H1LP-C>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass";
+$helper = "H1LP-C>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass6";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 # A position packet having TCPIP* in the path, coming from another connection,
@@ -169,7 +169,7 @@ istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message to object", $login_tx, $msg_obj);
 #$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message to object", $login_tx, $msg_obj);
 #istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
-$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass6";
+$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass7";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 #
@@ -186,7 +186,7 @@ istest::txrx(\&ok, $i_rx, $i_tx, $tx, $rx);
 $tx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,%s,I::%-9.9s:message to item", $login_tx, $msg_item);
 #$rx = sprintf("$msg_src>APRS,OH2RDG*,WIDE,qAR,%s::%-9.9s:message to item", $login_tx, $msg_item);
 #istest::txrx(\&ok, $i_tx, $i_rx, $tx, $rx);
-$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass7";
+$helper = "H1LP>APRS,OH2RDG*,WIDE:!6028.51N/02505.68E# should pass8";
 istest::should_drop(\&ok, $i_tx, $i_rx, $tx, $helper);
 
 #

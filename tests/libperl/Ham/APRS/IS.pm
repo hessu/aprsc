@@ -397,6 +397,13 @@ sub sendline($$;$$)
 	return $ret;
 }
 
+sub packet_is_equal($$$)
+{
+	my($self, $received, $expected) = @_;
+	
+	return $received eq $expected
+}
+
 =head1 aprspass($callsign)
 
 Calculates the APRS passcode for a given callsign. Ignores SSID

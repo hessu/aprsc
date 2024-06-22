@@ -10,6 +10,7 @@ use IO::Handle '_IOFBF';
 use IO::Socket::INET;
 use IO::Select;
 use Data::Dumper;
+use Scalar::Util qw( blessed );
 
 use Google::ProtocolBuffers::Dynamic;
 
@@ -260,10 +261,14 @@ sub send_packets($$)
 	
 	my @pq;
 	foreach my $p (@{ $packets }) {
-		push @pq, APRSIS2::ISPacket->new({
-			'type' => APRSIS2::ISPacket::Type::IS_PACKET(),
-			'is_packet_data' => $p
-		});
+		if (defined blessed($p) && blessed($p) eq 'APRSIS2::ISPacket') {
+			push @pq, $p;
+		} else {
+			push @pq, APRSIS2::ISPacket->new({
+				'type' => APRSIS2::ISPacket::Type::IS_PACKET(),
+				'is_packet_data' => $p
+			});
+		}
 	}
 	
 	my $im = APRSIS2::IS2Message->new({
@@ -365,9 +370,9 @@ sub send_packet($)
 	return 1;
 }
 
-sub get_packets($;$$)
+sub get_packets($;$$$)
 {
-	my($self, $timeout, $dupes) = @_;
+	my($self, $timeout, $dupes, $is2) = @_;
 	
 	my $t = time();
 	
@@ -388,13 +393,17 @@ sub get_packets($;$$)
 					$self->{'error'} = sprintf("ISPacket type %d not expected", $ip->get_type());
 					return undef;
 				}
-				
-				my $pd = $ip->get_is_packet_data();
-				if (!defined $pd) {
-					$self->{'error'} = "ISPacket with no packet data received";
-					return undef;
+
+				if ($is2) {
+					push @pa, $ip;
+				} else {
+					my $pd = $ip->get_is_packet_data();
+					if (!defined $pd) {
+						$self->{'error'} = "ISPacket with no packet data received";
+						return undef;
+					}
+					push @pa, $pd;
 				}
-				push @pa, $pd;
 			}
 			
 			return @pa;
@@ -412,20 +421,42 @@ sub get_packets($;$$)
 	return undef;
 }
 
-sub get_packet($;$$)
+sub get_packet($;$$$)
 {
-	my($self, $timeout, $duplicates) = @_;
+	my($self, $timeout, $duplicates, $is2) = @_;
 	
 	if (@{ $self->{'pqueue_in'} }) {
-		return shift @{ $self->{'pqueue_in'} };
+		if ($is2) {
+			return shift @{ $self->{'pqueue_in'} };
+		} else {
+			my $ip = shift @{ $self->{'pqueue_in'} };
+			my $pd = $ip->get_is_packet_data();
+			if (!defined $pd) {
+				$self->{'error'} = "ISPacket with no packet data received";
+				return undef;
+			}
+			return $pd;
+		}
 	}
 	
-	my @p = $self->get_packets($timeout, $duplicates);
+	my @p = $self->get_packets($timeout, $duplicates, 1);
 	
 	if (@p) {
-		my $r = shift @p;
+		my $ip = shift @p;
 		$self->{'pqueue_in'} = \@p;
-		return $r;
+		if ($is2) {
+			return $ip;
+		} else {
+			if (!defined $ip) {
+				return undef;
+			}
+			my $pd = $ip->get_is_packet_data();
+			if (!defined $pd) {
+				$self->{'error'} = "ISPacket with no packet data received";
+				return undef;
+			}
+			return $pd;
+		}
 	}
 	
 	return;
@@ -904,6 +935,39 @@ sub is2_corepeer_linked($)
 	return (defined $self->{'corepeer-ok-tx'} && ($self->{'corepeer-ok-rx'}));
 }
 
+sub packet_is_equal($$$)
+{
+	my($self, $received, $expected) = @_;
+
+	if (!ref($received)) {
+		return $received eq $expected;
+	}
+
+	my $rec_pd = $received->get_is_packet_data();
+	if (!defined $rec_pd) {
+		return 0;
+	}
+	my $exp_pd = $expected->get_is_packet_data();
+	if (!defined $exp_pd) {
+		return 0;
+	}
+
+	my $exp_rx_rssi = $expected->get_rx_rssi();
+	if (!defined $exp_rx_rssi) {
+		return 0 if (defined $received->get_rx_rssi());
+	} else {
+		return 0 if ($exp_rx_rssi ne $received->get_rx_rssi());
+	}
+	
+	my $exp_rx_snr_db = $expected->get_rx_snr_db();
+	if (!defined $exp_rx_snr_db) {
+		return 0 if (defined $received->get_rx_snr_db());
+	} else {
+		return 0 if ($exp_rx_snr_db ne $received->get_rx_snr_db());
+	}
+	
+	return $rec_pd eq $exp_pd;
+}
 
 =head1 aprspass($callsign)
 

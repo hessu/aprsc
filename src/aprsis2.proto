@@ -136,6 +136,16 @@ message ISPacket {
 	
 	// packet data in traditional APRS-IS format, without CRLF
 	bytes is_packet_data = 2;
+
+	// RSSI and SNR values at the receiver.
+	// When building with protobuf 3.15+, the "optional float rx_rssi"
+	// syntax can be used again, it is compatible with this definition.
+	oneof optional_rx_rssi {
+		float rx_rssi = 21;
+	}
+	oneof optional_rx_snr_db {
+		float rx_snr_db = 22;
+	}
 }
 
 //

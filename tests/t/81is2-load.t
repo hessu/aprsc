@@ -69,7 +69,7 @@ while ($txl < $bytelimit) {
 		$txf++;
 	}
 	
-	while (($outstanding > $window) && (my @rx = $i_rx->get_packets(5))) {
+	while (($outstanding > $window) && (my @rx = $i_rx->get_packets(5, 0, 0))) {
 		$rxf++;
 		if (!@rx) {
 			last;

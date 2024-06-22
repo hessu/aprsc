@@ -856,7 +856,17 @@ void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in)
 	pb->is2packet.is_packet_data.data = (uint8_t *)pb->data;
 	pb->is2packet.is_packet_data.len = pb->packet_len - 2; /* skip CR/LF */
 	
-	// TODO: Copy additional fields of IS2 packet to the pbuf, if is2_packet_in is set
+	// Copy additional fields of the incoming IS2 packet to the new pbuf
+	if (is2_packet_in) {
+		if (is2_packet_in->optional_rx_rssi_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI) {
+			pb->is2packet.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
+			pb->is2packet.rx_rssi = is2_packet_in->rx_rssi;
+		}
+		if (is2_packet_in->optional_rx_snr_db_case == APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB) {
+			pb->is2packet.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
+			pb->is2packet.rx_snr_db = is2_packet_in->rx_snr_db;
+		}
+	}
 }
 
 /*

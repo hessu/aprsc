@@ -955,7 +955,7 @@ int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
 	return ret;
 }
 
-static int is2_append_obuf_packet(struct client_t *c, struct pbuf_t *pb)
+static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, pb->is2packet.is_packet_data.len);
 	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS) {
@@ -965,7 +965,19 @@ static int is2_append_obuf_packet(struct client_t *c, struct pbuf_t *pb)
 
 	c->is2_obuf[c->is2_obuf_packets] = &pb->is2packet;
 	c->is2_obuf_packets++;
+	// TODO: This ignores the size of all IS2 fields in the message
 	c->is2_obuf_total_len += pb->is2packet.is_packet_data.len;
+	c->is2_packet_writes++;
+
+	if (c->is2_packet_writes > obuf_writes_threshold && c->is2_obuf_flushsize == 0) {
+		c->is2_obuf_flushsize = APRSIS2_OBUF_PACKETS / 2;
+		//hlog(LOG_DEBUG, "IS2: Switch fd %d (%s) to buffered writes (%d writes), flush at %d",
+		//	c->fd, c->addr_rem, c->is2_packet_writes, c->is2_obuf_flushsize);
+	}
+
+	if (c->is2_obuf_packets >= c->is2_obuf_flushsize) {
+		return is2_obuf_flush(self, c);
+	}
 
 	return 0;
 }
@@ -979,7 +991,7 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *p
 			return write_ret;
 	}
 
-	return is2_append_obuf_packet(c, pb);
+	return is2_append_obuf_packet(self, c, pb);
 }
 
 /*
@@ -990,13 +1002,14 @@ int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *p
 
 int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
+	// TODO: dynamic flushing
 	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_total_len >= APRSIS2_OBUF_MAX_LENGTH) {
 		int write_ret = is2_corepeer_obuf_flush(self, c);
 		if (write_ret < 0)
 			return write_ret;
 	}
 
-	return is2_append_obuf_packet(c, pb);
+	return is2_append_obuf_packet(self, c, pb);
 }
 
 

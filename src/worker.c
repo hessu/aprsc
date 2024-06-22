@@ -1771,7 +1771,7 @@ static void send_keepalives(struct worker_t *self)
 			
 			if (c->flags & CLFLAGS_IS2) {
 				if (c->is2_obuf_packets)
-					if (is2_obuf_flush(self, c) < 0)
+					if (is2_obuf_flush(self, c) < -2)
 						continue;
 				if (is2_out_ping(self, c) < -2)
 					continue; // destroyed
@@ -1786,7 +1786,8 @@ static void send_keepalives(struct worker_t *self)
 		} else {
 			/* just fush if there was anything to write */
 			if (c->is2_obuf_packets)
-				is2_obuf_flush(self, c);
+				if (is2_obuf_flush(self, c) < -2)
+					continue; // destroyed
 			if (c->ai_protocol == IPPROTO_TCP || c->ai_protocol == IPPROTO_SCTP) {
 				rc = c->write(self, c, buf, 0);
 				if (rc < -2) continue; // destroyed..
@@ -1851,6 +1852,17 @@ static void send_keepalives(struct worker_t *self)
 		}
 		
 		c->obuf_writes = 0;
+
+		if (c->flags & CLFLAGS_IS2) {
+			// Switching to buffered writes is done in is2_append_obuf_packet().
+			if (c->is2_obuf_flushsize != 0 && c->is2_packet_writes < obuf_writes_threshold_hys) {
+				c->is2_obuf_flushsize = 0;
+				//hlog(LOG_DEBUG, "IS2: Switch fd %d (%s) to unbuffered writes (%d writes)",
+				//	c->fd, c->addr_rem, c->is2_packet_writes);
+			}
+			c->is2_packet_writes = 0;
+		}
+
 	}
 }
 

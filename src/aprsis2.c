@@ -20,7 +20,7 @@
 #define STX 0x02
 #define ETX 0x03
 
-#define IS2_HEAD_LEN 4 /* STX + network byte order 24 bits uint to specify body length */
+#define IS2_HEAD_LEN 4 /* STX + reserved 8 bits + network byte order 16 bits uint to specify body length */
 #define IS2_TAIL_LEN 1 /* ETX */
 
 #define IS2_MINIMUM_FRAME_CONTENT_LEN 4
@@ -33,13 +33,14 @@
  *	Allocate a buffer for a message, fill with head an tail
  */
 
-static void is2_setup_buffer(char *buf, int len)
+static void is2_setup_buffer(char *buf, uint16_t len)
 {
-	uint32_t *len_p = (uint32_t *)buf;
-	
-	*len_p = htonl(len);
-	
+	uint16_t *len_p = (uint16_t *)&buf[2];
+
 	buf[0] = STX;
+	buf[1] = 0; // reserved
+	*len_p = htons(len);
+
 	buf[IS2_HEAD_LEN + len] = ETX;
 }
 
@@ -771,9 +772,15 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 			client_close(self, c, CLIERR_IS2_FRAMING_NO_STX);
 			return -1;
 		}
-		
-		uint32_t *ip = (uint32_t *)this;
-		uint32_t clen = ntohl(*ip) & 0xffffff;
+
+		if (this[1] != 0) {
+			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Frame with non-zero reserved byte: ",
+				c->addr_rem, c->username);
+			client_close(self, c, CLIERR_IS2_FRAMING_INCOMPATIBLE);
+		}
+
+		uint16_t *ip = (uint16_t *)&this[2];
+		uint16_t clen = ntohs(*ip);
 		
 		if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
 			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Too short frame content (%d): ",

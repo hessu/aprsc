@@ -577,14 +577,14 @@ sub is2_frame_in($;$)
 	
 	while (1) {
 		if (length($self->{'ibuf'}) >= 6) {
-			if (substr($self->{'ibuf'}, 0, 1) ne chr(0x02)) {
+			if (substr($self->{'ibuf'}, 0, 2) ne "\x02\x00") {
 				$self->{'error'} = "IS2 frame does not start with STX";
 				#warn "is2_frame_in: " . $self->{'error'} . "\n";
 				$self->disconnect();
 				return undef;
 			}
-			my $frame_len_b = chr(0) . substr($self->{'ibuf'}, 1, 3);
-			my $frame_len = unpack('N', $frame_len_b);
+			my $frame_len_b = substr($self->{'ibuf'}, 2, 2);
+			my $frame_len = unpack('n', $frame_len_b);
 			#warn "frame len: $frame_len\n";
 			my $need_bytes = $frame_len + 5;
 			

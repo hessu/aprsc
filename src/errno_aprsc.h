@@ -17,6 +17,7 @@
 #define CLIERR_INACTIVITY			-12
 #define CLIERR_UPLINK_PEER_CERT_FAIL		-13
 #define CLIERR_IS2_FRAMING_NO_STX		-14
+#define CLIERR_IS2_FRAMING_INCOMPATIBLE		-15
 
 extern const char *aprsc_strerror(int er);
 

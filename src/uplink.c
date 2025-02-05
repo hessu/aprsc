@@ -250,37 +250,37 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
 		hlog(LOG_ERR, "%s: Uplink's logresp message is not recognized: no # in beginning (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (argc < 6) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not have enough arguments (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[1], "logresp") != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not say 'logresp' (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[2], serverid) != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it (protocol incompatibility)", c->addr_rem, serverid);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[3], "verified,") != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not say I'm verified (wrong passcode in my configuration?)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_NOT_VERIFIED);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[4], "server") != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not contain 'server' (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	p = strchr(argv[5], ',');
@@ -290,13 +290,13 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	if (strlen(argv[5]) > CALLSIGNLEN_MAX) {
 		hlog(LOG_ERR, "%s: Uplink's server name is too long: '%s'", c->addr_rem, argv[5]);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcasecmp(argv[5], serverid) == 0) {
 		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, argv[5]);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	/* todo: validate server callsign with the q valid path algorithm */
@@ -311,7 +311,7 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	/* check the server name against certificate */
 #ifdef USE_SSL
 	if (!uplink_server_validate_cert_cn(self, c))
-		return 0;
+		return -1;
 #endif
 	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
@@ -338,7 +338,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	
 #ifdef USE_SSL
 	if (!uplink_server_validate_cert(self, c))
-		return 0;
+		return -1;
 #endif
 
 	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
@@ -350,7 +350,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
 		hlog(LOG_ERR, "%s: Uplink's welcome message is not recognized: no # in beginning", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (argc >= 3) {

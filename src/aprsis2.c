@@ -210,7 +210,7 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	if (strcasecmp(sig->username, serverid) == 0) {
 		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, sig->username);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		goto done;
+		return -1;
 	}
 	
 	/* TODO: validate server callsign with the q valid path algorithm */
@@ -224,7 +224,7 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	
 #ifdef USE_SSL
 	if (!uplink_server_validate_cert(self, c) || !uplink_server_validate_cert_cn(self, c))
-		goto done;
+		return -1;
 #endif
 	
 	/* Ok, we're happy with the uplink's server signature, let us login! */
@@ -240,8 +240,6 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	mr.login_request = &lr;
 	
 	is2_write_message(self, c, &mr);
-	
-done:	
 	return 0;
 }
 
@@ -455,7 +453,6 @@ failed_login:
 static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int i;
-	int r = 0;
 	Aprsis2__ISPacket *p;
 	
 	//hlog(LOG_DEBUG, "%s/%s: IS2: %d packets received in message", c->addr_rem, c->username, m->n_is_packet);
@@ -466,12 +463,11 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
 		
 		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->is_packet_data.len > 0) {
-			is2_incoming_handler(self, c, c->ai_protocol, p);
+			is2_incoming_handler(self, c, c->ai_protocol, p); // always returns 0, ignores erroneus packets
 		}
 	}
 	
-	// TODO: r is is always 0
-	return r;
+	return 0;
 }
 
 
@@ -652,6 +648,7 @@ int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client
 			hlog(LOG_WARNING, "%s/%s: IS2: connect: unknown message type %d",
 				c->addr_rem, c->username, m->type);
 			client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+			return -1;
 	};
 	
 	return 0;
@@ -804,7 +801,13 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		
 		//hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 		
-		is2_unpack_message(self, c, this + IS2_HEAD_LEN, clen);
+		/* We may find a packet which caused the client to be disconnected and discarded;
+		 * do not parse any additional packets after that.
+		 */
+		int r = is2_unpack_message(self, c, this + IS2_HEAD_LEN, clen);
+		if (r == -1)
+			return r;
+
 		i += IS2_HEAD_LEN + clen + IS2_TAIL_LEN;
 	}
 	
@@ -847,9 +850,7 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 	
 	//hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 	
-	is2_unpack_message(self, c, ibuf + IS2_HEAD_LEN, clen);
-	
-	return 1;
+	return is2_unpack_message(self, c, ibuf + IS2_HEAD_LEN, clen);
 }
 
 /*

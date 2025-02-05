@@ -703,11 +703,47 @@ int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2__IS2Mes
 }
 
 /*
+ *	IS2 corepeer incoming packets: Monitor packet loss
+ */
+
+static inline void is2_input_corepeer_sequence_monitor(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
+{
+	int latest_sequence = m->sequence;
+
+	c->corepeer_is2_sequence_window[c->corepeer_is2_sequence_window_pos] = latest_sequence;
+	hlog(LOG_DEBUG, "IS2 corepeer seq win %d received %d", c->corepeer_is2_sequence_window_pos, latest_sequence);
+	c->corepeer_is2_sequence_window_pos++;
+	if (c->corepeer_is2_sequence_window_pos == APRSIS2_COREPEER_SEQ_WINDOW) {
+		c->corepeer_is2_sequence_window_pos = 0;
+		// make a note that we have a full window recorded, and start tracking loss
+		c->corepeer_is2_sequence_window_used = APRSIS2_COREPEER_SEQ_WINDOW;
+	}
+
+	// If we have the full window of sequence numbers collected, check for loss
+	if (c->corepeer_is2_sequence_window_used == APRSIS2_COREPEER_SEQ_WINDOW) {
+		int expected_sequence = latest_sequence - APRSIS2_COREPEER_SEQ_WINDOW;
+		if (expected_sequence < 1) {
+			// No handling of sequence number wrap yet
+			return;
+		}
+		for (int i = 1; i < APRSIS2_COREPEER_SEQ_WINDOW; i++) {
+			int check_window_position = c->corepeer_is2_sequence_window_pos - i - 1;
+			if (check_window_position < 0)
+				check_window_position += APRSIS2_COREPEER_SEQ_WINDOW;
+			hlog(LOG_DEBUG, "IS2 corepeer seq checking win %d", check_window_position);
+		}
+	}
+}
+
+
+/*
  *	IS2 input handler, corepeer state
  */
  
 int is2_input_handler_corepeer(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
+	is2_input_corepeer_sequence_monitor(self, c, m);
+
 	switch (m->type) {
 		case APRSIS2__IS2_MESSAGE__TYPE__KEEPALIVE_PING:
 			return is2_in_ping(self, c, m);
@@ -978,6 +1014,7 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 	c->is2_obuf_total_len += pb->is2packet.is_packet_data.len;
 	c->is2_packet_writes++;
 
+	// Switch to buffered writes if necessary, switching back to unbuffered is done in send_keepalives().
 	if (c->is2_packet_writes > obuf_writes_threshold && c->is2_obuf_flushsize == 0) {
 		c->is2_obuf_flushsize = APRSIS2_OBUF_PACKETS / 2;
 		//hlog(LOG_DEBUG, "IS2: Switch fd %d (%s) to buffered writes (%d writes), flush at %d",

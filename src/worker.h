@@ -284,6 +284,7 @@ struct client_udp_t {			/* UDP services can be available at multiple
 
 #define APRSIS2_OBUF_PACKETS 20
 #define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of packets in IS2 obuf */
+#define APRSIS2_COREPEER_SEQ_WINDOW 32 /* packet loss monitoring window - allow reordering by N packets */
 
 struct client_t {
 	struct client_t *next;
@@ -441,6 +442,9 @@ struct client_t {
 
 	char *corepeer_is2_challenge;	/* IS2 handshake random token */
 	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */
+	int corepeer_is2_sequence_window[APRSIS2_COREPEER_SEQ_WINDOW];
+	int corepeer_is2_sequence_window_pos;
+	int corepeer_is2_sequence_window_used;
 };
 
 extern struct client_t *client_alloc(void);

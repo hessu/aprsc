@@ -28,6 +28,58 @@
 #define IS2_MAXIMUM_FRAME_LEN 4096
 #define IS2_MAXIMUM_FRAME_CONTENT_LEN (IS2_MAXIMUM_FRAME_LEN - IS2_HEAD_LEN - IS2_TAIL_LEN)
 
+/*
+ *	IS2 client / port / protocol accounting
+ */
+
+static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_frames, int lost_frames)
+{
+	struct portaccount_t *pa = NULL;
+	
+	/* worker local accounters do not need locks */
+	c->localaccount.is2_rx_frames += rx_frames;
+	c->localaccount.is2_lost_frames += lost_frames;
+	
+	if (l4proto == IPPROTO_UDP && c->udpclient && c->udpclient->portaccount) {
+		pa = c->udpclient->portaccount;
+	} else if (c->portaccount) {
+		pa = c->portaccount;
+	}
+	
+	if (pa) {
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+		__sync_fetch_and_add(&pa->is2_rx_frames, rx_frames);
+		__sync_fetch_and_add(&pa->is2_lost_frames, lost_frames);
+#else
+		// FIXME: MUTEX !! -- this may or may not need locks..
+		pa->is2_rx_frames += rx_frames;
+		pa->is2_lost_frames += lost_frames;
+#endif
+	}
+	
+	struct portaccount_t *proto;
+	
+	if (l4proto == IPPROTO_TCP)
+		proto = &client_connects_tcp;
+	else if (l4proto == IPPROTO_UDP)
+		proto = &client_connects_udp;
+#ifdef USE_SCTP
+	else if (l4proto == IPPROTO_SCTP)
+		proto = &client_connects_sctp;
+#endif
+	else
+		return;
+	
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+	__sync_fetch_and_add(&proto->is2_rx_frames, rx_frames);
+	__sync_fetch_and_add(&proto->is2_lost_frames, lost_frames);
+#else
+	// FIXME: MUTEX !! -- this may or may not need locks..
+	proto->is2_rx_frames += rx_frames;
+	proto->is2_lost_frames += lost_frames;
+#endif
+}
+
 
 /*
  *	Allocate a buffer for a message, fill with head an tail
@@ -727,6 +779,7 @@ static inline void is2_input_corepeer_sequence_check(struct worker_t *self, stru
 	}
 
 	//hlog(LOG_DEBUG, "IS2 corepeer packet loss - missed %d", expected_sequence);
+	is2_clientaccount_add_rx(c, c->ai_protocol, 0, 1);
 }
 
 static inline void is2_input_corepeer_sequence_monitor(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
@@ -787,6 +840,8 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
 		return 0;
 	}
 	
+	is2_clientaccount_add_rx(c, c->ai_protocol, 1, 0);
+
 	/* Call the current input message handler */
 	int r = c->is2_input_handler(self, c, m);
 	

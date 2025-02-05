@@ -212,8 +212,6 @@ message IS2Message {
 	
 	// For UDP packets, a sequence number may be transmitted
 	uint32 sequence = 2;
-	// For UDP packets, a HMAC signature may be transmitted
-	bytes signature = 3;
 	
 	// One of the following will be filled in. Just one.
 	IS2ServerSignature server_signature = 21;

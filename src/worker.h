@@ -245,6 +245,8 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 	long long  rxdrops,   rxdupes;
 	long long  rxerrs[INERR_BUCKETS];
 
+	long long  is2_rx_frames, is2_lost_frames;
+
 	/* record usage references */
 	int	refcount;	/* listener = 1, clients ++ */
 };

@@ -230,6 +230,7 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	/* Ok, we're happy with the uplink's server signature, let us login! */
 	Aprsis2__IS2LoginRequest lr = APRSIS2__IS2_LOGIN_REQUEST__INIT;
 	lr.username = serverid;
+	lr.password = passcode;
 	lr.app_name = verstr_progname;
 	lr.app_version = version_build;
 	lr.n_features_req = 0;

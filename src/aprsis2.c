@@ -706,32 +706,46 @@ int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2__IS2Mes
  *	IS2 corepeer incoming packets: Monitor packet loss
  */
 
+static inline void is2_input_corepeer_sequence_check(struct worker_t *self, struct client_t *c, int latest_sequence)
+{
+	int expected_sequence = latest_sequence - APRSIS2_COREPEER_SEQ_WINDOW;
+	if (expected_sequence < 0) {
+		// No handling of sequence number wrap yet
+		return;
+	}
+
+	//hlog(LOG_DEBUG, "IS2 corepeer seq got %d looking for %d", latest_sequence, expected_sequence);
+	for (int i = 0; i < APRSIS2_COREPEER_SEQ_WINDOW; i++) {
+		int check_window_position = c->corepeer_is2_sequence_window_pos + i;
+		if (check_window_position >= APRSIS2_COREPEER_SEQ_WINDOW)
+			check_window_position -= APRSIS2_COREPEER_SEQ_WINDOW;
+		//hlog(LOG_DEBUG, "IS2 corepeer seq checking win %d", check_window_position);
+		if (c->corepeer_is2_sequence_window[check_window_position] == expected_sequence) {
+			//hlog(LOG_DEBUG, "IS2 corepeer seq %d found in win %d - OK", expected_sequence, check_window_position);
+			return;
+		}
+	}
+
+	//hlog(LOG_DEBUG, "IS2 corepeer packet loss - missed %d", expected_sequence);
+}
+
 static inline void is2_input_corepeer_sequence_monitor(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int latest_sequence = m->sequence;
 
+	// If we have the full window of sequence numbers collected, check for loss
+	if (c->corepeer_is2_sequence_window_used == APRSIS2_COREPEER_SEQ_WINDOW) {
+		is2_input_corepeer_sequence_check(self, c, latest_sequence);
+	}
+
 	c->corepeer_is2_sequence_window[c->corepeer_is2_sequence_window_pos] = latest_sequence;
 	hlog(LOG_DEBUG, "IS2 corepeer seq win %d received %d", c->corepeer_is2_sequence_window_pos, latest_sequence);
+
 	c->corepeer_is2_sequence_window_pos++;
 	if (c->corepeer_is2_sequence_window_pos == APRSIS2_COREPEER_SEQ_WINDOW) {
 		c->corepeer_is2_sequence_window_pos = 0;
 		// make a note that we have a full window recorded, and start tracking loss
 		c->corepeer_is2_sequence_window_used = APRSIS2_COREPEER_SEQ_WINDOW;
-	}
-
-	// If we have the full window of sequence numbers collected, check for loss
-	if (c->corepeer_is2_sequence_window_used == APRSIS2_COREPEER_SEQ_WINDOW) {
-		int expected_sequence = latest_sequence - APRSIS2_COREPEER_SEQ_WINDOW;
-		if (expected_sequence < 1) {
-			// No handling of sequence number wrap yet
-			return;
-		}
-		for (int i = 1; i < APRSIS2_COREPEER_SEQ_WINDOW; i++) {
-			int check_window_position = c->corepeer_is2_sequence_window_pos - i - 1;
-			if (check_window_position < 0)
-				check_window_position += APRSIS2_COREPEER_SEQ_WINDOW;
-			hlog(LOG_DEBUG, "IS2 corepeer seq checking win %d", check_window_position);
-		}
 	}
 }
 

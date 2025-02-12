@@ -171,7 +171,7 @@ OBJS = aprsc.o accept.o worker.o errno_aprsc.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \
 	http.o tls.o sctp.o version.o \
-	aprsis2.pb-c.o aprsis2.o \
+	aprsis2.pb-c.o aprsis2.o aprsis2plain.o \
 	@LIBOBJS@
 
 clean:

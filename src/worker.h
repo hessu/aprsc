@@ -442,6 +442,8 @@ struct client_t {
 	int is2_packet_writes; /* How many writes (since last check) an IS2 packet has been buffered? */
 	int is2_obuf_flushsize;
 
+	Aprsis2__ISPacket is2_input_template; /* IS2 plaintext #is2-meta metadata holding buffer */
+
 	char *corepeer_is2_challenge;	/* IS2 handshake random token */
 	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */
 	int corepeer_is2_sequence_window[APRSIS2_COREPEER_SEQ_WINDOW];

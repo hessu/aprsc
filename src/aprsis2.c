@@ -963,7 +963,19 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
  *	Prepare a pbuf to have an IS2 formatted packet, when handling an incoming packet
  */
 
-void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in)
+void is2_pbuf_copy_additional(Aprsis2__ISPacket *dest, Aprsis2__ISPacket *src)
+{
+	if (src->optional_rx_rssi_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI) {
+		dest->optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
+		dest->rx_rssi = src->rx_rssi;
+	}
+	if (src->optional_rx_snr_db_case == APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB) {
+		dest->optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
+		dest->rx_snr_db = src->rx_snr_db;
+	}
+}
+
+void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template)
 {
 	aprsis2__ispacket__init(&pb->is2packet);
 	pb->is2packet.type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
@@ -972,14 +984,9 @@ void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in)
 	
 	// Copy additional fields of the incoming IS2 packet to the new pbuf
 	if (is2_packet_in) {
-		if (is2_packet_in->optional_rx_rssi_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI) {
-			pb->is2packet.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
-			pb->is2packet.rx_rssi = is2_packet_in->rx_rssi;
-		}
-		if (is2_packet_in->optional_rx_snr_db_case == APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB) {
-			pb->is2packet.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
-			pb->is2packet.rx_snr_db = is2_packet_in->rx_snr_db;
-		}
+		is2_pbuf_copy_additional(&pb->is2packet, is2_packet_in);
+	} else if (is2_input_template) {
+		is2_pbuf_copy_additional(&pb->is2packet, is2_input_template);
 	}
 }
 
@@ -1077,6 +1084,7 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 		return -12; // TODO: is this the correct return code?
 	}
 
+	// TODO: the dupecheck thread may free the pbuf before it is written out from is2_obuf
 	c->is2_obuf[c->is2_obuf_packets] = &pb->is2packet;
 	c->is2_obuf_packets++;
 	// TODO: This ignores the size of all IS2 fields in the message

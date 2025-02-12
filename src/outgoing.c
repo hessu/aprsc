@@ -154,6 +154,7 @@ void process_outgoing(struct worker_t *self)
 				status_error(86400, "packet_drop_future");
 		} else if (tick - pb->t > 5) {
 			/* this is a bit too old, are we stuck? */
+			/* TODO: rate limit error logging - there would be a lot of these */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d aged %ld sec (now %ld t %ld)\n%.*s",
 				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
 			self->internal_packet_drops++;

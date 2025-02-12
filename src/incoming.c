@@ -42,6 +42,7 @@
 #include "messaging.h"
 #include "dupecheck.h"
 #include "aprsis2.h"
+#include "aprsis2plain.h"
 
 /* When adding labels here, remember to add the description strings in
  * web/aprsc.js rx_err_strings, and worker.h constants
@@ -1129,7 +1130,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
 
-	is2_pbuf_init_packet(pb, is2_packet);
+	is2_pbuf_init_packet(pb, is2_packet, &c->is2_input_template);
 	
 	/* If the packet came in on a filtered port, mark the station as
 	 * heard on this port, so that messages can be routed to it.
@@ -1180,7 +1181,10 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 			char *filtercmd = memcasestr("filter", s, s + len);
 			if (filtercmd)
 				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
-			
+			/* IS2 metadata in plaintext key-value format */
+			if (memcmp(s, "#is2-meta ", 10) == 0) {
+				return is2_plain_metadata(self, c, s+10, len-10);
+			}
 		}
 		
 		return 0;
@@ -1188,6 +1192,9 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 
 	/* parse and process the packet */
 	e = incoming_parse(self, c, s, len, NULL);
+
+	/* only use the received plain metadata for the immediately next packet */
+	is2_plain_metadata_reset(c);
 
 in_drop:
 	if (e < 0) {

@@ -1,6 +1,9 @@
 
 #include <string.h>
 
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+
 #include "hmalloc.h"
 #include "worker.h"
 #include "aprsis2.h"
@@ -27,6 +30,8 @@
 #define IS2_MINIMUM_FRAME_LEN (IS2_HEAD_LEN + IS2_MINIMUM_FRAME_CONTENT_LEN + IS2_TAIL_LEN)
 #define IS2_MAXIMUM_FRAME_LEN 4096
 #define IS2_MAXIMUM_FRAME_CONTENT_LEN (IS2_MAXIMUM_FRAME_LEN - IS2_HEAD_LEN - IS2_TAIL_LEN)
+
+#define IS2_UDP_HMAC_MARKER 0x05
 
 /*
  *	IS2 client / port / protocol accounting
@@ -145,6 +150,39 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2_
  *	Write an UDP message to a client, return result from c->write
  */
 
+struct is2_corepeer_context_t {
+	EVP_MAC_CTX *ctx;
+	const unsigned char *key;
+	int key_len;
+} *is2_corepeer_context[IS2_PEERGROUP_KEY_ID_NUM];
+
+static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_size, int data_len)
+{
+	struct is2_corepeer_context_t *context = is2_corepeer_context[peergroup_key_transmit];
+	if (context == NULL) {
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: PeerGroupKey/PeerGroupKeyTransmit mismatch: Key %d not defined", c->addr_rem, c->username, peergroup_key_transmit);
+		return -1;
+	}
+	EVP_MAC_CTX *ctx = context->ctx;
+	
+	/* Calculate the MAC */
+	unsigned char md[32];
+	size_t md_len;
+
+	if (EVP_MAC_init(ctx, context->key, context->key_len, NULL) != 1 ||
+	    EVP_MAC_update(ctx, (unsigned char *)obuf, data_len) != 1 ||
+	        EVP_MAC_final(ctx, md, &md_len, sizeof(md)) != 1) {
+	            //handleErrors();
+	            return -1;
+	}
+
+	obuf[data_len] = IS2_UDP_HMAC_MARKER; // marker: has HMAC
+	obuf[data_len+1] = peergroup_key_transmit; // HMAC key identifier
+	memcpy(&obuf[data_len+2], md, md_len);
+
+	return data_len + 2 + md_len;
+}
+
 static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	m->sequence = c->corepeer_is2_sequence++;
@@ -158,8 +196,13 @@ static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c,
 	is2_setup_buffer(c->obuf, len);
 	
 	aprsis2__is2_message__pack(m, (void *)c->obuf + IS2_HEAD_LEN);
-	int r = udp_client_write(self, c, c->obuf, blen);
-	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized length %d, frame %d, wrote %d", c->addr_rem, c->username, len, len + IS2_HEAD_LEN + IS2_TAIL_LEN, r);
+
+	int signed_len = is2_corepeer_message_sign(c, c->obuf, c->obuf_size, blen);
+	if (signed_len < IS2_MINIMUM_FRAME_LEN)
+		return -1;
+
+	int r = udp_client_write(self, c, c->obuf, signed_len);
+	// hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized length %d, framed %d, signed %d, wrote %d", c->addr_rem, c->username, len, blen, signed_len, r);
 	
 	return r;
 }
@@ -792,7 +835,7 @@ static inline void is2_input_corepeer_sequence_monitor(struct worker_t *self, st
 	}
 
 	c->corepeer_is2_sequence_window[c->corepeer_is2_sequence_window_pos] = latest_sequence;
-	hlog(LOG_DEBUG, "IS2 corepeer seq win %d received %d", c->corepeer_is2_sequence_window_pos, latest_sequence);
+	//hlog(LOG_DEBUG, "IS2 corepeer seq win %d received %d", c->corepeer_is2_sequence_window_pos, latest_sequence);
 
 	c->corepeer_is2_sequence_window_pos++;
 	if (c->corepeer_is2_sequence_window_pos == APRSIS2_COREPEER_SEQ_WINDOW) {
@@ -920,6 +963,65 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 	return i;
 }
 
+static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, int len, int signature_start)
+{
+	int min_signed_len = signature_start + 2 + 32;
+	if (min_signed_len > len) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Frame too short to have HMAC: framed %d min %d total len %d",
+			c->addr_rem, c->username, min_signed_len, min_signed_len, len);
+		return -1;
+	}
+	
+	if (ibuf[signature_start] != IS2_UDP_HMAC_MARKER) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Frame with invalid hmac marker %d",
+			c->addr_rem, c->username, ibuf[signature_start]);
+		return -1;
+	}
+
+	unsigned int key_id = ibuf[signature_start+1];
+	if (key_id >= IS2_PEERGROUP_KEY_ID_NUM) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Frame with invalid key_id %d",
+			c->addr_rem, c->username, key_id);
+		return -1;
+	}
+
+	struct is2_corepeer_context_t *context = is2_corepeer_context[key_id];
+	if (context == NULL) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Incoming packet with undefined key ID %d",
+			c->addr_rem, c->username, key_id);
+		return -1;
+	}
+	EVP_MAC_CTX *ctx = context->ctx;
+
+	/* Calculate the MAC */
+	unsigned char md[32];
+	size_t md_len;
+
+	if (EVP_MAC_init(ctx, context->key, context->key_len, NULL) != 1 ||
+	    EVP_MAC_update(ctx, (unsigned char *)ibuf, signature_start) != 1 ||
+	        EVP_MAC_final(ctx, md, &md_len, sizeof(md)) != 1) {
+	            //handleErrors();
+	            return -1;
+	}
+
+	//hlog(LOG_DEBUG, "IS2 rx hmac signed, key %d, sig start %d, md_len %d, received md %d bytes", key_id, signature_start, md_len, len - signature_start - 2);
+	if (md_len != 32 || len - signature_start - 2 != 32) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Wrong hmac length, out %d received %d",
+			c->addr_rem, c->username, md_len, len-signature_start - 2);
+		return -1;
+	}
+	
+	if (memcmp(md, &ibuf[signature_start + 2], md_len) != 0) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Incoming packet with wrong signature (key_id %d)", c->addr_rem, c->username, key_id);
+		//hlog_packet(LOG_WARNING, (char *)md, 32, "%s/%s: calculated hmac len %d: ", c->addr_rem, c->username, md_len);
+		//hlog_packet(LOG_WARNING, &ibuf[signature_start + 2], 32, "%s/%s: received hmac: ", c->addr_rem, c->username);
+		return -1;
+	}
+	
+	//hlog(LOG_INFO, "%s/%s: IS2 UDP: rx hmac ok", c->addr_rem, c->username);
+	return 0;
+}
+
 int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *ibuf, int len)
 {
 	if (len < IS2_MINIMUM_FRAME_LEN) {
@@ -953,8 +1055,10 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 			c->addr_rem, c->username);
 		return -1;
 	}
-	
-	//hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
+
+	int r = is2_corepeer_signature_check(c, ibuf, len, IS2_HEAD_LEN + clen + IS2_TAIL_LEN);
+	if (r < 0)
+		return r;
 	
 	return is2_unpack_message(self, c, ibuf + IS2_HEAD_LEN, clen);
 }
@@ -1099,6 +1203,8 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 	}
 
 	if (c->is2_obuf_packets >= c->is2_obuf_flushsize) {
+		if (c->state == CSTATE_COREPEER)
+			return is2_corepeer_obuf_flush(self, c);
 		return is2_obuf_flush(self, c);
 	}
 
@@ -1277,3 +1383,55 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 	return 0;
 }
 
+int evp_hmac_errors(void) {
+	ERR_print_errors_fp(stderr);
+	return -1;
+}
+
+
+static int is2_corepeer_hmac_setup(int key_id, char *key)
+{
+	EVP_MAC *mac = NULL;
+	EVP_MAC_CTX *ctx = NULL;
+	OSSL_PARAM params[3];
+
+    	/* Fetch the HMAC algorithm */
+	mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
+	if (mac == NULL)
+		return evp_hmac_errors();
+
+	/* Create a MAC context */
+	ctx = EVP_MAC_CTX_new(mac);
+	if (ctx == NULL)
+		return evp_hmac_errors();
+
+	/* Set the MAC parameters */
+	params[0] = OSSL_PARAM_construct_utf8_string("digest", "SHA256", 0);
+	params[1] = OSSL_PARAM_construct_octet_string("key", key, strlen((char *)key));
+	params[2] = OSSL_PARAM_construct_end();
+
+	if (EVP_MAC_CTX_set_params(ctx, params) != 1)
+		return evp_hmac_errors();
+
+	// TODO: Since OpenSSL 3.0.3 there is no need to provide the key again when
+	// resetting HMAC context, we can leave key = NULL and key_len = 0.
+	// TODO: Free up old contexts after a while.
+	struct is2_corepeer_context_t *is2_ctx = hmalloc(sizeof(struct is2_corepeer_context_t));
+	is2_ctx->ctx = ctx;
+	is2_ctx->key = (unsigned char *)hstrdup(key);
+	is2_ctx->key_len = strlen(key);
+	is2_corepeer_context[key_id] = is2_ctx;
+
+	return 0;
+}
+
+int is2_corepeer_key_setup(void)
+{
+	struct peergroup_key_t *k;
+
+	for (k = peergroup_key_config; (k); k = k->next) {
+		is2_corepeer_hmac_setup(k->key_id, k->key);
+	}
+
+	return 0;
+}

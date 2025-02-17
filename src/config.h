@@ -169,6 +169,16 @@ struct peerip_config_t {
 	int client_flags;
 };
 
+#define IS2_PEERGROUP_KEY_ID_NUM 16
+
+struct peergroup_key_t {
+	struct peergroup_key_t *next;
+	struct peergroup_key_t **prevp;
+
+	int key_id;
+	char *key;
+};
+
 struct uplink_config_t {
 	struct uplink_config_t *next;
 	struct uplink_config_t **prevp; /* pointer to the *next pointer in the previous node */
@@ -200,6 +210,8 @@ struct uplink_config_t {
 
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
+extern struct peergroup_key_t *peergroup_key_config;
+extern int peergroup_key_transmit;
 extern struct uplink_config_t *uplink_config_install;
 extern int uplink_config_updated;
 extern int listen_low_ports;

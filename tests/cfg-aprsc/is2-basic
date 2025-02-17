@@ -58,6 +58,11 @@ PeerGroup TEST udp 127.0.0.1:16404 \
 #	PEER61 [::1]:16505 \
 #	PEER62 [::1]:16506
 
+PeerGroupKey 1 firstkey
+PeerGroupKey 2 secondkey
+PeerGroupKey 3 thirdkey
+PeerGroupKeyTransmit 1
+
 ### HTTP listener ##########
 # Status port provides a status view to web browsers.
 # It starts up by default on 0.0.0.0:14501.

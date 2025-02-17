@@ -13,6 +13,7 @@ use Data::Dumper;
 use Scalar::Util qw( blessed );
 
 use Google::ProtocolBuffers::Dynamic;
+use Digest::SHA qw(hmac_sha256);
 
 my $pf = Google::ProtocolBuffers::Dynamic->new("../src");
 $pf->load_file("aprsis2.proto");
@@ -52,7 +53,9 @@ sub new($$$;%)
 	$self->{'filter'} = $options{'filter'} if (defined $options{'filter'});
 	$self->{'udp'} = $options{'udp'} if (defined $options{'udp'});
 	$self->{'udp-peer'} = $options{'udp-peer'} if (defined $options{'udp-peer'});
-	
+	$self->{'hmac-keys'} = $options{'hmac-keys'} if (defined $options{'hmac-keys'});
+	$self->{'hmac-key-tx'} = $options{'hmac-key-tx'} if (defined $options{'hmac-key-tx'});
+
 	if ($options{'nopass'}) {
 		$self->{'aprspass'} = -1;
 	} else {
@@ -533,12 +536,13 @@ sub is2_frame_out($$)
 	my $is2_framed = chr(0x02) . substr($framelen_i, 1) . $frame . chr(0x03);
 
 	if ($self->{'usock'}) {
-		my $udp_frame_len = length($is2_framed);
+		my $udp_frame_signed = $self->is2_udp_sign($is2_framed);
+		my $udp_frame_len = length($udp_frame_signed);
 		if ($udp_frame_len > 1400) {
 			$self->{'error'} = "Attempted to write too large UDP frame: $udp_frame_len is over 1400 bytes";
 			return 0;
 		}
-		if (!$self->{'usock'}->send($is2_framed, 0, $self->{'dest'})) {
+		if (!$self->{'usock'}->send($udp_frame_signed, 0, $self->{'dest'})) {
 			$self->{'error'} = "Failed to write IS2 frame to UDP socket: $!";
 			return 0;
 		}
@@ -750,7 +754,6 @@ sub is2_udp_frame_decode($$)
 	if (length($msg) < $need_bytes) {
 		$self->{'error'} = "IS2 UDP frame too short for message length";
 		#warn "is2_udp_frame_in: " . $self->{'error'} . "\n";
-		$self->disconnect();
 		return undef;
 	}
 
@@ -758,15 +761,55 @@ sub is2_udp_frame_decode($$)
 	if ($etx ne chr(0x03)) {
 		$self->{'error'} = "IS2 UDP frame does not end with ETX";
 		#warn "is2_udp_frame_in: " . $self->{'error'} . "\n";
-		$self->disconnect();
 		return undef;
 	}
 	
 	my $frame = substr($msg, 4, $frame_len);
+	my $signature = substr($msg, 5 + $frame_len);
+	#warn "is2_udp_frame_in signature " . unpack('H*', $signature) . "\n";
+	if (!$self->is2_udp_signature_check(substr($msg, 0, $frame_len + 5), $signature)) {
+		return undef;
+	}
 	
 	my $is2_msg = APRSIS2::IS2Message->decode($frame);
 	#warn "is2_udp_frame_in decoded: " . Dumper($is2_msg) . "\n";
 	return $is2_msg;
+}
+
+sub is2_udp_signature_check($$$)
+{
+	my($self, $frame, $signature) = @_;
+
+	my $hmac_marker = substr($signature, 0, 1);
+	if ($hmac_marker ne chr(0x05)) {
+		$self->{'error'} = "IS2 UDP frame has invalid hmac marker";
+		return undef;
+	}
+	my $hmac_key_id = unpack('C', substr($signature, 1, 1));
+	#warn "is2_udp_signature_check: hmac_key_id $hmac_key_id\n";
+	my $hmac_key = $self->{'hmac-keys'}->{$hmac_key_id};
+	#warn "hmac_key $hmac_key";
+	my $hmac_result = hmac_sha256($frame, $hmac_key);
+	#warn "hmac_result " . unpack('H*', $hmac_result) . "\n";
+	
+	if ($hmac_result eq substr($signature, 2)) {
+		return 1;
+	}
+
+	$self->{'error'} = "IS2 UDP frame signature incorrect";
+	return 0;
+}
+
+sub is2_udp_sign($$$)
+{
+	my($self, $frame) = @_;
+
+	my $hmac_key = $self->{'hmac-keys'}->{$self->{'hmac-key-tx'}};
+	#warn "tx hmac_key $hmac_key" . "\n";
+	my $hmac_result = hmac_sha256($frame, $hmac_key);
+	#warn "hmac_result " . unpack('H*', $hmac_result) . "\n";
+
+	return $frame . chr(0x05) . chr($self->{'hmac-key-tx'}) . $hmac_result;
 }
 
 sub is2_frame_in_nonping($;$)

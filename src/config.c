@@ -32,6 +32,7 @@
 #include "worker.h"
 #include "filter.h"
 #include "parse_qc.h"
+#include "aprsis2.h"
 #include "tls.h"
 
 char def_cfgfile[] = "aprsc.conf";
@@ -81,6 +82,11 @@ struct uplink_config_t *new_uplink_config; /* uplink config being generated from
 
 struct peerip_config_t *peerip_config;
 struct peerip_config_t *new_peerip_config;
+
+struct peergroup_key_t *peergroup_key_config;
+struct peergroup_key_t *new_peergroup_key_config, *prev_peergroup_key_config;
+int peergroup_key_transmit;
+int new_peergroup_key_transmit;
 
 struct http_config_t *http_config = NULL;
 struct http_config_t *new_http_config = NULL;
@@ -146,6 +152,8 @@ int do_httpupload(char *new, int argc, char **argv);
 int do_listen(struct listen_config_t **lq, int argc, char **argv);
 int do_interval(int *dest, int argc, char **argv);
 int do_peergroup(struct peerip_config_t **lq, int argc, char **argv);
+int do_peergroup_key(struct peergroup_key_t **lq, int argc, char **argv);
+int do_peergroup_key_transmit(struct peergroup_key_t **lq, int argc, char **argv);
 int do_uplink(struct uplink_config_t **lq, int argc, char **argv);
 int do_uplinkbind(void *new, int argc, char **argv);
 int do_logrotate(int *dest, int argc, char **argv);
@@ -181,6 +189,8 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
+	{ "peergroupkey",	_CFUNC_ do_peergroup_key,	&new_peergroup_key_config	},
+	{ "peergroupkeytransmit",	_CFUNC_ do_peergroup_key_transmit,	&new_peergroup_key_transmit	},
 	{ "q_protocol_id",	_CFUNC_ do_char,	&q_protocol_id	},
 	{ "disallow_other_q_protocols",_CFUNC_ do_boolean,	&disallow_other_protocol_id	},
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
@@ -305,6 +315,22 @@ void free_peerip_config(struct peerip_config_t **lc)
 		hfree((void*)this->host);
 		hfree((void*)this->serverid);
 		freeaddrinfo(this->ai);
+		hfree(this);
+	}
+}
+
+/*
+ *	Free a peergroup key config tree
+ */
+
+void free_peergroup_key_config(struct peergroup_key_t **kc)
+{
+	struct peergroup_key_t *this;
+
+	while (*kc) {
+		this = *kc;
+		*kc = this->next;
+		hfree((void*)this->key);
 		hfree(this);
 	}
 }
@@ -676,6 +702,59 @@ err:
 		freeaddrinfo(ai);
 		
 	return -2;
+}
+
+/*
+ *	Packet signature keys for IS2 peergroups
+ */
+
+int do_peergroup_key(struct peergroup_key_t **lq, int argc, char **argv)
+{
+	if (argc != 3)
+		return -1;
+
+	errno = 0;
+	int key_id = strtol(argv[1], NULL, 10);
+	if (errno != 0) {
+		hlog(LOG_ERR, "PeerGroupKey: Failed to parse key identier as an integer: %s", strerror(errno));
+		return -2;
+	}
+	if (key_id < 0 || key_id >= IS2_PEERGROUP_KEY_ID_NUM) {
+		hlog(LOG_ERR, "PeerGroupKey: Invalid key identifier value: %d - must be 0-%d", key_id, IS2_PEERGROUP_KEY_ID_NUM-1);
+		return -2;
+	}
+
+	struct peergroup_key_t *k = hmalloc(sizeof(*k));
+	k->key_id = key_id;
+	k->key = hstrdup(argv[2]);
+	
+	k->next = new_peergroup_key_config;
+	if (k->next)
+		k->next->prevp = &k->next;
+	new_peergroup_key_config = k;
+
+	return 0;
+}
+
+int do_peergroup_key_transmit(struct peergroup_key_t **lq, int argc, char **argv)
+{
+	if (argc != 2)
+		return -1;
+
+	errno = 0;
+	int key_id = strtol(argv[1], NULL, 10);
+	if (errno != 0) {
+		hlog(LOG_ERR, "PeerGroupKeTransmity: Failed to parse key identier as an integer: %s", strerror(errno));
+		return -2;
+	}
+	if (key_id < 0 || key_id >= IS2_PEERGROUP_KEY_ID_NUM) {
+		hlog(LOG_ERR, "PeerGroupKeyTransmit: Invalid key identifier value: %d - must be 0-%d", key_id, IS2_PEERGROUP_KEY_ID_NUM-1);
+		return -2;
+	}
+
+	new_peergroup_key_transmit = key_id;
+
+	return 0;
 }
 
 /*
@@ -1462,7 +1541,7 @@ int read_config(void)
 		listen_config_new = NULL;
 	}
 
-	/* put in the new aprsis-uplink  config */
+	/* put in the new aprsis-uplink config */
 	if (uplink_config_install) {
 		// too quick reconfig - uplink thread has not reconfigured yet
 		hlog(LOG_WARNING, "New uplink config discarded - too quick reload, Uplink thread has not reconfigured yet");
@@ -1474,7 +1553,15 @@ int read_config(void)
 		uplink_config_updated = 1;
 	}
 
-	/* put in the new aprsis-peerip  config */
+	/* put in the new peergroup packet signing key config */
+	free_peergroup_key_config(&prev_peergroup_key_config);
+	prev_peergroup_key_config = peergroup_key_config;
+	peergroup_key_config = new_peergroup_key_config;
+	new_peergroup_key_config = NULL;
+	is2_corepeer_key_setup();
+	peergroup_key_transmit = new_peergroup_key_transmit;
+
+	/* put in the new peergroup config */
 	free_peerip_config(&peerip_config);
 	peerip_config = new_peerip_config;
 	if (peerip_config)
@@ -1538,6 +1625,8 @@ void free_config(void)
 	fake_version = NULL;
 	free_listen_config(&listen_config);
 	free_peerip_config(&peerip_config);
+	free_peergroup_key_config(&peergroup_key_config);
+	free_peergroup_key_config(&prev_peergroup_key_config);
 	free_http_config(&http_config);
 	if (disallow_srccall_glob) {
 		free_string_array(disallow_srccall_glob);

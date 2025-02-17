@@ -24,5 +24,7 @@ extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_propose(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
 
+extern int is2_corepeer_key_setup(void);
+
 #endif
 

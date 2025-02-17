@@ -24,7 +24,12 @@ use Time::HiRes qw(sleep);
 my $p = new runproduct('is2-basic');
 
 # UDP peer socket
-my $udp = new Ham::APRS::IS2('127.0.0.1:16405', 'TESTIN-2', 'udp-peer' => 1);
+my $is2_hmac_keys = {
+    1 => "firstkey",
+    2 => "secondkey",
+    3 => "thirdkey",
+};
+my $udp = new Ham::APRS::IS2('127.0.0.1:16405', 'TESTIN-2', 'udp-peer' => 1, 'hmac-keys' => $is2_hmac_keys, 'hmac-key-tx' => 2);
 ok(defined $udp, 1, "Failed to initialize Ham::APRS::IS2 UDP server socket");
 ok($udp->bind_and_listen(), 1, "Failed to bind UDP server socket");
 $udp->set_destination('127.0.0.1:16404', 'TESTING');

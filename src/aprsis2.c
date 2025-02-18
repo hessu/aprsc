@@ -151,7 +151,11 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2_
  */
 
 struct is2_corepeer_context_t {
+#ifdef HAVE_OPENSSL_3
 	EVP_MAC_CTX *ctx;
+#else
+	HMAC_CTX *ctx;
+#endif
 	const unsigned char *key;
 	int key_len;
 } *is2_corepeer_context[IS2_PEERGROUP_KEY_ID_NUM];
@@ -163,18 +167,27 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: PeerGroupKey/PeerGroupKeyTransmit mismatch: Key %d not defined", c->addr_rem, c->username, peergroup_key_transmit);
 		return -1;
 	}
-	EVP_MAC_CTX *ctx = context->ctx;
-	
+
 	/* Calculate the MAC */
 	unsigned char md[32];
-	size_t md_len;
 
+#ifdef HAVE_OPENSSL_3
+	size_t md_len;
+	EVP_MAC_CTX *ctx = context->ctx;
+	
 	if (EVP_MAC_init(ctx, context->key, context->key_len, NULL) != 1 ||
 	    EVP_MAC_update(ctx, (unsigned char *)obuf, data_len) != 1 ||
 	        EVP_MAC_final(ctx, md, &md_len, sizeof(md)) != 1) {
 	            //handleErrors();
 	            return -1;
 	}
+#else
+	unsigned int md_len;
+	HMAC_CTX *ctx = context->ctx;
+	HMAC_Init_ex(ctx, NULL, 0, NULL, NULL);
+	HMAC_Update(ctx, (unsigned char *)obuf, data_len);
+	HMAC_Final(ctx, md, &md_len);
+#endif
 
 	obuf[data_len] = IS2_UDP_HMAC_MARKER; // marker: has HMAC
 	obuf[data_len+1] = peergroup_key_transmit; // HMAC key identifier
@@ -991,10 +1004,12 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 			c->addr_rem, c->username, key_id);
 		return -1;
 	}
+
+	unsigned char md[32];
+#ifdef HAVE_OPENSSL_3
 	EVP_MAC_CTX *ctx = context->ctx;
 
 	/* Calculate the MAC */
-	unsigned char md[32];
 	size_t md_len;
 
 	if (EVP_MAC_init(ctx, context->key, context->key_len, NULL) != 1 ||
@@ -1003,6 +1018,13 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 	            //handleErrors();
 	            return -1;
 	}
+#else
+	unsigned int md_len;
+	HMAC_CTX *ctx = context->ctx;
+	HMAC_Init_ex(ctx, NULL, 0, NULL, NULL);
+	HMAC_Update(ctx, (unsigned char *)ibuf, signature_start);
+	HMAC_Final(ctx, md, &md_len);
+#endif
 
 	//hlog(LOG_DEBUG, "IS2 rx hmac signed, key %d, sig start %d, md_len %d, received md %d bytes", key_id, signature_start, md_len, len - signature_start - 2);
 	if (md_len != 32 || len - signature_start - 2 != 32) {
@@ -1391,6 +1413,7 @@ int evp_hmac_errors(void) {
 
 static int is2_corepeer_hmac_setup(int key_id, char *key)
 {
+#ifdef HAVE_OPENSSL_3
 	EVP_MAC *mac = NULL;
 	EVP_MAC_CTX *ctx = NULL;
 	OSSL_PARAM params[3];
@@ -1412,6 +1435,10 @@ static int is2_corepeer_hmac_setup(int key_id, char *key)
 
 	if (EVP_MAC_CTX_set_params(ctx, params) != 1)
 		return evp_hmac_errors();
+#else
+	HMAC_CTX *ctx = HMAC_CTX_new();
+	HMAC_Init_ex(ctx, key, strlen(key), EVP_sha256(), NULL);
+#endif
 
 	// TODO: Since OpenSSL 3.0.3 there is no need to provide the key again when
 	// resetting HMAC context, we can leave key = NULL and key_len = 0.

@@ -1,9 +1,8 @@
 
 #include "ac-hdrs.h"
 
-#ifdef HAVE_OPENSSL_SSL_H
+// It is not optional any more at build time.
 #define USE_SSL
-#endif
 
 #ifndef SSL_H
 #define SSL_H

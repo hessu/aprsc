@@ -1,4 +1,6 @@
 
+#include <string.h>
+
 #include "aprsis2plain.h"
 #include "hmalloc.h"
 #include "hlog.h"

@@ -23,7 +23,6 @@ AC_CONFIG_HEADERS([ac-hdrs.h])
 
 dnl Checks for programs.
 AC_PROG_CC
-AC_PROG_GCC_TRADITIONAL
 
 
 dnl AC_PATH_PROG(LD, ld, ld)dnl
@@ -141,9 +140,9 @@ if test "$ac_cv_libsocket_both" = 1 ; then
       if test "$ac_cv_func_socket_lsocket" = yes ; then
         t_oldLibs="$LIBS"
         LIBS="$LIBS -lsocket"
-        AC_TRY_LINK([],[gethostbyname();], ,[
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[gethostbyname();]])],[],[
           LIBS="$LIBS -lnsl" # Add this Solaris library..
-          AC_TRY_LINK([],[gethostbyname();],[
+          AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[gethostbyname();]])],[],[
                         LIBSOCKET="-lsocket -lnsl"
                         ac_cv_func_gethostbyname_lnsl=yes
                 ], [
@@ -164,7 +163,7 @@ LIBS="$t_oldLibs"
 
 if test "$ac_cv_func_socket" = no -a "$LIBSOCKET" != ""; then
   LIBS="$LIBS $LIBSOCKET"
-  AC_TRY_LINK([],[socket();], ac_cv_func_socket=yes)
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[socket();]])],[ac_cv_func_socket=yes],[])
   if test $ac_cv_func_socket = yes; then
     AC_DEFINE(HAVE_SOCKET)
     AC_MSG_RESULT([Has  socket()  when using  $LIBSOCKET])
@@ -173,7 +172,7 @@ if test "$ac_cv_func_socket" = no -a "$LIBSOCKET" != ""; then
 fi
 if test "$ac_cv_func_socketpair" = no -a "$LIBSOCKET" != ""; then
   LIBS="$LIBS $LIBSOCKET"
-  AC_TRY_LINK([],[socketpair();], ac_cv_func_socketpair=yes)
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[socketpair();]])],[ac_cv_func_socketpair=yes],[])
   if test $ac_cv_func_socketpair = yes; then
     AC_DEFINE(HAVE_SOCKETPAIR)
     AC_MSG_RESULT([Has  socketpair()  when using  $LIBSOCKET])
@@ -199,7 +198,7 @@ LIBS="$LIBS $LIBSOCKET"
 #  THEN call the AC_REPLACE_FUNCS()
 if test "$ac_cv_func_gai_strerror" = no ; then
     LIBS="$LIBS -linet6"
-    AC_TRY_LINK([],[gai_strerror();], ac_cv_func_gai_strerror=yes)
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[gai_strerror();]])],[ac_cv_func_gai_strerror=yes],[])
     LIBS="$t_oldLibs"
     if test "$ac_cv_func_gai_strerror" = yes; then
         LIBSOCKET="$LIBSOCKET -linet6"
@@ -219,7 +218,7 @@ AC_SUBST(LIBS,"$LIBS")
 dnl Check for the __sync_fetch_and_add builtin
 dnl the check needs to use long long x, since we're incrementing a long long in the stats.
 AC_CACHE_CHECK([for __sync_fetch_and_add], ac_cv_func_sync_fetch_and_add,
-[AC_TRY_LINK([],[long long x;__sync_fetch_and_add(&x,1);],ac_cv_func_sync_fetch_and_add=yes,ac_cv_func_sync_fetch_and_add=no)])
+[AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[long long x;__sync_fetch_and_add(&x,1);]])],[ac_cv_func_sync_fetch_and_add=yes],[ac_cv_func_sync_fetch_and_add=no])])
 if test "$ac_cv_func_sync_fetch_and_add" = yes; then
   AC_DEFINE(HAVE_SYNC_FETCH_AND_ADD,1,[Define if you have the __sync_fetch_and_add function])
 fi

@@ -48,13 +48,15 @@ VPATH = @srcdir@
 # Compiler and flags
 CC=		@CC@
 PROF=
-CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ $(PROF) $(DEFS)
+CHARDEN=        -Wformat -Wformat=2 -Wconversion -Wimplicit-fallthrough -Werror=format-security -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -D_GLIBCXX_ASSERTIONS -fstrict-flex-arrays=3 -fstack-clash-protection -fstack-protector-strong -fcf-protection=full -fno-delete-null-pointer-checks -fno-strict-overflow -fno-strict-aliasing -ftrivial-auto-var-init=zero -fexceptions
+CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ $(PROF) $(DEFS) $(CHARDEN)
 
 # On solaris, should use -D_REENTRANT  CFLAGS
 
 # Linker and flags
 LD=		@LD@
-LDFLAGS=	@LDFLAGS@ $(PROF)
+LDHARDEN=       -fPIE -pie -Wl,-z,nodlopen -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now -Wl,--as-needed -Wl,--no-copy-dt-needed-entries -s
+LDFLAGS=	@LDFLAGS@ $(PROF) $(LDHARDEN)
 
 INSTALL=	$(srcdir)/install-sh
 INSTALL_PROGRAM=$(INSTALL)  -m 755
@@ -188,7 +190,7 @@ distclean: clean
 	rm -rf ../tests/web/*
 
 aprsc: $(OBJS)
-	$(LD) $(LDFLAGS) -g -o aprsc $(OBJS) $(LIBS)
+	$(LD) $(LDFLAGS) -o aprsc $(OBJS) $(LIBS)
 
 %.o: %.c VERSION Makefile
 	$(CC) $(CFLAGS) -c $<

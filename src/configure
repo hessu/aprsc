@@ -653,6 +653,7 @@ LIBZ
 LIBRT
 LIBOBJS
 LIBSOCKET
+LIBRESOLV
 LIBGETNAMEINFO
 LIBPTHREAD
 LIBM
@@ -4122,6 +4123,60 @@ printf "%s\n" "$ac_cv_lib_nsl_getnameinfo" >&6; }
 if test "x$ac_cv_lib_nsl_getnameinfo" = xyes
 then :
   LIBGETNAMEINFO="-lnsl"
+fi
+
+fi
+
+done
+
+
+
+  for ac_func in res_init
+do :
+  ac_fn_c_check_func "$LINENO" "res_init" "ac_cv_func_res_init"
+if test "x$ac_cv_func_res_init" = xyes
+then :
+  printf "%s\n" "#define HAVE_RES_INIT 1" >>confdefs.h
+
+else $as_nop
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for res_init in -lresolv" >&5
+printf %s "checking for res_init in -lresolv... " >&6; }
+if test ${ac_cv_lib_resolv_res_init+y}
+then :
+  printf %s "(cached) " >&6
+else $as_nop
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lresolv  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+char res_init ();
+int
+main (void)
+{
+return res_init ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_resolv_res_init=yes
+else $as_nop
+  ac_cv_lib_resolv_res_init=no
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_resolv_res_init" >&5
+printf "%s\n" "$ac_cv_lib_resolv_res_init" >&6; }
+if test "x$ac_cv_lib_resolv_res_init" = xyes
+then :
+  LIBGETNAMEINFO="-lresolv"
 fi
 
 fi

@@ -101,6 +101,11 @@ AC_CHECK_FUNCS(getnameinfo,,
 	       AC_CHECK_LIB(nsl, getnameinfo,
 			    [LIBGETNAMEINFO="-lnsl"]))
 
+AC_SUBST(LIBRESOLV)
+AC_CHECK_FUNCS(res_init,,
+	       AC_CHECK_LIB(resolv, res_init,
+			    [LIBGETNAMEINFO="-lresolv"]))
+
 dnl
 dnl We check for various libraries
 dnl  - SysVr4 style of "-lsocket" at first (unless in libc)

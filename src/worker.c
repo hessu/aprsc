@@ -1267,6 +1267,11 @@ static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
 	 * to always output CRLF
 	 */
 	for (i = 0; i < c->ibuf_end; i++) {
+		if (ibuf[i] == 0) {
+			row_start++;
+			continue;
+		}
+
 		if (ibuf[i] == '\r' || ibuf[i] == '\n') {
 			/* found EOL - if the line is not empty, feed it forward */
 			if (i - row_start > 0) {

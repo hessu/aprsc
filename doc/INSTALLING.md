@@ -79,8 +79,13 @@ Next, add the gpg key used to sign the packages by running the following
 commands at your command prompt.  This will enable strong authentication of
 the aprsc packages - apt-get will cryptographically validate them.
 
-On newer distributions, such as Debian 12.0 and Ubuntu 22.04, where the
-`/etc/apt/trusted.gpg.d` directory is present, run the following commands:
+On Ubuntu 24.04 and later, use the new key identifier (rsa4096 key):
+
+    gpg --keyserver keyserver.ubuntu.com --recv D43AD4708A2DA1139F250B3294E40E5320D8AE3C
+    sudo gpg --export D43AD4708A2DA1139F250B3294E40E5320D8AE3C > /etc/apt/trusted.gpg.d/aprsc.key.gpg
+
+On older distributions, such as Debian 12.0 and Ubuntu 22.04, run the
+following commands:
 
     gpg --keyserver keyserver.ubuntu.com --recv C51AA22389B5B74C3896EF3CA72A581E657A2B8D
     sudo gpg --export C51AA22389B5B74C3896EF3CA72A581E657A2B8D > /etc/apt/trusted.gpg.d/aprsc.key.gpg
@@ -89,12 +94,6 @@ If you get a warning saying `Key is stored in legacy trusted.gpg keyring`,
 it can be deleted from there like this:
 
     sudo apt-key del C51AA22389B5B74C3896EF3CA72A581E657A2B8D
-
-On older distributions where `trusted.gpg.d` directory is not present, use
-the following commands instead:
-
-    gpg --keyserver keyserver.ubuntu.com --recv C51AA22389B5B74C3896EF3CA72A581E657A2B8D
-    gpg --export C51AA22389B5B74C3896EF3CA72A581E657A2B8D | sudo apt-key add -
 
 Next, download the package indexes:
 

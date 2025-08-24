@@ -763,6 +763,7 @@ void time_thread(void *asdf)
 	hlog(LOG_INFO, "Time thread starting: using gettimeofday");
 #endif
 
+	thread_name_set("aprsc time");
 	pthreads_profiling_reset("time");
 	
 	sigemptyset(&sigs_to_block);

@@ -924,7 +924,8 @@ void http_thread(void *asdf)
 	
 	http_timer_tv.tv_sec = 0;
 	http_timer_tv.tv_usec = 200000;
-	
+
+	thread_name_set("aprsc http");
 	pthreads_profiling_reset("http");
 	
 	sigemptyset(&sigs_to_block);

@@ -1394,6 +1394,7 @@ void accept_thread(void *asdf)
 	int poll_n = 0;
 	struct listen_t *l;
 
+	thread_name_set("aprsc accept");
 	pthreads_profiling_reset("accept");
 	
 	sigemptyset(&sigs_to_block);

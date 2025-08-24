@@ -94,6 +94,7 @@ dnl AC_CHECK_FUNCS(pthread_exit,,
 	       AC_CHECK_LIB(pthread, pthread_exit,
 			    [LIBPTHREAD="-lpthread"])
 dnl)
+AC_CHECK_LIB(pthread, pthread_setname_np, AC_DEFINE([HAVE_PTHREAD_SETNAME_NP], [], [pthread_setname_np available]))
 
 dnl Solaris resolver solution:
 AC_SUBST(LIBGETNAMEINFO)

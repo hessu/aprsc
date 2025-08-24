@@ -54,4 +54,6 @@ extern int accesslog(const char *fmt, ...);
 extern int writepid(char *name);
 extern int closepid(void);
 
+extern void thread_name_set(const char *name);
+
 #endif

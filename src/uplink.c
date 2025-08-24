@@ -726,6 +726,7 @@ void uplink_thread(void *asdf)
 	int next_uplink = -1; /* the index to the next regular uplink candidate */
 	int uplink_error_set = -1;
 	
+	thread_name_set("aprsc uplink");
 	pthreads_profiling_reset("uplink");
 	
 	sigemptyset(&sigs_to_block);

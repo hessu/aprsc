@@ -1784,7 +1784,8 @@ void worker_thread(struct worker_t *self)
 #endif
 	time_t t1, t2, t3, t4, t5, t6, t7;
 
-	sprintf(myname,"worker %d", self->id);
+	sprintf(myname,"aprsc worker %d", self->id);
+	thread_name_set(myname);
 	pthreads_profiling_reset(myname);
 
 	sigemptyset(&sigs_to_block);

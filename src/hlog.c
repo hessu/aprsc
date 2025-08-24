@@ -15,6 +15,11 @@
  *	logging destinations
  */
 
+#include "ac-hdrs.h"
+
+#define _GNU_SOURCE
+#include <pthread.h>
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <syslog.h>
@@ -22,16 +27,17 @@
 #include <time.h>
 #include <sys/time.h>
 #include <string.h>
-#include <pthread.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <fcntl.h>
 #include <errno.h>
 
+
 #include "hlog.h"
 #include "hmalloc.h"
 #include "rwlock.h"
+
 
 int log_dest = L_DEFDEST;	/* Logging destination */
 int log_level = LOG_INFO;	/* Logging level */
@@ -568,4 +574,11 @@ int closepid(void)
 	}
 	
 	return 0;
+}
+
+void thread_name_set(const char *name)
+{
+#ifdef HAVE_PTHREAD_SETNAME_NP
+	pthread_setname_np(pthread_self(), name);
+#endif
 }

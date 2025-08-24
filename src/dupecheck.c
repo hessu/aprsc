@@ -716,6 +716,8 @@ static void dupecheck_thread(void)
 	int pb_out_count, pb_out_dupe_count;
 	time_t cleanup_tick = tick;
 
+	thread_name_set("aprsc dupecheck");
+
 #ifndef USE_EVENTFD
 	struct timespec sleepspec;
 	sleepspec.tv_sec = 0;

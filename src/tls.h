@@ -13,7 +13,9 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/conf.h>
-#include <openssl/engine.h>
+#if OPENSSL_VERSION_NUMBER < 0x30010000L
+#include <openssl/engine.h> // Only include on OpenSSL < 3.1
+#endif
 #include <openssl/evp.h>
 
 /* ssl error codes, must match ssl_err_labels order */

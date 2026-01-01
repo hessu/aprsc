@@ -10,15 +10,13 @@ my @platforms = (
 	'ubuntu-2404-amd64',
 	'ubuntu-2204-amd64',
 	'ubuntu-2004-amd64',
-	'ubuntu-1804-amd64',
-	'debian-100-i386',
-	'debian-100-amd64',
 	'debian-110-i386',
 	'debian-110-amd64',
 	'debian-120-amd64',
-	'centos-70-x86_64',
-	'fedora-39-x86_64',
+	'debian-130-amd64',
 	'fedora-40-x86_64',
+	'fedora-42-x86_64',
+	'fedora-43-x86_64',
 );
 
 my %platconf = (
@@ -26,19 +24,17 @@ my %platconf = (
 		'novm' => 1,
 		'port' => 10022
 	},
-	'centos-70-x86_64' => {
-		'dest' => 'centos/7/x86_64'
-	},
-	'fedora-39-x86_64' => {
-		'virtualisation' => 'lxd',
-		'dest' => 'fedora/39/x86_64'
-	},
 	'fedora-40-x86_64' => {
 		'virtualisation' => 'lxd',
 		'dest' => 'fedora/40/x86_64'
 	},
-	'ubuntu-1804-amd64' => {
-		'virtualisation' => 'lxd'
+	'fedora-42-x86_64' => {
+		'virtualisation' => 'lxd',
+		'dest' => 'fedora/42/x86_64'
+	},
+	'fedora-43-x86_64' => {
+		'virtualisation' => 'lxd',
+		'dest' => 'fedora/43/x86_64'
 	},
 	'ubuntu-2004-amd64' => {
 		'virtualisation' => 'lxd'
@@ -56,6 +52,9 @@ my %platconf = (
 		'virtualisation' => 'lxd'
 	},
 	'debian-120-amd64' => {
+		'virtualisation' => 'lxd'
+	},
+	'debian-130-amd64' => {
 		'virtualisation' => 'lxd'
 	}
 );

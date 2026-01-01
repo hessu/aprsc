@@ -9,10 +9,10 @@ systems.
 
 aprsc has been built and tested on:
 
-* Ubuntu LTS (18.04, 20.04, 22.04): x86_64
-* Debian 10.0, "buster": i386 and x86_64
+* Ubuntu LTS (20.04, 22.04, 24.04): x86_64
 * Debian 11.0, "bullseye": i386 and x86_64
 * Debian 12.0, "bookworm": x86_64
+* Debian 13.0, "trixie": x86_64
 * Mac OS X 10.8 (Snow Leopard): x86
 * FreeBSD 8.2 and 9.0 on amd64, 7.2 on i386
 * Solaris 11 (SunOS 5.11 11.0 i86pc i386)

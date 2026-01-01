@@ -79,7 +79,8 @@ Next, add the gpg key used to sign the packages by running the following
 commands at your command prompt.  This will enable strong authentication of
 the aprsc packages - apt-get will cryptographically validate them.
 
-On Ubuntu 24.04 and later, use the new key identifier (rsa4096 key):
+On Ubuntu 24.04 and later, and Debian 13.0 trixie and later, use the new key
+identifier (rsa4096 key):
 
     gpg --keyserver keyserver.ubuntu.com --recv D43AD4708A2DA1139F250B3294E40E5320D8AE3C
     sudo gpg --export D43AD4708A2DA1139F250B3294E40E5320D8AE3C > /etc/apt/trusted.gpg.d/aprsc.key.gpg

@@ -60,6 +60,9 @@
 /* Define to 1 if you have the `socketpair' function. */
 #undef HAVE_SOCKETPAIR
 
+/* MacOS struct stat.st_mtimespec */
+#undef HAVE_STAT_ST_MTIMESPEC
+
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 

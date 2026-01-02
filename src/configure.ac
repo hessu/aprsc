@@ -102,6 +102,19 @@ dnl AC_CHECK_FUNCS(pthread_exit,,
 dnl)
 AC_CHECK_LIB(pthread, pthread_setname_np, AC_DEFINE([HAVE_PTHREAD_SETNAME_NP], [], [pthread_setname_np available]))
 
+AC_MSG_CHECKING([for macOS signature of pthread_setname_np])
+AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([[
+        #include <pthread.h>
+        void check_pthread_setname_np() {
+            pthread_setname_np("test");
+        }
+    ]], [[]])],
+    [AC_MSG_RESULT(yes)
+     AC_DEFINE([HAVE_PTHREAD_SETNAME_NP_MACOS], [1], [pthread_setname_np has macOS signature])],
+    [AC_MSG_RESULT(no)]
+)
+
 dnl Solaris resolver solution:
 AC_SUBST(LIBGETNAMEINFO)
 AC_CHECK_FUNCS(getnameinfo,,

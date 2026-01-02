@@ -579,6 +579,10 @@ int closepid(void)
 void thread_name_set(const char *name)
 {
 #ifdef HAVE_PTHREAD_SETNAME_NP
+#ifdef HAVE_PTHREAD_SETNAME_NP_MACOS
+	pthread_setname_np(name);
+#else
 	pthread_setname_np(pthread_self(), name);
+#endif
 #endif
 }

@@ -359,12 +359,19 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 			 * use filter or udp, the filter/udp keyword will end
 			 * up as the version number. So good luck with that.
 			 */
-			 
+
 			if (i+1 >= argc) {
 				hlog(LOG_INFO, "%s/%s: No application name after 'vers' in login", c->addr_rem, username);
 				break;
 			}
-			
+
+			if ((i+2 < argc && strcasecmp(argv[i+2], "filter") == 0) || (i+2 >= argc)) {
+				hlog(LOG_WARNING, "%s/%s: vers app '%s' ver '%s': software name and version are not separated by a space",
+					c->addr_rem, username, argv[i+1], argv[i+2]);
+				rc = client_printf(self, c, "# Invalid login: software name and version are not separated by a space\r\n");
+				goto failed_login;
+			}
+
 			login_set_app_name(c, argv[i+1], (i+2 < argc) ? argv[i+2] : "");
 			i += 2;
 

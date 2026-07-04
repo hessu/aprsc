@@ -106,6 +106,7 @@ extern char *fake_version;
 
 extern char **disallow_srccall_glob;
 extern char **disallow_login_glob;
+extern char **disallow_igate_glob;
 
 extern char def_cfgfile[];
 extern char *cfgfile;

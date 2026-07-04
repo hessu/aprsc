@@ -96,6 +96,14 @@ my @pkts = (
 	"GLDROP>DST,DIGI,qAR,$login:>should drop, GLDROP as source callsign matches *DROP",
 	"DRGLOB>DST,DIGI,qAR,$login:>should drop, DRGLOB as source callsign matches DRG*",
 	"OH7DRU>DST,DIGI,qAR,$login:>should drop, OH7DRU as source callsign matches OH?DRUP",
+	# disallowed igate/receiver callsigns after the Q construct: IGDROP IG8CALL* *IGREJ IGR* OH?IGA
+	"SRC>DST,DIGI,qAR,IGDROP:>should drop, IGDROP as igate callsign matches IGDROP",
+	"SRC>DST,DIGI,qAR,IG8CALL-1:>should drop, IG8CALL-1 as igate callsign matches IG8CALL*",
+	"SRC>DST,DIGI,qAR,XIGREJ:>should drop, XIGREJ as igate callsign matches *IGREJ",
+	"SRC>DST,DIGI,qAR,IGROTHER:>should drop, IGROTHER as igate callsign matches IGR*",
+	"SRC>DST,DIGI,qAR,OH2IGA:>should drop, OH2IGA as igate callsign matches OH?IGA",
+	# disallowed Q construct itself
+	"SRC>DST,DIGI,qAY,IGTEST:>should drop, qAY Q construct matches disallowed qAY",
 	# DX spots
 	"SRC>DST,DIGI,qAR,$login:DX de FOO: BAR - should drop",
 	# Disallowed message recipients, status messages and such

@@ -67,6 +67,7 @@ char *new_fake_version;
 
 char **disallow_srccall_glob, **new_disallow_srccall_glob;
 char **disallow_login_glob, **new_disallow_login_glob;
+char **disallow_igate_glob, **new_disallow_igate_glob;
 
 int listen_low_ports = 0; /* do we have any < 1024 ports set? need POSIX capabilities? */
 
@@ -188,6 +189,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "fake_version",	_CFUNC_ do_string,	&new_fake_version	},
 	{ "disallowlogincall",	_CFUNC_ do_string_array,	&new_disallow_login_glob	},
 	{ "disallowsourcecall",	_CFUNC_ do_string_array,	&new_disallow_srccall_glob	},
+	{ "disallowigatecall",	_CFUNC_ do_string_array,	&new_disallow_igate_glob	},
 	{ NULL,			NULL,			NULL			}
 };
 
@@ -1405,7 +1407,19 @@ int read_config(void)
 		disallow_login_glob = NULL;
 		free_string_array(o);
 	}
-	
+
+	if (new_disallow_igate_glob) {
+		char **o = disallow_igate_glob;
+		disallow_igate_glob = new_disallow_igate_glob;
+		new_disallow_igate_glob = NULL;
+		if (o)
+			free_string_array(o);
+	} else if (disallow_igate_glob) {
+		char **o = disallow_igate_glob;
+		disallow_igate_glob = NULL;
+		free_string_array(o);
+	}
+
 	/* validate uplink config: if there is a single 'multiro' connection
 	 * configured, all of the uplinks must be 'multiro'
 	 */
@@ -1534,6 +1548,10 @@ void free_config(void)
 	if (disallow_login_glob) {
 		free_string_array(disallow_login_glob);
 		disallow_login_glob = NULL;
+	}
+	if (disallow_igate_glob) {
+		free_string_array(disallow_igate_glob);
+		disallow_igate_glob = NULL;
 	}
 }
 

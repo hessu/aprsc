@@ -103,8 +103,17 @@ dnl)
 AC_CHECK_LIB(pthread, pthread_setname_np, AC_DEFINE([HAVE_PTHREAD_SETNAME_NP], [], [pthread_setname_np available]))
 
 AC_MSG_CHECKING([for macOS signature of pthread_setname_np])
+dnl _GNU_SOURCE must be defined before including pthread.h so that glibc
+dnl exposes the (two-argument) Linux prototype - just like hlog.c does.
+dnl Without it the function is undeclared on glibc and the single-argument
+dnl call below compiles as an implicit declaration, falsely detecting the
+dnl macOS signature. -Werror makes the wrong number of arguments fatal so
+dnl the test result is reliable.
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
 AC_COMPILE_IFELSE(
     [AC_LANG_PROGRAM([[
+        #define _GNU_SOURCE
         #include <pthread.h>
         void check_pthread_setname_np() {
             pthread_setname_np("test");
@@ -114,6 +123,7 @@ AC_COMPILE_IFELSE(
      AC_DEFINE([HAVE_PTHREAD_SETNAME_NP_MACOS], [1], [pthread_setname_np has macOS signature])],
     [AC_MSG_RESULT(no)]
 )
+CFLAGS="$save_CFLAGS"
 
 dnl Solaris resolver solution:
 AC_SUBST(LIBGETNAMEINFO)

@@ -81,7 +81,8 @@ const char *inerr_labels[] = {
 	"inerr_empty",
 	"disallow_srccall",
 	"disallow_dx",
-	"disallow_msg_dst"
+	"disallow_msg_dst",
+	"disallow_igatecall"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -679,8 +680,38 @@ int check_path_calls(const char *via_start, const char *path_end)
 	}
 	
 	//hlog(LOG_DEBUG, "check_path_calls returning %d", calls);
-	
+
 	return calls;
+}
+
+/*
+ *	Check the comma-delimited fields starting at the Q construct (q_start)
+ *	and ending at path_end against the disallow_igate_glob set. This covers
+ *	both the Q construct itself (e.g. qAY) and the igate/receiver callsigns
+ *	following it, so a configured glob can drop based on either.
+ *	q_start points to the 'q' of the Q construct, path_end to the ':'.
+ *	Returns -1 if a disallowed field is found, 0 otherwise.
+ */
+
+static int check_igate_calls(const char *q_start, const char *path_end)
+{
+	const char *p = q_start;
+	const char *e;
+
+	while (p < path_end) {
+		e = p;
+		/* find end of this path callsign */
+		while (*e != ',' && e < path_end)
+			e++;
+
+		/* check the field (the q construct itself, or an igate call) */
+		if (check_call_glob_match(disallow_igate_glob, p, e-p))
+			return -1;
+
+		p = e + 1;
+	}
+
+	return 0;
 }
 
 /*
@@ -951,7 +982,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len)
 		hlog(LOG_DEBUG, "%s/%s: q construct drop: %d", c->addr_rem, c->username, path_append_len);
 		return path_append_len;
 	}
-	
+
+	/* check if any of the igate callsigns after the Q construct are disallowed */
+	if (disallow_igate_glob && q_start != NULL && q_start >= s && q_start < path_end
+	    && check_igate_calls(q_start, path_end) == -1)
+		return INERR_DIS_IGATECALL; /* disallowed igate callsign */
+
 	/* get a packet buffer */
 	int new_len;
 	if (q_replace)

@@ -365,15 +365,30 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 				break;
 			}
 
-			if ((i+2 < argc && strcasecmp(argv[i+2], "filter") == 0) || (i+2 >= argc)) {
+			const char *app_name = argv[i+1];
+			const char *app_ver = (i+2 < argc) ? argv[i+2] : "";
+			/* If the software name and version are not separated by a
+			 * space, the filter/udp keyword (or nothing) ends up as the
+			 * version number.
+			 */
+			int ver_missing = (i+2 >= argc) || (strcasecmp(app_ver, "filter") == 0);
+
+			/* set app name and version, which also determines whether
+			 * this is a known-broken client running in quirks mode
+			 */
+			login_set_app_name(c, app_name, app_ver);
+			i += 2;
+
+			/* reject logins with a missing version number, unless the
+			 * client is in quirks mode (known-broken software, which
+			 * often does not send a proper version number)
+			 */
+			if (ver_missing && !c->quirks_mode) {
 				hlog(LOG_WARNING, "%s/%s: vers app '%s' ver '%s': software name and version are not separated by a space",
-					c->addr_rem, username, argv[i+1], argv[i+2]);
+					c->addr_rem, username, app_name, app_ver);
 				rc = client_printf(self, c, "# Invalid login: software name and version are not separated by a space\r\n");
 				goto failed_login;
 			}
-
-			login_set_app_name(c, argv[i+1], (i+2 < argc) ? argv[i+2] : "");
-			i += 2;
 
 		} else if (strcasecmp(argv[i], "udp") == 0) {
 			if (++i >= argc) {

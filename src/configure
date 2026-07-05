@@ -4040,9 +4040,12 @@ fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for macOS signature of pthread_setname_np" >&5
 printf %s "checking for macOS signature of pthread_setname_np... " >&6; }
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -Werror"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
+        #define _GNU_SOURCE
         #include <pthread.h>
         void check_pthread_setname_np() {
             pthread_setname_np("test");
@@ -4070,6 +4073,7 @@ printf "%s\n" "no" >&6; }
 esac
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+CFLAGS="$save_CFLAGS"
 
 
 

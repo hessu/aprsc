@@ -324,6 +324,12 @@ following callsigns are dropped by default: N0CALL* NOCALL* SERVER*
 
     DisallowSourceCall P1RAT* P?ROT*
 
+DisallowIgateCall makes the server drop packets which have the given callsign
+as one of the igate/receiver callsigns appearing after the Q construct in the
+path, even though they were injected at a different server.
+
+    DisallowIgateCall P1RAT* P?ROT*
+
 
 ### Environment ###
 

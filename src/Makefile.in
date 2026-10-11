@@ -48,7 +48,7 @@ VPATH = @srcdir@
 # Compiler and flags
 CC=		@CC@
 PROF=
-CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ $(PROF) $(DEFS)
+CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ @OPENSSL_CFLAGS@ $(PROF) $(DEFS)
 
 # On solaris, should use -D_REENTRANT  CFLAGS
 
@@ -66,7 +66,7 @@ LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ \
 		@LIBSOCKET@ @LIBGETNAMEINFO@ \
 		@LIBCAP@ @LIBRESOLV@ @LIBZ@ \
 		@LIBPROTOBUFC@ \
-		-lssl -lcrypto
+		@OPENSSL_LIBS@
 
 #LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
 #CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include
@@ -206,7 +206,7 @@ aprsis2.pb-c.c: aprsis2.proto
 	protoc-c --c_out=. $<
 
 aprsis2.pb-c.h: aprsis2.pb-c.c
-aprsc.o: aprsis2.pb-c.h
+$(OBJS): aprsis2.pb-c.h
 
 aprsc.8 : % : %.in VERSION Makefile
 	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\

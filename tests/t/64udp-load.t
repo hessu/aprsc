@@ -38,7 +38,11 @@ ok($ret, 1, "Failed to connect to the server: " . $i_full->{'error'});
 
 my $flush_interval = 300;
 my $bytelimit = 64*1024;
-my $window = 12*1024;
+# Bytes in flight. Linux counts the whole buffer of each small datagram
+# against the socket receive buffer, so the server's 64 KiB receive buffer
+# holds only about 170 of these ~80 byte packets. 12 KiB, about 150 packets,
+# overflows it when the server thread is descheduled on a busy CI runner.
+my $window = 6*1024;
 #my $max_speed = 500; # packets /s
 
 sub load_test($$$)

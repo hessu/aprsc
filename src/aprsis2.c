@@ -408,7 +408,10 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	mr.type = APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REQUEST;
 	mr.login_request = &lr;
 	
-	is2_write_message(self, c, &mr);
+	int rc = is2_write_message(self, c, &mr);
+	if (rc < -2)
+		return rc; /* the client was destroyed by the write */
+
 	return 0;
 }
 
@@ -569,7 +572,9 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	}
 	
 	/* tell the client he's good */
-	is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
+	rc = is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
+	if (rc < -2)
+		return rc; /* the client was destroyed by the write */
 
 	is2_allocate_obuf(c);
 	
@@ -598,7 +603,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 		shutdown(old_fd, SHUT_RDWR);
 	}
 
-	return rc;
+	return 0;
 
 failed_login:
 	
@@ -702,9 +707,12 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		ping->ping_type = APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REPLY;
 		
 		r = is2_write_message(self, c, m);
-	}
+		if (r < -2)
+			return r; /* the client was destroyed by the write */
 	
-	if (ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REPLY && ping->request_id == c->ping_request_id) {
+		/* a buffered or failed write does not make the ping invalid */
+		r = 0;
+	} else if (ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REPLY && ping->request_id == c->ping_request_id) {
 		double diff;
 #ifdef USE_CLOCK_GETTIME
 		struct timespec ts;
@@ -794,6 +802,11 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 	}
 	
 	r = is2_write_message(self, c, &rm);
+	if (r < -2)
+		return r; /* the client was destroyed by the write */
+
+	/* a buffered or failed write does not make the request invalid */
+	r = 0;
 	
 done:	
 	return r;
@@ -996,6 +1009,7 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Frame with non-zero reserved byte: ",
 				c->addr_rem, c->username);
 			client_close(self, c, CLIERR_IS2_FRAMING_INCOMPATIBLE);
+			return -1;
 		}
 
 		uint16_t *ip = (uint16_t *)&this[2];
@@ -1023,12 +1037,13 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		
 		//hlog_packet(LOG_DEBUG, this, left, "%s/%s: IS2: framing ok: ", c->addr_rem, c->username);
 		
-		/* We may find a packet which caused the client to be disconnected and discarded;
-		 * do not parse any additional packets after that.
+		/* The message handler may have disconnected and discarded the client:
+		 * it returns -1 after closing it, or a value < -2 if a write destroyed
+		 * it. Stop on any error, like the plaintext deframer does.
 		 */
 		int r = is2_unpack_message(self, c, this + IS2_HEAD_LEN, clen);
-		if (r == -1)
-			return r;
+		if (r < 0)
+			return -1;
 
 		i += IS2_HEAD_LEN + clen + IS2_TAIL_LEN;
 	}

@@ -518,6 +518,23 @@ sub set_filter($$)
 	return 0;
 }
 
+sub send_raw($$)
+{
+	my($self, $data) = @_;
+
+	return undef if ($self->{'state'} ne 'connected');
+
+	$self->{'sock'}->blocking(1);
+	if (!$self->{'sock'}->print($data) || !$self->{'sock'}->flush) {
+		$self->{'error'} = "Failed to write raw data to $self->{host_port}: $!";
+		$self->{'sock'}->blocking(0);
+		return 0;
+	}
+	$self->{'sock'}->blocking(0);
+
+	return 1;
+}
+
 sub is2_frame_out($$)
 {
 	my($self, $frame) = @_;

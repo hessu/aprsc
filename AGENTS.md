@@ -14,7 +14,7 @@ src/        All C sources, the autoconf build, packaging, and the web status UI
 tests/      Functional test suite in Go (runs the real binary against fake peers), and the configs it uses
 doc/        Markdown documentation published to he.fi/aprsc (also installed as HTML)
 tools/      Standalone Perl helpers for feeding, copying and receiving APRS-IS traffic
-build/      build-all.pl: maintainer script that builds packages in LXD VMs per distro
+build/      build-all.pl: maintainer script that builds packages in LXD containers per distro; lxd-create-builder.sh, lxd-import-image.sh and README.md for setting up a container
 .github/    CI workflow: configure, make, make testinstall, make test, on Ubuntu with and without IS2
 ```
 

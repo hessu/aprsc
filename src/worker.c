@@ -1262,7 +1262,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	
 	if (i == worker_corepeer_client_count || !rc) {
 		addrs = strsockaddr(&addr.sa, addrlen);
-		hlog(LOG_INFO, "recv: Received UDP peergroup packet from unknown peer address %s: %*s", addrs, r, c->ibuf);
+		hlog_packet(LOG_INFO, c->ibuf, r, "recv: Received UDP peergroup packet from unknown peer address %s: ", addrs);
 		hfree(addrs);
 		return 0;
 	}

@@ -42,7 +42,10 @@ ok($read1, undef, "Ouch, got data from server when none should have been availab
 my $t_end = time();
 my $t_dif = $t_end - $t_start;
 warn sprintf("\ntimeout on uplink socket took %.3f s, should take 10s\n", $t_dif);
-ok($t_dif > 9 && $t_dif < 15);
+# The server measures the timeout in whole-second ticks from the last read,
+# and the stopwatch starts after the login exchange, so it can legitimately
+# fire up to about a second early.
+ok($t_dif > 8 && $t_dif < 15);
 
 # create client connection
 my $cl = new Ham::APRS::IS("localhost:56152", 'CL1ENT');
@@ -58,7 +61,7 @@ ok($read1, undef, "Ouch, received data from server on client connection when non
 $t_end = time();
 $t_dif = $t_end - $t_start;
 warn sprintf("\ntimeout on client socket took %.3f s, should take 20s\n", $t_dif);
-ok($t_dif > 19 && $t_dif < 25);
+ok($t_dif > 18 && $t_dif < 25);
 
 $ret = $is1->disconnect();
 ok($ret, 1, "Failed to disconnect 1: " . $is1->{'error'});

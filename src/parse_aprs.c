@@ -86,7 +86,8 @@ static int pbuf_fill_pos(struct pbuf_t *pb, const float lat, const float lng, co
 	}
 
 
-	if (bad || lat < -90.0 || lat > 90.0 || lng < -180.0 || lng > 180.0) {
+	/* written so that NaN values, which compare false, are rejected too */
+	if (bad || !(lat >= -90.0 && lat <= 90.0) || !(lng >= -180.0 && lng <= 180.0)) {
 		DEBUG_LOG("\tposition out of range: lat %.5f lng %.5f", lat, lng);
 		return 0; /* out of range */
 	}
@@ -476,13 +477,13 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		if (*latp++ == ',') return 0;
 		if (*latp++ != ',') return 0;
 		/* Scan over date+time info */
-		while (*latp != ',' && latp <= body_end) ++latp;
+		while (latp < body_end && *latp != ',') ++latp;
 		if (*latp == ',') ++latp;
-		while (*latp != ',' && latp <= body_end) ++latp;
+		while (latp < body_end && *latp != ',') ++latp;
 		if (*latp == ',') ++latp;
-		while (*latp != ',' && latp <= body_end) ++latp;
+		while (latp < body_end && *latp != ',') ++latp;
 		if (*latp == ',') ++latp;
-		while (*latp != ',' && latp <= body_end) ++latp;
+		while (latp < body_end && *latp != ',') ++latp;
 		if (*latp == ',') ++latp;
 		/* now it points to latitude substring */
 		lngp = latp;
@@ -1082,7 +1083,7 @@ static int preparse_aprs_message(struct pbuf_t *pb, const char *body, int body_l
 		pb->packettype |= T_NWS;
 	
 	// Is it perhaps TELEMETRY related "message" ?
-	if ( body[9] == ':' && body_len >= 10 + 6 &&
+	if ( body_len >= 10 + 6 && body[9] == ':' &&
 	    ( memcmp( body+10, "PARM.", 5 ) == 0 ||
 		memcmp( body+10, "UNIT.", 5 ) == 0 ||
 		memcmp( body+10, "EQNS.", 5 ) == 0 ||
@@ -1108,7 +1109,7 @@ static int preparse_aprs_message(struct pbuf_t *pb, const char *body, int body_l
 	/* Collect message recipient */
 	int i;
 	
-	for (i = 0; i < CALLSIGNLEN_MAX; ++i) {
+	for (i = 0; i < CALLSIGNLEN_MAX && i < body_len; ++i) {
 		// the recipient address is space padded
 		// to 9 chars, while our historydb is not.
 		if (body[i] == ' ' || body[i] == ':' || body[i] == 0)
@@ -1140,8 +1141,13 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 	 * Perl module to C
 	 */
 	
-	/* length of the info field: length of the packet - length of header - CRLF */
-	paclen = pb->packet_len - (pb->info_start - pb->data) - 2;
+	/* ignore the CRLF in the end of the body */
+	body_end = pb->data + pb->packet_len - 2;
+	
+	/* length of the info field, measured from info_start which points
+	 * to the inner packet of a 3rd-party packet when called recursively
+	 */
+	paclen = body_end - info_start;
 	if (paclen < 1) return 0; /* Empty frame */
 
 	/* Check the first character of the packet and determine the packet type */
@@ -1154,8 +1160,6 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 	
 	/* body is right after the packet type character */
 	body = info_start + 1;
-	/* ignore the CRLF in the end of the body */
-	body_end = pb->data + pb->packet_len - 2;
 	
 	switch (packettype) {
 	/* the following are obsolete mic-e types: 0x1c 0x1d 

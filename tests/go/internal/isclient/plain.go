@@ -124,16 +124,49 @@ func (p *Plain) Send(line string) {
 	}
 }
 
-// FilterSettle is how long Command waits after sending a command. The server
-// does not acknowledge "#filter" commands, so there is nothing to wait for.
+var filterActiveRe = regexp.MustCompile(`^# filter .* active$`)
+
+// FilterAck tells whether the server under test replies to "#filter"
+// commands. aprsc does; javAPRSSrvr does not, and with it FilterCommand just
+// waits for FilterSettle instead.
+var FilterAck = true
+
+// FilterSettle is how long FilterCommand waits for a server which does not
+// reply to filter commands.
 const FilterSettle = 300 * time.Millisecond
 
-// Command sends a line which the server does not answer, such as a "#filter"
-// command, and gives the server a moment to apply it.
-func (p *Plain) Command(line string) {
+// FilterCommand sends a "#filter" command line and waits for the server's
+// "# filter ... active" reply, so that the filter is known to be in effect when
+// it returns. The reply is a comment line, which ReadPacket skips, so it is
+// read here with ReadLine. Other comment lines are ignored; a packet arriving
+// first fails the test.
+func (p *Plain) FilterCommand(line string) {
 	p.t.Helper()
 	p.Send(line)
-	time.Sleep(FilterSettle)
+
+	if !FilterAck {
+		time.Sleep(FilterSettle)
+		return
+	}
+
+	for {
+		l, err := p.ReadLine(DefaultTimeout)
+		if err != nil {
+			p.t.Fatalf("%s: no filter reply after %q: %v", p.Callsign, line, err)
+		}
+		if filterActiveRe.MatchString(l) {
+			return
+		}
+		if !strings.HasPrefix(l, "#") {
+			p.t.Fatalf("%s: received packet %q while waiting for the filter reply to %q", p.Callsign, l, line)
+		}
+	}
+}
+
+// SetFilter sets the filter with a "#filter" command and waits for the reply.
+func (p *Plain) SetFilter(filter string) {
+	p.t.Helper()
+	p.FilterCommand("#filter " + filter)
 }
 
 // isTimeout reports whether err is a network timeout.

@@ -21,7 +21,7 @@ func TestFilterAreaMyFriend(t *testing.T) {
 	rx := isclient.Connect(t, "localhost:55581", rxLogin, isclient.WithPasscode("-1"))
 
 	t.Run("area in north-east", func(t *testing.T) {
-		rx.Command("#filter a/60.1874/24.8362/60.1872/24.8365")
+		rx.SetFilter("a/60.1874/24.8362/60.1872/24.8365")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("position outside",
 				"DR0P>APRX1M,qAR,"+login+":/054048h6011.30N/02450.18E_c212s003g006t053h82b10046",
@@ -33,7 +33,7 @@ func TestFilterAreaMyFriend(t *testing.T) {
 	})
 
 	t.Run("area in south-west", func(t *testing.T) {
-		rx.Command("#filter a/-23.5679/-47.3288/-23.5688/-47.3278")
+		rx.SetFilter("a/-23.5679/-47.3288/-23.5688/-47.3278")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("north dropped",
 				"DR0P-15>APN390,qAR,PY2PE-1:!2334.10N/04719.70W# drop north",
@@ -48,9 +48,11 @@ func TestFilterAreaMyFriend(t *testing.T) {
 	// set a filter for friend range (its position is already known from the
 	// first test).
 	t.Run("my position and friend range", func(t *testing.T) {
-		rx.Command("#filter m/1 f/" + login + "/10")
+		rx.SetFilter("m/1 f/" + login + "/10")
+		// The position packet gets no reply, so give it a moment to reach
+		// the position cache.
 		rx.Send(rxLogin + ">APRS:!//HC`TPmVvR<_") // tampere
-		time.Sleep(isclient.FilterSettle)
+		time.Sleep(300 * time.Millisecond)
 
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			// close to the previous compressed position
@@ -69,7 +71,7 @@ func TestFilterAreaMyFriend(t *testing.T) {
 	t.Run("cached position", func(t *testing.T) {
 		tx.Close()
 		tx = isclient.Connect(t, "localhost:55580", login)
-		tx.Command("#filter m/1")
+		tx.SetFilter("m/1")
 
 		// a new transmitter is needed
 		const tx2Login = "TX2LOG"

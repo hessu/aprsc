@@ -38,7 +38,7 @@ func TestFilterCommand(t *testing.T) {
 	})
 
 	t.Run("filter command", func(t *testing.T) {
-		rx.Command("#filter p/N/K")
+		rx.SetFilter("p/N/K")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("OH dropped", "OH2SRC>APRS,qAR,"+login+":>should drop",
 				"K2SRC>APRS,qAR,"+login+":>should pass"),
@@ -48,7 +48,7 @@ func TestFilterCommand(t *testing.T) {
 	})
 
 	t.Run("filter command with spaces", func(t *testing.T) {
-		rx.Command("#  fIlTer   p/N/K  ")
+		rx.FilterCommand("#  fIlTer   p/N/K  ")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("OH dropped", "OH2SRC>APRS,qAR,"+login+":>should drop3",
 				"K2SRC>APRS,qAR,"+login+":>should pass3"),
@@ -58,7 +58,7 @@ func TestFilterCommand(t *testing.T) {
 	})
 
 	t.Run("filter command with rubbish in front", func(t *testing.T) {
-		rx.Command("#blaablaaanxauyg3iuyq2gFILTER p/OG/OF/OH")
+		rx.FilterCommand("#blaablaaanxauyg3iuyq2gFILTER p/OG/OF/OH")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("K dropped", "K2SRC>APRS,qAR,"+login+":>should drop5",
 				"OH2SRC>APRS,qAR,"+login+":>should pass5"),

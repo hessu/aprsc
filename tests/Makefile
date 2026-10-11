@@ -31,7 +31,12 @@ test-race:
 test-run:
 	cd go && $(GO) test $(GOTEST_FLAGS) -v -run '$(T)' ./...
 
-.PHONY: test test-short test-race test-run
+# The performance scenarios in go/perf, which are not part of the test suite.
+# PERF_ARGS passes their flags, for example PERF_ARGS="-duration 10s -rate 500".
+perftest:
+	cd go && $(GO) test -tags perf -count=1 -timeout 30m -v ./perf/ -args $(PERF_ARGS)
+
+.PHONY: test test-short test-race test-run perftest
 
 tls-testca: tls-testca/cacert.pem
 tls-testcert: tls-testca cfg-aprsc/tls1-cert.pem cfg-aprsc/tls-client-cert.pem

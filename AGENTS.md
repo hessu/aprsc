@@ -133,6 +133,7 @@ make test PARALLEL=1            # one test at a time (default 3)
 make test-short                 # skips the heavy TestUDPLoad
 make test-race                  # with the race detector
 make test-run T=TestDupecheck   # one test or a group, verbose (T is a regexp)
+make perftest                   # the performance scenarios in tests/go/perf, not part of the suite; PERF_ARGS="-duration 10s" etc.
 ```
 
 Go dependencies: Go 1.26 or newer, and `github.com/hessu/go-aprs-fap` for

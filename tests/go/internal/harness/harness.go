@@ -153,20 +153,46 @@ var httpConfigRe = regexp.MustCompile(`(?mi)^[ \t]*HTTP(Status|Upload)[ \t]`)
 // Start runs the product with the named configuration (from tests/cfg-aprsc,
 // tests/cfg-javap or the javap4 directory) and waits until it is ready: its
 // listeners are open, and so are its HTTP ports if it has any. aprsc runs
-// with a copy of the configuration, on the test's ports (see Port). The
-// server is stopped when the test finishes, and its log is printed if the
-// test failed.
+// with a copy of the configuration, on the test's ports (see Port). A test
+// can start more than one server, with configurations which use different
+// port numbers. The server is stopped when the test finishes, and its log is
+// printed if the test failed.
 func Start(t *testing.T, cfg string, extraArgs ...string) *Server {
 	t.Helper()
-	return start(t, cfg, true, extraArgs)
+
+	prod, dir, bin := productUnderTest(t)
+
+	cfgPath := filepath.Join(dir, prod.cfgDir, cfg)
+	if _, err := os.Stat(cfgPath); err != nil {
+		if !prod.ownLogging {
+			// not every test has a configuration for the other products
+			t.Skipf("no %s configuration for this test: %v", prod.name, err)
+		}
+		t.Fatalf("no such configuration file: %v", err)
+	}
+
+	var text []byte
+	if prod.ownLogging {
+		var err error
+		if text, err = os.ReadFile(cfgPath); err != nil {
+			t.Fatalf("cannot read the configuration file: %v", err)
+		}
+	}
+
+	return launch(t, prod, dir, bin, cfgPath, text, extraArgs)
 }
 
-// StartAdditional starts a second server in a test, with a configuration which
-// uses ports different from the first one. It does not insist on the status
-// port being free.
-func StartAdditional(t *testing.T, cfg string, extraArgs ...string) *Server {
+// StartText runs aprsc with a configuration given as text, for a scenario
+// whose configuration the test generates. The text is written to the server's
+// own directory under name, with its ports mapped to the test's like those of
+// a configuration file. The test is skipped with another product.
+func StartText(t *testing.T, name, text string, extraArgs ...string) *Server {
 	t.Helper()
-	return start(t, cfg, false, extraArgs)
+
+	RequireAprsc(t)
+	prod, dir, bin := productUnderTest(t)
+
+	return launch(t, prod, dir, bin, name, []byte(text), extraArgs)
 }
 
 // CheckConfig has aprsc parse a configuration and exit. It returns aprsc's
@@ -272,6 +298,26 @@ func (s *Server) RunDir() string {
 	return s.runDir
 }
 
+// Rusage returns the resource usage of the server process over its whole
+// life, as the kernel reported it when the process was reaped: its CPU times
+// in user and system mode, the maximum resident set size and the context
+// switches, like the time command shows. It is available after Stop.
+func (s *Server) Rusage() *syscall.Rusage {
+	s.t.Helper()
+
+	select {
+	case <-s.done:
+	default:
+		s.t.Fatalf("Rusage: %s is still running", s.prod.name)
+	}
+
+	ru, ok := s.cmd.ProcessState.SysUsage().(*syscall.Rusage)
+	if !ok {
+		s.t.Fatalf("Rusage: no resource usage for %s on this platform", s.prod.name)
+	}
+	return ru
+}
+
 // LogCount returns how many times text appears in the server's log so far.
 func (s *Server) LogCount(text string) int {
 	b, err := os.ReadFile(s.LogFile())
@@ -295,7 +341,9 @@ func (s *Server) WaitLog(text string, n int, timeout time.Duration) {
 	}
 }
 
-func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Server {
+// productUnderTest returns the product under test, its working directory and
+// its executable, failing the test if the executable is missing.
+func productUnderTest(t *testing.T) (*product, string, string) {
 	t.Helper()
 
 	prod, ok := products[ProductName()]
@@ -317,16 +365,16 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 		t.Fatalf("%s executable not found (aprsc must be built in src/ first): %v", prod.name, err)
 	}
 
-	block := blockFor(t)
+	return prod, dir, bin
+}
 
-	cfgPath := filepath.Join(dir, prod.cfgDir, cfg)
-	if _, err := os.Stat(cfgPath); err != nil {
-		if !prod.ownLogging {
-			// not every test has a configuration for the other products
-			t.Skipf("no %s configuration for this test: %v", prod.name, err)
-		}
-		t.Fatalf("no such configuration file: %v", err)
-	}
+// launch starts the product with the configuration file at cfgPath, or, for
+// aprsc, with the configuration text, which is written to the server's own
+// directory under the base name of cfgPath.
+func launch(t *testing.T, prod *product, dir, bin, cfgPath string, text []byte, extraArgs []string) *Server {
+	t.Helper()
+
+	block := blockFor(t)
 
 	// The status page serves the web files copied to tests/web by "make
 	// testinstall", and the configurations of the other products keep the
@@ -340,13 +388,15 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 		}
 	}
 
-	// A leftover server would hold the ports and answer in place of ours.
-	if checkStale {
+	// A leftover server would hold the ports and answer in place of ours. A
+	// test's further servers have other ports, so this is checked once.
+	if !block.started {
 		if c, err := net.DialTimeout("tcp", block.statusAddr(), time.Second); err == nil {
 			c.Close()
 			t.Fatalf("something is already listening on %s; is an old server still running?", block.statusAddr())
 		}
 	}
+	block.started = true
 
 	s := &Server{
 		t:       t,
@@ -367,10 +417,6 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 			t.Fatalf("cannot create the run directory: %v", err)
 		}
 
-		text, err := os.ReadFile(cfgPath)
-		if err != nil {
-			t.Fatalf("cannot read the configuration file: %v", err)
-		}
 		s.waitHTTP = httpConfigRe.Match(text)
 		s.cfgFile = filepath.Join(s.logDir, filepath.Base(cfgPath))
 		s.writeConfig(string(text))

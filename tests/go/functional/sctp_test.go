@@ -28,7 +28,7 @@ func TestSCTP(t *testing.T) {
 	}
 
 	hub := harness.Start(t, "sctp-hub")
-	leaf := harness.StartAdditional(t, "sctp-leaf")
+	leaf := harness.Start(t, "sctp-leaf")
 
 	// wait for the leaf to connect to the hub
 	httpClient := &http.Client{Timeout: 10 * time.Second}

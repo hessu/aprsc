@@ -62,6 +62,8 @@ type portBlock struct {
 	// identity makes the block use the port numbers as they are, for the
 	// products whose configurations are not rewritten.
 	identity bool
+	// started is set once a server has been started on the block
+	started bool
 }
 
 // port maps a port number of the configurations to the block's.
@@ -99,9 +101,10 @@ func rootName(name string) string {
 }
 
 // blockFor returns the port block of the test, allocating the next free one on
-// the first call. The first call must come from the top-level test, not a
-// subtest, since the block is released when the test which allocated it
-// finishes.
+// the first call. The block is shared by the subtests of a test and released
+// when the test, or subtest, which first used it finishes: a test which uses
+// the harness after its subtests should do so before them too. Subtests must
+// not run in parallel.
 func blockFor(t *testing.T) *portBlock {
 	t.Helper()
 
@@ -112,9 +115,6 @@ func blockFor(t *testing.T) *portBlock {
 
 	if b := blocksByTest[root]; b != nil {
 		return b
-	}
-	if root != t.Name() {
-		t.Fatalf("the ports of %s must first be used by the top-level test, not by a subtest", root)
 	}
 	if !IsAprsc() && len(blocksInUse) > 0 {
 		t.Fatalf("%s runs on the ports of its configurations only, so its tests cannot run in parallel", ProductName())

@@ -51,3 +51,17 @@ without it. The IS2 client uses Go types generated from `../../src/aprsis2.proto
 
 `TestSCTP` needs a Linux aprsc build with SCTP support, and is skipped if the
 server rejects the `sctp` listener.
+
+## Performance scenarios
+
+`perf/` has scenarios which measure rather than check, behind the `perf`
+build tag so that the test suite does not run them: `make perftest` in
+`../`, or `go test -tags perf -v ./perf/` here. `TestCorepeerCPU` feeds
+unique packets to a server at a steady rate (200/s for 30 s by default),
+which passes them to a second server over a UDP core peer link, plain or
+IS2, to a full feed client of the second server, plaintext or IS2, and
+reports the CPU use of both servers (user and system time, as the `time`
+command shows them, from the resource usage the kernel reports for the
+process) for each of the four combinations. `make perftest
+PERF_ARGS="-duration 10s -rate 500 -peers is2 -clients tcp"` changes the
+load and the scenarios.

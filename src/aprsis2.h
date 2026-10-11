@@ -1,3 +1,16 @@
+/*
+ *	aprsc
+ *
+ *	(c) Heikki Hannikainen, OH7LZB <hessu@hes.iki.fi>
+ *
+ *     This program is licensed under the BSD license, which can be found
+ *     in the file LICENSE.
+ *
+ */
+
+/*
+ *	aprsis2.h: the APRS-IS2 Protocol Buffers based protocol
+ */
 
 #ifndef APRSIS2_H
 #define APRSIS2_H

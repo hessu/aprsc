@@ -1,3 +1,17 @@
+/*
+ *	aprsc
+ *
+ *	(c) Heikki Hannikainen, OH7LZB <hessu@hes.iki.fi>
+ *
+ *     This program is licensed under the BSD license, which can be found
+ *     in the file LICENSE.
+ *
+ */
+
+/*
+ *	aprsis2plain.c: IS2 metadata from plaintext clients, given as
+ *	key-value pairs on #is2-meta comment lines
+ */
 
 #include <string.h>
 

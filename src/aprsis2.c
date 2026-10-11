@@ -1,3 +1,18 @@
+/*
+ *	aprsc
+ *
+ *	(c) Heikki Hannikainen, OH7LZB <hessu@hes.iki.fi>
+ *
+ *     This program is licensed under the BSD license, which can be found
+ *     in the file LICENSE.
+ *
+ */
+
+/*
+ *	aprsis2.c: the APRS-IS2 Protocol Buffers based protocol: framing,
+ *	login, keepalives, output buffering, UDP peer negotiation and
+ *	frame signatures
+ */
 
 #include <string.h>
 

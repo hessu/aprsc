@@ -354,6 +354,38 @@ func TestIS2Optionals(t *testing.T) {
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 9", isclient.Meta{SNR: &snr}))
 	})
 
+	// the modem types are looked up in the enum: the last one defined is
+	// accepted, the undefined one (0) is ignored
+	t.Run("plain with the FLARM modem", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_modem=3")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 10")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 10",
+			isclient.Meta{Modem: aprsis2.ISPacket_MODEM_FLARM}))
+	})
+	t.Run("plain with the undefined modem", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_modem=0 rx_snr_db=12")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 11")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 11", isclient.Meta{SNR: &snr}))
+	})
+
+	// a bare word without '=' is skipped alone, the pairs around it apply
+	t.Run("plain with bare words around a pair", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta bare rx_snr_db=12 word")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 12")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 12", isclient.Meta{SNR: &snr}))
+	})
+
+	// a key containing "filter" is an unknown key, not a filter command
+	t.Run("plain with a key containing filter", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_filter=1 rx_snr_db=12")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 13")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 13", isclient.Meta{SNR: &snr}))
+	})
+
 	s.Stop()
 }
 

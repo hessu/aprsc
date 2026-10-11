@@ -281,16 +281,16 @@ func TestIS2Optionals(t *testing.T) {
 
 	// a position packet on the plain IS connection, with metadata
 	t.Run("plain with RSSI and SNR", func(t *testing.T) {
-		txPlain.Send("#is2-meta rx_rssi=42 rx_snr_db=12")
-		txPlain.Send(msgSrc + ">APRS,OH2RDG*,WIDE," + loginTxPlain + ",I:!6028.51N/02505.68E# should pass 2")
+		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 2")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 2", &rssi, &snr))
 	})
 
 	// and with only the SNR
 	t.Run("plain with SNR only", func(t *testing.T) {
-		txPlain.Send("#is2-meta rx_snr_db=12")
-		txPlain.Send(msgSrc + ">APRS,OH2RDG*,WIDE," + loginTxPlain + ",I:!6028.51N/02505.68E# should pass 3")
+		txPlain.Send(t, "#is2-meta rx_snr_db=12")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 3")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 3", nil, &snr))
 	})

@@ -27,7 +27,7 @@ func TestFilterPrefixBuddyObject(t *testing.T) {
 	const pos = ":!6028.51N/02505.68E#"
 
 	t.Run("prefix filter", func(t *testing.T) {
-		rx.SetFilter("p/OH/G")
+		rx.SetFilter(t, "p/OH/G")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			passSame("OH prefix passes", "OH0TES>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should pass prefix filter"),
 			passSame("G prefix passes", "G0TES>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should pass prefix filter"),
@@ -38,7 +38,7 @@ func TestFilterPrefixBuddyObject(t *testing.T) {
 	})
 
 	t.Run("buddy filter", func(t *testing.T) {
-		rx.SetFilter("b/OH0TES/OH2TES b/OH7*")
+		rx.SetFilter(t, "b/OH0TES/OH2TES b/OH7*")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			passSame("buddy matches", "OH0TES>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should pass buddy filter"),
 			// the previously set prefix filter should no longer pass
@@ -55,7 +55,7 @@ func TestFilterPrefixBuddyObject(t *testing.T) {
 	})
 
 	t.Run("object filter", func(t *testing.T) {
-		rx.SetFilter("o/OBJ1/OBJ2/ISS/PRE*")
+		rx.SetFilter(t, "o/OBJ1/OBJ2/ISS/PRE*")
 
 		var steps []isclient.Step
 		if strings.HasPrefix(harness.ProductName(), "javap") {
@@ -105,7 +105,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 	}
 
 	t.Run("first half of the types", func(t *testing.T) {
-		rx.SetFilter("t/poimq -t/nw")
+		rx.SetFilter(t, "t/poimq -t/nw")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("status dropped, position passes",
 				"ST1>APRS,qAR,"+login+":>status type drop",
@@ -128,7 +128,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 	})
 
 	t.Run("second half of the types", func(t *testing.T) {
-		rx.SetFilter("t/stunwc")
+		rx.SetFilter(t, "t/stunwc")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("position dropped, status passes",
 				"ST12>APRS,qAR,"+login+pos+" pos drop",
@@ -156,7 +156,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 	})
 
 	t.Run("distance in type filter", func(t *testing.T) {
-		rx.SetFilter("t/o/OH2TI/10")
+		rx.SetFilter(t, "t/o/OH2TI/10")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			// OH2TI's position/wx packet must not pass, since it is not an
 			// object. It is sent before the drop: if it were forwarded it
@@ -178,7 +178,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 
 	t.Run("symbol filter", func(t *testing.T) {
 		// passes all House and Car symbols (primary table)
-		rx.SetFilter("s/->")
+		rx.SetFilter(t, "s/->")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("digi dropped, house passes",
 				"OH2RDP>BEACON,qAR,"+login+":!6028.51N/02505.68E#PHG7220/drop digi sym",
@@ -189,7 +189,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 		})
 
 		// passes all Digi with or without overlay
-		rx.SetFilter("s//#")
+		rx.SetFilter(t, "s//#")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("car dropped, digi passes",
 				"OH5TES>APRS,qAR,"+login+":!6018.16N/02421.26E> drop car",
@@ -200,7 +200,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 		})
 
 		// passes all Digi with overlay of capital T
-		rx.SetFilter("s//#/T")
+		rx.SetFilter(t, "s//#/T")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("digi with other overlay dropped, mandatory overlay passes",
 				"OH2RDS-2>APRS,qAR,"+login+":!6016.66NN02515.26E# digi sym mand overlay drop",
@@ -221,7 +221,7 @@ func TestFilterDigiEntryUnproto(t *testing.T) {
 	tx, rx := connectFilterPair(t)
 
 	t.Run("digipeater", func(t *testing.T) {
-		rx.SetFilter("d/OH7RDA/OH2RDS/OH9*")
+		rx.SetFilter(t, "d/OH7RDA/OH2RDS/OH9*")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			// The filter must only match when the path element is USED*
 			drop("used digi passes, unused dropped",
@@ -242,7 +242,7 @@ func TestFilterDigiEntryUnproto(t *testing.T) {
 	})
 
 	t.Run("entrycall", func(t *testing.T) {
-		rx.SetFilter("e/" + login + "/IGA*")
+		rx.SetFilter(t, "e/"+login+"/IGA*")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("entrycall",
 				"ESRC2>APRS,qAR,BAA"+pos+"drop entrycall",
@@ -255,7 +255,7 @@ func TestFilterDigiEntryUnproto(t *testing.T) {
 	})
 
 	t.Run("unproto", func(t *testing.T) {
-		rx.SetFilter("u/ALTNET/APZ*")
+		rx.SetFilter(t, "u/ALTNET/APZ*")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("unproto",
 				"USRC2>ALTBLA,qAR,"+login+pos+"drop unproto",
@@ -277,7 +277,7 @@ func TestFilterQConstr(t *testing.T) {
 	const pos = ":!2334.10"
 	tx, rx := connectFilterPair(t)
 
-	rx.SetFilter("q/RUo")
+	rx.SetFilter(t, "q/RUo")
 	isclient.RunSteps(t, tx, rx, []isclient.Step{
 		drop("qAR passes, qAC dropped",
 			login+">APN390"+pos+"N/04719.70W# drop qAC",

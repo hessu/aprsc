@@ -45,10 +45,14 @@ func TestUplinkReconnect(t *testing.T) {
 			flush()
 		}
 
-		// the server drops the flooded connection and reconnects
-		fake.Accept(t)
+		// The server drops the flooded connection and reconnects. The
+		// reconnection is closed too, like the flooded one, so that the
+		// server connects again right away for the next round, instead of
+		// after its upstream timeout.
+		up2 := fake.Accept(t)
 
 		up1.Close()
+		up2.Close()
 	}
 
 	if err := tx.Close(); err != nil {

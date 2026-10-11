@@ -38,7 +38,6 @@ type Receiver interface {
 // Plain is a plaintext APRS-IS client connected to a test server.
 type Plain struct {
 	*fap.Conn
-	t *testing.T
 
 	Callsign string
 	LogResp  *fap.LogResp
@@ -56,6 +55,12 @@ type config struct {
 // passcodeFor returns the correct passcode for a callsign.
 func passcodeFor(callsign string) int16 {
 	return fap.AprsPasscode(callsign)
+}
+
+// Passcode returns the correct passcode for a callsign, as written in a login
+// line.
+func Passcode(callsign string) string {
+	return fmt.Sprint(passcodeFor(callsign))
 }
 
 // withUDPPort asks the server to send packets over UDP to the given port.
@@ -81,7 +86,7 @@ func WithVers(v string) Option { return func(c *config) { c.vers = v } }
 func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 	t.Helper()
 
-	cfg := config{passcode: fmt.Sprint(fap.AprsPasscode(callsign))}
+	cfg := config{passcode: Passcode(callsign)}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -92,7 +97,6 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 		AppName:  "aprsc-gotest",
 		AppVer:   "1.0",
 		Filter:   cfg.filter,
-		NoLogin:  true,
 	}
 	if cfg.vers != "" || cfg.udp != 0 {
 		vers := cfg.vers
@@ -108,23 +112,12 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 		}
 	}
 
-	var conn *fap.Conn
-	var err error
-	deadline := time.Now().Add(connectRetry)
-	for {
-		conn, err = fap.Connect(addr, o)
-		if err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("failed to connect to %s: %v", addr, err)
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	conn := dial(t, addr, o)
 
-	p := &Plain{Conn: conn, t: t, Callsign: callsign}
+	p := &Plain{Conn: conn, Callsign: callsign}
 	t.Cleanup(func() { conn.Close() })
 
+	var err error
 	p.LogResp, err = conn.Login()
 	if err != nil {
 		t.Fatalf("%s: login to %s failed: %v", callsign, addr, err)
@@ -133,12 +126,64 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 	return p
 }
 
-// Send sends a line to the server, failing the test on error. It must be
-// called from the goroutine of the test passed to Connect.
-func (p *Plain) Send(line string) {
-	p.t.Helper()
+// dial connects to addr without logging in, retrying for a few seconds while
+// the port is not open. The test fails if it cannot connect.
+func dial(t *testing.T, addr string, o fap.ConnOptions) *fap.Conn {
+	t.Helper()
+
+	o.NoLogin = true
+	deadline := time.Now().Add(connectRetry)
+	for {
+		conn, err := fap.Connect(addr, o)
+		if err == nil {
+			return conn
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("failed to connect to %s: %v", addr, err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+var loginRejectRe = regexp.MustCompile(`(?i)^#\s.*(not allowed|invalid)`)
+
+// LoginReply connects to addr, sends the login line as it is, and returns the
+// server's reply to it: the "# logresp" line if the login was accepted, or the
+// comment line rejecting it. As in the Perl client, a rejection is a line
+// saying "not allowed" or "invalid"; the server closing the connection, or
+// staying silent for DefaultTimeout, counts as a rejection too, with an empty
+// reply. The connection is closed before returning.
+func LoginReply(t *testing.T, addr, login string) (reply string, accepted bool) {
+	t.Helper()
+
+	conn := dial(t, addr, fap.ConnOptions{})
+	defer conn.Close()
+
+	if err := conn.SendLine(login); err != nil {
+		t.Fatalf("failed to send the login %q to %s: %v", login, addr, err)
+	}
+
+	end := time.Now().Add(DefaultTimeout)
+	for {
+		l, err := conn.ReadLine(time.Until(end))
+		if err != nil {
+			return "", false
+		}
+		if strings.HasPrefix(l, "# logresp") {
+			return l, true
+		}
+		if loginRejectRe.MatchString(l) {
+			return l, false
+		}
+	}
+}
+
+// Send sends a line to the server, failing the test on error. t is the test
+// or subtest making the call, so that a failure is reported there.
+func (p *Plain) Send(t *testing.T, line string) {
+	t.Helper()
 	if err := p.SendLine(line); err != nil {
-		p.t.Fatalf("%s: failed to send %q: %v", p.Callsign, line, err)
+		t.Fatalf("%s: failed to send %q: %v", p.Callsign, line, err)
 	}
 }
 
@@ -157,10 +202,10 @@ const FilterSettle = 300 * time.Millisecond
 // "# filter ... active" reply, so that the filter is known to be in effect when
 // it returns. The reply is a comment line, which ReadPacket skips, so it is
 // read here with ReadLine. Other comment lines are ignored; a packet arriving
-// first fails the test.
-func (p *Plain) FilterCommand(line string) {
-	p.t.Helper()
-	p.Send(line)
+// first fails the test. t is the test or subtest making the call.
+func (p *Plain) FilterCommand(t *testing.T, line string) {
+	t.Helper()
+	p.Send(t, line)
 
 	if !FilterAck {
 		time.Sleep(FilterSettle)
@@ -170,25 +215,27 @@ func (p *Plain) FilterCommand(line string) {
 	for {
 		l, err := p.ReadLine(DefaultTimeout)
 		if err != nil {
-			p.t.Fatalf("%s: no filter reply after %q: %v", p.Callsign, line, err)
+			t.Fatalf("%s: no filter reply after %q: %v", p.Callsign, line, err)
 		}
 		if filterActiveRe.MatchString(l) {
 			return
 		}
 		if !strings.HasPrefix(l, "#") {
-			p.t.Fatalf("%s: received packet %q while waiting for the filter reply to %q", p.Callsign, l, line)
+			t.Fatalf("%s: received packet %q while waiting for the filter reply to %q", p.Callsign, l, line)
 		}
 	}
 }
 
 // SetFilter sets the filter with a "#filter" command and waits for the reply.
-func (p *Plain) SetFilter(filter string) {
-	p.t.Helper()
-	p.FilterCommand("#filter " + filter)
+// t is the test or subtest making the call.
+func (p *Plain) SetFilter(t *testing.T, filter string) {
+	t.Helper()
+	p.FilterCommand(t, "#filter "+filter)
 }
 
-// isTimeout reports whether err is a network timeout.
-func isTimeout(err error) bool {
+// IsTimeout reports whether err is a network timeout, as opposed to the
+// connection having failed.
+func IsTimeout(err error) bool {
 	var ne net.Error
 	return errors.As(err, &ne) && ne.Timeout()
 }
@@ -298,7 +345,7 @@ func ExpectSilence(t *testing.T, rx Receiver, d time.Duration, what string) {
 	switch {
 	case err == nil:
 		t.Errorf("%s: received unexpected data %q", what, got)
-	case !isTimeout(err):
+	case !IsTimeout(err):
 		t.Errorf("%s: connection error while expecting silence: %v", what, err)
 	}
 }

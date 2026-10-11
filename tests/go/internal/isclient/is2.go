@@ -308,7 +308,7 @@ func (c *IS2) ReadFrame(timeout time.Duration) (*aprsis2.IS2Message, error) {
 
 // readError marks the connection closed unless err is only a timeout.
 func (c *IS2) readError(err error) error {
-	if !isTimeout(err) {
+	if !IsTimeout(err) {
 		c.closed = true
 		if errors.Is(err, io.EOF) {
 			return fmt.Errorf("connection closed by the server: %w", err)

@@ -38,7 +38,7 @@ func TestFilterCommand(t *testing.T) {
 	})
 
 	t.Run("filter command", func(t *testing.T) {
-		rx.SetFilter("p/N/K")
+		rx.SetFilter(t, "p/N/K")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("OH dropped", "OH2SRC>APRS,qAR,"+login+":>should drop",
 				"K2SRC>APRS,qAR,"+login+":>should pass"),
@@ -48,7 +48,7 @@ func TestFilterCommand(t *testing.T) {
 	})
 
 	t.Run("filter command with spaces", func(t *testing.T) {
-		rx.FilterCommand("#  fIlTer   p/N/K  ")
+		rx.FilterCommand(t, "#  fIlTer   p/N/K  ")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("OH dropped", "OH2SRC>APRS,qAR,"+login+":>should drop3",
 				"K2SRC>APRS,qAR,"+login+":>should pass3"),
@@ -58,7 +58,7 @@ func TestFilterCommand(t *testing.T) {
 	})
 
 	t.Run("filter command with rubbish in front", func(t *testing.T) {
-		rx.FilterCommand("#blaablaaanxauyg3iuyq2gFILTER p/OG/OF/OH")
+		rx.FilterCommand(t, "#blaablaaanxauyg3iuyq2gFILTER p/OG/OF/OH")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{
 			drop("K dropped", "K2SRC>APRS,qAR,"+login+":>should drop5",
 				"OH2SRC>APRS,qAR,"+login+":>should pass5"),
@@ -75,7 +75,7 @@ func TestFilterCommand(t *testing.T) {
 
 	serverMessage := func(t *testing.T, text, id string) {
 		t.Helper()
-		rx.Send(fmt.Sprintf("%s>APRS::%-9.9s:%s{%s", rxLogin, "SERVER", text, id))
+		rx.Send(t, fmt.Sprintf("%s>APRS::%-9.9s:%s{%s", rxLogin, "SERVER", text, id))
 
 		ack, err := rx.ReadPacket(2 * time.Second)
 		if err != nil {

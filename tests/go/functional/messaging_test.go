@@ -50,7 +50,7 @@ func TestMessaging(t *testing.T) {
 
 	// The g/ message recipient filter.
 	t.Run("g filter", func(t *testing.T) {
-		rx.SetFilter("g/PREF*/FULLCAL")
+		rx.SetFilter(t, "g/PREF*/FULLCAL")
 
 		// the first message does not match the filter, the second one does
 		isclient.ExpectDrop(t, tx, rx,

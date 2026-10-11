@@ -432,7 +432,16 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		/* $GPWPL,4610.586,N,00607.754,E,4*70
 		// $GPWPL,4610.452,N,00607.759,E,5*74
 		*/
-		latp = body+6;
+		latp = body+6; // over the keyword
+		lngp = latp;
+		while (lngp < body_end && *lngp != ',') // over latitude
+			lngp++;
+		if (*lngp == ',')
+			lngp++; // and lat designator
+		if (*lngp != ',')
+			lngp++; // and lat designator
+		if (*lngp == ',')
+			lngp++;
 		
 	} else if (memcmp(body, "PNTS,1,", 7) == 0) { /* PNTS version 1 */
 		/* $PNTS,1,0,11,01,2002,231932,3539.687,N,13944.480,E,0,000,5,Roppongi UID RELAY,000,1*35

@@ -864,7 +864,13 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 	rm.type = APRSIS2__IS2_MESSAGE__TYPE__PARAMETER;
 	rm.parameter = &prep;
 	
-	if (par->filter_string) {
+	if (par->filter_string && !(c->flags & CLFLAGS_USERFILTEROK)) {
+		/* like the plaintext filter command, user filters are only
+		 * accepted on ports which allow them
+		 */
+		hlog(LOG_INFO, "%s/%s: IS2: PARAMETER_SET: user filters are not allowed on this port",
+			c->addr_rem, c->username);
+	} else if (par->filter_string) {
 		filter_set(c, par->filter_string, strlen(par->filter_string));
 		
 		prep.type = APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_APPLIED;

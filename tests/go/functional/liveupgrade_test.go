@@ -121,6 +121,10 @@ func TestLiveUpgrade(t *testing.T) {
 	isclient.ExpectDropLiteral(t, tx, rx, uniq, helper)
 	expectIS2(uniq, helper)
 
+	// The new instance's HTTP thread binds the status port on its own; wait for
+	// its second "ready" line in the log before asking for the status page.
+	s.WaitLog("HTTP thread ready.", 2, isclient.DefaultTimeout)
+
 	// The worker threads take some time to accumulate statistics. The counters
 	// must include only the packets sent after the reload: 2 uniques, 1 dupe.
 	var dupecheck map[string]any

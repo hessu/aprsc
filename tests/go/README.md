@@ -7,10 +7,13 @@ peers to it, and checks what comes out. This is a Go port of the Perl suite in
 
     cd src && ./configure && make       # build aprsc first
     make testinstall                    # copies the web files to tests/web
-    cd ../tests && make gotest          # or: cd go && go test ./...
+    cd ../tests && make gotest          # or: make tls-testcert; cd go && go test ./...
 
 `make gotest-short`, `make gotest-race` and `make gotest-run T=TestDupecheck`
-are variants (see `../Makefile`).
+are variants (see `../Makefile`). All of them generate the TLS test CA and
+certificates on the first run, which the TLS listeners of the `basic`
+configuration need; `go test` run by hand needs `make tls-testcert` done in
+`../` first.
 
 The tests use fixed ports, so they run one at a time, and nothing else (an old
 aprsc, for example) may be listening on port 55501.

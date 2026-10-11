@@ -16,11 +16,15 @@ TEST_SRCCALLS="XX7FIT-1,XX7FIT-2"
 TEST_IGATE="XX7IG"
 
 # The Go test suite, in go/, replaces the Perl one. It needs the aprsc binary
-# built in ../src and "make testinstall" done there. Set APRSC_BIN to test
-# another binary, for example one built with ./configure --enable-is2: the IS2
-# tests are skipped without it.
+# built in ../src and "make testinstall" done there, and the TLS test CA and
+# certificates, which are generated on the first run: the basic configuration
+# has TLS listeners, and aprsc does not start without their certificates. Set
+# APRSC_BIN to test another binary, for example one built with ./configure
+# --enable-is2: the IS2 tests are skipped without it.
 GO=go
 GOTEST_FLAGS = -count=1 -timeout 20m
+
+gotest gotest-short gotest-race gotest-run: tls-testcert
 
 # the Go tests: all of them, including aggregator and live upgrade
 gotest:

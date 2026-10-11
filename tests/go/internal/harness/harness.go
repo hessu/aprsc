@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"syscall"
 	"testing"
@@ -139,12 +140,19 @@ type Server struct {
 	done    chan struct{} // closed when the process has been reaped
 	waitErr error         // result of cmd.Wait, valid after done is closed
 	stopped bool
+	// waitHTTP is set when the configuration has HTTP ports, which aprsc
+	// binds in a thread of its own, so that waitReady waits for those too.
+	waitHTTP bool
 }
 
+// httpConfigRe matches the configuration lines which make aprsc start an HTTP
+// server.
+var httpConfigRe = regexp.MustCompile(`(?mi)^[ \t]*HTTP(Status|Upload)[ \t]`)
+
 // Start runs the product with the named configuration (from tests/cfg-aprsc,
-// tests/cfg-javap or the javap4 directory) and waits until the HTTP status
-// port accepts connections. The server is stopped when the test finishes, and
-// its log is printed if the test failed.
+// tests/cfg-javap or the javap4 directory) and waits until it is ready: its
+// listeners are open, and so are its HTTP ports if it has any. The server is
+// stopped when the test finishes, and its log is printed if the test failed.
 func Start(t *testing.T, cfg string, extraArgs ...string) *Server {
 	t.Helper()
 	return start(t, cfg, true, extraArgs)
@@ -271,6 +279,15 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 		t.Fatalf("no such configuration file: %v", err)
 	}
 
+	waitHTTP := false
+	if prod.ownLogging {
+		b, err := os.ReadFile(filepath.Join(dir, cfgFile))
+		if err != nil {
+			t.Fatalf("cannot read the configuration file: %v", err)
+		}
+		waitHTTP = httpConfigRe.Match(b)
+	}
+
 	// The configurations keep the server's data in tests/data, and the status
 	// page serves the web files copied to tests/web by "make testinstall".
 	if err := os.MkdirAll(filepath.Join(TestsDir(), "data"), 0o755); err != nil {
@@ -291,9 +308,10 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 	}
 
 	s := &Server{
-		t:    t,
-		prod: prod,
-		done: make(chan struct{}),
+		t:        t,
+		prod:     prod,
+		done:     make(chan struct{}),
+		waitHTTP: waitHTTP,
 	}
 
 	var args []string
@@ -349,7 +367,12 @@ func (s *Server) waitReady() error {
 		if s.prod.ownLogging {
 			// Some configurations have no status port, so watch the log
 			// for the accept thread having opened the listeners instead.
-			if b, err := os.ReadFile(s.LogFile()); err == nil && bytes.Contains(b, []byte("Accept thread ready")) {
+			// The HTTP thread binds its ports on its own, after the accept
+			// thread has been started, so wait for it as well when the
+			// configuration has HTTP ports.
+			if b, err := os.ReadFile(s.LogFile()); err == nil &&
+				bytes.Contains(b, []byte("Accept thread ready")) &&
+				(!s.waitHTTP || bytes.Contains(b, []byte("HTTP thread ready"))) {
 				return nil
 			}
 		} else if c, err := net.DialTimeout("tcp", StatusAddr, 200*time.Millisecond); err == nil {

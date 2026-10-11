@@ -129,7 +129,7 @@ one to extend, and replaces the Perl suite (`tests/t/`, `tests/aggregator/`,
 ```sh
 cd src && make testinstall      # copies web/ files into tests/web, creates tests/data and tests/logs
 cd ../tests
-make gotest                     # the Go suite, all of it
+make gotest                     # the Go suite, all of it; generates the TLS test CA and certs on first run
 make gotest-short               # skips the heavy TestUDPLoad
 make gotest-race                # with the race detector
 make gotest-run T=TestDupecheck # one test or a group, verbose (T is a regexp)
@@ -157,9 +157,9 @@ How the Go suite is structured:
 
 - `tests/go/internal/harness` starts and stops the server. It passes
   `-e debug -o file -r <temp dir>`, so a failed test prints the tail of that
-  server log. It waits for the log to say the listeners are open. It runs
-  with `tests/` as the working directory, because the configs use relative
-  paths. `TEST_PRODUCT=javap` or `javap4` runs the tests against
+  server log. It waits for the log to say the listeners are open, and the
+  HTTP ports too when the config has them. It runs with `tests/` as the
+  working directory, because the configs use relative paths. `TEST_PRODUCT=javap` or `javap4` runs the tests against
   javAPRSSrvr if a copy is present in `tests/javaprssrvr/` (not distributed);
   tests of aprsc-only features skip.
 - `tests/go/internal/isclient` has the clients: `Connect` (plaintext, built on

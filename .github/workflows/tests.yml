@@ -31,7 +31,7 @@ jobs:
     - name: configure
       run: |
         cd src
-        ./configure --enable-is2
+        ./configure
 
     - name: make
       run: |

@@ -69,10 +69,9 @@ It's a good idea to start by getting the test suite running on your system
 so that you will notice if your changes accidentally break some other
 functionality.
 
-The test suite is in the tests/ directory.  It is being rewritten in Go, in
-tests/go (run it with "make gotest" in tests/, after building aprsc and doing
-"make testinstall" in src/); the older Perl tests there ("make test") still
-exist until the Go suite has replaced them.  Write new tests in Go.
+The test suite is in the tests/ directory, written in Go (tests/go).  Run it
+with "make test" in tests/, after building aprsc and doing "make testinstall"
+in src/.  See tests/go/README.md for the details.
 
 Patches which simply add new test cases for existing, untested functionality
 are more than welcome.  Writing tests is an easy way to start contributing.

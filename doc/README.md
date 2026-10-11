@@ -83,12 +83,12 @@ and automatic upgrades using APT.
 Quality control
 ------------------
 
-aprsc comes with an APRS-IS server test suite, implemented in Go (an older
-version in Perl is being replaced).  A "make gotest" executed in the tests/
-subdirectory will execute automated tests for all of the basic functions of
-the server in a few minutes.  The tests run fake APRS-IS servers, clients
-and peers around the tested server, and pass various valid and invalid
-packets through the server, checking for expected output.
+aprsc comes with an APRS-IS server test suite, implemented in Go.  A "make
+test" executed in the tests/ subdirectory will execute automated tests for
+all of the basic functions of the server in a few minutes.  The tests run
+fake APRS-IS servers, clients and peers around the tested server, and pass
+various valid and invalid packets through the server, checking for expected
+output.
 
 Test-driven development methods have been used during the development: a
 testing script has been implemented first, based on existing documentation

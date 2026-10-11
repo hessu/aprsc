@@ -98,8 +98,19 @@ func TestLoad(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // let it get started
 
+	orderedLoad(t, tx, rx, loginTx, 20*1024*1024, 500*time.Millisecond)
+
+	s.Stop()
+}
+
+// orderedLoad sends packets from tx until byteLimit bytes have been sent, and
+// expects them to come out of rx in order, with at most a window of bytes
+// outstanding. After the last packet is sent, rx may be idle for finalTimeout
+// before the remaining packets are counted as lost.
+func orderedLoad(t *testing.T, tx, rx *isclient.Plain, loginTx string, byteLimit int, finalTimeout time.Duration) {
+	t.Helper()
+
 	const flushInterval = 300
-	const byteLimit = 20 * 1024 * 1024
 	const window = 64 * 1024
 
 	packet := func(n int) string {
@@ -157,7 +168,7 @@ func TestLoad(t *testing.T) {
 
 	t.Logf("reading the rest, have received %d packets, sent %d", rxn, txn)
 	for outstanding > 0 {
-		line, err := rx.ReadPacket(500 * time.Millisecond)
+		line, err := rx.ReadPacket(finalTimeout)
 		if err != nil {
 			break
 		}
@@ -177,6 +188,4 @@ func TestLoad(t *testing.T) {
 	if outstanding != 0 {
 		t.Errorf("%d bytes outstanding in the server after timeout", outstanding)
 	}
-
-	s.Stop()
 }

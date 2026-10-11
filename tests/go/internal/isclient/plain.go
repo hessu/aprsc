@@ -48,7 +48,11 @@ type config struct {
 	passcode string
 	filter   string
 	vers     string
+	udp      int
 }
+
+// withUDPPort asks the server to send packets over UDP to the given port.
+func withUDPPort(port int) Option { return func(c *config) { c.udp = port } }
 
 // Option customizes Connect.
 type Option func(*config)
@@ -83,8 +87,15 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 		Filter:   cfg.filter,
 		NoLogin:  true,
 	}
-	if cfg.vers != "" {
-		o.LoginLine = fmt.Sprintf("user %s pass %s vers %s", callsign, cfg.passcode, cfg.vers)
+	if cfg.vers != "" || cfg.udp != 0 {
+		vers := cfg.vers
+		if vers == "" {
+			vers = "aprsc-gotest 1.0"
+		}
+		o.LoginLine = fmt.Sprintf("user %s pass %s vers %s", callsign, cfg.passcode, vers)
+		if cfg.udp != 0 {
+			o.LoginLine += fmt.Sprintf(" UDP %d", cfg.udp)
+		}
 		if cfg.filter != "" {
 			o.LoginLine += " filter " + cfg.filter
 		}

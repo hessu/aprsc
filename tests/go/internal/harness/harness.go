@@ -147,6 +147,35 @@ type Server struct {
 // its log is printed if the test failed.
 func Start(t *testing.T, cfg string, extraArgs ...string) *Server {
 	t.Helper()
+	return start(t, cfg, true, extraArgs)
+}
+
+// StartAdditional starts a second server in a test, with a configuration which
+// uses ports different from the first one. It does not insist on the status
+// port being free.
+func StartAdditional(t *testing.T, cfg string, extraArgs ...string) *Server {
+	t.Helper()
+	return start(t, cfg, false, extraArgs)
+}
+
+// CheckConfig has aprsc parse a configuration and exit. It returns aprsc's
+// output, and an error if the configuration was not accepted. A test can use
+// it to see whether the aprsc build has an optional feature, such as SCTP.
+func CheckConfig(t *testing.T, cfg string) (string, error) {
+	t.Helper()
+
+	if !IsAprsc() {
+		t.Fatalf("CheckConfig only works with aprsc")
+	}
+
+	cmd := exec.Command(Binary(), "-y", "-c", filepath.Join("cfg-aprsc", cfg), "-e", "info", "-o", "stderr")
+	cmd.Dir = TestsDir()
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Server {
+	t.Helper()
 
 	prod, ok := products[ProductName()]
 	if !ok {
@@ -177,9 +206,11 @@ func Start(t *testing.T, cfg string, extraArgs ...string) *Server {
 	}
 
 	// A leftover server would hold the ports and answer in place of ours.
-	if c, err := net.DialTimeout("tcp", StatusAddr, time.Second); err == nil {
-		c.Close()
-		t.Fatalf("something is already listening on %s; is an old server still running?", StatusAddr)
+	if checkStale {
+		if c, err := net.DialTimeout("tcp", StatusAddr, time.Second); err == nil {
+			c.Close()
+			t.Fatalf("something is already listening on %s; is an old server still running?", StatusAddr)
+		}
 	}
 
 	s := &Server{

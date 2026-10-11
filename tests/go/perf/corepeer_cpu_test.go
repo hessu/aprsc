@@ -10,6 +10,8 @@ import (
 	"flag"
 	"fmt"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -69,10 +71,57 @@ func serverConfig(id string, fullFeed, igate, is2, status, peer int, peerID stri
 	return b.String()
 }
 
-// packet returns the n:th packet of the feed. Each one is unique, so that the
-// duplicate filter passes all of them.
-func packet(n int) string {
-	return fmt.Sprintf("PT%d>APRS,qAR,%s:!6028.51N/02505.68E# perf packet %d blaa blaa blaa END", n%1000+10, feedLogin, n)
+// packet returns the n:th packet of the feed, stamped with the time it is
+// sent, as microseconds since epoch. Each one is unique, so that the duplicate
+// filter passes all of them.
+func packet(n int, epoch time.Time) string {
+	return fmt.Sprintf("PT%d>APRS,qAR,%s:!6028.51N/02505.68E# perf %d @%d blaa blaa END", n%1000+10, feedLogin, n, time.Since(epoch).Microseconds())
+}
+
+// sentAt returns the time stamp of a received packet of the feed.
+func sentAt(line string) (time.Duration, bool) {
+	i := strings.LastIndexByte(line, '@')
+	if i < 0 {
+		return 0, false
+	}
+	f := strings.Fields(line[i+1:])
+	if len(f) == 0 {
+		return 0, false
+	}
+	us, err := strconv.ParseInt(f[0], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return time.Duration(us) * time.Microsecond, true
+}
+
+// latencies summarizes how long the packets took from the feeder to the
+// receiver, through both servers and the peer link.
+type latencies struct {
+	mean, median, p99, max time.Duration
+}
+
+func summarize(samples []time.Duration) latencies {
+	if len(samples) == 0 {
+		return latencies{}
+	}
+	sort.Slice(samples, func(i, j int) bool { return samples[i] < samples[j] })
+
+	var sum time.Duration
+	for _, d := range samples {
+		sum += d
+	}
+	return latencies{
+		mean:   sum / time.Duration(len(samples)),
+		median: samples[len(samples)/2],
+		p99:    samples[len(samples)*99/100],
+		max:    samples[len(samples)-1],
+	}
+}
+
+func (l latencies) String() string {
+	ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
+	return fmt.Sprintf("mean %.1f ms, median %.1f ms, 99th percentile %.1f ms, max %.1f ms", ms(l.mean), ms(l.median), ms(l.p99), ms(l.max))
 }
 
 // usage is what a server process used over its life.
@@ -115,6 +164,7 @@ type result struct {
 	fed            time.Duration // the length of the feed
 	drain          time.Duration // from the end of the feed to the last packet received
 	a, b           usage
+	lat            latencies
 }
 
 // TestCorepeerCPU measures the CPU use of two servers while a client feeds
@@ -159,6 +209,12 @@ func TestCorepeerCPU(t *testing.T) {
 				r.drain.Seconds())
 		}
 	}
+	fmt.Fprintf(&b, "\nLatency from the feeder to the receiver, ms:\n")
+	fmt.Fprintf(&b, "%-22s %8s %8s %8s %8s\n", "scenario", "mean", "median", "p99", "max")
+	for _, r := range results {
+		ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
+		fmt.Fprintf(&b, "%-22s %8.1f %8.1f %8.1f %8.1f\n", r.name, ms(r.lat.mean), ms(r.lat.median), ms(r.lat.p99), ms(r.lat.max))
+	}
 	t.Log(b.String())
 }
 
@@ -200,13 +256,20 @@ func runScenario(t *testing.T, peer, client string) result {
 		t.FailNow()
 	}
 
-	// receive in the background, counting
+	// receive in the background, counting the packets and noting how long
+	// each took
+	total := int(duration.Seconds() * float64(*rate))
+	epoch := time.Now()
+	samples := make([]time.Duration, 0, total)
 	var received atomic.Int64
 	stop := make(chan struct{})
 	rxDone := make(chan error, 1)
 	go func() {
 		for {
-			if _, err := rx.ReadPacket(time.Second); err == nil {
+			if line, err := rx.ReadPacket(time.Second); err == nil {
+				if sent, ok := sentAt(line); ok {
+					samples = append(samples, time.Since(epoch)-sent)
+				}
 				received.Add(1)
 				continue
 			} else if !isclient.IsTimeout(err) {
@@ -224,12 +287,11 @@ func runScenario(t *testing.T, peer, client string) result {
 
 	// feed at the rate, catching up after any hiccup so that the average
 	// holds
-	total := int(duration.Seconds() * float64(*rate))
 	interval := time.Second / time.Duration(*rate)
 	start := time.Now()
 	for n := 0; n < total; n++ {
 		time.Sleep(time.Until(start.Add(time.Duration(n) * interval)))
-		tx.Send(t, packet(n))
+		tx.Send(t, packet(n, epoch))
 	}
 	fed := time.Since(start)
 
@@ -260,7 +322,8 @@ func runScenario(t *testing.T, peer, client string) result {
 		}
 	}
 
-	r := result{sent: total, received: got, fed: fed, drain: drain, a: usageOf(a.Rusage()), b: usageOf(b.Rusage())}
+	r := result{sent: total, received: got, fed: fed, drain: drain, a: usageOf(a.Rusage()), b: usageOf(b.Rusage()), lat: summarize(samples)}
+	t.Logf("latency from the feeder to the receiver: %s", r.lat)
 	t.Logf("server A (feed in, peer out): %s", r.a.describe(fed, total))
 	t.Logf("server B (peer in, client out): %s", r.b.describe(fed, total))
 

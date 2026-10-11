@@ -13,7 +13,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 10 + 6 + 2 };
+BEGIN { plan tests => 10 + 2 + 6 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS2;
@@ -60,6 +60,14 @@ ok(defined $is1, (1), "Failed to accept connection 1 from server");
 ok($iss1->process_login($is1), 'ok', "Failed to accept login 1 from server");
 
 ok($udp->is2_corepeer_negotiate(), 1, "Failed to negotiate IS2 corepeer link");
+
+# Oversized datagrams, which do not fit in the server's input buffer, must be
+# dropped: with MSG_TRUNC, Linux reports the full length of a truncated datagram.
+# The traffic tests below verify that the server survived them.
+my $big = "# PEER2 v 2 hello TESTIN-2 " . ('x' x 9000);
+ok($udp->send_udp_packet($big), length($big), "Failed to send oversized control datagram");
+$big = chr(0x02) . chr(0x00) . chr(0x23) . chr(0x10) . ('y' x 9000);
+ok($udp->send_udp_packet($big), length($big), "Failed to send oversized IS2 datagram");
 
 # test ###########################
 

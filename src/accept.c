@@ -741,6 +741,14 @@ static void accept_udp_recv(struct listen_t *l)
 			continue;
 		}
 		
+		/* With MSG_TRUNC, Linux returns the real length of the datagram even
+		 * when it did not fit in the buffer - do not process it.
+		 */
+		if (i > (int)sizeof(buf)-1) {
+			hlog(LOG_DEBUG, "accept thread discarded an oversized UDP packet of %d bytes", i);
+			continue;
+		}
+
 		addrs = strsockaddr(&addr.sa, addrlen);
 		accept_process_udpsubmit(l, buf, i, addrs);
 		hfree(addrs);

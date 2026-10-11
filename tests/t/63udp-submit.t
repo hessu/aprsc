@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 5 + 2 + 2 };
+BEGIN { plan tests => 5 + 3 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -59,6 +59,13 @@ for my $rej (@udp_rej) {
 
 	$usock->send($rej_post);
 }
+
+# an oversized datagram, which does not fit in the server's receive buffer:
+# with MSG_TRUNC, Linux reports the full length of a truncated datagram, and
+# it must not be processed
+
+my $big = "user TEST pass 29939 vers udpaprstester 1.0\r\n" . ('x' x 2500);
+ok($usock->send($big), length($big), "Failed to send oversized UDP datagram");
 
 # another success after the failures
 

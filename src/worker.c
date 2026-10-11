@@ -1224,6 +1224,16 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		return 0;
 	}
 	
+	/* With MSG_TRUNC, Linux returns the real length of the datagram even when
+	 * it did not fit in the buffer. The handlers below trust the length, so
+	 * such a datagram must not be passed on - a real peer never sends one.
+	 */
+	if (r > c->ibuf_size-1) {
+		hlog( LOG_INFO, "recv: Dropped oversized datagram of %d bytes (buffer %d) from corepeer UDP socket fd %d",
+			r, c->ibuf_size-1, c->udpclient->fd);
+		return 0;
+	}
+
 	// Figure the correct client/peer based on the remote IP address.
 	for (i = 0; i < worker_corepeer_client_count; i++) {
 		rc = worker_corepeer_clients[i];

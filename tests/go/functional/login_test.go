@@ -20,7 +20,7 @@ func TestLogin(t *testing.T) {
 	if c.LogResp.Callsign != "OH7LZB" || c.LogResp.Server != "TESTING" {
 		t.Errorf("unexpected logresp: %q", c.LogResp.Raw)
 	}
-	if !strings.HasPrefix(c.Banner(), "# aprsc ") {
+	if harness.IsAprsc() && !strings.HasPrefix(c.Banner(), "# aprsc ") {
 		t.Errorf("unexpected banner: %q", c.Banner())
 	}
 

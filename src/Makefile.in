@@ -136,11 +136,11 @@ WEBFILES = \
 	src/web/bootstrap/fonts/glyphicons-halflings-regular.woff2
  	
 testinstall:
-	mkdir -p ../tests/web ../tests/data ../tests/logs
+	mkdir -p ../tests/web ../tests/data
 	cp -p $(subst src/,,$(WEBFILES)) ../tests/web/
 
 test: all testinstall
-	cd ../tests && make
+	cd ../tests && make test
 
 # -------------------------------------------------------------------- #
 

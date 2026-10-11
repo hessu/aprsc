@@ -11,11 +11,11 @@ in `doc/` remain authoritative; read `doc/CONTRIBUTING.md` and
 
 ```
 src/        All C sources, the autoconf build, packaging, and the web status UI
-tests/      Functional test suites (run the real binary against fake peers): Go in tests/go, Perl in t/ (being replaced)
+tests/      Functional test suite in Go (runs the real binary against fake peers), and the configs it uses
 doc/        Markdown documentation published to he.fi/aprsc (also installed as HTML)
 tools/      Standalone Perl helpers for feeding, copying and receiving APRS-IS traffic
 build/      build-all.pl: maintainer script that builds packages in LXD VMs per distro
-.github/    CI workflow: configure, make, make testinstall, then two parallel jobs on Ubuntu (each with and without IS2): the Perl tests + aggrtest, and the Go tests
+.github/    CI workflow: configure, make, make testinstall, make test, on Ubuntu with and without IS2
 ```
 
 There is no top-level Makefile. Everything is driven from `src/` and `tests/`.
@@ -121,39 +121,35 @@ make -j4
 The test suite is functional: each test starts the real `aprsc` binary with a
 config from `tests/cfg-aprsc/`, connects fake APRS-IS clients, upstreams and
 UDP peers to it, and asserts on what comes out. There are no C unit tests.
-
-There are two suites with the same tests. The Go suite in `tests/go/` is the
-one to extend, and replaces the Perl suite (`tests/t/`, `tests/aggregator/`,
-`tests/libperl/`) once it has been run on Linux. Write new tests in Go.
+The suite is written in Go, in `tests/go/`; it replaced an earlier Perl suite
+in 2026, and each test's header comment names the Perl test it was ported
+from.
 
 ```sh
-cd src && make testinstall      # copies web/ files into tests/web, creates tests/data and tests/logs
+cd src && make testinstall      # copies web/ files into tests/web, creates tests/data
 cd ../tests
-make gotest                     # the Go suite, all of it; generates the TLS test CA and certs on first run
-make gotest-short               # skips the heavy TestUDPLoad
-make gotest-race                # with the race detector
-make gotest-run T=TestDupecheck # one test or a group, verbose (T is a regexp)
-make test                       # Perl: all of t/*.t, also generates the TLS test CA and certs on first run
-make aggrtest                   # Perl: aggregator/*.t
-make travistest                 # Perl: skips the heavy t/64udp-load.t
+make test                       # all of it; generates the TLS test CA and certs on first run
+make test-short                 # skips the heavy TestUDPLoad
+make test-race                  # with the race detector
+make test-run T=TestDupecheck   # one test or a group, verbose (T is a regexp)
 ```
 
 Go dependencies: Go 1.26 or newer, and `github.com/hessu/go-aprs-fap` for
 the APRS parser and the `Conn` type behind the plaintext client. Go modules
 are fetched on first use. Subtests can be run with
-`go test -run 'TestDupecheck/long_dupe'` in `tests/go/`; see
-`tests/go/README.md`.
+`go test -run 'TestDupecheck/long_dupe'` in `tests/go/`, once
+`make tls-testcert` has been done in `tests/`; see `tests/go/README.md`.
 
 IS2 is compiled out unless aprsc was configured with `--enable-is2`. The IS2
 tests (`TestIS2*`, `TestDupeClientIS2`, `TestLiveUpgrade`) skip themselves on
 a build without it, and `TestIS2Disabled` does the opposite. Run them with
-`APRSC_BIN=/path/to/aprsc make gotest`. The Go IS2 types are generated from
+`APRSC_BIN=/path/to/aprsc make test`. The Go IS2 types are generated from
 `src/aprsis2.proto`: after changing the schema, run
 `go generate ./internal/aprsis2` in `tests/go/` (needs `protoc` and
 `protoc-gen-go`) and commit the result; `TestGeneratedIsCurrent` fails
 otherwise.
 
-How the Go suite is structured:
+How the suite is structured:
 
 - `tests/go/internal/harness` starts and stops the server. It passes
   `-e debug -o file -r <temp dir>`, so a failed test prints the tail of that
@@ -174,36 +170,14 @@ How the Go suite is structured:
 - Tests that start a server cannot run in parallel: the configs use fixed
   ports. Cases that share server state (the dupe cache, heard lists) run in
   order within one test.
-- Test files are named by area, as the Perl ones were numbered: login and
-  start-up, dupecheck, quirks and third-party, q constructs, filters,
-  messaging, load and uplinks, UDP/HTTP/SCTP/status, live upgrade, IS2,
-  aggregator.
-
-The Perl suite is structured as follows (the port map applies to both suites,
-since both use the configs in `tests/cfg-aprsc/`):
-
-- `tests/libperl/runproduct.pm` starts and stops the server. It passes
-  `-e debug -o file -r logs`, so the server log for the last run is in
-  `tests/logs/aprsc.log`. It waits for the status HTTP port 55501 to open
-  before returning. `TEST_PRODUCT=javap` runs the same tests against
-  javAPRSSrvr if a copy is present in `tests/javaprssrvr/` (not distributed).
-- `tests/libperl/istest.pm` provides `txrx()` (send on one connection,
-  expect on another), `rx()`, and `should_drop()` (send a packet that must
-  be dropped followed by a helper packet that must arrive).
-- `Ham::APRS::IS` is a plaintext client, `Ham::APRS::IS2` a protobuf client,
-  `Ham::APRS::IS_Fake` and `IS_Fake_UDP` play the role of upstream servers
-  and UDP peers so uplink and peering code paths are exercised.
-- Tests use `Test.pm` with `plan tests => N` and `ok(got, expected, msg)`.
-  Keep the plan count correct when adding checks; the convention is an
-  arithmetic expression that documents the groups, e.g. `9 + 5 + 2`.
-- Port map used by the configs: `55152` full feed, `55580` igate,
-  `55581` client-only, `55153` dupefeed, `55080` UDP submit, `55154`,
-  `55582` and `55583` TLS variants, `56xxx` IS2 equivalents, `55501` HTTP status, `10153` and
-  `57153/57154` fake upstreams, `1640x` UDP peers.
-- File names are numbered by area: `0x` start/login, `1x` dupecheck and
-  drops, `2x` q-construct, `3x` filters, `4x` messaging, `5x` load and
-  uplinks, `6x` UDP/HTTP/SCTP/status, `7x` live upgrade, `8x` IS2.
-  A disabled test carries a `.disabled` suffix.
+- Test files are named by area: login and start-up, dupecheck and drops,
+  quirks and third-party, q constructs, filters, messaging, load and
+  uplinks, UDP/HTTP/SCTP/status, live upgrade, IS2, aggregator.
+- Port map used by the configs in `tests/cfg-aprsc/`: `55152` full feed,
+  `55580` igate, `55581` client-only, `55153` dupefeed, `55080` UDP submit,
+  `55154`, `55582` and `55583` TLS variants, `56xxx` IS2 equivalents,
+  `55501` HTTP status, `10153` and `57153/57154` fake upstreams, `1640x`
+  UDP peers. `tests/cfg-javap/` has the javAPRSSrvr equivalents.
 
 Every new feature must come with a test. Run the full suite before
 connecting modified code to the live APRS-IS network.

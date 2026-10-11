@@ -8,72 +8,11 @@ on:
 
 jobs:
   build:
-    # The Perl test suite. The two variants run in parallel: one built with
-    # the work in progress IS2 protocol, and one without, which is the default.
-    name: build (${{ matrix.variant }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ ubuntu-latest ]
-        variant: [ is2, no-is2 ]
-        include:
-          - variant: is2
-            configure_flags: --enable-is2
-          - variant: no-is2
-            configure_flags: ""
-    runs-on: ${{ matrix.os }}
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: install deps
-      run: |
-        sudo apt-get install -y libevent-dev \
-            perl perl-modules libio-socket-inet6-perl libjson-xs-perl \
-            libwww-perl \
-            libparse-recdescent-perl \
-            libprotobuf-c-dev protobuf-c-compiler libprotoc-dev \
-            libprotobuf-dev protobuf-compiler cmake \
-            libsctp-dev \
-            libssl-dev pkg-config \
-            cpanminus \
-            openssl
-
-    # The IS2 tests need the protobuf module of the Perl test client; it has
-    # no Debian package. It builds against the protobuf installed above.
-    # Without IS2 the IS2 tests skip themselves and do not need it.
-    - name: install Perl Google::ProtocolBuffers::Dynamic
-      if: matrix.variant == 'is2'
-      run: |
-        sudo CMAKE_POLICY_VERSION_MINIMUM=3.5 cpanm --notest Google::ProtocolBuffers::Dynamic
-
-    - name: configure
-      run: |
-        cd src
-        ./configure ${{ matrix.configure_flags }}
-
-    - name: make
-      run: |
-        cd src
-        make -j4
-
-    - name: make testinstall
-      run: |
-        cd src
-        make testinstall
-
-    - name: Run tests
-      run: |
-        cd tests
-        make test aggrtest
-
-  go-tests:
-    # The Go test suite, which is replacing the Perl one. It runs as a
-    # separate job in parallel with the Perl tests (the tests use fixed ports,
-    # which is fine with a runner each). The IS2 tests run against the IS2
-    # variant of the build and skip themselves on the other; TestIS2Disabled
+    # The two variants run in parallel: one built with the work in progress
+    # IS2 protocol, and one without, which is the default. The IS2 tests run
+    # against the IS2 variant and skip themselves on the other; TestIS2Disabled
     # does the opposite. TestSCTP runs because libsctp-dev is installed.
-    name: go tests (${{ matrix.variant }})
+    name: build (${{ matrix.variant }})
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +57,7 @@ jobs:
         go-version-file: tests/go/go.mod
         cache-dependency-path: tests/go/go.sum
 
-    - name: Run Go tests
+    - name: Run tests
       run: |
         cd tests
-        make gotest
+        make test

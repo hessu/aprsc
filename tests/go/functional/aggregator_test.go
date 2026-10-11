@@ -14,8 +14,7 @@ import (
 // dupes come out. Port of aggregator/10aggr_join.t.
 func TestAggregatorJoin(t *testing.T) {
 	// the packets are unique to this run, so that a real network is not
-	// confused by repeated test runs (the Perl suite passes these in the
-	// environment)
+	// confused by repeated test runs
 	id := fmt.Sprintf("%d_%d", time.Now().Unix(), rand.Intn(1000000))
 	const igate = "XX7IG"
 	tlmSeq := rand.Intn(1000)

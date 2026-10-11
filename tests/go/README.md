@@ -1,16 +1,17 @@
-# Go functional tests
+# Functional tests
 
 Functional tests for aprsc: each test starts the real `aprsc` binary with a
 configuration from `../cfg-aprsc/`, connects fake clients, upstreams and UDP
-peers to it, and checks what comes out. This is a Go port of the Perl suite in
-`../t/`; the Perl tests remain until the port has been run on Linux.
+peers to it, and checks what comes out. The suite was ported from an earlier
+Perl suite in 2026; each test's header comment names the Perl test it came
+from, for digging in the git history.
 
     cd src && ./configure && make       # build aprsc first
     make testinstall                    # copies the web files to tests/web
-    cd ../tests && make gotest          # or: make tls-testcert; cd go && go test ./...
+    cd ../tests && make test            # or: make tls-testcert; cd go && go test ./...
 
-`make gotest-short`, `make gotest-race` and `make gotest-run T=TestDupecheck`
-are variants (see `../Makefile`). All of them generate the TLS test CA and
+`make test-short`, `make test-race` and `make test-run T=TestDupecheck` are
+variants (see `../Makefile`). All of them generate the TLS test CA and
 certificates on the first run, which the TLS listeners of the `basic`
 configuration need; `go test` run by hand needs `make tls-testcert` done in
 `../` first.

@@ -163,15 +163,81 @@ func StartAdditional(t *testing.T, cfg string, extraArgs ...string) *Server {
 // it to see whether the aprsc build has an optional feature, such as SCTP.
 func CheckConfig(t *testing.T, cfg string) (string, error) {
 	t.Helper()
+	return CheckConfigFile(t, filepath.Join("cfg-aprsc", cfg))
+}
+
+// CheckConfigFile is like CheckConfig, for a configuration file at a path
+// relative to the tests/ directory.
+func CheckConfigFile(t *testing.T, path string) (string, error) {
+	t.Helper()
 
 	if !IsAprsc() {
 		t.Fatalf("CheckConfig only works with aprsc")
 	}
 
-	cmd := exec.Command(Binary(), "-y", "-c", filepath.Join("cfg-aprsc", cfg), "-e", "info", "-o", "stderr")
+	cmd := exec.Command(Binary(), "-y", "-c", path, "-e", "info", "-o", "stderr")
 	cmd.Dir = TestsDir()
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// hasIS2 tells whether this build of aprsc has IS2 enabled (./configure
+// --enable-is2): without it the server rejects the IS2 keywords in the
+// configuration. A plain configuration that does not parse either is a test
+// environment problem, not a missing feature.
+func hasIS2(t *testing.T) bool {
+	t.Helper()
+
+	if out, err := CheckConfig(t, "basic"); err != nil {
+		t.Fatalf("the basic configuration was not accepted: %v\n%s", err, out)
+	}
+
+	_, err := CheckConfig(t, "is2-basic")
+	return err == nil
+}
+
+// RequireIS2 skips the test unless the product is an aprsc built with IS2
+// enabled.
+func RequireIS2(t *testing.T) {
+	t.Helper()
+
+	RequireAprsc(t)
+	if !hasIS2(t) {
+		t.Skip("this aprsc build has no IS2 support (./configure --enable-is2)")
+	}
+}
+
+// RequireNoIS2 skips the test if the aprsc was built with IS2 enabled.
+func RequireNoIS2(t *testing.T) {
+	t.Helper()
+
+	RequireAprsc(t)
+	if hasIS2(t) {
+		t.Skip("this aprsc build has IS2 enabled")
+	}
+}
+
+// LogCount returns how many times text appears in the server's log so far.
+func (s *Server) LogCount(text string) int {
+	b, err := os.ReadFile(s.LogFile())
+	if err != nil {
+		return 0
+	}
+	return bytes.Count(b, []byte(text))
+}
+
+// WaitLog waits until text appears in the server's log at least n times, and
+// fails the test if it does not within timeout.
+func (s *Server) WaitLog(text string, n int, timeout time.Duration) {
+	s.t.Helper()
+
+	end := time.Now().Add(timeout)
+	for s.LogCount(text) < n {
+		if time.Now().After(end) {
+			s.t.Fatalf("%q did not appear in the server log %d times within %v", text, n, timeout)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Server {

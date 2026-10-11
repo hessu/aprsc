@@ -49,6 +49,13 @@ type config struct {
 	filter   string
 	vers     string
 	udp      int
+	appName  string // IS2 login
+	dupes    bool   // IS2 dupe feed
+}
+
+// passcodeFor returns the correct passcode for a callsign.
+func passcodeFor(callsign string) int16 {
+	return fap.AprsPasscode(callsign)
 }
 
 // withUDPPort asks the server to send packets over UDP to the given port.

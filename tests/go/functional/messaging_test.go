@@ -15,6 +15,13 @@ func msgTo(dest string) string {
 	return fmt.Sprintf("::%-9.9s:", dest)
 }
 
+// duplex is a client which can both send and receive packets, over whichever
+// protocol.
+type duplex interface {
+	isclient.Sender
+	isclient.Receiver
+}
+
 // Messaging features:
 //
 // On a filtered igate port, no messages should come out at first. When a
@@ -31,24 +38,52 @@ func msgTo(dest string) string {
 func TestMessaging(t *testing.T) {
 	s := harness.Start(t, "basic")
 
-	const loginTx = "N0GATE"
-	const loginRx = "N1GATE"
 	const filter = "r/60.4752/25.0947/1"
 
 	// A filter is set on both so that the helper packets get through.
-	tx := isclient.Connect(t, "localhost:55580", loginTx, isclient.WithFilter(filter))
-	rx := isclient.Connect(t, "localhost:55580", loginRx, isclient.WithFilter(filter))
+	tx := isclient.Connect(t, "localhost:55580", "N0GATE", isclient.WithFilter(filter))
+	rx := isclient.Connect(t, "localhost:55580", "N1GATE", isclient.WithFilter(filter))
 
+	messaging(t, tx, rx, func() duplex {
+		return isclient.Connect(t, "localhost:55580", "N2GATE", isclient.WithFilter(filter))
+	})
+
+	// The g/ message recipient filter.
+	t.Run("g filter", func(t *testing.T) {
+		rx.SetFilter("g/PREF*/FULLCAL")
+
+		// the first message does not match the filter, the second one does
+		isclient.ExpectDrop(t, tx, rx,
+			"OH1SRC>APRS,OH2RDG*,WIDE,N0GATE,I"+msgTo("NOMATCH")+"message",
+			"OH1SRC>APRS,OH2RDG*,WIDE,N0GATE,I"+msgTo("FULLCAL")+"message")
+
+		// wildcard in the g/ filter
+		again := func(to string) string {
+			return "OH1SRC>APRS,qAR,N0GATE" + msgTo(to) + "message again"
+		}
+		isclient.TxRx(t, tx, rx, again("PREFIX"), again("PREFIX"))
+		isclient.TxRx(t, tx, rx, again("PREF"), again("PREF"))
+	})
+
+	s.Stop()
+}
+
+// messaging runs the messaging scenario between two connected igates, tx
+// (N0GATE) and rx (N1GATE), and a third one made by connectRx2 (N2GATE). All
+// of them have a range filter around the stations' positions.
+func messaging(t *testing.T, tx, rx duplex, connectRx2 func() duplex) {
+	const loginTx = "N0GATE"
+	const loginRx = "N1GATE"
 	const msgSrc = "M1SRC"
 	const msgDst = "M1DST"
 	const path = ">APRS,OH2RDG*,WIDE,"
 	const pos = ":!6028.51N/02505.68E# "
 
 	// txrx runs a pass step in the given direction.
-	txrx := func(name string, from, to *isclient.Plain, sent, want string) {
+	txrx := func(name string, from, to duplex, sent, want string) {
 		t.Run(name, func(t *testing.T) { isclient.TxRx(t, from, to, sent, want) })
 	}
-	dropped := func(name string, from, to *isclient.Plain, sent, helper string) {
+	dropped := func(name string, from, to duplex, sent, helper string) {
 		t.Run(name, func(t *testing.T) { isclient.ExpectDrop(t, from, to, sent, helper) })
 	}
 
@@ -156,7 +191,7 @@ func TestMessaging(t *testing.T) {
 
 	// Connect another igate and see what happens when there are two gates
 	// hearing the same station.
-	rx2 := isclient.Connect(t, "localhost:55580", "N2GATE", isclient.WithFilter(filter))
+	rx2 := connectRx2()
 
 	// A position packet on the second receiving filtered port comes out on
 	// the first receiving filtered port due to the range filter *and* due to
@@ -181,23 +216,4 @@ func TestMessaging(t *testing.T) {
 			t.Errorf("first rx port got %q (%v), want %q", got, err, want)
 		}
 	})
-
-	// The g/ message recipient filter.
-	t.Run("g filter", func(t *testing.T) {
-		rx.SetFilter("g/PREF*/FULLCAL")
-
-		// the first message does not match the filter, the second one does
-		isclient.ExpectDrop(t, tx, rx,
-			"OH1SRC"+path+loginTx+",I"+msgTo("NOMATCH")+"message",
-			"OH1SRC"+path+loginTx+",I"+msgTo("FULLCAL")+"message")
-
-		// wildcard in the g/ filter
-		again := func(to string) string {
-			return "OH1SRC>APRS,qAR," + loginTx + msgTo(to) + "message again"
-		}
-		isclient.TxRx(t, tx, rx, again("PREFIX"), again("PREFIX"))
-		isclient.TxRx(t, tx, rx, again("PREF"), again("PREF"))
-	})
-
-	s.Stop()
 }

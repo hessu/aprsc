@@ -32,7 +32,9 @@ const char *aprsc_errs[] = {
 	"Client login timed out",
 	"Inactivity timeout",
 	"Uplink server certificate validation failed",
-	"IS2 framing failure - no STX"
+	"IS2 framing failure - no STX",
+	"IS2 framing failure - reserved byte set",
+	"IS2 framing failure - invalid length or missing ETX"
 };
 
 const char *aprsc_strerror(int er)

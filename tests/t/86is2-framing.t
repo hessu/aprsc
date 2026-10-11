@@ -1,12 +1,12 @@
 
 #
-# Test IS2 framing errors: the server must disconnect the client,
-# must not process any further frames from it, and must survive.
+# Test IS2 framing errors: the server must disconnect the client right
+# away, must not process any further frames from it, and must survive.
 #
 
 use strict;
 use Test;
-BEGIN { plan tests => 4 + 3 + 2 + 1 };
+BEGIN { plan tests => 3 + 4*4 + 2 + 1 };
 use runproduct;
 use istest;
 use Ham::APRS::IS2;
@@ -20,11 +20,7 @@ my $login = "OH7LZB";
 my $is = new Ham::APRS::IS2("localhost:56152", $login);
 ok(defined $is, 1, "Failed to initialize Ham::APRS::IS2");
 
-my $ret = $is->connect('retryuntil' => 8);
-ok($ret, 1, "Failed to connect to the server: " . $is->{'error'});
-
-# a valid message body, framed with a non-zero reserved byte, followed by
-# the same body framed correctly
+# a valid message body, and the same body in a correct frame
 
 my $im = APRSIS2::IS2Message->new({
 	'type' => APRSIS2::IS2Message::Type::IS_PACKET(),
@@ -34,20 +30,36 @@ my $im = APRSIS2::IS2Message->new({
 	}) ],
 });
 my $body = $im->encode;
-my $bad  = chr(0x02) . chr(0x01) . pack('n', length($body)) . $body . chr(0x03);
-my $good = chr(0x02) . chr(0x00) . pack('n', length($body)) . $body . chr(0x03);
+my $good = $is->is2_frame_wrap($body);
 
-# The server closes the connection on the first frame, and must not parse
-# the second one, since the client object is gone.
-ok($is->send_raw($bad . $good), 1, "Failed to send frames with a non-zero reserved byte");
+# Broken frames, each followed by the correct one. The server must close
+# the connection on the broken frame, right away instead of waiting for
+# more data, and must not parse the following frame.
+my @cases = (
+	[ 'non-zero reserved byte', chr(0x02) . chr(0x01) . pack('n', length($body)) . $body . chr(0x03) ],
+	[ 'too short content length', chr(0x02) . chr(0x00) . pack('n', 2) . substr($body, 0, 2) . chr(0x03) ],
+	[ 'too long content length', chr(0x02) . chr(0x00) . pack('n', 5000) . $body . chr(0x03) ],
+	[ 'missing ETX', chr(0x02) . chr(0x00) . pack('n', length($body)) . $body . chr(0x04) ],
+);
 
-my $r = $is->get_packet(3);
-ok($r, undef, "Received a packet after a framing error");
-ok($is->{'state'}, 'disconnected', "Server did not disconnect the client after a framing error: " . $is->{'error'});
+foreach my $case (@cases) {
+	my($name, $bad) = @{ $case };
+
+	my $ret = $is->connect('retryuntil' => 8);
+	ok($ret, 1, "Failed to connect to the server before sending a frame with $name: " . $is->{'error'});
+
+	ok($is->send_raw($bad . $good), 1, "Failed to send frames with $name");
+
+	my $r = $is->get_packet(3);
+	ok($r, undef, "Received a packet after a frame with $name");
+	ok($is->{'state'}, 'disconnected', "Server did not disconnect the client after a frame with $name: " . $is->{'error'});
+
+	$is->disconnect() if ($is->{'state'} eq 'connected');
+}
 
 # the server must still be alive and accepting clients
 
-$ret = $is->connect('retryuntil' => 8);
+my $ret = $is->connect('retryuntil' => 8);
 ok($ret, 1, "Failed to reconnect to the server: " . $is->{'error'});
 
 $ret = $is->disconnect();

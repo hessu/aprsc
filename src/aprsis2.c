@@ -1094,9 +1094,10 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		uint16_t *ip = (uint16_t *)&this[2];
 		uint16_t clen = ntohs(*ip);
 		
-		if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
-			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Too short frame content (%d): ",
+		if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN || clen > IS2_MAXIMUM_FRAME_CONTENT_LEN) {
+			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Invalid frame content length (%d): ",
 				c->addr_rem, c->username, clen);
+			client_close(self, c, CLIERR_IS2_FRAMING_INVALID);
 			return -1;
 		}
 		
@@ -1111,6 +1112,7 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 		if (this[IS2_HEAD_LEN + clen] != ETX) {
 			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Frame missing terminating ETX: ",
 				c->addr_rem, c->username);
+			client_close(self, c, CLIERR_IS2_FRAMING_INVALID);
 			return -1;
 		}
 		

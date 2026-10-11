@@ -19,6 +19,7 @@
 #include "incoming.h"
 #include "filter.h"
 #include "random.h"
+#include "rwlock.h"
 
 #define STX 0x02
 #define ETX 0x03
@@ -229,23 +230,63 @@ static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2_
  *	Write an UDP message to a client, return result from c->write
  */
 
-struct is2_corepeer_context_t {
-#ifdef HAVE_OPENSSL_3
-	EVP_MAC_CTX *ctx;
-#else
-	HMAC_CTX *ctx;
-#endif
-	const unsigned char *key;
+/*
+ *	Keys for signing and verifying UDP peer frames, indexed by key id.
+ *	The main thread builds the table from the configuration and
+ *	replaces it as a whole on reload, while a worker thread may be
+ *	using a key, so the lock is held for the duration of a signature
+ *	calculation. The HMAC is computed with the one-shot API, so no
+ *	OpenSSL context is shared between threads.
+ */
+
+struct is2_corepeer_key_t {
+	unsigned char *key;
 	int key_len;
-} *is2_corepeer_context[IS2_PEERGROUP_KEY_ID_NUM];
+};
+
+static struct is2_corepeer_key_t *is2_corepeer_keys[IS2_PEERGROUP_KEY_ID_NUM];
+static rwlock_t is2_corepeer_keys_lock = RWL_INITIALIZER;
+
+#define IS2_HMAC_FAILED -1
+#define IS2_HMAC_NO_KEY -2
+
+/*
+ *	Calculate the HMAC-SHA256 of a buffer with the given key.
+ *	Returns 0 on success, IS2_HMAC_NO_KEY if the key is not configured.
+ */
+
+static int is2_corepeer_hmac(unsigned int key_id, const char *data, int len, unsigned char *md, unsigned int *md_len)
+{
+	struct is2_corepeer_key_t *k;
+	int r = IS2_HMAC_FAILED;
+
+	rwl_rdlock(&is2_corepeer_keys_lock);
+
+	k = is2_corepeer_keys[key_id];
+	if (!k) {
+		r = IS2_HMAC_NO_KEY;
+	} else {
+#ifdef HAVE_OPENSSL_3
+		size_t outl = 0;
+		if (EVP_Q_mac(NULL, "HMAC", NULL, "SHA256", NULL, k->key, k->key_len,
+		    (const unsigned char *)data, len, md, 32, &outl) != NULL) {
+			*md_len = outl;
+			r = 0;
+		}
+#else
+		if (HMAC(EVP_sha256(), k->key, k->key_len, (const unsigned char *)data, len, md, md_len) != NULL)
+			r = 0;
+#endif
+	}
+
+	rwl_rdunlock(&is2_corepeer_keys_lock);
+
+	return r;
+}
 
 static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_size, int data_len)
 {
-	struct is2_corepeer_context_t *context = is2_corepeer_context[peergroup_key_transmit];
-	if (context == NULL) {
-		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: PeerGroupKey/PeerGroupKeyTransmit mismatch: Key %d not defined", c->addr_rem, c->username, peergroup_key_transmit);
-		return -1;
-	}
+	unsigned int key_id = peergroup_key_transmit;
 
 	if (data_len + IS2_UDP_HMAC_TRAILER_LEN > obuf_size) {
 		hlog(LOG_ERR, "%s/%s: IS2 UDP: no room for HMAC after %d bytes of frame in buffer of %d bytes", c->addr_rem, c->username, data_len, obuf_size);
@@ -254,27 +295,20 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 
 	/* Calculate the MAC */
 	unsigned char md[32];
+	unsigned int md_len = 0;
 
-#ifdef HAVE_OPENSSL_3
-	size_t md_len;
-	EVP_MAC_CTX *ctx = context->ctx;
-	
-	if (EVP_MAC_init(ctx, context->key, context->key_len, NULL) != 1 ||
-	    EVP_MAC_update(ctx, (unsigned char *)obuf, data_len) != 1 ||
-	        EVP_MAC_final(ctx, md, &md_len, sizeof(md)) != 1) {
-	            //handleErrors();
-	            return -1;
+	int r = is2_corepeer_hmac(key_id, obuf, data_len, md, &md_len);
+	if (r == IS2_HMAC_NO_KEY) {
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: PeerGroupKey/PeerGroupKeyTransmit mismatch: Key %d not defined", c->addr_rem, c->username, key_id);
+		return -1;
 	}
-#else
-	unsigned int md_len;
-	HMAC_CTX *ctx = context->ctx;
-	HMAC_Init_ex(ctx, NULL, 0, NULL, NULL);
-	HMAC_Update(ctx, (unsigned char *)obuf, data_len);
-	HMAC_Final(ctx, md, &md_len);
-#endif
+	if (r != 0 || md_len != 32) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: HMAC calculation failed (key %d)", c->addr_rem, c->username, key_id);
+		return -1;
+	}
 
 	obuf[data_len] = IS2_UDP_HMAC_MARKER; // marker: has HMAC
-	obuf[data_len+1] = peergroup_key_transmit; // HMAC key identifier
+	obuf[data_len+1] = key_id; // HMAC key identifier
 	memcpy(&obuf[data_len+2], md, md_len);
 
 	return data_len + 2 + md_len;
@@ -1073,33 +1107,21 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 		return -1;
 	}
 
-	struct is2_corepeer_context_t *context = is2_corepeer_context[key_id];
-	if (context == NULL) {
+	/* Calculate the MAC */
+	unsigned char md[32];
+	unsigned int md_len = 0;
+
+	int r = is2_corepeer_hmac(key_id, ibuf, signature_start, md, &md_len);
+	if (r == IS2_HMAC_NO_KEY) {
 		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Incoming packet with undefined key ID %d",
 			c->addr_rem, c->username, key_id);
 		return -1;
 	}
-
-	unsigned char md[32];
-#ifdef HAVE_OPENSSL_3
-	EVP_MAC_CTX *ctx = context->ctx;
-
-	/* Calculate the MAC */
-	size_t md_len;
-
-	if (EVP_MAC_init(ctx, context->key, context->key_len, NULL) != 1 ||
-	    EVP_MAC_update(ctx, (unsigned char *)ibuf, signature_start) != 1 ||
-	        EVP_MAC_final(ctx, md, &md_len, sizeof(md)) != 1) {
-	            //handleErrors();
-	            return -1;
+	if (r != 0) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: HMAC calculation failed (key %d)",
+			c->addr_rem, c->username, key_id);
+		return -1;
 	}
-#else
-	unsigned int md_len;
-	HMAC_CTX *ctx = context->ctx;
-	HMAC_Init_ex(ctx, NULL, 0, NULL, NULL);
-	HMAC_Update(ctx, (unsigned char *)ibuf, signature_start);
-	HMAC_Final(ctx, md, &md_len);
-#endif
 
 	//hlog(LOG_DEBUG, "IS2 rx hmac signed, key %d, sig start %d, md_len %d, received md %d bytes", key_id, signature_start, md_len, len - signature_start - 2);
 	if (md_len != 32 || len - signature_start - 2 != 32) {
@@ -1586,60 +1608,48 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 	return 0;
 }
 
-int evp_hmac_errors(void) {
-	ERR_print_errors_fp(stderr);
-	return -1;
-}
-
-
-static int is2_corepeer_hmac_setup(int key_id, char *key)
+static void is2_corepeer_key_free(struct is2_corepeer_key_t *k)
 {
-#ifdef HAVE_OPENSSL_3
-	EVP_MAC *mac = NULL;
-	EVP_MAC_CTX *ctx = NULL;
-	OSSL_PARAM params[3];
+	if (!k)
+		return;
 
-    	/* Fetch the HMAC algorithm */
-	mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
-	if (mac == NULL)
-		return evp_hmac_errors();
-
-	/* Create a MAC context */
-	ctx = EVP_MAC_CTX_new(mac);
-	if (ctx == NULL)
-		return evp_hmac_errors();
-
-	/* Set the MAC parameters */
-	params[0] = OSSL_PARAM_construct_utf8_string("digest", "SHA256", 0);
-	params[1] = OSSL_PARAM_construct_octet_string("key", key, strlen((char *)key));
-	params[2] = OSSL_PARAM_construct_end();
-
-	if (EVP_MAC_CTX_set_params(ctx, params) != 1)
-		return evp_hmac_errors();
-#else
-	HMAC_CTX *ctx = HMAC_CTX_new();
-	HMAC_Init_ex(ctx, key, strlen(key), EVP_sha256(), NULL);
-#endif
-
-	// TODO: Since OpenSSL 3.0.3 there is no need to provide the key again when
-	// resetting HMAC context, we can leave key = NULL and key_len = 0.
-	// TODO: Free up old contexts after a while.
-	struct is2_corepeer_context_t *is2_ctx = hmalloc(sizeof(struct is2_corepeer_context_t));
-	is2_ctx->ctx = ctx;
-	is2_ctx->key = (unsigned char *)hstrdup(key);
-	is2_ctx->key_len = strlen(key);
-	is2_corepeer_context[key_id] = is2_ctx;
-
-	return 0;
+	hfree(k->key);
+	hfree(k);
 }
+
+/*
+ *	Build the peer key table from the configuration and replace the
+ *	previous one. Called from the main thread at startup and on reload;
+ *	keys removed from the configuration are no longer accepted.
+ */
 
 int is2_corepeer_key_setup(void)
 {
-	struct peergroup_key_t *k;
+	struct is2_corepeer_key_t *new_keys[IS2_PEERGROUP_KEY_ID_NUM];
+	struct is2_corepeer_key_t *old_keys[IS2_PEERGROUP_KEY_ID_NUM];
+	struct peergroup_key_t *pk;
+	struct is2_corepeer_key_t *k;
+	int i;
 
-	for (k = peergroup_key_config; (k); k = k->next) {
-		is2_corepeer_hmac_setup(k->key_id, k->key);
+	memset(new_keys, 0, sizeof(new_keys));
+
+	for (pk = peergroup_key_config; (pk); pk = pk->next) {
+		/* a key id defined twice: the later entry in the list wins */
+		is2_corepeer_key_free(new_keys[pk->key_id]);
+
+		k = hmalloc(sizeof(*k));
+		k->key = (unsigned char *)hstrdup(pk->key);
+		k->key_len = strlen(pk->key);
+		new_keys[pk->key_id] = k;
 	}
+
+	rwl_wrlock(&is2_corepeer_keys_lock);
+	memcpy(old_keys, is2_corepeer_keys, sizeof(old_keys));
+	memcpy(is2_corepeer_keys, new_keys, sizeof(is2_corepeer_keys));
+	rwl_wrunlock(&is2_corepeer_keys_lock);
+
+	for (i = 0; i < IS2_PEERGROUP_KEY_ID_NUM; i++)
+		is2_corepeer_key_free(old_keys[i]);
 
 	return 0;
 }

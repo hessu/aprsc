@@ -169,6 +169,10 @@ func Start(t *testing.T, cfg string, extraArgs ...string) *Server {
 
 	cfgFile := filepath.Join(prod.cfgDir, cfg)
 	if _, err := os.Stat(filepath.Join(dir, cfgFile)); err != nil {
+		if !prod.ownLogging {
+			// not every test has a configuration for the other products
+			t.Skipf("no %s configuration for this test: %v", prod.name, err)
+		}
 		t.Fatalf("no such configuration file: %v", err)
 	}
 
@@ -234,14 +238,20 @@ func (s *Server) waitReady() error {
 		default:
 		}
 
-		if c, err := net.DialTimeout("tcp", StatusAddr, 200*time.Millisecond); err == nil {
+		if s.prod.ownLogging {
+			// Some configurations have no status port, so watch the log
+			// for the accept thread having opened the listeners instead.
+			if b, err := os.ReadFile(s.LogFile()); err == nil && bytes.Contains(b, []byte("Accept thread ready")) {
+				return nil
+			}
+		} else if c, err := net.DialTimeout("tcp", StatusAddr, 200*time.Millisecond); err == nil {
 			c.Close()
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	return fmt.Errorf("%s did not open %s within %v", s.prod.name, StatusAddr, startTimeout)
+	return fmt.Errorf("%s was not ready within %v", s.prod.name, startTimeout)
 }
 
 // cleanExit reports whether err, the result of waiting for the process after

@@ -3,8 +3,10 @@
 package isclient
 
 import (
+	"errors"
 	"fmt"
 	"math/rand"
+	"net"
 	"regexp"
 	"strings"
 	"testing"
@@ -21,6 +23,18 @@ const DefaultTimeout = 5 * time.Second
 // accepting yet.
 const connectRetry = 8 * time.Second
 
+// Sender is something lines can be sent on: a Plain client, or a Peer which
+// plays an upstream server.
+type Sender interface {
+	SendLine(line string) error
+}
+
+// Receiver is something packets can be received from. ReadPacket skips
+// comment lines.
+type Receiver interface {
+	ReadPacket(timeout time.Duration) (string, error)
+}
+
 // Plain is a plaintext APRS-IS client connected to a test server.
 type Plain struct {
 	*fap.Conn
@@ -33,6 +47,7 @@ type Plain struct {
 type config struct {
 	passcode string
 	filter   string
+	vers     string
 }
 
 // Option customizes Connect.
@@ -45,6 +60,10 @@ func WithPasscode(p string) Option { return func(c *config) { c.passcode = p } }
 // WithFilter sets the filter in the login line.
 func WithFilter(f string) Option { return func(c *config) { c.filter = f } }
 
+// WithVers sets everything after "vers" in the login line, for example
+// "HR-IXPWINDi-123" to look like a client with known quirks.
+func WithVers(v string) Option { return func(c *config) { c.vers = v } }
+
 // Connect connects to the server at addr, retrying for a few seconds while the
 // port is not open, and logs in as callsign. The test fails if it cannot. The
 // connection is closed when the test finishes.
@@ -56,18 +75,26 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 		o(&cfg)
 	}
 
+	o := fap.ConnOptions{
+		Callsign: callsign,
+		Passcode: cfg.passcode,
+		AppName:  "aprsc-gotest",
+		AppVer:   "1.0",
+		Filter:   cfg.filter,
+		NoLogin:  true,
+	}
+	if cfg.vers != "" {
+		o.LoginLine = fmt.Sprintf("user %s pass %s vers %s", callsign, cfg.passcode, cfg.vers)
+		if cfg.filter != "" {
+			o.LoginLine += " filter " + cfg.filter
+		}
+	}
+
 	var conn *fap.Conn
 	var err error
 	deadline := time.Now().Add(connectRetry)
 	for {
-		conn, err = fap.Connect(addr, fap.ConnOptions{
-			Callsign: callsign,
-			Passcode: cfg.passcode,
-			AppName:  "aprsc-gotest",
-			AppVer:   "1.0",
-			Filter:   cfg.filter,
-			NoLogin:  true,
-		})
+		conn, err = fap.Connect(addr, o)
 		if err == nil {
 			break
 		}
@@ -88,7 +115,8 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 	return p
 }
 
-// Send sends a line to the server, failing the test on error.
+// Send sends a line to the server, failing the test on error. It must be
+// called from the goroutine of the test passed to Connect.
 func (p *Plain) Send(line string) {
 	p.t.Helper()
 	if err := p.SendLine(line); err != nil {
@@ -96,19 +124,27 @@ func (p *Plain) Send(line string) {
 	}
 }
 
-// Recv returns the next non-comment line, or an error on timeout or if the
-// connection is gone.
-func (p *Plain) Recv() (string, error) {
-	return p.ReadPacket(DefaultTimeout)
+// isTimeout reports whether err is a network timeout.
+func isTimeout(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
+}
+
+// send sends a line, failing the test on error.
+func send(t *testing.T, tx Sender, line string) {
+	t.Helper()
+	if err := tx.SendLine(line); err != nil {
+		t.Fatalf("failed to send %q: %v", line, err)
+	}
 }
 
 // TxRx sends a line on tx and expects to receive exactly want on rx.
-func TxRx(t *testing.T, tx, rx *Plain, sent, want string) {
+func TxRx(t *testing.T, tx Sender, rx Receiver, sent, want string) {
 	t.Helper()
 
-	tx.Send(sent)
+	send(t, tx, sent)
 
-	got, err := rx.Recv()
+	got, err := rx.ReadPacket(DefaultTimeout)
 	if err != nil {
 		t.Errorf("did not receive %q (sent %q): %v", want, sent, err)
 		return
@@ -119,34 +155,103 @@ func TxRx(t *testing.T, tx, rx *Plain, sent, want string) {
 }
 
 // ExpectDrop sends the packet drop on tx and then a helper packet, and expects
-// that rx receives only the helper. The helper is the given packet with a
-// random token appended, so that it is never a duplicate of anything.
-func ExpectDrop(t *testing.T, tx, rx *Plain, drop, helper string) {
+// that rx receives only the helper. A random token is appended to both
+// packets, so that neither is a duplicate of anything the server has seen and
+// the drop must be for the reason being tested.
+func ExpectDrop(t *testing.T, tx Sender, rx Receiver, drop, helper string) {
+	t.Helper()
+	expectDrop(t, tx, rx, drop, helper, false)
+}
+
+// ExpectDropExact is like ExpectDrop, but sends the packet to be dropped
+// exactly as given, for tests of duplicate detection. The helper still gets a
+// random token.
+func ExpectDropExact(t *testing.T, tx Sender, rx Receiver, drop, helper string) {
+	t.Helper()
+	expectDrop(t, tx, rx, drop, helper, true)
+}
+
+func expectDrop(t *testing.T, tx Sender, rx Receiver, drop, helper string, exact bool) {
 	t.Helper()
 
-	key := fmt.Sprintf("helper.%d", rand.Intn(1000000))
-	helperKeyed := helper + " " + key
+	dropKey := ""
+	if !exact {
+		dropKey = fmt.Sprintf("drop.%d", rand.Intn(1000000))
+		drop += " " + dropKey
+	}
+	helperKey := fmt.Sprintf("helper.%d", rand.Intn(1000000))
+	helperKeyed := helper + " " + helperKey
 
-	tx.Send(drop)
-	tx.Send(helperKeyed)
+	send(t, tx, drop)
+	send(t, tx, helperKeyed)
 
-	got, err := rx.Recv()
+	got, err := rx.ReadPacket(DefaultTimeout)
 	if err != nil {
 		t.Errorf("did not receive the helper packet %q after %q: %v", helperKeyed, drop, err)
 		return
 	}
-	if strings.Contains(got, key) {
+	if strings.Contains(got, helperKey) {
 		return
 	}
 
-	if stripPath(got) == stripPath(drop) {
+	if (!exact && strings.Contains(got, dropKey)) || (exact && stripPath(got) == stripPath(drop)) {
 		t.Errorf("server forwarded a packet it should have dropped: %q", got)
 	} else {
 		t.Errorf("server sent an unexpected packet %q instead of the helper %q", got, helperKeyed)
 	}
 
 	// resynchronize: consume the helper that must still be coming
-	rx.Recv()
+	rx.ReadPacket(DefaultTimeout)
+}
+
+// ExpectSilence fails the test if rx receives a packet within d.
+func ExpectSilence(t *testing.T, rx Receiver, d time.Duration, what string) {
+	t.Helper()
+
+	got, err := rx.ReadPacket(d)
+	switch {
+	case err == nil:
+		t.Errorf("%s: received unexpected data %q", what, got)
+	case !isTimeout(err):
+		t.Errorf("%s: connection error while expecting silence: %v", what, err)
+	}
+}
+
+// Step is one check in a sequence run by RunSteps.
+type Step struct {
+	Name string
+	Send string
+	// Want is the packet expected on the receiving side. If it is empty, the
+	// packet must be dropped instead, and Helper is the packet used to prove
+	// that the server is still forwarding.
+	Want   string
+	Helper string
+	// Exact sends the dropped packet without a unique token, so that it can
+	// be a duplicate of an earlier packet.
+	Exact bool
+}
+
+// RunSteps runs the steps in order as subtests. Steps depend on the server
+// state left by earlier ones, so they are not run in parallel.
+func RunSteps(t *testing.T, tx Sender, rx Receiver, steps []Step) {
+	t.Helper()
+
+	for _, st := range steps {
+		name := st.Name
+		if name == "" {
+			name = st.Send
+		}
+		t.Run(name, func(t *testing.T) {
+			switch {
+			case st.Want != "":
+				TxRx(t, tx, rx, st.Send, st.Want)
+			case st.Exact:
+				ExpectDropExact(t, tx, rx, st.Send, st.Helper)
+			default:
+				ExpectDrop(t, tx, rx, st.Send, st.Helper)
+			}
+		})
+	}
 }
 
 var pathRe = regexp.MustCompile(`^([^>]+)>([^,:]+)(?:,[^:]*)?(:.*)$`)

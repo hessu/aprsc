@@ -4,7 +4,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 12 };
+BEGIN { plan tests => 12 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS;
@@ -80,6 +80,18 @@ while (my $rx = $i_rx->getline_noncomment(1)) {
 ok($rxn, $txn, "Received wrong number of lines from blob");
 ok($rxl, $txl, "Received wrong number of bytes from blob");
 
+#
+############################################
+# Thousands of short lines in a single write: the deframer must handle
+# a buffer full of lines without growing the worker thread's stack
+#
+
+$sent = $i_tx->sendline("a\n" x 8000, 1);
+ok($sent, 1, "Failed to transmit 8000 short lines");
+
+# the server must still be there and forwarding packets
+$s = "M1SRC>APRS,qAR,$login_tx:!6028.51N/02505.68E#after short lines";
+istest::txrx(\&ok, $i_tx, $i_rx, $s, $s);
 
 # stop
 

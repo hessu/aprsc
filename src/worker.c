@@ -1328,16 +1328,19 @@ static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c,
 			/* skip the rest of EOL */
 			while (i < c->ibuf_end && (ibuf[i] == '\r' || ibuf[i] == '\n'))
 				i++;
+			start_at = i;
 			
-			/* call myself recursively - it's possible that the deframing
-			 * handler has been changed by the line handler
-			 * (protocol switch)
+			/* the line handler may have switched the protocol, and with
+			 * it the deframer: let the new one consume the rest. Do not
+			 * recurse otherwise, the worker thread's stack is small and
+			 * a buffer full of short lines would exhaust it.
 			 */
-			return c->handler_consume_input(self, c, i);
+			if (c->handler_consume_input != &deframe_aprsis_input_lines)
+				return c->handler_consume_input(self, c, start_at);
 		}
 	}
 	
-	/* didn't find anything to process */
+	/* return the amount of data consumed */
 	return start_at;
 }
 

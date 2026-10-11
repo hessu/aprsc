@@ -950,6 +950,7 @@ int main(int argc, char **argv)
 	 * need a copy of the shared libs within the chroot dir
 	 */
 	generate_instance_id();
+	urandom_init(); /* kept open for random tokens needed after the chroot */
 	version_report("startup");
 	
 	/* do a chroot if required */

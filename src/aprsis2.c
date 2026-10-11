@@ -1456,7 +1456,7 @@ int is2_corepeer_propose(struct worker_t *self, struct client_t *c)
 	if (!c->corepeer_is2_challenge)
 		c->corepeer_is2_challenge = hmalloc(IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
 	
-	urandom_alphanumeric(urandom_open(), (unsigned char *)c->corepeer_is2_challenge, IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
+	urandom_token((unsigned char *)c->corepeer_is2_challenge, IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
 	
 	int l = snprintf(buf, sizeof(buf), "# PEER2 v 2 hello %s vers %s %s token %s\r\n",
 		serverid, verstr_progname, version_build, c->corepeer_is2_challenge);

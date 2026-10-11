@@ -13,11 +13,20 @@ import (
 
 // The configurations in tests/cfg-aprsc use fixed port numbers, and the tests
 // refer to the same numbers. To let tests run side by side, each running test
-// gets a block of ports of its own: the first block keeps the numbers as they
-// are in the configurations, and the others map each number to a port in a
-// range of their own. The harness rewrites the configuration a server starts
-// with accordingly, and the tests ask for their addresses with Port, Addr and
-// AddrOn instead of spelling the numbers out.
+// gets a block of ports of its own, which maps each of those numbers to a port
+// in a range of the block's own. The harness rewrites the configuration a
+// server starts with accordingly, and the tests ask for their addresses with
+// Port, Addr and AddrOn instead of spelling the numbers out.
+//
+// The blocks lie below the ephemeral port ranges of Linux (32768 and up) and
+// macOS (49152 and up), unlike the numbers in the configurations: a port in
+// the ephemeral range may be taken by any outgoing connection, the tests' own
+// included, just when a server is about to bind it. The blocks are handed out
+// in turn, so that a test does not bind the ports of a server which closed
+// seconds ago.
+//
+// With another product than aprsc the numbers are used as they are, since its
+// configurations are not rewritten, and the tests run one at a time.
 
 // basePorts lists every port number which appears in the test configurations
 // or is bound by a test, in ascending order. A port missing from here is a
@@ -38,17 +47,21 @@ var basePorts = []int{
 }
 
 const (
-	// portBlockBase is where the port ranges of the blocks after the first
-	// start, below the ephemeral port ranges of Linux (32768) and macOS
-	// (49152): block n gets portBlockBase+n*portBlockSize and the following
-	// ports, one per entry of basePorts.
+	// portBlockBase is where the port ranges of the blocks start: block n
+	// gets portBlockBase+n*portBlockSize and the following ports, one per
+	// entry of basePorts. maxBlocks keeps the ranges below the ephemeral
+	// ports.
 	portBlockBase = 20000
 	portBlockSize = 100
+	maxBlocks     = 64
 )
 
 // portBlock is the set of ports a test runs its servers and fake peers on.
 type portBlock struct {
 	index int
+	// identity makes the block use the port numbers as they are, for the
+	// products whose configurations are not rewritten.
+	identity bool
 }
 
 // port maps a port number of the configurations to the block's.
@@ -57,7 +70,7 @@ func (b *portBlock) port(base int) (int, bool) {
 	if i >= len(basePorts) || basePorts[i] != base {
 		return 0, false
 	}
-	if b.index == 0 {
+	if b.identity {
 		return base, true
 	}
 	return portBlockBase + b.index*portBlockSize + i, true
@@ -74,6 +87,7 @@ var (
 	blocksMu     sync.Mutex
 	blocksInUse  = map[int]bool{}
 	blocksByTest = map[string]*portBlock{}
+	nextBlock    int // where the search for a free block starts
 )
 
 // rootName returns the name of the top-level test a subtest belongs to.
@@ -84,8 +98,8 @@ func rootName(name string) string {
 	return name
 }
 
-// blockFor returns the port block of the test, allocating the lowest free one
-// on the first call. The first call must come from the top-level test, not a
+// blockFor returns the port block of the test, allocating the next free one on
+// the first call. The first call must come from the top-level test, not a
 // subtest, since the block is released when the test which allocated it
 // finishes.
 func blockFor(t *testing.T) *portBlock {
@@ -102,12 +116,23 @@ func blockFor(t *testing.T) *portBlock {
 	if root != t.Name() {
 		t.Fatalf("the ports of %s must first be used by the top-level test, not by a subtest", root)
 	}
-
-	index := 0
-	for blocksInUse[index] {
-		index++
+	if !IsAprsc() && len(blocksInUse) > 0 {
+		t.Fatalf("%s runs on the ports of its configurations only, so its tests cannot run in parallel", ProductName())
 	}
-	b := &portBlock{index: index}
+
+	index := -1
+	for n := 0; n < maxBlocks; n++ {
+		if i := (nextBlock + n) % maxBlocks; !blocksInUse[i] {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		t.Fatalf("all %d port blocks are in use; run fewer tests in parallel", maxBlocks)
+	}
+	nextBlock = (index + 1) % maxBlocks
+
+	b := &portBlock{index: index, identity: !IsAprsc()}
 	blocksInUse[index] = true
 	blocksByTest[root] = b
 

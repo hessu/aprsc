@@ -129,7 +129,7 @@ from.
 cd src && make testinstall      # copies web/ files into tests/web, creates tests/data
 cd ../tests
 make test                       # all of it; generates the TLS test CA and certs on first run
-make test PARALLEL=1            # one test at a time (default 3), on the ports in the configs
+make test PARALLEL=1            # one test at a time (default 3)
 make test-short                 # skips the heavy TestUDPLoad
 make test-race                  # with the race detector
 make test-run T=TestDupecheck   # one test or a group, verbose (T is a regexp)
@@ -166,10 +166,11 @@ How the suite is structured:
   `harness.Parallel(t)` and gets its addresses from `harness.Addr(t, 55152)`,
   `harness.AddrOn(t, "127.0.0.1", 10153)` or `harness.Port(t, 51342)`, using
   the port numbers of the configs; never from literal ports. The harness
-  maps those numbers to a block per running test (the first block is the
-  original numbers) and rewrites the server's config copy to match, so the
-  configs keep their fixed numbers. A port number new to the configs must be
-  added to the table in `tests/go/internal/harness/ports.go`.
+  maps those numbers to a block of ports in the 20000 range per running
+  test, below the ephemeral port range, and rewrites the server's config
+  copy to match, so the configs keep their fixed numbers. A port number new
+  to the configs must be added to the table in
+  `tests/go/internal/harness/ports.go`.
 - `tests/go/internal/isclient` has the clients: `Connect` (plaintext, built on
   the go-aprs-fap `Conn`), `ConnectIS2`, `ConnectUDP`, `FakeUpstream` for
   uplinks the server connects to, and `UDPPeer` and `IS2Peer` for UDP

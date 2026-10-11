@@ -318,9 +318,6 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 	}
 
 	block := blockFor(t)
-	if !IsAprsc() && block.index != 0 {
-		t.Fatalf("%s runs on the ports of its configuration only, so its tests cannot run in parallel", prod.name)
-	}
 
 	cfgPath := filepath.Join(dir, prod.cfgDir, cfg)
 	if _, err := os.Stat(cfgPath); err != nil {

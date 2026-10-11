@@ -202,6 +202,21 @@ func ConnectIS2(t *testing.T, addr, callsign string, opts ...Option) *IS2 {
 	return c
 }
 
+// WaitSignature waits for a SERVER_SIGNATURE frame, which the server sends to
+// a connected client again after a live upgrade.
+func (c *IS2) WaitSignature(timeout time.Duration) error {
+	m, err := c.ReadFrame(timeout)
+	if err != nil {
+		return err
+	}
+	if m.GetType() != aprsis2.IS2Message_SERVER_SIGNATURE || m.GetServerSignature() == nil {
+		return fmt.Errorf("wrong type of message received instead of SERVER_SIGNATURE: %v", m.GetType())
+	}
+
+	c.Signature = m.GetServerSignature()
+	return nil
+}
+
 // Close closes the connection.
 func (c *IS2) Close() error {
 	c.closed = true

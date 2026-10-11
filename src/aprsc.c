@@ -48,6 +48,7 @@
 
 #include "dupecheck.h"
 #include "filter.h"
+#include "aprsis2.h"
 #include "historydb.h"
 #include "client_heard.h"
 #include "keyhash.h"
@@ -985,6 +986,11 @@ int main(int argc, char **argv)
 	int orig_log_dest = log_dest;
 	log_dest |= L_STDERR;
 	
+	if (is2_wire_selfcheck()) {
+		hlog(LOG_CRIT, "IS2 wire format self-check failed, refusing to start.");
+		exit(1);
+	}
+
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);

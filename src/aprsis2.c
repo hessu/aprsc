@@ -32,6 +32,56 @@
 #define IS2_MAXIMUM_FRAME_CONTENT_LEN (IS2_MAXIMUM_FRAME_LEN - IS2_HEAD_LEN - IS2_TAIL_LEN)
 
 #define IS2_UDP_HMAC_MARKER 0x05
+#define IS2_UDP_HMAC_TRAILER_LEN (2 + 32) /* marker + key id + HMAC-SHA256 */
+
+/*
+ *	Protocol Buffers wire format bits for building the IS2Message envelope
+ *	around ISPacket elements by hand. The field numbers come from
+ *	aprsis2.proto - is2_wire_selfcheck() verifies them against protobuf-c
+ *	at startup.
+ */
+
+#define PB_WIRETYPE_VARINT 0
+#define PB_WIRETYPE_LEN 2
+
+#define IS2_MESSAGE_FIELD_TYPE 1
+#define IS2_MESSAGE_FIELD_SEQUENCE 2
+#define IS2_MESSAGE_FIELD_IS_PACKET 25
+
+/* IS2 output buffer size: frame head, message type field, ISPacket elements,
+ * sequence number field, ETX, and the HMAC trailer of UDP peer frames
+ */
+#define IS2_OBUF_SIZE (IS2_HEAD_LEN + 10 + APRSIS2_OBUF_MAX_LENGTH + 10 + IS2_TAIL_LEN + IS2_UDP_HMAC_TRAILER_LEN)
+
+static int pb_put_varint(char *buf, uint64_t v)
+{
+	int i = 0;
+
+	while (v >= 0x80) {
+		buf[i++] = (char)((v & 0x7f) | 0x80);
+		v >>= 7;
+	}
+	buf[i++] = (char)v;
+
+	return i;
+}
+
+static int pb_varint_len(uint64_t v)
+{
+	int i = 1;
+
+	while (v >= 0x80) {
+		v >>= 7;
+		i++;
+	}
+
+	return i;
+}
+
+static int pb_put_tag(char *buf, int field, int wiretype)
+{
+	return pb_put_varint(buf, ((uint64_t)field << 3) | wiretype);
+}
 
 /*
  *	IS2 client / port / protocol accounting
@@ -115,12 +165,41 @@ static void *is2_allocate_buffer(int len)
 }
 #endif
 
+/*
+ *	The IS2 output buffer of a client holds a partially built IS2 frame:
+ *	room for the frame header, the IS2Message type field, and then the
+ *	elements of the repeated is_packet field, serialized and appended one
+ *	by one as packets are passed to the client. On flush, the sequence
+ *	number (UDP peers only) and ETX are appended and the header is filled in.
+ *
+ *	Protocol Buffers allows the elements of a repeated field to be written
+ *	separately, and the fields of a message in any order, so the result is
+ *	equivalent to packing a complete IS2Message at once.
+ *
+ *	Since the buffer only contains serialized bytes, it does not refer to
+ *	pbuf_t memory, which the dupecheck thread may recycle before the
+ *	buffer is flushed.
+ */
+
+static void is2_obuf_reset(struct client_t *c)
+{
+	int i = IS2_HEAD_LEN;
+
+	i += pb_put_tag(c->is2_obuf + i, IS2_MESSAGE_FIELD_TYPE, PB_WIRETYPE_VARINT);
+	i += pb_put_varint(c->is2_obuf + i, APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET);
+
+	c->is2_obuf_end = i;
+	c->is2_obuf_packets = 0;
+	c->is2_obuf_total_len = 0;
+}
+
 void is2_allocate_obuf(struct client_t *c)
 {
 	// deallocated in client_free()
-	c->is2_obuf = hmalloc(APRSIS2_OBUF_PACKETS * sizeof(struct pbuf_t *));
-	c->is2_obuf_packets = 0;
-	c->is2_obuf_total_len = 0;
+	if (!c->is2_obuf)
+		c->is2_obuf = hmalloc(IS2_OBUF_SIZE);
+
+	is2_obuf_reset(c);
 }
 
 /*
@@ -168,6 +247,11 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 		return -1;
 	}
 
+	if (data_len + IS2_UDP_HMAC_TRAILER_LEN > obuf_size) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: no room for HMAC after %d bytes of frame in buffer of %d bytes", c->addr_rem, c->username, data_len, obuf_size);
+		return -1;
+	}
+
 	/* Calculate the MAC */
 	unsigned char md[32];
 
@@ -194,30 +278,6 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 	memcpy(&obuf[data_len+2], md, md_len);
 
 	return data_len + 2 + md_len;
-}
-
-static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
-{
-	m->sequence = c->corepeer_is2_sequence++;
-	
-	int len = aprsis2__is2_message__get_packed_size(m);
-	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
-	if (blen > c->obuf_size) {
-		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized IS2 frame length %d does not fit in obuf", c->addr_rem, c->username, blen);
-		return -1;
-	}
-	is2_setup_buffer(c->obuf, len);
-	
-	aprsis2__is2_message__pack(m, (void *)c->obuf + IS2_HEAD_LEN);
-
-	int signed_len = is2_corepeer_message_sign(c, c->obuf, c->obuf_size, blen);
-	if (signed_len < IS2_MINIMUM_FRAME_LEN)
-		return -1;
-
-	int r = udp_client_write(self, c, c->obuf, signed_len);
-	// hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized length %d, framed %d, signed %d, wrote %d", c->addr_rem, c->username, len, blen, signed_len, r);
-	
-	return r;
 }
 
 /*
@@ -1117,104 +1177,168 @@ void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, A
 }
 
 /*
- *	Write a single packet to a client.
- *
- *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
+ *	Serialize a packet to a single element of the repeated is_packet field
+ *	of an IS2Message: the field tag, the length of the ISPacket, and the
+ *	ISPacket itself as packed by protobuf-c.
+ *	Returns the length of the element, or -1 if it does not fit in buf.
  */
-/*
-static int is2_encode_packet(Aprsis2__IS2Message *m, ProtobufCBinaryData *data, char *p, int len)
-{
-	data->data = (uint8_t *)p;
-	data->len  = len;
-	
-	int n = 1; // just one packet
-	int i;
-	Aprsis2__ISPacket **subs = hmalloc(sizeof(Aprsis2__ISPacket*) * n);
-	for (i = 0; i < n; i++) {
-		//hlog(LOG_DEBUG, "packing packet %d", i);
-		subs[i] = hmalloc(sizeof(Aprsis2__ISPacket));
-		aprsis2__ispacket__init(subs[i]);
-		subs[i]->type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
-		subs[i]->is_packet_data = *data;
-	}
-	
-	m->type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
-	m->n_is_packet = n;
-	m->is_packet = subs;
-	
-	return i;
-}
-*/
 
-/* 
-int is2_write_packet_unbuffered(struct worker_t *self, struct client_t *c, char *p, int len)
+static int is2_encode_packet_element(char *buf, int buflen, Aprsis2__ISPacket *p)
 {
-	// trim away CR/LF
-	len = len - 2;
-	
-	//hlog(LOG_DEBUG, "%s/%s: IS2: writing IS packet of %d bytes", c->addr_rem, c->username, len);
-	
-	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	ProtobufCBinaryData data;
-	is2_encode_packet(&m, &data, p, len);
-	
-	int ret = is2_write_message(self, c, &m);
-	
-	is2_free_encoded_packets(&m);
-	
-	return ret;
+	size_t plen = aprsis2__ispacket__get_packed_size(p);
+	int hlen = pb_varint_len((IS2_MESSAGE_FIELD_IS_PACKET << 3) | PB_WIRETYPE_LEN) + pb_varint_len(plen);
+	int i;
+
+	if (hlen + plen > buflen)
+		return -1;
+
+	i = pb_put_tag(buf, IS2_MESSAGE_FIELD_IS_PACKET, PB_WIRETYPE_LEN);
+	i += pb_put_varint(buf + i, plen);
+	aprsis2__ispacket__pack(p, (uint8_t *)buf + i);
+
+	return i + plen;
 }
-*/
+
+/*
+ *	Encode the packet being distributed by the worker, unless the worker's
+ *	encoding cache already has it: a packet going to many IS2 clients is
+ *	serialized only once per worker. The cache is invalidated by
+ *	process_outgoing_single() when it moves to the next packet.
+ */
+
+static int is2_worker_encode_packet(struct worker_t *self, struct pbuf_t *pb)
+{
+	if (self->is2_enc_pb == pb)
+		return 0;
+
+	self->is2_enc_len = is2_encode_packet_element(self->is2_enc, sizeof(self->is2_enc), &pb->is2packet);
+	if (self->is2_enc_len < 0) {
+		hlog(LOG_ERR, "worker %d: IS2: encoded packet does not fit in %d bytes: %.*s",
+			self->id, (int)sizeof(self->is2_enc), pb->packet_len - 2, pb->data);
+		self->is2_enc_pb = NULL;
+		return -1;
+	}
+
+	self->is2_enc_pb = pb;
+
+	return 0;
+}
+
+/*
+ *	Finish the frame in the IS2 output buffer: fill in the frame header
+ *	and append the ETX. Returns the length of the complete frame.
+ */
+
+static int is2_obuf_close_frame(struct client_t *c)
+{
+	int len = c->is2_obuf_end - IS2_HEAD_LEN;
+
+	is2_setup_buffer(c->is2_obuf, len);
+
+	return IS2_HEAD_LEN + len + IS2_TAIL_LEN;
+}
+
+/*
+ *	Flush the IS2 output buffer to a TCP (or SCTP) client.
+ *	Returns the result of c->write: a value < -2 means the client was destroyed.
+ */
 
 int is2_obuf_flush(struct worker_t *self, struct client_t *c)
 {
+	int len, ret;
+
+	if (c->is2_obuf_packets == 0)
+		return 0;
+
 	//hlog(LOG_DEBUG, "%s/%s: IS2: flushing obuf of %d packets, %d bytes", c->addr_rem, c->username, c->is2_obuf_packets, c->is2_obuf_total_len);
 
-	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	len = is2_obuf_close_frame(c);
 
-	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
-	m.n_is_packet = c->is2_obuf_packets;
-	m.is_packet = c->is2_obuf;
-	
-	int ret = is2_write_message(self, c, &m);
-	
-	c->is2_obuf_packets = 0;
-	c->is2_obuf_total_len = 0;
-	
+	/* c->write copies the frame to the socket output buffer of the client */
+	ret = c->write(self, c, c->is2_obuf, len);
+	if (ret < -2)
+		return ret; // destroyed
+
+	is2_obuf_reset(c);
+
 	return ret;
 }
+
+/*
+ *	Flush the IS2 output buffer to an UDP peer: append the sequence number,
+ *	sign the frame and transmit it.
+ */
 
 int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
 {
+	int len, signed_len, ret;
+	uint32_t seq;
+
+	if (c->is2_obuf_packets == 0)
+		return 0;
+
 	//hlog(LOG_DEBUG, "%s/%s: IS2 corepeer: flushing obuf of %d packets, %d bytes", c->addr_rem, c->username, c->is2_obuf_packets, c->is2_obuf_total_len);
 
-	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
-	
-	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
-	m.n_is_packet = c->is2_obuf_packets;
-	m.is_packet = c->is2_obuf;
-	
-	int ret = is2_corepeer_write_message(self, c, &m);
-	
-	c->is2_obuf_packets = 0;
-	c->is2_obuf_total_len = 0;
-	
+	/* like protobuf-c, do not transmit the default value of 0 (proto3) */
+	seq = c->corepeer_is2_sequence++;
+	if (seq) {
+		c->is2_obuf_end += pb_put_tag(c->is2_obuf + c->is2_obuf_end, IS2_MESSAGE_FIELD_SEQUENCE, PB_WIRETYPE_VARINT);
+		c->is2_obuf_end += pb_put_varint(c->is2_obuf + c->is2_obuf_end, seq);
+	}
+
+	len = is2_obuf_close_frame(c);
+
+	signed_len = is2_corepeer_message_sign(c, c->is2_obuf, IS2_OBUF_SIZE, len);
+	if (signed_len < IS2_MINIMUM_FRAME_LEN) {
+		is2_obuf_reset(c);
+		return -1;
+	}
+
+	ret = udp_client_write(self, c, c->is2_obuf, signed_len);
+
+	is2_obuf_reset(c);
+
 	return ret;
 }
 
+static int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
+{
+	if (c->state == CSTATE_COREPEER)
+		return is2_corepeer_obuf_flush(self, c);
+
+	return is2_obuf_flush(self, c);
+}
+
+/*
+ *	Append a packet to the IS2 output buffer of a client. The buffer is
+ *	flushed first if the packet would not fit in it, and afterwards if
+ *	the buffer has reached its flush level.
+ *	Returns a value < -2 if the client was destroyed.
+ */
+
 static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, pb->is2packet.is_packet_data.len);
-	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS) {
-		hlog(LOG_ERR, "%s/%s: IS2: can not fit IS packet IS2 obuf", c->addr_rem, c->username);
-		return -12; // TODO: is this the correct return code?
+	int ret;
+
+	if (is2_worker_encode_packet(self, pb) < 0)
+		return 0; // can not be encoded, drop
+
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, self->is2_enc_len);
+
+	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS
+	    || c->is2_obuf_total_len + self->is2_enc_len > APRSIS2_OBUF_MAX_LENGTH) {
+		ret = is2_obuf_flush_client(self, c);
+		if (ret < -2)
+			return ret; // destroyed
 	}
 
-	// TODO: the dupecheck thread may free the pbuf before it is written out from is2_obuf
-	c->is2_obuf[c->is2_obuf_packets] = &pb->is2packet;
+	/* copy the serialized packet to the client's own buffer - after this,
+	 * the pbuf is not referred to any more
+	 */
+	memcpy(c->is2_obuf + c->is2_obuf_end, self->is2_enc, self->is2_enc_len);
+	c->is2_obuf_end += self->is2_enc_len;
+	c->is2_obuf_total_len += self->is2_enc_len;
 	c->is2_obuf_packets++;
-	// TODO: This ignores the size of all IS2 fields in the message
-	c->is2_obuf_total_len += pb->is2packet.is_packet_data.len;
 	c->is2_packet_writes++;
 
 	// Switch to buffered writes if necessary, switching back to unbuffered is done in send_keepalives().
@@ -1224,43 +1348,85 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 		//	c->fd, c->addr_rem, c->is2_packet_writes, c->is2_obuf_flushsize);
 	}
 
-	if (c->is2_obuf_packets >= c->is2_obuf_flushsize) {
-		if (c->state == CSTATE_COREPEER)
-			return is2_corepeer_obuf_flush(self, c);
-		return is2_obuf_flush(self, c);
-	}
+	if (c->is2_obuf_packets >= c->is2_obuf_flushsize)
+		return is2_obuf_flush_client(self, c);
 
 	return 0;
 }
 
+/*
+ *	Write a single packet to an IS2 client, or to an IS2 UDP peer
+ */
+
 int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
-	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS
-	    || c->is2_obuf_total_len + pb->is2packet.is_packet_data.len >= APRSIS2_OBUF_MAX_LENGTH) {
-		int write_ret = is2_obuf_flush(self, c);
-		if (write_ret < 0)
-			return write_ret;
-	}
+	return is2_append_obuf_packet(self, c, pb);
+}
 
+int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
 	return is2_append_obuf_packet(self, c, pb);
 }
 
 /*
- *	Write a single packet to an IS2 UDP peer
- *
- *	OPTIMIZE: generate packet once, or reuse incoming prepacked buffer
+ *	Verify at startup that the IS2Message envelope written by the output
+ *	buffer code matches what protobuf-c generates for the same message,
+ *	so that a change of field numbers in aprsis2.proto can not silently
+ *	break the output path. Returns 0 when OK, -1 on mismatch.
  */
 
-int is2_corepeer_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+int is2_wire_selfcheck(void)
 {
-	// TODO: dynamic flushing
-	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS || c->is2_obuf_total_len >= APRSIS2_OBUF_MAX_LENGTH) {
-		int write_ret = is2_corepeer_obuf_flush(self, c);
-		if (write_ret < 0)
-			return write_ret;
+	char ref[APRSIS2_ENC_MAX + 32];
+	char mine[APRSIS2_ENC_MAX + 32];
+	int rlen, mlen, elen;
+
+	/* an ISPacket with all the fields set */
+	Aprsis2__ISPacket p = APRSIS2__ISPACKET__INIT;
+	Aprsis2__ISPacket *pp[1] = { &p };
+	p.type = APRSIS2__ISPACKET__TYPE__IS_PACKET_DUPLICATE;
+	p.is_packet_data.data = (uint8_t *)"N0CALL>APRS,qAR,TEST:>IS2 wire format self-check";
+	p.is_packet_data.len = strlen((char *)p.is_packet_data.data);
+	p.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
+	p.rx_rssi = -101.5;
+	p.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
+	p.rx_snr_db = 7.25;
+
+	/* message type and one packet, as flushed to a TCP client */
+	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
+	m.type = APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET;
+	m.n_is_packet = 1;
+	m.is_packet = pp;
+	rlen = aprsis2__is2_message__pack(&m, (uint8_t *)ref);
+
+	mlen = pb_put_tag(mine, IS2_MESSAGE_FIELD_TYPE, PB_WIRETYPE_VARINT);
+	mlen += pb_put_varint(mine + mlen, APRSIS2__IS2_MESSAGE__TYPE__IS_PACKET);
+	elen = is2_encode_packet_element(mine + mlen, sizeof(mine) - mlen, &p);
+	if (elen < 0) {
+		hlog(LOG_CRIT, "IS2: wire format self-check: packet element does not fit in buffer");
+		return -1;
+	}
+	mlen += elen;
+
+	if (rlen != mlen || memcmp(ref, mine, rlen) != 0) {
+		hlog(LOG_CRIT, "IS2: wire format self-check failed for packet message (%d/%d bytes): aprsis2.proto and aprsis2.c disagree", rlen, mlen);
+		return -1;
 	}
 
-	return is2_append_obuf_packet(self, c, pb);
+	/* sequence number, as appended when flushing to an UDP peer */
+	Aprsis2__IS2Message ms = APRSIS2__IS2_MESSAGE__INIT;
+	ms.sequence = 0x12345678;
+	rlen = aprsis2__is2_message__pack(&ms, (uint8_t *)ref);
+
+	mlen = pb_put_tag(mine, IS2_MESSAGE_FIELD_SEQUENCE, PB_WIRETYPE_VARINT);
+	mlen += pb_put_varint(mine + mlen, ms.sequence);
+
+	if (rlen != mlen || memcmp(ref, mine, rlen) != 0) {
+		hlog(LOG_CRIT, "IS2: wire format self-check failed for sequence number (%d/%d bytes): aprsis2.proto and aprsis2.c disagree", rlen, mlen);
+		return -1;
+	}
+
+	return 0;
 }
 
 

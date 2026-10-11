@@ -286,7 +286,8 @@ struct client_udp_t {			/* UDP services can be available at multiple
 #endif
 
 #define APRSIS2_OBUF_PACKETS 20
-#define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of packets in IS2 obuf */
+#define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of encoded ISPacket elements in IS2 obuf */
+#define APRSIS2_ENC_MAX (PACKETLEN_MAX + 64) /* max length of a single encoded ISPacket element */
 #define APRSIS2_COREPEER_SEQ_WINDOW 32 /* packet loss monitoring window - allow reordering by N packets */
 
 struct client_t {
@@ -437,9 +438,15 @@ struct client_t {
 #endif
 	char filter_s[FILTER_S_SIZE];
 
-	Aprsis2__ISPacket **is2_obuf;
-	int is2_obuf_packets;
-	int is2_obuf_total_len;
+	/* IS2 output buffer: a partially built IS2 frame, owned by the client.
+	 * Packets are serialized into it as they are passed to the client,
+	 * so that nothing in here refers to pbuf_t memory, which may be
+	 * recycled by the dupecheck thread before the frame is flushed.
+	 */
+	char *is2_obuf;
+	int is2_obuf_end;      /* write position in is2_obuf */
+	int is2_obuf_packets;  /* number of ISPacket elements in is2_obuf */
+	int is2_obuf_total_len; /* total length of the ISPacket elements in is2_obuf */
 	int is2_packet_writes; /* How many writes (since last check) an IS2 packet has been buffered? */
 	int is2_obuf_flushsize;
 
@@ -515,6 +522,15 @@ struct worker_t {
 	 * (process hangs and time jumps)
 	 */
 	unsigned int internal_packet_drops;
+
+	/* IS2: the encoded ISPacket element of the packet currently being
+	 * distributed by process_outgoing_single(), so that a packet going
+	 * to many IS2 clients is serialized only once per worker.
+	 * Valid only when is2_enc_pb points to the packet being processed.
+	 */
+	struct pbuf_t *is2_enc_pb;
+	int is2_enc_len;
+	char is2_enc[APRSIS2_ENC_MAX];
 };
 
 extern cJSON *worker_shutdown_clients;

@@ -987,10 +987,12 @@ int main(int argc, char **argv)
 	int orig_log_dest = log_dest;
 	log_dest |= L_STDERR;
 	
+#ifdef USE_IS2
 	if (is2_wire_selfcheck()) {
 		hlog(LOG_CRIT, "IS2 wire format self-check failed, refusing to start.");
 		exit(1);
 	}
+#endif
 
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");

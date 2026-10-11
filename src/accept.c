@@ -1222,7 +1222,12 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	hfree(client_addr_s);
 	
 	if ((link) && (link->valuestring) && strcmp(link->valuestring, "is2") == 0) {
+#ifdef USE_IS2
 		c->flags |= CLFLAGS_IS2;
+#else
+		hlog(LOG_ERR, "Live upgrade: Client %s uses IS2, which is not enabled in this build (fd %d)", l->addr_s, l->fd);
+		goto err;
+#endif
 	}
 	
 	if (strcmp(state->valuestring, "connected") == 0) {

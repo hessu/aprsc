@@ -1278,10 +1278,12 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	/* c is the peer whose xfd polls the shared UDP socket and owns the
 	 * input buffer, rc is the peer which sent this datagram.
 	 */
+#ifdef USE_IS2
 	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
 		is2_corepeer_control_in(self, rc, c->ibuf, r);
 		return 0;
 	}
+#endif
 	
 	if (rc->corepeer_is2) {
 		is2_corepeer_deframe_input(self, rc, c->ibuf, r);
@@ -1747,6 +1749,7 @@ static void send_keepalives(struct worker_t *self)
 
 		/* No keepalives on PEER links.. */
 		if ( c->state == CSTATE_COREPEER ) {
+#ifdef USE_IS2
 			/* min/max limits for retry timer exponential backoff */
 			if (c->next_is2_peer_interval < COREPEER_IS2_PROPOSE_T_MIN)
 				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
@@ -1768,6 +1771,7 @@ static void send_keepalives(struct worker_t *self)
 				if (is2_corepeer_obuf_flush(self, c) < 0)
 					continue;
 			}
+#endif
 			
 			continue;
 		}

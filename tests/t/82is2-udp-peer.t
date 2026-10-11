@@ -12,6 +12,7 @@
 # the previous ones were not transitted to the wrong sockets.
 #
 
+use is2skip;
 use Test;
 BEGIN { plan tests => 13 + 2 + 9 + 8 + 2 };
 use runproduct;

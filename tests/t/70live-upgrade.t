@@ -3,6 +3,7 @@
 # Test live upgrade, only on aprsc
 #
 
+use is2skip;
 use Test;
 
 BEGIN {

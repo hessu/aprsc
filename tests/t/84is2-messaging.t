@@ -17,6 +17,7 @@
 # the station is on the Internet.
 #
 
+use is2skip;
 use Test;
 BEGIN { plan tests => 8 + 9 + 1 + 2 + 3 + 2 + 6 + 4 + 1 };
 use runproduct;

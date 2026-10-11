@@ -190,8 +190,10 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
 	{ "peergroup",		_CFUNC_ do_peergroup,	&new_peerip_config	},
+#ifdef USE_IS2
 	{ "peergroupkey",	_CFUNC_ do_peergroup_key,	&new_peergroup_key_config	},
 	{ "peergroupkeytransmit",	_CFUNC_ do_peergroup_key_transmit,	&new_peergroup_key_transmit	},
+#endif
 	{ "q_protocol_id",	_CFUNC_ do_char,	&q_protocol_id	},
 	{ "disallow_other_q_protocols",_CFUNC_ do_boolean,	&disallow_other_protocol_id	},
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
@@ -849,9 +851,12 @@ int do_uplink(struct uplink_config_t **lq, int argc, char **argv)
 	l->state = UPLINK_ST_UNKNOWN;
 	
 	for (i = 6; i < argc; i++) {
+#ifdef USE_IS2
 		if (strcasecmp(argv[i], "is2") == 0) {
 			l->client_flags |= CLFLAGS_IS2;
-		} else if (strcasecmp(argv[i], "tlskey") == 0 || strcasecmp(argv[i], "sslkey") == 0) {
+		} else
+#endif
+		if (strcasecmp(argv[i], "tlskey") == 0|| strcasecmp(argv[i], "sslkey") == 0) {
 			if (config_uplink_tls(argv, argc, &i, "tlskey", (char **)&l->keyfile)) {
 				free_uplink_config(&l);
 				return -2;
@@ -1033,6 +1038,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_IGATE;
 	} else if (strcasecmp(argv[2], "fullfeed") == 0) {
 	  clflags |= CLFLAGS_FULLFEED;
+#ifdef USE_IS2
 	} else if (strcasecmp(argv[2], "is2fullfeed") == 0) {
 	  clflags |= CLFLAGS_FULLFEED;
 	  clflags |= CLFLAGS_IS2;
@@ -1040,11 +1046,14 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_USERFILTEROK;
 	  clflags |= CLFLAGS_IGATE;
 	  clflags |= CLFLAGS_IS2;
+#endif
 	} else if (strcasecmp(argv[2], "dupefeed") == 0) {
 	  clflags |= CLFLAGS_DUPEFEED;
+#ifdef USE_IS2
 	} else if (strcasecmp(argv[2], "is2dupefeed") == 0) {
 	  clflags |= CLFLAGS_DUPEFEED;
 	  clflags |= CLFLAGS_IS2;
+#endif
 	} else if (strcasecmp(argv[2], "clientonly") == 0) {
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_USERFILTEROK;
@@ -1053,6 +1062,13 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	  clflags |= CLFLAGS_CLIENTONLY;
 	  clflags |= CLFLAGS_UDPSUBMIT;
 	  clients_max = 1;
+#ifndef USE_IS2
+	} else if (strncasecmp(argv[2], "is2", 3) == 0) {
+	  /* an unknown port type is only logged below, and the listener would
+	   * silently come up as a plain one - refuse instead */
+	  hlog(LOG_ERR, "Listen: port type %s requires IS2, which is not enabled in this build", argv[2]);
+	  return -2;
+#endif
 	} else {
 	  hlog(LOG_ERR, "Listen: unknown port type: %s", argv[2]);
 	}

@@ -2,6 +2,7 @@
 # Test client receiving dupes
 #
 
+use is2skip;
 use Test;
 BEGIN { plan tests => 2 + 4*2 + 4 + 4 + 1 };
 use runproduct;

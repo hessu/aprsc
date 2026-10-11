@@ -3,6 +3,7 @@
 # Test heavier packet load
 #
 
+use is2skip;
 use Test;
 BEGIN { plan tests => 10 };
 use runproduct;

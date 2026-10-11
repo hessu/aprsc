@@ -1218,10 +1218,12 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 			char *filtercmd = memcasestr("filter", s, s + len);
 			if (filtercmd)
 				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
+#ifdef USE_IS2
 			/* IS2 metadata in plaintext key-value format */
 			if (memcmp(s, "#is2-meta ", 10) == 0) {
 				return is2_plain_metadata(self, c, s+10, len-10);
 			}
+#endif
 		}
 		
 		return 0;

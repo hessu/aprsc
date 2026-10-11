@@ -6,6 +6,7 @@
 #
 
 use strict;
+use is2skip;
 use Test;
 BEGIN { plan tests => 9 + 2 + 4 };
 use runproduct;

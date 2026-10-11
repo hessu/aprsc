@@ -1,6 +1,7 @@
 
 # Simple test to login to the server.
 
+use is2skip;
 use Test;
 BEGIN { plan tests => 7 };
 use runproduct;

@@ -857,6 +857,9 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	if (lat_deg > 89 || lng_deg > 179)
 		return 0; /* too large values for lat/lng degrees */
 	
+	if (lat_min > 59 || lng_min > 59)
+		return 0; /* too large values for lat/lng minutes */
+	
 	lat = (float)lat_deg + (float)lat_min / 60.0 + (float)lat_min_frag / 6000.0;
 	lng = (float)lng_deg + (float)lng_min / 60.0 + (float)lng_min_frag / 6000.0;
 	

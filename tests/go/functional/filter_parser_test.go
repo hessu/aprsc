@@ -99,6 +99,30 @@ func TestParserNMEA(t *testing.T) {
 	s.Stop()
 }
 
+// Uncompressed positions with minutes over 59 are invalid: 6060.00N would
+// be 61 degrees north and 02390.00E 24.5 degrees east, and they must not
+// match a range filter there.
+func TestParserUncompressedMinutes(t *testing.T) {
+	harness.Parallel(t)
+	s := harness.Start(t, "basic")
+
+	const login = "N5CAL-1"
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2",
+		isclient.WithFilter("r/61.0/24.5/5"))
+
+	isclient.RunSteps(t, tx, rx, []isclient.Step{
+		drop("latitude minutes over 59",
+			"OH1AA>APRS,qAR,"+login+":!6060.00N/02430.00E/",
+			"OH2AA>APRS,qAR,"+login+":!6100.00N/02430.00E/"),
+		drop("longitude minutes over 59",
+			"OH3AA>APRS,qAR,"+login+":!6100.00N/02390.00E/",
+			"OH4AA>APRS,qAR,"+login+":!6100.00N/02430.00E/"),
+	})
+
+	s.Stop()
+}
+
 // Negative filters: allow a range, then drop using a buddy filter. Port of
 // t/32filter-negative.t.
 func TestFilterNegative(t *testing.T) {

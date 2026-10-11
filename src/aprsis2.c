@@ -744,14 +744,11 @@ int is2_out_ping(struct worker_t *self, struct client_t *c)
 #ifdef USE_CLOCK_GETTIME
 	struct timespec ts;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	tick = ts.tv_sec;
 	rdata.data = (void *)&ts;
 	rdata.len  = sizeof(ts);
 #else
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
-	tick = tv.tv_sec;
-	now = tv.tv_sec;
 	rdata.data = (void *)&tv;
 	rdata.len  = sizeof(tv);
 #endif
@@ -805,8 +802,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 #ifdef USE_CLOCK_GETTIME
 		struct timespec ts;
 		clock_gettime(CLOCK_MONOTONIC, &ts);
-		tick = ts.tv_sec;
-		
+
 		if (ping->request_data.len != sizeof(ts)) {
 			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %d expected %d)",
 				c->addr_rem, c->username, ping->request_data.len, sizeof(ts));
@@ -818,9 +814,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 #else
 		struct timeval tv;
 		gettimeofday(&tv, NULL);
-		tick = tv.tv_sec;
-		now = tv.tv_sec;
-		
+
 		if (ping->request_data.len != sizeof(tv)) {
 			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %d expected %d)",
 				c->addr_rem, c->username, ping->request_data.len, sizeof(tv));

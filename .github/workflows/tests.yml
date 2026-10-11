@@ -8,9 +8,19 @@ on:
 
 jobs:
   build:
+    # The two variants run in parallel: one built with the work in progress
+    # IS2 protocol, and one without, which is the default.
+    name: build (${{ matrix.variant }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
+        variant: [ is2, no-is2 ]
+        include:
+          - variant: is2
+            configure_flags: --enable-is2
+          - variant: no-is2
+            configure_flags: ""
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -31,14 +41,16 @@ jobs:
 
     # The IS2 tests need the protobuf module of the Perl test client; it has
     # no Debian package. It builds against the protobuf installed above.
+    # Without IS2 the IS2 tests skip themselves and do not need it.
     - name: install Perl Google::ProtocolBuffers::Dynamic
+      if: matrix.variant == 'is2'
       run: |
         sudo CMAKE_POLICY_VERSION_MINIMUM=3.5 cpanm --notest Google::ProtocolBuffers::Dynamic
 
     - name: configure
       run: |
         cd src
-        ./configure --enable-is2
+        ./configure ${{ matrix.configure_flags }}
 
     - name: make
       run: |

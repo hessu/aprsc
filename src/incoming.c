@@ -508,7 +508,7 @@ int check_invalid_src_dst(const char *call, int len)
 	/* go through callsign body */
 	while (i < len && call[i] != '-') {
 		/* alphanumeric */
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		
 		i++;
@@ -537,7 +537,7 @@ int check_invalid_src_dst(const char *call, int len)
 	*/
 	
 	while (i < len) {
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		i++;
 	}
@@ -619,7 +619,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 	/* go through callsign body */
 	while (i < len && call[i] != '-') {
 		/* alphanumeric */
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		
 		i++;
@@ -641,7 +641,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 		return -1;
 	
 	while (i < len) {
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		i++;
 	}
@@ -1124,6 +1124,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 		 */
 		if (!originated_by_client) {
 			hlog(LOG_DEBUG, "message to SERVER from non-local client %.*s, dropping", pb->srcname_len, pb->srcname);
+			goto free_pb_ret;
+		}
+		
+		/* A message inside a 3rd-party packet is not from the local client */
+		if (pb->packettype & T_3RDPARTY) {
+			hlog(LOG_DEBUG, "3rd-party message to SERVER from %.*s, dropping", pb->srcname_len, pb->srcname);
 			goto free_pb_ret;
 		}
 		

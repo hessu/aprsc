@@ -40,7 +40,7 @@ int check_invalid_q_callsign(const char *call, int len)
 		return -1;
 	
 	while (p < e) {
-		if ((!isalnum(*p)) && *p != '-')
+		if ((!isalnum((unsigned char)*p)) && *p != '-')
 			return -1;
 		p++;
 	}
@@ -97,7 +97,7 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * after the q construct
 	 */
 	qcallc = 0;
-	if (q_start) {
+	if (q_start && q_start + 4 < path_end) {
 		p = q_start + 4;
 		while (qcallc < MAX_Q_CALLS && p < path_end) {
 			while (p < path_end && *p == ',')
@@ -122,7 +122,10 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * match against ,SERVERLOGIN, or ,SERVERLOGIN:)
 	 */
 	
-	if (q_start) {
+	/* q_start may point past path_end, if q_process found an invalid
+	 * Q construct and cut the path before it
+	 */
+	if (q_start && q_start + 4 < path_end) {
 		p = memmem(q_start+4, path_end-q_start-4, serverid, serverid_len);
 		if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
 			/* TODO: The reject log should really log the offending packet */

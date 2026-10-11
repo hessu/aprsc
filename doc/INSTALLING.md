@@ -7,8 +7,8 @@ aprsc is "officially" "supported" on the following platforms:
 * Debian stable (13.0, "trixie"): x86_64
 * Debian oldstable (12.0, "bookworm"): x86_64
 * Debian oldoldstable (11.0, "bullseye"): i386, x86_64
-* Ubuntu LTS (20.04, 22.04, 24.04): x86_64
-* Fedora Core 42 and 43: x86_64
+* Ubuntu LTS (22.04, 24.04, 26.04): x86_64
+* Fedora Core 43 and 44: x86_64
 
 The i386 builds actually require an i686 (Pentium 2 class) CPU or
 anything newer than that.
@@ -50,9 +50,9 @@ You'll need to figure out the codename of your distribution.  The command
 "lsb_release -c" should provide the codename.  Here's a list of distribution
 versions and their codenames:
 
+* Ubuntu 26.04 LTS: resolute
 * Ubuntu 24.04 LTS: noble
 * Ubuntu 22.04 LTS: jammy
-* Ubuntu 20.04 LTS: focal
 * Debian 13.0: trixie
 * Debian 12.0: bookworm
 * Debian 11.0: bullseye
@@ -150,8 +150,7 @@ any warnings or errors.
 Fedora Core: Installing using dnf
 ------------------------------------
 
-This installation procedure has only been tested on Fedora 39 and 40.
-Builds are only available for x86\_64 currently.
+Packages are built for Fedora 43 and 44, and only for x86\_64 currently.
 
 The following commands assume you're running them as a regular user, and the
 sudo tool is used to run individual commands as root.  sudo will ask you for

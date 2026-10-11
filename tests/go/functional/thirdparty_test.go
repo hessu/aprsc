@@ -53,6 +53,14 @@ func TestThirdParty(t *testing.T) {
 		// Valid third-party header with a used digi
 		same("valid header with a used digi",
 			"K3SRC>APWW09,TCPIP*,qAR,IGA:}KB3ONM>APK102,KV3B-1,FOO,BAR*:should pass"),
+		// Empty and short inner bodies must not make the parser read
+		// past the end of the packet
+		same("empty inner body",
+			"K4SRC>APWW10,TCPIP*,qAR,IGA:}KB3ONM>APK102,NET,GATE:"),
+		same("short inner message",
+			"K4SRC>APWW11,TCPIP*,qAR,IGA:}KB3ONM>APK102,NET,GATE::N3"),
+		same("short inner mic-e",
+			"K4SRC>APWW12,TCPIP*,qAR,IGA:}KB3ONM>APK102,NET,GATE:`(_f"),
 	}
 
 	isclient.RunSteps(t, tx, rx, steps)

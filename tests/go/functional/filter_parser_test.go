@@ -82,6 +82,9 @@ func TestParserNMEA(t *testing.T) {
 		pass("passes by position",
 			"OH1XYZ>GPSMW:$GPRMC,184649,A,3832.7107,S,05844.1957,W,0.000,0.0,130909,4.5,W*62",
 			"OH1XYZ>GPSMW,qAS,"+login+":$GPRMC,184649,A,3832.7107,S,05844.1957,W,0.000,0.0,130909,4.5,W*62"),
+		pass("GPWPL passes by position",
+			"OH6XYZ>GPSMW:$GPWPL,3832.7107,S,05844.1957,W,4*49",
+			"OH6XYZ>GPSMW,qAS,"+login+":$GPWPL,3832.7107,S,05844.1957,W,4*49"),
 		pass("passes by car symbol",
 			"OH2XYZ>GPSMV:"+car,
 			"OH2XYZ>GPSMV,qAS,"+login+":"+car),
@@ -91,6 +94,30 @@ func TestParserNMEA(t *testing.T) {
 		dropLiteral("invalid char in coordinates",
 			"OH4XYZ>GPSMW:$GPRMO,182051.\xf000,A,6039.8655,N,01708.3799,E,20.07,243.41,070313,,,A*5A",
 			"OH5XYZ>GPSMV:"+car),
+	})
+
+	s.Stop()
+}
+
+// Uncompressed positions with minutes over 59 are invalid: 6060.00N would
+// be 61 degrees north and 02390.00E 24.5 degrees east, and they must not
+// match a range filter there.
+func TestParserUncompressedMinutes(t *testing.T) {
+	harness.Parallel(t)
+	s := harness.Start(t, "basic")
+
+	const login = "N5CAL-1"
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2",
+		isclient.WithFilter("r/61.0/24.5/5"))
+
+	isclient.RunSteps(t, tx, rx, []isclient.Step{
+		drop("latitude minutes over 59",
+			"OH1AA>APRS,qAR,"+login+":!6060.00N/02430.00E/",
+			"OH2AA>APRS,qAR,"+login+":!6100.00N/02430.00E/"),
+		drop("longitude minutes over 59",
+			"OH3AA>APRS,qAR,"+login+":!6100.00N/02390.00E/",
+			"OH4AA>APRS,qAR,"+login+":!6100.00N/02430.00E/"),
 	})
 
 	s.Stop()

@@ -87,3 +87,54 @@ func TestFilterAreaMyFriend(t *testing.T) {
 
 	s.Stop()
 }
+
+// The friend range filter follows objects and items by name. Object names
+// are space padded to 9 characters, and the padding must not end up in the
+// position cache key. Objects and items within 3rd-party packets are cached
+// by their own names, not by the outer packet header.
+func TestFilterFriendObject(t *testing.T) {
+	harness.Parallel(t)
+	s := harness.Start(t, "basic")
+
+	const login = "N5CAL-1"
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	full := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-3")
+
+	// The f/ filter caches the lookup result, also a failed one, so each
+	// case connects a new client after the object has been seen on the
+	// full feed (and thus put in the position cache).
+	cases := []struct {
+		name, friend, object, near string
+	}{
+		{"short-named object", "OBJ1",
+			"OH1AA>APRS,qAR," + login + ":;OBJ1     *111111z6010.00N/02456.00E/",
+			"OH2AA>APRS,qAR," + login + ":!6011.00N/02457.00E/"},
+		{"3rd-party object", "OBJ3",
+			"OH3AA>APRS,qAR," + login + ":}OH3AA>APRS,NET,GATE*:;OBJ3     *111111z6210.00N/02556.00E/",
+			"OH4AA>APRS,qAR," + login + ":!6211.00N/02557.00E/"},
+		{"3rd-party item", "ITEM3",
+			"OH5AA>APRS,qAR," + login + ":}OH5AA>APRS,NET,GATE*:)ITEM3!6310.00N/02356.00E/",
+			"OH6AA>APRS,qAR," + login + ":!6311.00N/02357.00E/"},
+	}
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			isclient.RunSteps(t, tx, full, []isclient.Step{
+				passSame("object on full feed", tc.object),
+			})
+			rx := isclient.Connect(t, harness.Addr(t, 55581), fmt.Sprintf("N5CAL-%d", 4+i),
+				isclient.WithFilter("f/"+tc.friend+"/10"))
+			isclient.RunSteps(t, tx, rx, []isclient.Step{
+				passSame("station near friend", tc.near),
+			})
+			rx.Close()
+
+			// the full feed got it too
+			if got, err := full.ReadPacket(isclient.DefaultTimeout); err != nil || got != tc.near {
+				t.Fatalf("full feed: got %q (%v), want %q", got, err, tc.near)
+			}
+		})
+	}
+
+	s.Stop()
+}

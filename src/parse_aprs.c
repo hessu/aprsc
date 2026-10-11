@@ -256,19 +256,19 @@ static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym
 		return 0;
 	
 	// DEBUG_LOG("\ttesting %c %c %c", d_start[3], d_start[4], d_start[5]);
-	if (!isalnum(d_start[3]) || !isalnum(d_start[4]))
+	if (!isalnum((unsigned char)d_start[3]) || !isalnum((unsigned char)d_start[4]))
 		return 0;
 	
-	if (sublength == 3 && !isalnum(d_start[5]))
+	if (sublength == 3 && !isalnum((unsigned char)d_start[5]))
 		return 0;
 	
 	type = d_start[3];
 	
 	if (sublength == 3) {
 		if (type == 'C' || type == 'E') {
-			if (!isdigit(d_start[4]))
+			if (!isdigit((unsigned char)d_start[4]))
 				return 0;
-			if (!isdigit(d_start[5]))
+			if (!isdigit((unsigned char)d_start[5]))
 				return 0;
 			numberid = (d_start[4] - 48) * 10 + (d_start[5] - 48);
 			
@@ -289,7 +289,7 @@ static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym
 			overlay = d_start[5];
 			if ((type == 'O' || type == 'A' || type == 'N' ||
 				type == 'D' || type == 'S' || type == 'Q')
-				&& isalnum(overlay)) {
+				&& isalnum((unsigned char)overlay)) {
 				return get_symbol_from_dstcall_twochar(d_start[3], d_start[4], sym_table, sym_code);
 			}
 			return 0;

@@ -40,7 +40,7 @@ int check_invalid_q_callsign(const char *call, int len)
 		return -1;
 	
 	while (p < e) {
-		if ((!isalnum(*p)) && *p != '-')
+		if ((!isalnum((unsigned char)*p)) && *p != '-')
 			return -1;
 		p++;
 	}

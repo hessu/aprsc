@@ -508,7 +508,7 @@ int check_invalid_src_dst(const char *call, int len)
 	/* go through callsign body */
 	while (i < len && call[i] != '-') {
 		/* alphanumeric */
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		
 		i++;
@@ -537,7 +537,7 @@ int check_invalid_src_dst(const char *call, int len)
 	*/
 	
 	while (i < len) {
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		i++;
 	}
@@ -619,7 +619,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 	/* go through callsign body */
 	while (i < len && call[i] != '-') {
 		/* alphanumeric */
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		
 		i++;
@@ -641,7 +641,7 @@ static int check_invalid_path_callsign(const char *call, int len, int after_q)
 		return -1;
 	
 	while (i < len) {
-		if (!isalnum(call[i]))
+		if (!isalnum((unsigned char)call[i]))
 			return -1;
 		i++;
 	}

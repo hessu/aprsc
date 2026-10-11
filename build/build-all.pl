@@ -7,16 +7,15 @@ use Time::HiRes qw(time sleep);
 use IO::Socket::INET;
 
 my @platforms = (
+	'ubuntu-2604-amd64',
 	'ubuntu-2404-amd64',
 	'ubuntu-2204-amd64',
-	'ubuntu-2004-amd64',
 	'debian-110-i386',
 	'debian-110-amd64',
 	'debian-120-amd64',
 	'debian-130-amd64',
-	'fedora-40-x86_64',
-	'fedora-42-x86_64',
 	'fedora-43-x86_64',
+	'fedora-44-x86_64',
 );
 
 my %platconf = (
@@ -24,25 +23,21 @@ my %platconf = (
 		'novm' => 1,
 		'port' => 10022
 	},
-	'fedora-40-x86_64' => {
-		'virtualisation' => 'lxd',
-		'dest' => 'fedora/40/x86_64'
-	},
-	'fedora-42-x86_64' => {
-		'virtualisation' => 'lxd',
-		'dest' => 'fedora/42/x86_64'
-	},
 	'fedora-43-x86_64' => {
 		'virtualisation' => 'lxd',
 		'dest' => 'fedora/43/x86_64'
 	},
-	'ubuntu-2004-amd64' => {
-		'virtualisation' => 'lxd'
+	'fedora-44-x86_64' => {
+		'virtualisation' => 'lxd',
+		'dest' => 'fedora/44/x86_64'
 	},
 	'ubuntu-2204-amd64' => {
 		'virtualisation' => 'lxd'
 	},
 	'ubuntu-2404-amd64' => {
+		'virtualisation' => 'lxd'
+	},
+	'ubuntu-2604-amd64' => {
 		'virtualisation' => 'lxd'
 	},
 	'debian-110-i386' => {

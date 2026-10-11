@@ -9,7 +9,7 @@ systems.
 
 aprsc has been built and tested on:
 
-* Ubuntu LTS (20.04, 22.04, 24.04): x86_64
+* Ubuntu LTS (22.04, 24.04, 26.04): x86_64
 * Debian 11.0, "bullseye": i386 and x86_64
 * Debian 12.0, "bookworm": x86_64
 * Debian 13.0, "trixie": x86_64

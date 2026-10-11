@@ -22,10 +22,11 @@ import (
 
 // Simple IS2 login, and a ping. Port of t/80is2-login.t.
 func TestIS2Login(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
-	c := isclient.ConnectIS2(t, "localhost:56152", "OH7LZB")
+	c := isclient.ConnectIS2(t, harness.Addr(t, 56152), "OH7LZB")
 
 	if c.LoginReply.GetVerified() != aprsis2.VerificationStatus_WEAK {
 		t.Errorf("login verification status %v, want WEAK", c.LoginReply.GetVerified())
@@ -48,12 +49,13 @@ func TestIS2Login(t *testing.T) {
 // bytes, in order, with a limited number of bytes outstanding. Port of
 // t/81is2-load.t.
 func TestIS2Load(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
 	const loginTx = "N0GAT"
-	rx := isclient.ConnectIS2(t, "localhost:56152", "N1GAT")
-	tx := isclient.ConnectIS2(t, "localhost:56580", loginTx)
+	rx := isclient.ConnectIS2(t, harness.Addr(t, 56152), "N1GAT")
+	tx := isclient.ConnectIS2(t, harness.Addr(t, 56580), loginTx)
 
 	time.Sleep(500 * time.Millisecond) // let it get started
 
@@ -159,19 +161,20 @@ var is2PeerKeys = map[uint8]string{1: "firstkey", 2: "secondkey", 3: "thirdkey"}
 // The testing order is selected so that the last packet proves the previous
 // ones were not transmitted to the wrong sockets. Port of t/82is2-udp-peer.t.
 func TestIS2UDPPeer(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 
-	udp := isclient.ListenIS2Peer(t, "127.0.0.1:16405", "TESTIN-2", is2PeerKeys, 2)
-	udp.SetDestination(t, "127.0.0.1:16404")
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", is2PeerKeys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
 	// a second UDP peer in the same group, sharing the server's socket
-	udp2 := isclient.ListenIS2Peer(t, "127.0.0.1:16406", "TESTIN-3", is2PeerKeys, 3)
-	udp2.SetDestination(t, "127.0.0.1:16404")
+	udp2 := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16406), "TESTIN-3", is2PeerKeys, 3)
+	udp2.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
 
-	fake := isclient.ListenFakeUpstream(t, "127.0.0.1:10153", "FAKEUP")
+	fake := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 10153), "FAKEUP")
 
 	s := harness.Start(t, "is2-basic")
 
-	client := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	client := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 	up := fake.Accept(t)
 
 	if err := udp.Negotiate(20 * time.Second); err != nil {
@@ -256,16 +259,17 @@ func TestIS2UDPPeer(t *testing.T) {
 // The forwarding of optional packet fields: RSSI and SNR. Port of
 // t/83is2-optionals.t.
 func TestIS2Optionals(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
 	const loginTx = "N0GATE"
 	const loginTxPlain = "N0GATE-2"
-	tx := isclient.ConnectIS2(t, "localhost:56580", loginTx)
-	txPlain := isclient.Connect(t, "localhost:55580", loginTxPlain)
+	tx := isclient.ConnectIS2(t, harness.Addr(t, 56580), loginTx)
+	txPlain := isclient.Connect(t, harness.Addr(t, 55580), loginTxPlain)
 
 	// a filter on the rx so that the helper packets get through
-	rx := isclient.ConnectIS2(t, "localhost:56580", "N1GATE", isclient.WithFilter("r/60.4752/25.0947/1"))
+	rx := isclient.ConnectIS2(t, harness.Addr(t, 56580), "N1GATE", isclient.WithFilter("r/60.4752/25.0947/1"))
 
 	const msgSrc = "M1SRC"
 	rssi, snr := float32(42), float32(12)
@@ -300,17 +304,18 @@ func TestIS2Optionals(t *testing.T) {
 
 // Messaging over IS2 ports. Port of t/84is2-messaging.t.
 func TestIS2Messaging(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
 	const filter = "r/60.4752/25.0947/1"
 
 	// A filter is set on both so that the helper packets get through.
-	tx := isclient.ConnectIS2(t, "localhost:56580", "N0GATE", isclient.WithFilter(filter))
-	rx := isclient.ConnectIS2(t, "localhost:56580", "N1GATE", isclient.WithFilter(filter))
+	tx := isclient.ConnectIS2(t, harness.Addr(t, 56580), "N0GATE", isclient.WithFilter(filter))
+	rx := isclient.ConnectIS2(t, harness.Addr(t, 56580), "N1GATE", isclient.WithFilter(filter))
 
 	messaging(t, tx, rx, func() duplex {
-		return isclient.ConnectIS2(t, "localhost:56580", "N2GATE", isclient.WithFilter(filter))
+		return isclient.ConnectIS2(t, harness.Addr(t, 56580), "N2GATE", isclient.WithFilter(filter))
 	})
 
 	s.Stop()
@@ -319,15 +324,16 @@ func TestIS2Messaging(t *testing.T) {
 // Dropping of IS2 packets whose packet data would not be valid on a plaintext
 // APRS-IS link. Port of t/85is2-drops.t.
 func TestIS2Drops(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
 	const loginTx = "N0GATE"
-	tx := isclient.ConnectIS2(t, "localhost:56580", loginTx)
+	tx := isclient.ConnectIS2(t, harness.Addr(t, 56580), loginTx)
 
 	// The receiver is a plaintext full feed client, where an injected second
 	// line would show up as a separate packet.
-	rx := isclient.Connect(t, "localhost:55152", "N1GATE")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N1GATE")
 
 	const msgSrc = "M1SRC"
 	helper := msgSrc + ">APRS,OH2RDG*,WIDE," + loginTx + ",I:!6028.51N/02505.68E# helper"
@@ -347,7 +353,7 @@ func TestIS2Drops(t *testing.T) {
 	// terminated by a line end, so the parser must not look past its end:
 	// packets with no '>' after the source call, or no ':' after the path.
 	const loginQuirk = "N0QRK"
-	quirk := isclient.ConnectIS2(t, "localhost:56580", loginQuirk, isclient.WithAppName("HR-IXPWIND"))
+	quirk := isclient.ConnectIS2(t, harness.Addr(t, 56580), loginQuirk, isclient.WithAppName("HR-IXPWIND"))
 	quirkHelper := loginQuirk + ">APRS,TCPIP*:!6028.51N/02505.68E# quirks helper"
 
 	t.Run("quirks mode, no >", func(t *testing.T) {
@@ -364,6 +370,7 @@ func TestIS2Drops(t *testing.T) {
 // not process any further frames from it, and must survive. Port of
 // t/86is2-framing.t.
 func TestIS2Framing(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
@@ -393,7 +400,7 @@ func TestIS2Framing(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			is := isclient.ConnectIS2(t, "localhost:56152", login)
+			is := isclient.ConnectIS2(t, harness.Addr(t, 56152), login)
 
 			if err := is.SendRaw(append(append([]byte{}, c.bad...), good...)); err != nil {
 				t.Fatalf("failed to send frames: %v", err)
@@ -409,7 +416,7 @@ func TestIS2Framing(t *testing.T) {
 	}
 
 	// the server must still be alive and accepting clients
-	is := isclient.ConnectIS2(t, "localhost:56152", login)
+	is := isclient.ConnectIS2(t, harness.Addr(t, 56152), login)
 	if err := is.Close(); err != nil {
 		t.Errorf("failed to disconnect from the server: %v", err)
 	}
@@ -420,46 +427,35 @@ func TestIS2Framing(t *testing.T) {
 // The UDP peer signing keys follow a configuration reload: a key removed from
 // the configuration must no longer be accepted. Port of t/87is2-key-reload.t.
 func TestIS2KeyReload(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 
-	// The server reloads its configuration file in place, so run it with a
-	// copy of the IS2 configuration which the test can modify. The copy
-	// goes under tests/ because the configuration refers to files relative to
-	// it.
+	// The server reloads its configuration file in place: the test writes
+	// the changed configuration through the harness, which keeps the test's
+	// ports in it.
 	src, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", "is2-basic"))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	tmpDir := filepath.Join(harness.TestsDir(), "tmp")
-	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cfgPath := filepath.Join(tmpDir, "is2-key-reload")
-	t.Cleanup(func() { os.Remove(cfgPath) })
-
-	writeConfig := func(withoutKey string) {
+	withoutKey := func(key string) string {
 		var out []string
 		for _, l := range strings.Split(string(src), "\n") {
 			f := strings.Fields(l)
-			if withoutKey != "" && len(f) > 1 && f[0] == "PeerGroupKey" && f[1] == withoutKey {
+			if len(f) > 1 && f[0] == "PeerGroupKey" && f[1] == key {
 				continue
 			}
 			out = append(out, l)
 		}
-		if err := os.WriteFile(cfgPath, []byte(strings.Join(out, "\n")), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		return strings.Join(out, "\n")
 	}
-	writeConfig("")
 
 	// UDP peer socket, signing with key 2
-	udp := isclient.ListenIS2Peer(t, "127.0.0.1:16405", "TESTIN-2", is2PeerKeys, 2)
-	udp.SetDestination(t, "127.0.0.1:16404")
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", is2PeerKeys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
 
-	s := harness.Start(t, "../tmp/is2-key-reload")
+	s := harness.Start(t, "is2-basic")
 
-	client := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	client := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 	if err := udp.Negotiate(20 * time.Second); err != nil {
 		t.Fatalf("failed to negotiate the IS2 corepeer link: %v", err)
 	}
@@ -471,7 +467,7 @@ func TestIS2KeyReload(t *testing.T) {
 	// remove key 2 from the configuration and reload
 	const readOK = "New configuration read successfully"
 	reloads := s.LogCount(readOK)
-	writeConfig("2")
+	s.ReplaceConfig(withoutKey("2"))
 	s.Signal(syscall.SIGUSR1)
 	s.WaitLog(readOK, reloads+1, 10*time.Second)
 
@@ -505,6 +501,7 @@ func TestIS2KeyReload(t *testing.T) {
 // LOGIN_REPLY saying so, instead of leaving the client waiting. Port of
 // t/88is2-login-reject.t.
 func TestIS2LoginReject(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
@@ -517,7 +514,7 @@ func TestIS2LoginReject(t *testing.T) {
 		{serverCall, "our server id"},
 	} {
 		t.Run(r.why, func(t *testing.T) {
-			c, err := isclient.DialIS2("localhost:56152", r.call)
+			c, err := isclient.DialIS2(harness.Addr(t, 56152), r.call)
 			if c != nil {
 				c.Close()
 			}
@@ -531,7 +528,7 @@ func TestIS2LoginReject(t *testing.T) {
 	}
 
 	// a valid login still works
-	c := isclient.ConnectIS2(t, "localhost:56152", "OH7LZB")
+	c := isclient.ConnectIS2(t, harness.Addr(t, 56152), "OH7LZB")
 	c.Close()
 
 	s.Stop()
@@ -541,15 +538,16 @@ func TestIS2LoginReject(t *testing.T) {
 // feed port must refuse the PARAMETER_SET and keep sending everything, while
 // the igate port applies it. Port of t/89is2-filter-port.t.
 func TestIS2FilterPort(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
 	const loginTx = "N0GATE"
-	tx := isclient.Connect(t, "localhost:55580", loginTx)
+	tx := isclient.Connect(t, harness.Addr(t, 55580), loginTx)
 
 	// an IS2 client on the full feed port: the login works, but the filter
 	// request after it must be refused, and the connection must stay up
-	full, err := isclient.DialIS2("localhost:56152", "N1FULL", isclient.WithFilter("r/60.4752/25.0947/1"))
+	full, err := isclient.DialIS2(harness.Addr(t, 56152), "N1FULL", isclient.WithFilter("r/60.4752/25.0947/1"))
 	if full == nil {
 		t.Fatalf("login on the full feed port failed: %v", err)
 	}
@@ -565,7 +563,7 @@ func TestIS2FilterPort(t *testing.T) {
 	}
 
 	// an IS2 client on the igate port, where filters are allowed
-	igate := isclient.ConnectIS2(t, "localhost:56580", "N1GATE", isclient.WithFilter("r/60.4752/25.0947/1"))
+	igate := isclient.ConnectIS2(t, harness.Addr(t, 56580), "N1GATE", isclient.WithFilter("r/60.4752/25.0947/1"))
 
 	// A packet far outside the filter range goes to the full feed client, and
 	// the igate client gets only the one inside its range.
@@ -582,6 +580,7 @@ func TestIS2FilterPort(t *testing.T) {
 // keyword, so that IS2 can not be enabled by configuration. Skipped when IS2 is
 // enabled. Port of t/90is2-disabled.t.
 func TestIS2Disabled(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireNoIS2(t)
 
 	base, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", "basic"))

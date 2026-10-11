@@ -16,12 +16,22 @@ certificates on the first run, which the TLS listeners of the `basic`
 configuration need; `go test` run by hand needs `make tls-testcert` done in
 `../` first.
 
-The tests use fixed ports, so they run one at a time, and nothing else (an old
-aprsc, for example) may be listening on port 55501.
+The tests run a few at a time, three unless `-parallel n` (or `make test
+PARALLEL=n`) says otherwise, each with a server of its own on ports of its
+own. The configurations in `../cfg-aprsc/` use fixed port numbers, and the
+tests refer to the same numbers through `harness.Port`, `harness.Addr` and
+`harness.AddrOn`, never literally. The first test to run gets those very
+ports, and the others get ranges from 20100 up, with the ports in their
+copies of the configuration mapped accordingly; `PARALLEL=1` runs the tests
+one at a time, all on the original ports. `internal/harness/ports.go` lists
+every port the configurations use, and a port added to a configuration must
+be added there. Nothing else (an old aprsc, for example) may be listening on
+port 55501.
 
 ## Options
 
 * `APRSC_BIN`: the aprsc binary to test, default `../../src/aprsc`.
+* `-parallel n`, or `PARALLEL=n` with make: how many tests run at a time.
 * `go test -short` skips the heavy `TestUDPLoad`.
 * `TEST_PRODUCT=javap` or `javap4` runs the tests against javAPRSSrvr, if a
   copy is in `../javaprssrvr` (or `../javaprssrvr4`). Tests of aprsc features

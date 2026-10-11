@@ -26,7 +26,7 @@ func getStatus(t *testing.T) *statusJSON {
 	t.Helper()
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	res, err := client.Get("http://127.0.0.1:55501/status.json")
+	res, err := client.Get("http://" + harness.AddrOn(t, "127.0.0.1", 55501) + "/status.json")
 	if err != nil {
 		t.Fatalf("HTTP GET of status.json failed: %v", err)
 	}
@@ -52,6 +52,7 @@ func getStatus(t *testing.T) *statusJSON {
 // Live upgrade, only on aprsc: SIGUSR2 makes the server run the new binary in
 // place, handing the client connections over. Port of t/70live-upgrade.t.
 func TestLiveUpgrade(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t) // the test configuration has IS2 ports, to see them survive too
 
 	s := harness.Start(t, "is2-basic")
@@ -63,9 +64,9 @@ func TestLiveUpgrade(t *testing.T) {
 
 	// connect IS clients: one transmitting, a full feed, and an IS2 client
 	const login = "N5CAL-10"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2")
-	is2 := isclient.ConnectIS2(t, "localhost:56152", "N5CAL-4")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+	is2 := isclient.ConnectIS2(t, harness.Addr(t, 56152), "N5CAL-4")
 	if err := is2.Ping(); err != nil {
 		t.Errorf("failed to ping the IS2 server: %v", err)
 	}
@@ -88,7 +89,7 @@ func TestLiveUpgrade(t *testing.T) {
 
 	// Delete the old live upgrade status file, ignoring errors if it does not
 	// happen to exist yet. The new instance writes it when it is up.
-	upgraded := filepath.Join(harness.TestsDir(), "data", "liveupgrade.json.old")
+	upgraded := filepath.Join(s.RunDir(), "liveupgrade.json.old")
 	os.Remove(upgraded)
 
 	s.Signal(syscall.SIGUSR2)

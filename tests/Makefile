@@ -6,9 +6,12 @@
 # generated on the first run: the basic configuration has TLS listeners, and
 # aprsc does not start without their certificates. Set APRSC_BIN to test
 # another binary, for example one built with ./configure --enable-is2: the IS2
-# tests are skipped without it.
+# tests are skipped without it. PARALLEL is how many tests run at a time, each
+# with a server of its own on ports of its own; PARALLEL=1 runs them one at a
+# time, on the ports in the configurations.
 GO=go
-GOTEST_FLAGS = -count=1 -timeout 20m
+PARALLEL=3
+GOTEST_FLAGS = -count=1 -timeout 20m -parallel $(PARALLEL)
 
 test test-short test-race test-run: tls-testcert
 

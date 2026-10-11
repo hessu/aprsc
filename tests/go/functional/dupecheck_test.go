@@ -13,11 +13,12 @@ import (
 // The cases share one server and depend on its dupe cache state, so they run
 // in order and must not be made parallel or reordered.
 func TestDupecheck(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
 
 	const data = "foo"
 

@@ -10,12 +10,13 @@ import (
 // A client on the dupefeed port receives the duplicates the full feed does not
 // get. Port of the plaintext part of t/65dupeclient.t.
 func TestDupeClient(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2")
-	dup := isclient.Connect(t, "localhost:55153", "DUPS")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+	dup := isclient.Connect(t, harness.Addr(t, 55153), "DUPS")
 
 	// A unique packet comes out on the full feed.
 	l := "SRC>DST,qAR," + login + ":foo"
@@ -39,14 +40,15 @@ func TestDupeClient(t *testing.T) {
 // marked as a duplicate packet type, without the "dup" prefix. Port of the IS2
 // part of t/65dupeclient.t.
 func TestDupeClientIS2(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2")
-	dup := isclient.Connect(t, "localhost:55153", "DUPS")
-	dupIS2 := isclient.ConnectIS2(t, "localhost:56153", "DUPIS2", isclient.WithDuplicates())
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+	dup := isclient.Connect(t, harness.Addr(t, 55153), "DUPS")
+	dupIS2 := isclient.ConnectIS2(t, harness.Addr(t, 56153), "DUPIS2", isclient.WithDuplicates())
 
 	l := "SRC>DST,qAR," + login + ":foo"
 	isclient.TxRx(t, tx, rx, l, l)

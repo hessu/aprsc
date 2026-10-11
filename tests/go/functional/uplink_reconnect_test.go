@@ -13,13 +13,15 @@ import (
 // upstream never reads, so the server must give up on the connection and
 // connect again. Port of t/51uplink-reconnect.t.
 func TestUplinkReconnect(t *testing.T) {
+	harness.Parallel(t)
+
 	const rounds = 3
 
-	fake := isclient.ListenFakeUpstream(t, "127.0.0.1:10153", "FAKEUP")
+	fake := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 10153), "FAKEUP")
 
 	s := harness.Start(t, "basic")
 
-	tx := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	tx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 
 	tail := strings.Repeat(" blaa", 78) + " END\r\n"
 

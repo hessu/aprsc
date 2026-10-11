@@ -13,15 +13,16 @@ import (
 //
 // TODO: add more filter test cases for the rest of the filters.
 func TestParserFilter(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
 
 	// First filter is for uncompressed packet, second for compressed,
 	// third for mic-e, fourth for prefix filter test.
 	// The first and last one also test upper-case letters as filter keys.
-	rx := isclient.Connect(t, "localhost:55581", "N5CAL-2", isclient.WithFilter(
+	rx := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2", isclient.WithFilter(
 		"R/60.4752/25.0947/1 r/60.0520/24.5045/1 r/49.0/8.4/500 r/37.0887/-76.4585/100 "+
 			"r/60.49966/-151.10416/5 r/35.0685/136.662833/2 P/OG/of3/N"))
 
@@ -65,11 +66,12 @@ func TestParserFilter(t *testing.T) {
 // NMEA packet parsing and filtering: these packets must pass a filter which
 // matches their positions. Port of t/31parser-nmea.t.
 func TestParserNMEA(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55581", "N5CAL-2",
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2",
 		isclient.WithFilter("r/-38.5452/-58.7366/1 s/->")) // GPRMC
 
 	// The NMEA checksum must stay intact, so the dropped packets and their
@@ -97,14 +99,15 @@ func TestParserNMEA(t *testing.T) {
 // Negative filters: allow a range, then drop using a buddy filter. Port of
 // t/32filter-negative.t.
 func TestFilterNegative(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
 	const srccall = "OH2RDP-1"
 	const dstcall = "BEACON-15"
 
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55581", "N5CAL-2",
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2",
 		isclient.WithFilter("r/60.4752/25.0947/100 -b/D3NY"))
 
 	// the r/ range filter passes packets within the range

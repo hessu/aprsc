@@ -12,13 +12,14 @@ import (
 // receiver N5CAL-2 on the client-only port, with no filter on the receiver.
 func connectFilterPair(t *testing.T) (tx, rx *isclient.Plain) {
 	t.Helper()
-	tx = isclient.Connect(t, "localhost:55580", "N5CAL-1")
-	rx = isclient.Connect(t, "localhost:55581", "N5CAL-2")
+	tx = isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-1")
+	rx = isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2")
 	return tx, rx
 }
 
 // Prefix, buddy and object filters. Port of t/33filter-pref-buddy-obj.t.
 func TestFilterPrefixBuddyObject(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
@@ -91,6 +92,7 @@ func TestFilterPrefixBuddyObject(t *testing.T) {
 
 // Type and symbol filters. Port of t/34filter-type-symbol.t.
 func TestFilterTypeSymbol(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
@@ -214,6 +216,7 @@ func TestFilterTypeSymbol(t *testing.T) {
 // Filters for digipeater, entrycall and unproto. Port of
 // t/35filter-digi-entry-unproto.t.
 func TestFilterDigiEntryUnproto(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
@@ -271,6 +274,7 @@ func TestFilterDigiEntryUnproto(t *testing.T) {
 
 // Q construct filters. Port of t/37filter-qconstr.t.
 func TestFilterQConstr(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"

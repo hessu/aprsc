@@ -124,6 +124,18 @@ func (p *Plain) Send(line string) {
 	}
 }
 
+// FilterSettle is how long Command waits after sending a command. The server
+// does not acknowledge "#filter" commands, so there is nothing to wait for.
+const FilterSettle = 300 * time.Millisecond
+
+// Command sends a line which the server does not answer, such as a "#filter"
+// command, and gives the server a moment to apply it.
+func (p *Plain) Command(line string) {
+	p.t.Helper()
+	p.Send(line)
+	time.Sleep(FilterSettle)
+}
+
 // isTimeout reports whether err is a network timeout.
 func isTimeout(err error) bool {
 	var ne net.Error
@@ -160,7 +172,7 @@ func TxRx(t *testing.T, tx Sender, rx Receiver, sent, want string) {
 // the drop must be for the reason being tested.
 func ExpectDrop(t *testing.T, tx Sender, rx Receiver, drop, helper string) {
 	t.Helper()
-	expectDrop(t, tx, rx, drop, helper, false)
+	expectDrop(t, tx, rx, drop, helper, dropOpts{})
 }
 
 // ExpectDropExact is like ExpectDrop, but sends the packet to be dropped
@@ -168,36 +180,59 @@ func ExpectDrop(t *testing.T, tx Sender, rx Receiver, drop, helper string) {
 // random token.
 func ExpectDropExact(t *testing.T, tx Sender, rx Receiver, drop, helper string) {
 	t.Helper()
-	expectDrop(t, tx, rx, drop, helper, true)
+	expectDrop(t, tx, rx, drop, helper, dropOpts{exact: true})
 }
 
-func expectDrop(t *testing.T, tx Sender, rx Receiver, drop, helper string, exact bool) {
+// ExpectDropLiteral is like ExpectDrop, but sends both packets exactly as
+// given. It is for packets which would no longer parse with a token appended,
+// such as NMEA sentences with a checksum. The helper is recognized by its
+// content, ignoring the digipeater path.
+func ExpectDropLiteral(t *testing.T, tx Sender, rx Receiver, drop, helper string) {
+	t.Helper()
+	expectDrop(t, tx, rx, drop, helper, dropOpts{exact: true, literalHelper: true})
+}
+
+type dropOpts struct {
+	exact         bool // send the dropped packet without a token
+	literalHelper bool // send the helper without a token
+}
+
+func expectDrop(t *testing.T, tx Sender, rx Receiver, drop, helper string, o dropOpts) {
 	t.Helper()
 
 	dropKey := ""
-	if !exact {
+	if !o.exact {
 		dropKey = fmt.Sprintf("drop.%d", rand.Intn(1000000))
 		drop += " " + dropKey
 	}
-	helperKey := fmt.Sprintf("helper.%d", rand.Intn(1000000))
-	helperKeyed := helper + " " + helperKey
+	helperKey := ""
+	helperSent := helper
+	if !o.literalHelper {
+		helperKey = fmt.Sprintf("helper.%d", rand.Intn(1000000))
+		helperSent += " " + helperKey
+	}
 
 	send(t, tx, drop)
-	send(t, tx, helperKeyed)
+	send(t, tx, helperSent)
 
 	got, err := rx.ReadPacket(DefaultTimeout)
 	if err != nil {
-		t.Errorf("did not receive the helper packet %q after %q: %v", helperKeyed, drop, err)
-		return
-	}
-	if strings.Contains(got, helperKey) {
+		t.Errorf("did not receive the helper packet %q after %q: %v", helperSent, drop, err)
 		return
 	}
 
-	if (!exact && strings.Contains(got, dropKey)) || (exact && stripPath(got) == stripPath(drop)) {
+	if o.literalHelper {
+		if stripPath(got) == stripPath(helper) {
+			return
+		}
+	} else if strings.Contains(got, helperKey) {
+		return
+	}
+
+	if (!o.exact && strings.Contains(got, dropKey)) || (o.exact && stripPath(got) == stripPath(drop)) {
 		t.Errorf("server forwarded a packet it should have dropped: %q", got)
 	} else {
-		t.Errorf("server sent an unexpected packet %q instead of the helper %q", got, helperKeyed)
+		t.Errorf("server sent an unexpected packet %q instead of the helper %q", got, helperSent)
 	}
 
 	// resynchronize: consume the helper that must still be coming
@@ -229,6 +264,11 @@ type Step struct {
 	// Exact sends the dropped packet without a unique token, so that it can
 	// be a duplicate of an earlier packet.
 	Exact bool
+	// Literal sends both the dropped packet and the helper without tokens.
+	Literal bool
+	// Before is an extra line sent right before Send. If it is expected to
+	// be dropped, the step fails when it shows up instead of the helper.
+	Before string
 }
 
 // RunSteps runs the steps in order as subtests. Steps depend on the server
@@ -242,9 +282,15 @@ func RunSteps(t *testing.T, tx Sender, rx Receiver, steps []Step) {
 			name = st.Send
 		}
 		t.Run(name, func(t *testing.T) {
+			if st.Before != "" {
+				send(t, tx, st.Before)
+			}
+
 			switch {
 			case st.Want != "":
 				TxRx(t, tx, rx, st.Send, st.Want)
+			case st.Literal:
+				ExpectDropLiteral(t, tx, rx, st.Send, st.Helper)
 			case st.Exact:
 				ExpectDropExact(t, tx, rx, st.Send, st.Helper)
 			default:

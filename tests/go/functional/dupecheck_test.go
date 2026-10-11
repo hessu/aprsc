@@ -8,24 +8,6 @@ import (
 	"github.com/hessu/aprsc/tests/go/internal/isclient"
 )
 
-// pass is a step where the packet must come out of the receiver as want.
-func pass(name, send, want string) isclient.Step {
-	return isclient.Step{Name: name, Send: send, Want: want}
-}
-
-// drop is a step where the packet must be dropped; only the helper packet
-// comes out. The packet is sent with a unique token appended, so that it is
-// not dropped as a duplicate of an earlier packet.
-func drop(name, send, helper string) isclient.Step {
-	return isclient.Step{Name: name, Send: send, Helper: helper}
-}
-
-// dropDupe is like drop, but the packet is sent exactly as given, so that the
-// server can drop it as a duplicate.
-func dropDupe(name, send, helper string) isclient.Step {
-	return isclient.Step{Name: name, Send: send, Helper: helper, Exact: true}
-}
-
 // Duplicate detection. Port of t/10dupecheck.t.
 //
 // The cases share one server and depend on its dupe cache state, so they run

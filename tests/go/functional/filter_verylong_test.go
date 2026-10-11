@@ -16,6 +16,7 @@ import (
 // TODO: run this threaded, with multiple copies, for a better chance of
 // finding a bug.
 func TestFilterVeryLong(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const rounds = 300
@@ -26,7 +27,7 @@ func TestFilterVeryLong(t *testing.T) {
 			filters = append(filters, fmt.Sprintf("b/BUDDYYYY%d-42", b))
 		}
 
-		c := isclient.Connect(t, "localhost:55580", "N5CAL-1",
+		c := isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-1",
 			isclient.WithFilter(strings.Join(filters, " ")), isclient.WithPasscode("-1"))
 		c.Close()
 

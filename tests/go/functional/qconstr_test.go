@@ -163,12 +163,14 @@ func qcFullFeedPhase2(login, second, proto string) []isclient.Step {
 // q construct handling for a verified client on a client-only port, and then
 // on a regular port. Port of t/20qconstr-clientonly.t.
 func TestQConstrClientOnly(t *testing.T) {
+	harness.Parallel(t)
 	testQConstrClientOnly(t, "basic", "A", "O")
 }
 
 // The same with the q construct protocol id configured as O. Port of
 // t/24qconstr-protocols.t.
 func TestQConstrProtocols(t *testing.T) {
+	harness.Parallel(t)
 	testQConstrClientOnly(t, "qconstr-protocols", "O", "A")
 }
 
@@ -178,8 +180,8 @@ func testQConstrClientOnly(t *testing.T, cfg, proto, wrong string) {
 	const login = "N5CAL-1"
 	const second = "MYC4LL-5"
 
-	tx := isclient.Connect(t, "localhost:55581", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2")
+	tx := isclient.Connect(t, harness.Addr(t, 55581), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
 
 	t.Run("client-only port", func(t *testing.T) {
 		isclient.RunSteps(t, tx, rx, qcClientOnlyPhase1(login, proto, wrong))
@@ -189,10 +191,10 @@ func testQConstrClientOnly(t *testing.T, cfg, proto, wrong string) {
 	if err := tx.Close(); err != nil {
 		t.Errorf("failed to disconnect from the server: %v", err)
 	}
-	tx = isclient.Connect(t, "localhost:55152", login)
+	tx = isclient.Connect(t, harness.Addr(t, 55152), login)
 
 	// for loop testing, also make a second connection
-	isclient.Connect(t, "localhost:55152", second)
+	isclient.Connect(t, harness.Addr(t, 55152), second)
 
 	t.Run("full feed port", func(t *testing.T) {
 		isclient.RunSteps(t, tx, rx, qcFullFeedPhase2(login, second, proto))
@@ -204,14 +206,15 @@ func testQConstrClientOnly(t *testing.T, cfg, proto, wrong string) {
 // q construct handling for a verified client on an igate port, and then on a
 // regular port. Port of t/20qconstr-verified.t.
 func TestQConstrVerified(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
 	const second = "MYC4LL-5"
 	const proto = "A"
 
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-5")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-5")
 	b := qBuilder{proto}
 
 	t.Run("igate port", func(t *testing.T) {
@@ -263,10 +266,10 @@ func TestQConstrVerified(t *testing.T) {
 	if err := tx.Close(); err != nil {
 		t.Errorf("failed to disconnect from the server: %v", err)
 	}
-	tx = isclient.Connect(t, "localhost:55152", login)
+	tx = isclient.Connect(t, harness.Addr(t, 55152), login)
 
 	// for loop testing, also make a second connection
-	isclient.Connect(t, "localhost:55152", second)
+	isclient.Connect(t, harness.Addr(t, 55152), second)
 
 	t.Run("full feed port", func(t *testing.T) {
 		steps := qcFullFeedPhase2(login, second, proto)
@@ -286,11 +289,12 @@ func TestQConstrVerified(t *testing.T) {
 
 // Path tracing (qAI). Port of t/22path-trace.t.
 func TestQConstrPathTrace(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const txCall = "OHCALL-1"
-	tx := isclient.Connect(t, "localhost:55152", txCall)
-	rx := isclient.Connect(t, "localhost:55152", "OHCALL-2")
+	tx := isclient.Connect(t, harness.Addr(t, 55152), txCall)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "OHCALL-2")
 
 	// If the q construct is qAI: (1) if the login is not found after it,
 	// append ,login, then (3) append ,SERVERLOGIN.

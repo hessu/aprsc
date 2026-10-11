@@ -129,6 +129,7 @@ from.
 cd src && make testinstall      # copies web/ files into tests/web, creates tests/data
 cd ../tests
 make test                       # all of it; generates the TLS test CA and certs on first run
+make test PARALLEL=1            # one test at a time (default 3), on the ports in the configs
 make test-short                 # skips the heavy TestUDPLoad
 make test-race                  # with the race detector
 make test-run T=TestDupecheck   # one test or a group, verbose (T is a regexp)
@@ -151,13 +152,24 @@ otherwise.
 
 How the suite is structured:
 
-- `tests/go/internal/harness` starts and stops the server. It passes
-  `-e debug -o file -r <temp dir>`, so a failed test prints the tail of that
-  server log. It waits for the log to say the listeners are open, and the
-  HTTP ports too when the config has them. It runs with `tests/` as the
-  working directory, because the configs use relative paths. `TEST_PRODUCT=javap` or `javap4` runs the tests against
+- `tests/go/internal/harness` starts and stops the server. It runs aprsc
+  with a copy of the config in a temp dir of its own, together with its log
+  (`-e debug -o file -r <temp dir>`, so a failed test prints the tail of
+  it), pid file and `RunDir`. It waits for the log to say the listeners are
+  open, and the HTTP ports too when the config has them. It runs with
+  `tests/` as the working directory, because the configs use relative
+  paths. `TEST_PRODUCT=javap` or `javap4` runs the tests against
   javAPRSSrvr if a copy is present in `tests/javaprssrvr/` (not distributed);
   tests of aprsc-only features skip.
+- Tests run in parallel, `PARALLEL` (default 3) at a time, each with a
+  server of its own on ports of its own. Every test starts with
+  `harness.Parallel(t)` and gets its addresses from `harness.Addr(t, 55152)`,
+  `harness.AddrOn(t, "127.0.0.1", 10153)` or `harness.Port(t, 51342)`, using
+  the port numbers of the configs; never from literal ports. The harness
+  maps those numbers to a block per running test (the first block is the
+  original numbers) and rewrites the server's config copy to match, so the
+  configs keep their fixed numbers. A port number new to the configs must be
+  added to the table in `tests/go/internal/harness/ports.go`.
 - `tests/go/internal/isclient` has the clients: `Connect` (plaintext, built on
   the go-aprs-fap `Conn`), `ConnectIS2`, `ConnectUDP`, `FakeUpstream` for
   uplinks the server connects to, and `UDPPeer` and `IS2Peer` for UDP
@@ -167,9 +179,8 @@ How the suite is structured:
   runs a table of them as subtests. Reads always have deadlines; avoid
   sleeps, and prefer waiting for a reply the server sends (`SetFilter` waits
   for the `# filter ... active` line).
-- Tests that start a server cannot run in parallel: the configs use fixed
-  ports. Cases that share server state (the dupe cache, heard lists) run in
-  order within one test.
+- Cases that share server state (the dupe cache, heard lists) run in order
+  within one test; subtests are not parallel.
 - Test files are named by area: login and start-up, dupecheck and drops,
   quirks and third-party, q constructs, filters, messaging, load and
   uplinks, UDP/HTTP/SCTP/status, live upgrade, IS2, aggregator.

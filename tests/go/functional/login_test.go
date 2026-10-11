@@ -11,9 +11,10 @@ import (
 
 // Log in to the full feed port with a valid passcode. Port of t/01login.t.
 func TestLogin(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
-	c := isclient.Connect(t, "localhost:55152", "OH7LZB")
+	c := isclient.Connect(t, harness.Addr(t, 55152), "OH7LZB")
 
 	if !c.LogResp.Verified {
 		t.Errorf("login was not verified: %q", c.LogResp.Raw)
@@ -37,6 +38,7 @@ func TestLogin(t *testing.T) {
 // lines with no version number after the software name. Port of
 // t/02login-reject.t.
 func TestLoginReject(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	// expectReject sends a login line and expects the server to refuse it,
@@ -44,7 +46,7 @@ func TestLoginReject(t *testing.T) {
 	expectReject := func(t *testing.T, login, want string) {
 		t.Helper()
 
-		reply, accepted := isclient.LoginReply(t, "localhost:55152", login)
+		reply, accepted := isclient.LoginReply(t, harness.Addr(t, 55152), login)
 		if accepted {
 			t.Errorf("login %q was accepted: %q", login, reply)
 			return

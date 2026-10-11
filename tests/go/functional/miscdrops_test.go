@@ -18,14 +18,15 @@ import (
 // test did, and then everything the full feed sends within a short time is
 // checked: only the last packet, which is valid, may come out.
 func TestMiscDrops(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
 
 	const unverCall = "N5UN-1"
-	un := isclient.Connect(t, "localhost:55580", unverCall, isclient.WithPasscode("-1"))
+	un := isclient.Connect(t, harness.Addr(t, 55580), unverCall, isclient.WithPasscode("-1"))
 
 	// the unverified client must not get anything through at all
 	for _, p := range []string{

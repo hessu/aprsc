@@ -12,13 +12,14 @@ import (
 // Filters for area (a/), my position range (m/) and friend position range
 // (f/). Port of t/36filter-area-my-friend.t.
 func TestFilterAreaMyFriend(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
 	const rxLogin = "N5CAL-2"
 
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55581", rxLogin, isclient.WithPasscode("-1"))
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55581), rxLogin, isclient.WithPasscode("-1"))
 
 	t.Run("area in north-east", func(t *testing.T) {
 		rx.SetFilter(t, "a/60.1874/24.8362/60.1872/24.8365")
@@ -70,12 +71,12 @@ func TestFilterAreaMyFriend(t *testing.T) {
 	// position in historydb.
 	t.Run("cached position", func(t *testing.T) {
 		tx.Close()
-		tx = isclient.Connect(t, "localhost:55580", login)
+		tx = isclient.Connect(t, harness.Addr(t, 55580), login)
 		tx.SetFilter(t, "m/1")
 
 		// a new transmitter is needed
 		const tx2Login = "TX2LOG"
-		tx2 := isclient.Connect(t, "localhost:55581", tx2Login)
+		tx2 := isclient.Connect(t, harness.Addr(t, 55581), tx2Login)
 
 		isclient.RunSteps(t, tx2, tx, []isclient.Step{
 			drop("far position dropped, close position passes",

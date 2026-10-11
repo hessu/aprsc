@@ -6,8 +6,10 @@
 //
 // The server runs with the tests/ directory as its working directory (or
 // tests/javaprssrvr4 for javap4), because the configurations refer to files
-// relative to it (ACLs, TLS certificates, RunDir). The configurations also use
-// fixed ports, so tests which start a server must not run in parallel.
+// relative to it (ACLs, TLS certificates). Tests run in parallel, a few at a
+// time, each on ports of its own: aprsc is started with a copy of the
+// configuration in which the ports are mapped to the test's and RunDir points
+// at a directory of the server's own (see ports.go).
 package harness
 
 import (
@@ -26,11 +28,7 @@ import (
 )
 
 const (
-	// StatusAddr is the HTTP status port in the test configurations. The
-	// harness uses it to tell when the server is up.
-	StatusAddr = "127.0.0.1:55501"
-
-	startTimeout = 5 * time.Second
+	startTimeout = 15 * time.Second
 	stopTimeout  = 6 * time.Second
 )
 
@@ -134,8 +132,11 @@ func Binary() string {
 type Server struct {
 	t       *testing.T
 	prod    *product
+	block   *portBlock
 	cmd     *exec.Cmd
-	logDir  string
+	cfgFile string // the configuration file the server runs with
+	logDir  string // aprsc: a directory of its own for the log, pid file, configuration and run directory
+	runDir  string // aprsc: its RunDir
 	output  bytes.Buffer
 	done    chan struct{} // closed when the process has been reaped
 	waitErr error         // result of cmd.Wait, valid after done is closed
@@ -151,8 +152,10 @@ var httpConfigRe = regexp.MustCompile(`(?mi)^[ \t]*HTTP(Status|Upload)[ \t]`)
 
 // Start runs the product with the named configuration (from tests/cfg-aprsc,
 // tests/cfg-javap or the javap4 directory) and waits until it is ready: its
-// listeners are open, and so are its HTTP ports if it has any. The server is
-// stopped when the test finishes, and its log is printed if the test failed.
+// listeners are open, and so are its HTTP ports if it has any. aprsc runs
+// with a copy of the configuration, on the test's ports (see Port). The
+// server is stopped when the test finishes, and its log is printed if the
+// test failed.
 func Start(t *testing.T, cfg string, extraArgs ...string) *Server {
 	t.Helper()
 	return start(t, cfg, true, extraArgs)
@@ -181,6 +184,11 @@ func CheckConfigFile(t *testing.T, path string) (string, error) {
 
 	if !IsAprsc() {
 		t.Fatalf("CheckConfig only works with aprsc")
+	}
+
+	// the configurations have "RunDir data", which must exist for the check
+	if err := os.MkdirAll(filepath.Join(TestsDir(), "data"), 0o755); err != nil {
+		t.Fatalf("cannot create the data directory: %v", err)
 	}
 
 	cmd := exec.Command(Binary(), "-y", "-c", path, "-e", "info", "-o", "stderr")
@@ -223,6 +231,45 @@ func RequireNoIS2(t *testing.T) {
 	if hasIS2(t) {
 		t.Skip("this aprsc build has IS2 enabled")
 	}
+}
+
+// writeConfig writes an aprsc configuration to the server's configuration
+// file, with the ports mapped to the test's and RunDir pointing at the
+// server's run directory.
+func (s *Server) writeConfig(text string) {
+	s.t.Helper()
+
+	out, err := s.block.rewriteConfig(text, s.runDir)
+	if err != nil {
+		s.t.Fatalf("configuration %s: %v", filepath.Base(s.cfgFile), err)
+	}
+	if err := os.WriteFile(s.cfgFile, []byte(out), 0o644); err != nil {
+		s.t.Fatalf("cannot write the configuration file: %v", err)
+	}
+}
+
+// ReplaceConfig writes a new configuration for the server to reload on
+// SIGUSR1. Like the one it started with, it gets the test's ports and the
+// server's run directory. aprsc only.
+func (s *Server) ReplaceConfig(text string) {
+	s.t.Helper()
+
+	if !s.prod.ownLogging {
+		s.t.Fatalf("ReplaceConfig only works with aprsc")
+	}
+	s.writeConfig(text)
+}
+
+// ConfigFile returns the path of the configuration file the server runs
+// with: for aprsc, its copy with the test's ports.
+func (s *Server) ConfigFile() string {
+	return s.cfgFile
+}
+
+// RunDir returns the directory aprsc keeps its run-time files in, such as the
+// live upgrade dump. It is empty for the other products.
+func (s *Server) RunDir() string {
+	return s.runDir
 }
 
 // LogCount returns how many times text appears in the server's log so far.
@@ -270,8 +317,13 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 		t.Fatalf("%s executable not found (aprsc must be built in src/ first): %v", prod.name, err)
 	}
 
-	cfgFile := filepath.Join(prod.cfgDir, cfg)
-	if _, err := os.Stat(filepath.Join(dir, cfgFile)); err != nil {
+	block := blockFor(t)
+	if !IsAprsc() && block.index != 0 {
+		t.Fatalf("%s runs on the ports of its configuration only, so its tests cannot run in parallel", prod.name)
+	}
+
+	cfgPath := filepath.Join(dir, prod.cfgDir, cfg)
+	if _, err := os.Stat(cfgPath); err != nil {
 		if !prod.ownLogging {
 			// not every test has a configuration for the other products
 			t.Skipf("no %s configuration for this test: %v", prod.name, err)
@@ -279,17 +331,9 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 		t.Fatalf("no such configuration file: %v", err)
 	}
 
-	waitHTTP := false
-	if prod.ownLogging {
-		b, err := os.ReadFile(filepath.Join(dir, cfgFile))
-		if err != nil {
-			t.Fatalf("cannot read the configuration file: %v", err)
-		}
-		waitHTTP = httpConfigRe.Match(b)
-	}
-
-	// The configurations keep the server's data in tests/data, and the status
-	// page serves the web files copied to tests/web by "make testinstall".
+	// The status page serves the web files copied to tests/web by "make
+	// testinstall", and the configurations of the other products keep the
+	// server's data in tests/data.
 	if err := os.MkdirAll(filepath.Join(TestsDir(), "data"), 0o755); err != nil {
 		t.Fatalf("cannot create the data directory: %v", err)
 	}
@@ -301,22 +345,39 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 
 	// A leftover server would hold the ports and answer in place of ours.
 	if checkStale {
-		if c, err := net.DialTimeout("tcp", StatusAddr, time.Second); err == nil {
+		if c, err := net.DialTimeout("tcp", block.statusAddr(), time.Second); err == nil {
 			c.Close()
-			t.Fatalf("something is already listening on %s; is an old server still running?", StatusAddr)
+			t.Fatalf("something is already listening on %s; is an old server still running?", block.statusAddr())
 		}
 	}
 
 	s := &Server{
-		t:        t,
-		prod:     prod,
-		done:     make(chan struct{}),
-		waitHTTP: waitHTTP,
+		t:       t,
+		prod:    prod,
+		block:   block,
+		cfgFile: cfgPath,
+		done:    make(chan struct{}),
 	}
 
 	var args []string
 	if prod.ownLogging {
+		// aprsc gets a directory of its own for its log and pid file, its
+		// run directory, and a copy of the configuration with the test's
+		// ports and that run directory
 		s.logDir = t.TempDir()
+		s.runDir = filepath.Join(s.logDir, "data")
+		if err := os.Mkdir(s.runDir, 0o755); err != nil {
+			t.Fatalf("cannot create the run directory: %v", err)
+		}
+
+		text, err := os.ReadFile(cfgPath)
+		if err != nil {
+			t.Fatalf("cannot read the configuration file: %v", err)
+		}
+		s.waitHTTP = httpConfigRe.Match(text)
+		s.cfgFile = filepath.Join(s.logDir, filepath.Base(cfgPath))
+		s.writeConfig(string(text))
+
 		args = append(args,
 			"-e", "debug", "-o", "file", "-r", s.logDir,
 			"-p", filepath.Join(s.logDir, "aprsc.pid"))
@@ -325,7 +386,7 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 	if prod.cfgFlag != "" {
 		args = append(args, prod.cfgFlag)
 	}
-	args = append(args, cfgFile)
+	args = append(args, s.cfgFile)
 	args = append(args, extraArgs...)
 
 	s.cmd = exec.Command(bin, args...)
@@ -375,7 +436,7 @@ func (s *Server) waitReady() error {
 				(!s.waitHTTP || bytes.Contains(b, []byte("HTTP thread ready"))) {
 				return nil
 			}
-		} else if c, err := net.DialTimeout("tcp", StatusAddr, 200*time.Millisecond); err == nil {
+		} else if c, err := net.DialTimeout("tcp", s.block.statusAddr(), 200*time.Millisecond); err == nil {
 			c.Close()
 			return nil
 		}

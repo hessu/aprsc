@@ -14,11 +14,12 @@ import (
 // in a single write, and thousands of short lines in a single write. Port of
 // t/50disc-blobs.t.
 func TestDiscBlobs(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const loginTx = "N0GAT"
-	tx := isclient.Connect(t, "localhost:55580", loginTx)
-	rx := isclient.Connect(t, "localhost:55152", "N1GAT")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), loginTx)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N1GAT")
 
 	// Send a packet halfway and disconnect. The server must not forward it.
 	if err := tx.SendRaw([]byte("M0SRC>APRS,OH2RDG*,WIDE,qAR," + loginTx + ":!6028.51N/02505.68E#this packet trunca")); err != nil {
@@ -30,7 +31,7 @@ func TestDiscBlobs(t *testing.T) {
 	isclient.ExpectSilence(t, rx, 2*time.Second, "truncated packet")
 
 	// connect again
-	tx = isclient.Connect(t, "localhost:55580", loginTx)
+	tx = isclient.Connect(t, harness.Addr(t, 55580), loginTx)
 
 	t.Run("blob", func(t *testing.T) {
 		const blobSize = 32 * 1024
@@ -90,11 +91,12 @@ func TestDiscBlobs(t *testing.T) {
 // Heavier packet load: 20 MB of packets through the server, in order, with a
 // limited number of bytes outstanding. Port of t/51load.t.
 func TestLoad(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const loginTx = "N0GAT"
-	rx := isclient.Connect(t, "localhost:55152", "N1GAT")
-	tx := isclient.Connect(t, "localhost:55580", loginTx)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N1GAT")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), loginTx)
 
 	time.Sleep(500 * time.Millisecond) // let it get started
 

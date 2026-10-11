@@ -13,6 +13,7 @@ import (
 
 // HTTP status service, only on aprsc. Port of t/66http-status.t.
 func TestHTTPStatus(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireAprsc(t)
 
 	s := harness.Start(t, "basic")
@@ -83,7 +84,7 @@ func TestHTTPStatus(t *testing.T) {
 		}
 	}
 
-	const base = "http://127.0.0.1:55501"
+	base := "http://" + harness.AddrOn(t, "127.0.0.1", 55501)
 
 	for _, compressed := range []bool{false, true} {
 		name := "plain"

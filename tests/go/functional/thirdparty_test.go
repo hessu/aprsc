@@ -9,15 +9,16 @@ import (
 
 // Third-party packet header parsing and filtering. Port of t/13thirdparty.t.
 func TestThirdParty(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
 
 	// First filter is for uncompressed packet, second for compressed,
 	// third for mic-e, fourth for prefix filter test.
 	// The first and last one also test upper-case letters as filter keys.
-	rx := isclient.Connect(t, "localhost:55581", "N5CAL-2",
+	rx := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2",
 		isclient.WithFilter("r/60.228/24.8495/5 p/OG p/OI p/K b/BB7LZB"))
 
 	same := func(name, packet string) isclient.Step {

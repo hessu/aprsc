@@ -13,6 +13,8 @@ import (
 // Feed data to an aggregator server from two servers and validate that no
 // dupes come out. Port of aggregator/10aggr_join.t.
 func TestAggregatorJoin(t *testing.T) {
+	harness.Parallel(t)
+
 	// the packets are unique to this run, so that a real network is not
 	// confused by repeated test runs
 	id := fmt.Sprintf("%d_%d", time.Now().Unix(), rand.Intn(1000000))
@@ -33,8 +35,8 @@ func TestAggregatorJoin(t *testing.T) {
 		)
 	}
 
-	fake1 := isclient.ListenFakeUpstream(t, "127.0.0.1:57153", "CORE1")
-	fake2 := isclient.ListenFakeUpstream(t, "127.0.0.1:57154", "CORE2")
+	fake1 := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 57153), "CORE1")
+	fake2 := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 57154), "CORE2")
 
 	s := harness.Start(t, "aggregator")
 
@@ -42,7 +44,7 @@ func TestAggregatorJoin(t *testing.T) {
 	up2 := fake2.Accept(t)
 
 	// create a client connection
-	cl := isclient.Connect(t, "localhost:56152", "CL1ENT")
+	cl := isclient.Connect(t, harness.Addr(t, 56152), "CL1ENT")
 
 	for _, p := range packets {
 		if err := up1.SendLine(p); err != nil {
@@ -99,7 +101,9 @@ func TestAggregatorJoin(t *testing.T) {
 // UpstreamTimeout (10 s) and an idle client after ClientTimeout (20 s). Port of
 // aggregator/20socket-timeouts.t.
 func TestSocketTimeouts(t *testing.T) {
-	fake := isclient.ListenFakeUpstream(t, "127.0.0.1:57153", "CORE1")
+	harness.Parallel(t)
+
+	fake := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 57153), "CORE1")
 
 	s := harness.Start(t, "aggregator")
 
@@ -117,7 +121,7 @@ func TestSocketTimeouts(t *testing.T) {
 	}
 
 	// create a client connection
-	cl := isclient.Connect(t, "localhost:56152", "CL1ENT")
+	cl := isclient.Connect(t, harness.Addr(t, 56152), "CL1ENT")
 
 	start = time.Now()
 	if l, err := cl.ReadPacket(60 * time.Second); err == nil {

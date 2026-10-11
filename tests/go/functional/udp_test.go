@@ -15,11 +15,12 @@ import (
 // UDP client functions: a client which logs in with a UDP port gets its
 // packets over UDP. Port of t/60udp-client.t.
 func TestUDPClient(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.ConnectUDP(t, "localhost:55152", "N5CAL-2", 51342)
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.ConnectUDP(t, harness.Addr(t, 55152), "N5CAL-2", harness.Port(t, 51342))
 
 	const data = "udp packet content"
 	isclient.TxRx(t, tx, rx, "SRC>DST,qAR,"+login+":"+data, "SRC>DST,qAR,"+login+":"+data)
@@ -38,15 +39,17 @@ func TestUDPClient(t *testing.T) {
 // The testing order is selected so that the last packet proves the previous
 // ones were not transmitted to the wrong sockets. Port of t/61udp-peer.t.
 func TestUDPPeer(t *testing.T) {
+	harness.Parallel(t)
+
 	// the peer group in the configuration has the server at 16404 and the
 	// peer at 16405
-	udp := isclient.ListenUDPPeer(t, "127.0.0.1:16405", "127.0.0.1:16404")
-	fake := isclient.ListenFakeUpstream(t, "127.0.0.1:10153", "FAKEUP")
+	udp := isclient.ListenUDPPeer(t, harness.AddrOn(t, "127.0.0.1", 16405), harness.AddrOn(t, "127.0.0.1", 16404))
+	fake := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 10153), "FAKEUP")
 
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
-	client := isclient.Connect(t, "localhost:55152", login)
+	client := isclient.Connect(t, harness.Addr(t, 55152), login)
 	up := fake.Accept(t)
 
 	// 1) from upstream to client
@@ -76,16 +79,17 @@ func TestUDPPeer(t *testing.T) {
 
 // HTTP position upload. Port of t/62http-client.t.
 func TestHTTPUpload(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 
 	const data = "TEST>HTAPRS,TCPIP*:>http packet content"
 	const out = "TEST>HTAPRS,TCPIP*,qAC,TESTING:>http packet content"
 	post := "user TEST pass 29939 vers httpaprstester 1.0\r\n" + data + "\r\n"
 
 	// httpaprstester is the User-Agent of the Perl test, kept as is
-	req, err := http.NewRequest("POST", "http://127.0.0.1:55080/", strings.NewReader(post))
+	req, err := http.NewRequest("POST", "http://"+harness.AddrOn(t, "127.0.0.1", 55080)+"/", strings.NewReader(post))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,11 +123,12 @@ func TestHTTPUpload(t *testing.T) {
 // UDP submit: packets sent in a datagram to the UDP submit port are accepted
 // with a valid login and rejected without. Port of t/63udp-submit.t.
 func TestUDPSubmit(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
-	rx := isclient.Connect(t, "localhost:55152", "OH0CAL-2")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "OH0CAL-2")
 
-	usock, err := net.Dial("udp", "127.0.0.1:55080")
+	usock, err := net.Dial("udp", harness.AddrOn(t, "127.0.0.1", 55080))
 	if err != nil {
 		t.Fatalf("failed to set up an UDP client socket: %v", err)
 	}
@@ -257,15 +262,16 @@ func unorderedLoad(t *testing.T, prefix string, send func(line string) error, rx
 // UDP core peers with a load chunk, in both directions. It is skipped with
 // -short. Port of t/64udp-load.t.
 func TestUDPLoad(t *testing.T) {
+	harness.Parallel(t)
 	if testing.Short() {
 		t.Skip("skipping the UDP load test in short mode")
 	}
 
-	udp := isclient.ListenUDPPeer(t, "127.0.0.1:16405", "127.0.0.1:16404")
+	udp := isclient.ListenUDPPeer(t, harness.AddrOn(t, "127.0.0.1", 16405), harness.AddrOn(t, "127.0.0.1", 16404))
 
 	s := harness.Start(t, "basic")
 
-	full := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	full := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 
 	t.Run("full feed to UDP peer", func(t *testing.T) {
 		unorderedLoad(t, "F", full.SendLine, udp)

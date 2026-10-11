@@ -17,6 +17,7 @@ import (
 // this build of aprsc has no SCTP support (the configuration is rejected).
 // Port of t/69sctp.t.
 func TestSCTP(t *testing.T) {
+	harness.Parallel(t)
 	harness.RequireAprsc(t)
 
 	if out, err := harness.CheckConfig(t, "sctp-hub"); err != nil {
@@ -31,11 +32,12 @@ func TestSCTP(t *testing.T) {
 
 	// wait for the leaf to connect to the hub
 	httpClient := &http.Client{Timeout: 10 * time.Second}
+	statusURL := "http://" + harness.AddrOn(t, "127.0.0.1", 55502) + "/status.json"
 	var uplink map[string]any
 
 	deadline := time.Now().Add(10 * time.Second)
 	for uplink == nil && time.Now().Before(deadline) {
-		uplink = leafUplink(httpClient)
+		uplink = leafUplink(httpClient, statusURL)
 		if uplink == nil {
 			time.Sleep(time.Second)
 		}
@@ -45,8 +47,8 @@ func TestSCTP(t *testing.T) {
 	}
 
 	const loginTx = "N0GAT"
-	rx := isclient.Connect(t, "localhost:55152", "N1GAT")
-	tx := isclient.Connect(t, "localhost:55583", loginTx)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N1GAT")
+	tx := isclient.Connect(t, harness.Addr(t, 55583), loginTx)
 
 	orderedLoad(t, tx, rx, loginTx, 4*1024*1024, 2*time.Second)
 
@@ -54,10 +56,10 @@ func TestSCTP(t *testing.T) {
 	leaf.Stop()
 }
 
-// leafUplink returns the first uplink in the leaf's status.json, if it has
-// logged in to the hub (as TESTING-1).
-func leafUplink(c *http.Client) map[string]any {
-	res, err := c.Get("http://127.0.0.1:55502/status.json")
+// leafUplink returns the first uplink in the leaf's status.json at url, if
+// it has logged in to the hub (as TESTING-1).
+func leafUplink(c *http.Client, url string) map[string]any {
+	res, err := c.Get(url)
 	if err != nil {
 		return nil
 	}

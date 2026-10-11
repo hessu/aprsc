@@ -25,12 +25,13 @@ import (
 //
 // Port of t/30filter-cmd.t.
 func TestFilterCommand(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
 	const rxLogin = "N5CAL-2"
-	tx := isclient.Connect(t, "localhost:55580", login)
-	rx := isclient.Connect(t, "localhost:55580", rxLogin, isclient.WithFilter("p/OH"))
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55580), rxLogin, isclient.WithFilter("p/OH"))
 
 	// the initial p/ filter from the login line works
 	isclient.RunSteps(t, tx, rx, []isclient.Step{

@@ -36,16 +36,17 @@ type duplex interface {
 //
 // Port of t/40messaging.t.
 func TestMessaging(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const filter = "r/60.4752/25.0947/1"
 
 	// A filter is set on both so that the helper packets get through.
-	tx := isclient.Connect(t, "localhost:55580", "N0GATE", isclient.WithFilter(filter))
-	rx := isclient.Connect(t, "localhost:55580", "N1GATE", isclient.WithFilter(filter))
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N0GATE", isclient.WithFilter(filter))
+	rx := isclient.Connect(t, harness.Addr(t, 55580), "N1GATE", isclient.WithFilter(filter))
 
 	messaging(t, tx, rx, func() duplex {
-		return isclient.Connect(t, "localhost:55580", "N2GATE", isclient.WithFilter(filter))
+		return isclient.Connect(t, harness.Addr(t, 55580), "N2GATE", isclient.WithFilter(filter))
 	})
 
 	// The g/ message recipient filter.

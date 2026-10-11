@@ -22,14 +22,16 @@ func maxPacketLen() int {
 // Q constructs for packets from an uplink connection, over IPv4 and IPv6.
 // Port of t/22qconstr-uplink.t.
 func TestQConstrUplink(t *testing.T) {
+	harness.Parallel(t)
+
 	const upstreamCall = "FAKEUP"
 
-	fake4 := isclient.ListenFakeUpstream(t, "127.0.0.1:54153", upstreamCall)
+	fake4 := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 54153), upstreamCall)
 
 	s := harness.Start(t, "uplinks")
 
 	up1 := fake4.Accept(t)
-	rx := isclient.Connect(t, "127.0.0.1:55152", "N5CAL-1")
+	rx := isclient.Connect(t, harness.AddrOn(t, "127.0.0.1", 55152), "N5CAL-1")
 
 	// If the q construct is qAI and the packet is from an outbound
 	// connection, append ,IPADDR (here the upstream's callsign), then
@@ -44,7 +46,7 @@ func TestQConstrUplink(t *testing.T) {
 
 	// unbind the IPv4 server and create an IPv6 server
 	fake4.Close()
-	fake6 := isclient.ListenFakeUpstream(t, "[::]:54153", upstreamCall)
+	fake6 := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "::", 54153), upstreamCall)
 	up1.Close()
 	up6 := fake6.Accept(t)
 
@@ -144,12 +146,14 @@ func sendUplinkPackets(t *testing.T, up *isclient.Peer, rx *isclient.Plain, pack
 // Long q constructs from an uplink: a q path of every length, up to and past
 // the maximum packet length. Port of t/23qconstr-long.t.
 func TestQConstrLong(t *testing.T) {
-	fake6 := isclient.ListenFakeUpstream(t, "[::]:54153", "FAKEIS")
+	harness.Parallel(t)
+
+	fake6 := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "::", 54153), "FAKEIS")
 
 	s := harness.Start(t, "uplinks")
 
 	up := fake6.Accept(t)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 
 	sendUplinkPackets(t, up, rx, qPathPackets(), func(p string) string {
 		return strings.Replace(p, ":", ",FAKEIS,"+serverCall+":", 1)
@@ -161,12 +165,14 @@ func TestQConstrLong(t *testing.T) {
 // Long digipeater paths from an uplink, up to and past the maximum packet
 // length. Port of t/27digipath-long.t.
 func TestDigipathLong(t *testing.T) {
-	fake6 := isclient.ListenFakeUpstream(t, "[::]:54153", "FAKE6")
+	harness.Parallel(t)
+
+	fake6 := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "::", 54153), "FAKE6")
 
 	s := harness.Start(t, "uplinks")
 
 	up := fake6.Accept(t)
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-1")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
 
 	sendUplinkPackets(t, up, rx, digiPackets(), func(p string) string {
 		return strings.Replace(p, "IGATE:", "IGATE,FAKE6,"+serverCall+":", 1)

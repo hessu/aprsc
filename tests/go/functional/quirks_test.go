@@ -10,12 +10,13 @@ import (
 // Some bad packets which should be allowed in quirks mode, for clients with
 // known bad-and-unmaintained software. Port of t/12quirks-mode.t.
 func TestQuirksMode(t *testing.T) {
+	harness.Parallel(t)
 	s := harness.Start(t, "basic")
 
 	const login = "N5CAL-1"
 	const vers = "HR-IXPWINDi-123"
-	tx := isclient.Connect(t, "localhost:55580", login, isclient.WithVers(vers))
-	rx := isclient.Connect(t, "localhost:55152", "N5CAL-2", isclient.WithVers(vers))
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login, isclient.WithVers(vers))
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2", isclient.WithVers(vers))
 
 	steps := []isclient.Step{
 		pass("spaces in front of srccall",

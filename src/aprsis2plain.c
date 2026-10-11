@@ -14,6 +14,9 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <math.h>
 
 #include "aprsis2plain.h"
 #include "hmalloc.h"
@@ -26,20 +29,47 @@ void is2_plain_metadata_reset(struct client_t *c)
 	c->is2_input_template.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB__NOT_SET;
 }
 
+/*
+ *	Parse a metadata value: a finite decimal number, making up the whole
+ *	value. Returns 1 with the number in *out, or 0 if the value is not
+ *	one, in which case it is ignored.
+ */
+static int is2_plain_metadata_float(const char *val, int val_len, float *out)
+{
+	char buf[32];
+	char *end;
+	float f;
+
+	if (val_len <= 0 || val_len >= sizeof(buf))
+		return 0;
+	memcpy(buf, val, val_len);
+	buf[val_len] = 0;
+
+	errno = 0;
+	f = strtof(buf, &end);
+	if (errno != 0 || end != buf + val_len || !isfinite(f))
+		return 0;
+
+	*out = f;
+	return 1;
+}
+
 static void is2_plain_metadata_key(struct client_t *c,
 	const char *key, int key_len,
 	const char *val, int val_len)
 {
+	float f;
+
 	if (key_len == 7 && memcmp(key, "rx_rssi", 7) == 0) {
-		errno = 0;
-		c->is2_input_template.rx_rssi = strtof(val, NULL);
-		if (errno == 0)
+		if (is2_plain_metadata_float(val, val_len, &f)) {
+			c->is2_input_template.rx_rssi = f;
 			c->is2_input_template.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
+		}
 	} else if (key_len == 9 && memcmp(key, "rx_snr_db", 9) == 0) {
-		errno = 0;
-		c->is2_input_template.rx_snr_db = strtof(val, NULL);
-		if (errno == 0)
+		if (is2_plain_metadata_float(val, val_len, &f)) {
+			c->is2_input_template.rx_snr_db = f;
 			c->is2_input_template.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
+		}
 	}
 }
 

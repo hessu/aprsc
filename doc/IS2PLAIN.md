@@ -3,11 +3,11 @@ IS2 packet metadata on plaintext APRS-IS connections
 -------------------------------------------------------
 
 The IS2 protocol carries metadata with each packet, in addition to the
-packet itself: so far the signal strength and the signal-to-noise ratio
-measured by the receiver which heard the packet on the air.  A client
-which speaks the traditional plaintext APRS-IS protocol can still supply
-this metadata for the packets it feeds, without implementing IS2, by
-sending it on a comment line just before the packet.
+packet itself: how the receiver heard the packet on the air, such as
+the signal strength it measured.  A client which speaks the traditional
+plaintext APRS-IS protocol can still supply this metadata for the
+packets it feeds, without implementing IS2, by sending it on a comment
+line just before the packet.
 
 Work in progress, like IS2 itself: the set of keys may grow.
 
@@ -25,7 +25,9 @@ that.  It is followed by one or more key-value pairs, separated by
 spaces; a key and its value are separated by `=`, with no spaces around
 it.  Values are numbers, such as `-97.5` or `300`.
 
-The keys so far:
+The keys are named after the fields of the IS2 `ISPacket` message in
+`src/aprsis2.proto`, which defines what they mean and their units.  The
+ones a plaintext client can set:
 
 * `rx_rssi`: the received signal strength indication of the packet at
   the receiver, in dBm.  This is what LoRa radios report for a packet,
@@ -36,8 +38,9 @@ The keys so far:
 * `rx_snr_db`: the signal-to-noise ratio of the packet at the receiver,
   in dB.  LoRa decodes packets well below the noise, so the value is
   often negative, down to about -20, and rarely above +10.
-* `rx_modem`: the modem the packet was received with, as a number:
-  1 for AX.25 packet radio, 2 for LoRa APRS, 3 for FLARM.
+* `rx_modem`: the modem the packet was received with, as the number of
+  one of the modem types of the `ModemType` enum in `aprsis2.proto`;
+  `2` is LoRa APRS, for instance.
 * `rx_bitrate`: the bit rate of the transmission in bit/s, as a whole
   number: 1200 or 9600 for packet radio, about 300 for the usual LoRa
   APRS setting.
@@ -45,12 +48,13 @@ The keys so far:
   Hz, decimals allowed; `433775000` for the European LoRa APRS channel,
   for instance.
 
-Keys the server does not know are ignored, as are pairs without a key
-or a value, so a client may send more than a given server understands.
-A value which is not a number as a whole, such as `rx_snr_db=8dB`, is
-ignored together with its key, and so is a value out of range: a modem
-number not listed above, a bit rate of zero, a frequency of zero or
-below.  The other pairs on the line still apply.
+Keys the server does not know are ignored, so a client may send more
+than a given server understands.  A value the server cannot use is
+ignored together with its key: an empty one, as in `rx_rssi=`, one
+which is not a number as a whole, such as `rx_snr_db=8dB`, or one out
+of range, such as a bit rate of zero, a frequency of zero or below, or
+a modem number which is not one of the defined types.  The other pairs
+on the line still apply.
 
 An example of a session, from the client's point of view, which logs in
 and sends one packet with all the values:
@@ -76,19 +80,20 @@ A metadata line waits for the next packet, so a line sent after a
 packet belongs to the one following it.
 
 The metadata does not take part in duplicate detection, which looks at
-the packet alone.  A packet which is dropped as a duplicate is dropped
-together with its metadata, and the copy which went through first is
-the one forwarded, with the metadata it came with.
+the packet alone.  A packet dropped as a duplicate takes its metadata
+with it: the copy which went through first is the one forwarded, with
+the metadata it came with.  The dupe feed ports, which are given the
+duplicates, get them with their own metadata.
 
 
 Where the lines are accepted
 -------------------------------
 
-The metadata lines are accepted on the ports which accept filter commands,
-those of the `igate`, `userfilter` and `clientonly` types, over the TCP
-connection the client logged in on.  They are not accepted on full feed
-ports, over UDP (the UDP submit port, or the UDP return path of a TCP
-login), or in HTTP uploads.
+The metadata lines are accepted on the ports which accept filter
+commands, those of the `igate`, `userfilter` and `clientonly` types,
+on the connection the client logged in on, whether TCP, TLS or SCTP.
+They are not accepted on full feed or dupe feed ports, over UDP (the
+UDP submit port), or in HTTP uploads.
 
 The server accepts them when it has been built with IS2 support
 (`./configure --enable-is2`).  Without it, and on other APRS-IS server
@@ -100,18 +105,16 @@ connected to.
 What happens to the metadata
 -------------------------------
 
-The server attaches the values to the packet as the `rx_rssi`,
-`rx_snr_db`, `rx_modem`, `rx_bitrate` and `rx_frequency` fields of the
-IS2 `ISPacket` message (see `aprsis2.proto`), exactly as if the packet
-had come in over IS2 with them.  From there
-they travel with the packet to IS2 clients and over IS2 peer links, for
-as many IS2 hops as the packet makes.  Plaintext connections have no
-room for them: a plaintext client receives the packet without the
-metadata, and the metadata line itself is never forwarded to anyone.
-When a packet crosses a plaintext link between servers, the metadata is
-lost for good.
+The server attaches the values to the packet as the `ISPacket` fields
+of the same names, exactly as if the packet had come in over IS2 with
+them.  From there they travel with the packet to IS2 clients and over
+IS2 peer links, for as many IS2 hops as the packet makes.  Plaintext
+connections have no room for them: a plaintext client receives the
+packet without the metadata, and the metadata line itself is never
+forwarded to anyone.  When a packet crosses a plaintext link between
+servers, the metadata is lost for good.
 
 An IS2 client receiving the packet of the example above finds, in the
-`ISPacket`, the packet line with the q construct the server added, and
-the fields `rx_rssi` set to -97.5, `rx_snr_db` to 8.2, `rx_modem` to
-`MODEM_LORA_APRS`, `rx_bitrate` to 300 and `rx_frequency` to 433775000.
+`ISPacket`, the packet line as the server forwards it, and the fields
+set to the values of the metadata line, `rx_modem` as
+`MODEM_LORA_APRS`.

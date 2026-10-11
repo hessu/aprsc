@@ -1214,16 +1214,19 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 	if (*s == '#') {
 		hlog_packet(LOG_DEBUG, s, len, "%s/%s: #-in: ", c->addr_rem, c->username);
 		if (l4proto != IPPROTO_UDP && (c->flags & CLFLAGS_USERFILTEROK)) {
-			/* filter adjunct commands ? */
-			char *filtercmd = memcasestr("filter", s, s + len);
-			if (filtercmd)
-				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
 #ifdef USE_IS2
-			/* IS2 metadata in plaintext key-value format */
+			/* IS2 metadata in plaintext key-value format, checked before
+			 * the filter commands so that a key or value containing
+			 * "filter" is not taken for one
+			 */
 			if (memcmp(s, "#is2-meta ", 10) == 0) {
 				return is2_plain_metadata(self, c, s+10, len-10);
 			}
 #endif
+			/* filter adjunct commands ? */
+			char *filtercmd = memcasestr("filter", s, s + len);
+			if (filtercmd)
+				return filter_commands(self, c, 0, filtercmd, len - (filtercmd - s));
 		}
 		
 		return 0;

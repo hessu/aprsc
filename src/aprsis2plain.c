@@ -116,8 +116,12 @@ static void is2_plain_metadata_key(struct client_t *c,
 			c->is2_input_template.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
 		}
 	} else if (key_len == 8 && memcmp(key, "rx_modem", 8) == 0) {
-		/* the modem type identifiers defined in aprsis2.proto */
-		if (is2_plain_metadata_int(val, val_len, APRSIS2__ISPACKET__MODEM_TYPE__MODEM_AX25, APRSIS2__ISPACKET__MODEM_TYPE__MODEM_FLARM, &l))
+		/* one of the modem types defined in aprsis2.proto, looked up in
+		 * the generated enum descriptor so that new types need no change
+		 * here; 0 is MODEM_UNDEFINED, which is what an absent key means
+		 */
+		if (is2_plain_metadata_int(val, val_len, 1, INT32_MAX, &l)
+		    && protobuf_c_enum_descriptor_get_value(&aprsis2__ispacket__modem_type__descriptor, l))
 			c->is2_input_template.rx_modem = l;
 	} else if (key_len == 10 && memcmp(key, "rx_bitrate", 10) == 0) {
 		if (is2_plain_metadata_int(val, val_len, 1, UINT32_MAX, &l)) {
@@ -153,6 +157,13 @@ int is2_plain_metadata(struct worker_t *self, struct client_t *c, const char *s,
 				key_len = i-key_start;
 				break;
 			}
+			if (s[i] == ' ')
+				break;
+		}
+		if (i >= len || s[i] != '=') {
+			// a bare word without '=' is not a pair: skip it alone,
+			// so that the pairs after it still apply
+			continue;
 		}
 		//if (key_len > 0)
 		//	hlog(LOG_DEBUG, "is2-meta key: '%.*s'", key_len, &s[key_start]);

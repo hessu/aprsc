@@ -11,6 +11,7 @@ dnl
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT
 AC_CONFIG_SRCDIR([aprsc.c])
+AC_CONFIG_MACRO_DIRS([m4])
 
 dnl For automake
 VERSION="`cat VERSION`"
@@ -51,6 +52,15 @@ AC_ARG_ENABLE([static-libevent],
 	[link against static libevent.a @<:@default=do not@:>@])],
 	[static_libevent=$enableval],
 	[])
+
+dnl IS2 is work in progress, disabled unless asked for
+AC_ARG_ENABLE([is2],
+	[AS_HELP_STRING([--enable-is2],
+	[enable the work in progress IS2 protocol @<:@default=disabled@:>@])],
+	[enable_is2=$enableval],
+	[enable_is2=no])
+AS_IF([test "x$enable_is2" = "xyes"],
+	[AC_DEFINE([USE_IS2], [1], [Enable the IS2 Protocol Buffers protocol])])
 
 dnl Check for Protocol Buffers
 AC_SUBST(LIBPROTOBUFC)

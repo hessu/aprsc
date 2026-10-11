@@ -84,7 +84,8 @@ const char *inerr_labels[] = {
 	"disallow_srccall",
 	"disallow_dx",
 	"disallow_msg_dst",
-	"disallow_igatecall"
+	"disallow_igatecall",
+	"inv_crlf"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -1261,6 +1262,16 @@ int is2_incoming_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	 */
 	if (is2_packet->is_packet_data.len > PACKETLEN_MAX-2) {
 		e = INERR_LONG_PACKET;
+		goto in_drop;
+	}
+
+	/* The packet data is a byte string which may contain anything. A CR or
+	 * LF in it would split the packet in two lines when it is forwarded on
+	 * a plaintext link, and the second line would bypass all validation.
+	 */
+	if (memchr(is2_packet->is_packet_data.data, '\r', is2_packet->is_packet_data.len)
+	    || memchr(is2_packet->is_packet_data.data, '\n', is2_packet->is_packet_data.len)) {
+		e = INERR_INV_CRLF;
 		goto in_drop;
 	}
 

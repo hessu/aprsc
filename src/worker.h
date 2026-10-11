@@ -228,8 +228,9 @@ struct client_heard_t {
 #define INERR_DIS_DX			-34
 #define INERR_DIS_MSG_DST		-35
 #define INERR_DIS_IGATECALL		-36
+#define INERR_INV_CRLF			-37	/* CR or LF inside the packet (IS2) */
 
-#define INERR_MIN			-36	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-37	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

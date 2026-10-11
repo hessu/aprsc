@@ -23,7 +23,7 @@ to, on the same connection:
 The line starts with `#is2-meta` and a space, in lower case, just like
 that.  It is followed by one or more key-value pairs, separated by
 spaces; a key and its value are separated by `=`, with no spaces around
-it.  Values are decimal numbers, such as `-97.5` or `8`.
+it.  Values are numbers, such as `-97.5` or `300`.
 
 The keys so far:
 
@@ -36,21 +36,31 @@ The keys so far:
 * `rx_snr_db`: the signal-to-noise ratio of the packet at the receiver,
   in dB.  LoRa decodes packets well below the noise, so the value is
   often negative, down to about -20, and rarely above +10.
+* `rx_modem`: the modem the packet was received with, as a number:
+  1 for AX.25 packet radio, 2 for LoRa APRS, 3 for FLARM.
+* `rx_bitrate`: the bit rate of the transmission in bit/s, as a whole
+  number: 1200 or 9600 for packet radio, about 300 for the usual LoRa
+  APRS setting.
+* `rx_frequency`: the radio frequency the packet was received on, in
+  Hz, decimals allowed; `433775000` for the European LoRa APRS channel,
+  for instance.
 
 Keys the server does not know are ignored, as are pairs without a key
 or a value, so a client may send more than a given server understands.
 A value which is not a number as a whole, such as `rx_snr_db=8dB`, is
-ignored together with its key; the other pairs on the line still apply.
+ignored together with its key, and so is a value out of range: a modem
+number not listed above, a bit rate of zero, a frequency of zero or
+below.  The other pairs on the line still apply.
 
 An example of a session, from the client's point of view, which logs in
-and sends one packet with both values:
+and sends one packet with all the values:
 
     user N0CALL-10 pass 12345 vers myigate 1.0
-    #is2-meta rx_rssi=-97.5 rx_snr_db=8.2
+    #is2-meta rx_rssi=-97.5 rx_snr_db=8.2 rx_modem=2 rx_bitrate=300 rx_frequency=433775000
     OH7LZB-9>APRS,WIDE1-1,qAR,N0CALL-10:!6028.51N/02505.68E>test
 
-Either key may be given on its own, when the receiver knows only one of
-the values.
+Any of the keys may be left out, when the receiver does not know the
+value.
 
 
 What the metadata applies to
@@ -90,9 +100,10 @@ connected to.
 What happens to the metadata
 -------------------------------
 
-The server attaches the values to the packet as the `rx_rssi` and
-`rx_snr_db` fields of the IS2 `ISPacket` message (see `aprsis2.proto`),
-exactly as if the packet had come in over IS2 with them.  From there
+The server attaches the values to the packet as the `rx_rssi`,
+`rx_snr_db`, `rx_modem`, `rx_bitrate` and `rx_frequency` fields of the
+IS2 `ISPacket` message (see `aprsis2.proto`), exactly as if the packet
+had come in over IS2 with them.  From there
 they travel with the packet to IS2 clients and over IS2 peer links, for
 as many IS2 hops as the packet makes.  Plaintext connections have no
 room for them: a plaintext client receives the packet without the
@@ -102,4 +113,5 @@ lost for good.
 
 An IS2 client receiving the packet of the example above finds, in the
 `ISPacket`, the packet line with the q construct the server added, and
-the fields `rx_rssi` set to -97.5 and `rx_snr_db` set to 8.2.
+the fields `rx_rssi` set to -97.5, `rx_snr_db` to 8.2, `rx_modem` to
+`MODEM_LORA_APRS`, `rx_bitrate` to 300 and `rx_frequency` to 433775000.

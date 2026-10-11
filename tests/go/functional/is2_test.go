@@ -275,12 +275,12 @@ func TestIS2Optionals(t *testing.T) {
 	rssi, snr := float32(42), float32(12)
 
 	t.Run("IS2 to IS2", func(t *testing.T) {
-		sent := isclient.NewISPacket(msgSrc+">APRS,OH2RDG*,WIDE,"+loginTx+",I:!6028.51N/02505.68E# should pass", &rssi, &snr)
+		sent := isclient.NewISPacket(msgSrc+">APRS,OH2RDG*,WIDE,"+loginTx+",I:!6028.51N/02505.68E# should pass", isclient.Meta{RSSI: &rssi, SNR: &snr})
 		if err := tx.SendISPacket(sent); err != nil {
 			t.Fatal(err)
 		}
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
-			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTx+":!6028.51N/02505.68E# should pass", &rssi, &snr))
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTx+":!6028.51N/02505.68E# should pass", isclient.Meta{RSSI: &rssi, SNR: &snr}))
 	})
 
 	// a position packet on the plain IS connection, with metadata
@@ -288,7 +288,7 @@ func TestIS2Optionals(t *testing.T) {
 		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 2")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
-			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 2", &rssi, &snr))
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 2", isclient.Meta{RSSI: &rssi, SNR: &snr}))
 	})
 
 	// and with only the SNR
@@ -296,7 +296,7 @@ func TestIS2Optionals(t *testing.T) {
 		txPlain.Send(t, "#is2-meta rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 3")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
-			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 3", nil, &snr))
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 3", isclient.Meta{SNR: &snr}))
 	})
 
 	// A value which is not a number is ignored, with its key, and so is
@@ -305,13 +305,53 @@ func TestIS2Optionals(t *testing.T) {
 		txPlain.Send(t, "#is2-meta rx_rssi=strong rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 4")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
-			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 4", nil, &snr))
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 4", isclient.Meta{SNR: &snr}))
 	})
 	t.Run("plain with trailing garbage in the SNR", func(t *testing.T) {
 		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12dB")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 5")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
-			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 5", &rssi, nil))
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 5", isclient.Meta{RSSI: &rssi}))
+	})
+
+	// the modem type, bit rate and frequency, from an IS2 client
+	modem := aprsis2.ISPacket_MODEM_LORA_APRS
+	bitrate, frequency := uint32(300), 433775000.0
+	t.Run("IS2 to IS2 with modem, bit rate and frequency", func(t *testing.T) {
+		sent := isclient.NewISPacket(msgSrc+">APRS,OH2RDG*,WIDE,"+loginTx+",I:!6028.51N/02505.68E# should pass 6",
+			isclient.Meta{Modem: modem, Bitrate: &bitrate, Frequency: &frequency})
+		if err := tx.SendISPacket(sent); err != nil {
+			t.Fatal(err)
+		}
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTx+":!6028.51N/02505.68E# should pass 6",
+			isclient.Meta{Modem: modem, Bitrate: &bitrate, Frequency: &frequency}))
+	})
+
+	// and from a plaintext client
+	t.Run("plain with modem, bit rate and frequency", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_modem=2 rx_bitrate=300 rx_frequency=433775000")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 7")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 7",
+			isclient.Meta{Modem: modem, Bitrate: &bitrate, Frequency: &frequency}))
+	})
+
+	// a modem type not defined, a zero bit rate and a negative frequency
+	// are ignored, the rest of the line still applies
+	t.Run("plain with invalid modem, bit rate and frequency", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_modem=9 rx_bitrate=0 rx_frequency=-433775000 rx_snr_db=12")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 8")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 8", isclient.Meta{SNR: &snr}))
+	})
+
+	// a value beyond the range of a float is ignored, not stored as infinity
+	t.Run("plain with an RSSI beyond the float range", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_rssi=1e40 rx_snr_db=12")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 9")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 9", isclient.Meta{SNR: &snr}))
 	})
 
 	s.Stop()

@@ -1,12 +1,13 @@
 <!--
 
 // add additional language codes here, in the end of the list:
-var lang_list = ['en', 'fi'];
+var lang_list = ['en', 'fi', 'zh'];
 // and, if necessary, add one new line in the beginning here,
 // for dialect mapping (en_US, en_GB to en):
 var lang_map = {
 	'en_*': 'en',
 	'fi_*': 'fi',
+	'zh_*': 'zh',
 	'*': 'en' // DO NOT remove or change the default mapping to 'en'
 };
 

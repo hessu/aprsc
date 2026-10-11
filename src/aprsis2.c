@@ -356,12 +356,14 @@ int is2_out_server_signature(struct worker_t *self, struct client_t *c)
  *	Transmit a login reply to a new client
  */
 
-int is2_out_login_reply(struct worker_t *self, struct client_t *c, Aprsis2__IS2LoginReply__LoginResult result, Aprsis2__IS2LoginReply__LoginResultReason reason, Aprsis2__VerificationStatus verified)
+int is2_out_login_reply(struct worker_t *self, struct client_t *c, Aprsis2__IS2LoginReply__LoginResult result, Aprsis2__IS2LoginReply__LoginResultReason reason, Aprsis2__VerificationStatus verified, const char *message)
 {
 	Aprsis2__IS2LoginReply lr = APRSIS2__IS2_LOGIN_REPLY__INIT;
 	lr.result = result;
 	lr.result_code = reason;
 	lr.verified = verified;
+	if (message)
+		lr.result_message = (char *)message;
 
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;
 	m.type = APRSIS2__IS2_MESSAGE__TYPE__LOGIN_REPLY;
@@ -506,12 +508,15 @@ static int is2_login_client_validate_cert(struct worker_t *self, struct client_t
 static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	int rc = 0;
+	int i;
+	Aprsis2__IS2LoginReply__LoginResultReason reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE;
+	const char *reason_s = "Login failed";
 	
 	Aprsis2__IS2LoginRequest *lr = m->login_request;
 	if (!lr) {
 		hlog(LOG_WARNING, "%s/%s: IS2: unpacking of login request failed",
 			c->addr_rem, c->username);
-		rc = -1;
+		reason_s = "Invalid login request";
 		goto failed_login;
 	}
 	
@@ -519,10 +524,10 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 		c->addr_rem, c->username);
 	
 	/* limit username length */
-	if (strlen(c->username) > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: IS2: Invalid login string, too long 'user' username: '%s'", c->addr_rem, c->username);
-		c->username[CALLSIGNLEN_MAX] = 0;
-		//rc = client_printf(self, c, "# Invalid username format\r\n");
+	if (strlen(lr->username) > CALLSIGNLEN_MAX) {
+		hlog(LOG_WARNING, "%s: IS2: Invalid login request, too long username: '%.20s'", c->addr_rem, lr->username);
+		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__INVALID_USERNAME;
+		reason_s = "Invalid username format";
 		goto failed_login;
 	}
 	
@@ -535,28 +540,36 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	login_set_app_name(c, lr->app_name, lr->app_version);
 	
 	/* check the username against a static list of disallowed usernames */
-	/*
-	int i;
 	for (i = 0; (disallow_login_usernames[i]); i++) {
 		if (strcasecmp(c->username, disallow_login_usernames[i]) == 0) {
-			hlog(LOG_WARNING, "%s: Login by user '%s' not allowed", c->addr_rem, c->username);
-			//rc = client_printf(self, c, "# Login by user not allowed\r\n");
+			hlog(LOG_WARNING, "%s: IS2: Login by user '%s' not allowed", c->addr_rem, c->username);
+			reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__USERNAME_NOT_ALLOWED;
+			reason_s = "Login by user not allowed";
 			goto failed_login;
 		}
 	}
-	*/
+
+	/* check the username against a dynamic list of disallowed usernames */
+	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, c->username, c->username_len)) {
+		hlog(LOG_WARNING, "%s: IS2: Login by user '%s' not allowed due to config", c->addr_rem, c->username);
+		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__USERNAME_NOT_ALLOWED;
+		reason_s = "Login by user not allowed";
+		goto failed_login;
+	}
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {
-		hlog(LOG_WARNING, "%s: Invalid login string, invalid 'user': '%s'", c->addr_rem, c->username);
-		//rc = client_printf(self, c, "# Invalid username format\r\n");
+		hlog(LOG_WARNING, "%s: IS2: Invalid login request, invalid username: '%s'", c->addr_rem, c->username);
+		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__INVALID_USERNAME;
+		reason_s = "Invalid username format, not allowed";
 		goto failed_login;
 	}
 	
 	/* make sure the client's callsign is not my Server ID */
 	if (strcasecmp(c->username, serverid) == 0) {
-		hlog(LOG_WARNING, "%s: Invalid login string, username equals our serverid: '%s'", c->addr_rem, c->username);
-		//rc = client_printf(self, c, "# Login by user not allowed (our serverid)\r\n");
+		hlog(LOG_WARNING, "%s: IS2: Invalid login request, username equals our serverid: '%s'", c->addr_rem, c->username);
+		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__USERNAME_NOT_ALLOWED;
+		reason_s = "Login by user not allowed (our serverid)";
 		goto failed_login;
 	}
 	
@@ -565,6 +578,8 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
 		ssl_validated = is2_login_client_validate_cert(self, c);
+		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__CERT_VERIFICATION_FAIL;
+		reason_s = "Client certificate validation failed";
 		if (ssl_validated == -1) {
 			rc = ssl_validated;
 			goto failed_login;
@@ -624,7 +639,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	}
 	
 	/* tell the client he's good */
-	rc = is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs);
+	rc = is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__OK, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__NONE, vs, NULL);
 	if (rc < -2)
 		return rc; /* the client was destroyed by the write */
 
@@ -663,13 +678,19 @@ failed_login:
 	if (rc < -2)
 		return rc;
 	
+	/* tell the client why, instead of leaving it waiting */
+	rc = is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__FAIL, reason, APRSIS2__VERIFICATION_STATUS__NONE, reason_s);
+	if (rc < -2)
+		return rc; /* the client was destroyed by the write */
+
 	c->failed_cmds++;
 	if (c->failed_cmds >= 3) {
 		client_close(self, c, CLIERR_LOGIN_RETRIES);
 		return -3;
 	}
 	
-	return rc;
+	/* the request has been handled, the client may try again */
+	return 0;
 }
 
 /*

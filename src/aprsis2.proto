@@ -83,6 +83,11 @@ message IS2LoginReply {
 		CERT_MISMATCH = 4;
 		// Certificate has expired.
 		CERT_EXPIRED = 5;
+		// Username is not a valid callsign, or too long.
+		INVALID_USERNAME = 6;
+		// Username is not allowed to log in on this server: reserved,
+		// disallowed by configuration, or the server's own ID.
+		USERNAME_NOT_ALLOWED = 7;
 	}
 	
 	LoginResult result = 1;

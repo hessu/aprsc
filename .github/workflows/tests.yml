@@ -25,12 +25,13 @@ jobs:
             libprotobuf-c-dev protobuf-c-compiler libprotoc-dev \
             libprotobuf-dev protobuf-compiler cmake \
             libsctp-dev \
+            libssl-dev pkg-config \
             openssl
 
     - name: configure
       run: |
         cd src
-        ./configure
+        ./configure --enable-is2
 
     - name: make
       run: |

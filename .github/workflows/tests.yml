@@ -26,12 +26,19 @@ jobs:
             libprotobuf-dev protobuf-compiler cmake \
             libsctp-dev \
             libssl-dev pkg-config \
+            cpanminus \
             openssl
+
+    # The IS2 tests need the protobuf module of the Perl test client; it has
+    # no Debian package. It builds against the protobuf installed above.
+    - name: install Perl Google::ProtocolBuffers::Dynamic
+      run: |
+        sudo CMAKE_POLICY_VERSION_MINIMUM=3.5 cpanm --notest Google::ProtocolBuffers::Dynamic
 
     - name: configure
       run: |
         cd src
-        ./configure
+        ./configure --enable-is2
 
     - name: make
       run: |

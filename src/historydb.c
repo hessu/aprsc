@@ -303,43 +303,26 @@ int historydb_insert(struct pbuf_t *pb)
 	**       have previous entry with data.
 	*/
 
-	/* NOTE2: We could use pb->srcname, and pb->srcname_len here,
-	**        but then we would not know if this is a "kill-item"
+	/* NOTE2: Object and item names are taken from pb->srcname, which
+	**        the parser has set to the name without the space padding,
+	**        also within a 3rd-party packet. The kill character follows
+	**        the 9-character object name field, or the item name.
 	*/
 
 	keybuf[CALLSIGNLEN_MAX] = 0;
 	if (pb->packettype & T_OBJECT) {
-		/* Pick object name  ";item  *" */
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX+1);
-		keybuf[CALLSIGNLEN_MAX+1] = 0;
-		s = strchr(keybuf, '*');
-		if (s) *s = 0;
-		else {
-			s = strchr(keybuf, '_'); // kill an object!
-			if (s) {
-				*s = 0;
-				isdead = 1;
-			}
-		}
-		s = keybuf + strlen(keybuf);
-		for ( ; s > keybuf; --s ) {  // tail space padded..
-			if (*s == ' ') *s = ' ';
-			else break;
-		}
+		/* Pick object name  ";item     *" or ";item     _" */
+		memcpy(keybuf, pb->srcname, pb->srcname_len);
+		keybuf[pb->srcname_len] = 0;
+		if (pb->srcname[9] == '_')
+			isdead = 1; // kill an object!
 
 	} else if (pb->packettype & T_ITEM) {
 		// Pick item name  ") . . . !"  or ") . . . _"
-		memcpy( keybuf, pb->info_start+1, CALLSIGNLEN_MAX+1);
-		keybuf[CALLSIGNLEN_MAX+1] = 0;
-		s = strchr(keybuf, '!');
-		if (s) *s = 0;
-		else {
-			s = strchr(keybuf, '_'); // kill an item!
-			if (s) {
-				*s = 0;
-				isdead = 1;
-			}
-		}
+		memcpy(keybuf, pb->srcname, pb->srcname_len);
+		keybuf[pb->srcname_len] = 0;
+		if (pb->srcname[pb->srcname_len] == '_')
+			isdead = 1; // kill an item!
 	} else if (pb->packettype & T_POSITION) {
 		// Pick originator callsign
 		memcpy( keybuf, pb->data, CALLSIGNLEN_MAX) ;

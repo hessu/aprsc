@@ -100,3 +100,36 @@ v2 protocol eventually, if one node is upgraded, or if the initial handshake
 packets are lost.
 
 
+Data frames
+------------
+
+After the handshake, each UDP datagram carries one IS2Message, as
+defined in aprsis2.proto, in a frame followed by an authentication
+trailer:
+
+    0x02 (STX)
+    24-bit big-endian length of the message
+    IS2Message, Protocol Buffers encoded
+    0x03 (ETX)
+    0x05, marker: an authentication trailer follows
+    8-bit key identifier, 0-15
+    32-bit big-endian unsigned Unix time of the sender
+    HMAC-SHA256, 32 bytes
+
+The HMAC is calculated over everything before it: the frame, the
+marker, the key identifier and the timestamp.  The keys are shared
+secrets configured on all peers of a group (PeerGroupKey), the key
+identifier selects which one was used, so that keys can be rotated.
+
+A receiver drops a frame if it does not carry a trailer, the key
+identifier is not configured, the HMAC does not verify, or the
+timestamp differs from the receiver's clock by more than 10 seconds.
+The timestamp prevents replaying captured frames later: a replay within
+the window is dropped by the duplicate packet filter, which remembers
+packets for longer than that.  Peers need to keep their clocks in sync,
+with NTP or similar.
+
+The IS2Message carries a sequence number, which is only used for
+detecting lost frames, and a reordering window of 32 frames is allowed.
+
+

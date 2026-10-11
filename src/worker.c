@@ -2357,6 +2357,7 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 		cJSON_AddStringToObject(jc, "link", "is2");
 		cJSON_AddNumberToObject(jc, "is2_frames_rx", c->localaccount.is2_rx_frames);
 		cJSON_AddNumberToObject(jc, "is2_frames_lost", c->localaccount.is2_lost_frames);
+		cJSON_AddNumberToObject(jc, "is2_frames_rejected", c->localaccount.is2_rejected_frames);
 	}
 
 #ifdef USE_SSL

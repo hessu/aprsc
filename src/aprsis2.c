@@ -3,6 +3,7 @@
 
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
+#include <openssl/crypto.h>
 
 #include "hmalloc.h"
 #include "worker.h"
@@ -33,7 +34,9 @@
 #define IS2_MAXIMUM_FRAME_CONTENT_LEN (IS2_MAXIMUM_FRAME_LEN - IS2_HEAD_LEN - IS2_TAIL_LEN)
 
 #define IS2_UDP_HMAC_MARKER 0x05
-#define IS2_UDP_HMAC_TRAILER_LEN (2 + 32) /* marker + key id + HMAC-SHA256 */
+#define IS2_UDP_HMAC_START 6 /* marker + key id + 32-bit timestamp, all covered by the HMAC */
+#define IS2_UDP_HMAC_TRAILER_LEN (IS2_UDP_HMAC_START + 32) /* ... + HMAC-SHA256 */
+#define IS2_UDP_FRAME_MAX_AGE 10 /* seconds: how far the timestamp of a frame may be from our clock */
 
 /*
  *	Protocol Buffers wire format bits for building the IS2Message envelope
@@ -88,13 +91,14 @@ static int pb_put_tag(char *buf, int field, int wiretype)
  *	IS2 client / port / protocol accounting
  */
 
-static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_frames, int lost_frames)
+static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_frames, int lost_frames, int rejected_frames)
 {
 	struct portaccount_t *pa = NULL;
 	
 	/* worker local accounters do not need locks */
 	c->localaccount.is2_rx_frames += rx_frames;
 	c->localaccount.is2_lost_frames += lost_frames;
+	c->localaccount.is2_rejected_frames += rejected_frames;
 	
 	if (l4proto == IPPROTO_UDP && c->udpclient && c->udpclient->portaccount) {
 		pa = c->udpclient->portaccount;
@@ -106,10 +110,12 @@ static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_fra
 #ifdef HAVE_SYNC_FETCH_AND_ADD
 		__sync_fetch_and_add(&pa->is2_rx_frames, rx_frames);
 		__sync_fetch_and_add(&pa->is2_lost_frames, lost_frames);
+		__sync_fetch_and_add(&pa->is2_rejected_frames, rejected_frames);
 #else
 		// FIXME: MUTEX !! -- this may or may not need locks..
 		pa->is2_rx_frames += rx_frames;
 		pa->is2_lost_frames += lost_frames;
+		pa->is2_rejected_frames += rejected_frames;
 #endif
 	}
 	
@@ -129,10 +135,12 @@ static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_fra
 #ifdef HAVE_SYNC_FETCH_AND_ADD
 	__sync_fetch_and_add(&proto->is2_rx_frames, rx_frames);
 	__sync_fetch_and_add(&proto->is2_lost_frames, lost_frames);
+	__sync_fetch_and_add(&proto->is2_rejected_frames, rejected_frames);
 #else
 	// FIXME: MUTEX !! -- this may or may not need locks..
 	proto->is2_rx_frames += rx_frames;
 	proto->is2_lost_frames += lost_frames;
+	proto->is2_rejected_frames += rejected_frames;
 #endif
 }
 
@@ -287,17 +295,29 @@ static int is2_corepeer_hmac(unsigned int key_id, const char *data, int len, uns
 static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_size, int data_len)
 {
 	unsigned int key_id = peergroup_key_transmit;
+	int hmac_start = data_len + IS2_UDP_HMAC_START;
+	uint32_t ts;
 
 	if (data_len + IS2_UDP_HMAC_TRAILER_LEN > obuf_size) {
 		hlog(LOG_ERR, "%s/%s: IS2 UDP: no room for HMAC after %d bytes of frame in buffer of %d bytes", c->addr_rem, c->username, data_len, obuf_size);
 		return -1;
 	}
 
+	/* The trailer starts with the marker, key identifier and the current
+	 * time, which are covered by the HMAC together with the frame. The
+	 * receiver drops frames whose time is too far off, so that captured
+	 * frames can not be replayed later.
+	 */
+	ts = htonl((uint32_t)now);
+	obuf[data_len] = IS2_UDP_HMAC_MARKER; // marker: has HMAC
+	obuf[data_len+1] = key_id; // HMAC key identifier
+	memcpy(&obuf[data_len+2], &ts, sizeof(ts));
+
 	/* Calculate the MAC */
 	unsigned char md[32];
 	unsigned int md_len = 0;
 
-	int r = is2_corepeer_hmac(key_id, obuf, data_len, md, &md_len);
+	int r = is2_corepeer_hmac(key_id, obuf, hmac_start, md, &md_len);
 	if (r == IS2_HMAC_NO_KEY) {
 		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: PeerGroupKey/PeerGroupKeyTransmit mismatch: Key %d not defined", c->addr_rem, c->username, key_id);
 		return -1;
@@ -307,11 +327,9 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 		return -1;
 	}
 
-	obuf[data_len] = IS2_UDP_HMAC_MARKER; // marker: has HMAC
-	obuf[data_len+1] = key_id; // HMAC key identifier
-	memcpy(&obuf[data_len+2], md, md_len);
+	memcpy(&obuf[hmac_start], md, md_len);
 
-	return data_len + 2 + md_len;
+	return hmac_start + md_len;
 }
 
 /*
@@ -942,7 +960,7 @@ static inline void is2_input_corepeer_sequence_check(struct worker_t *self, stru
 	}
 
 	//hlog(LOG_DEBUG, "IS2 corepeer packet loss - missed %d", expected_sequence);
-	is2_clientaccount_add_rx(c, c->ai_protocol, 0, 1);
+	is2_clientaccount_add_rx(c, c->ai_protocol, 0, 1, 0);
 }
 
 static inline void is2_input_corepeer_sequence_monitor(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
@@ -1003,7 +1021,7 @@ static int is2_unpack_message(struct worker_t *self, struct client_t *c, void *b
 		return 0;
 	}
 	
-	is2_clientaccount_add_rx(c, c->ai_protocol, 1, 0);
+	is2_clientaccount_add_rx(c, c->ai_protocol, 1, 0, 0);
 
 	/* Call the current input message handler */
 	int r = c->is2_input_handler(self, c, m);
@@ -1087,7 +1105,8 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 
 static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, int len, int signature_start)
 {
-	int min_signed_len = signature_start + 2 + 32;
+	int hmac_start = signature_start + IS2_UDP_HMAC_START;
+	int min_signed_len = signature_start + IS2_UDP_HMAC_TRAILER_LEN;
 	if (min_signed_len > len) {
 		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Frame too short to have HMAC: framed %d min %d total len %d",
 			c->addr_rem, c->username, min_signed_len, min_signed_len, len);
@@ -1107,11 +1126,11 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 		return -1;
 	}
 
-	/* Calculate the MAC */
+	/* Calculate the MAC over the frame, marker, key id and timestamp */
 	unsigned char md[32];
 	unsigned int md_len = 0;
 
-	int r = is2_corepeer_hmac(key_id, ibuf, signature_start, md, &md_len);
+	int r = is2_corepeer_hmac(key_id, ibuf, hmac_start, md, &md_len);
 	if (r == IS2_HMAC_NO_KEY) {
 		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Incoming packet with undefined key ID %d",
 			c->addr_rem, c->username, key_id);
@@ -1123,17 +1142,31 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 		return -1;
 	}
 
-	//hlog(LOG_DEBUG, "IS2 rx hmac signed, key %d, sig start %d, md_len %d, received md %d bytes", key_id, signature_start, md_len, len - signature_start - 2);
-	if (md_len != 32 || len - signature_start - 2 != 32) {
+	//hlog(LOG_DEBUG, "IS2 rx hmac signed, key %d, sig start %d, md_len %d, received md %d bytes", key_id, signature_start, md_len, len - hmac_start);
+	if (md_len != 32 || len - hmac_start != 32) {
 		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Wrong hmac length, out %d received %d",
-			c->addr_rem, c->username, md_len, len-signature_start - 2);
+			c->addr_rem, c->username, md_len, len - hmac_start);
 		return -1;
 	}
 	
-	if (memcmp(md, &ibuf[signature_start + 2], md_len) != 0) {
+	if (CRYPTO_memcmp(md, &ibuf[hmac_start], md_len) != 0) {
 		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Incoming packet with wrong signature (key_id %d)", c->addr_rem, c->username, key_id);
 		//hlog_packet(LOG_WARNING, (char *)md, 32, "%s/%s: calculated hmac len %d: ", c->addr_rem, c->username, md_len);
-		//hlog_packet(LOG_WARNING, &ibuf[signature_start + 2], 32, "%s/%s: received hmac: ", c->addr_rem, c->username);
+		//hlog_packet(LOG_WARNING, &ibuf[hmac_start], 32, "%s/%s: received hmac: ", c->addr_rem, c->username);
+		return -1;
+	}
+
+	/* The frame is authentic. Reject it if its timestamp is too far from
+	 * our clock: a captured frame can not be replayed after this window,
+	 * and a replay within it is caught by the dupecheck, which remembers
+	 * packets for longer than this.
+	 */
+	uint32_t ts;
+	memcpy(&ts, &ibuf[signature_start+2], sizeof(ts));
+	int64_t age = (int64_t)(uint32_t)now - (int64_t)ntohl(ts);
+	if (age > IS2_UDP_FRAME_MAX_AGE || age < -IS2_UDP_FRAME_MAX_AGE) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: Frame timestamp is off by %lld seconds, dropping (clocks not in sync, or a replayed frame)",
+			c->addr_rem, c->username, (long long)age);
 		return -1;
 	}
 	
@@ -1176,8 +1209,10 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 	}
 
 	int r = is2_corepeer_signature_check(c, ibuf, len, IS2_HEAD_LEN + clen + IS2_TAIL_LEN);
-	if (r < 0)
+	if (r < 0) {
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return r;
+	}
 	
 	return is2_unpack_message(self, c, ibuf + IS2_HEAD_LEN, clen);
 }

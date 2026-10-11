@@ -535,6 +535,13 @@ sub send_raw($$)
 	return 1;
 }
 
+sub is2_frame_wrap($$)
+{
+	my($self, $frame) = @_;
+
+	return chr(0x02) . substr(pack('N', length($frame)), 1) . $frame . chr(0x03);
+}
+
 sub is2_frame_out($$)
 {
 	my($self, $frame) = @_;
@@ -546,11 +553,10 @@ sub is2_frame_out($$)
 		return 0;
 	} 
 	
-	my $framelen_i = pack('N', $framelen);
 	
 	#warn "is2_frame_out: framelen $framelen\n";
 	
-	my $is2_framed = chr(0x02) . substr($framelen_i, 1) . $frame . chr(0x03);
+	my $is2_framed = $self->is2_frame_wrap($frame);
 
 	if ($self->{'usock'}) {
 		my $udp_frame_signed = $self->is2_udp_sign($is2_framed);
@@ -806,27 +812,40 @@ sub is2_udp_signature_check($$$)
 	#warn "is2_udp_signature_check: hmac_key_id $hmac_key_id\n";
 	my $hmac_key = $self->{'hmac-keys'}->{$hmac_key_id};
 	#warn "hmac_key $hmac_key";
-	my $hmac_result = hmac_sha256($frame, $hmac_key);
+	# the marker, key id and timestamp are signed together with the frame
+	my $hmac_result = hmac_sha256($frame . substr($signature, 0, 6), $hmac_key);
 	#warn "hmac_result " . unpack('H*', $hmac_result) . "\n";
 	
-	if ($hmac_result eq substr($signature, 2)) {
-		return 1;
+	if ($hmac_result ne substr($signature, 6)) {
+		$self->{'error'} = "IS2 UDP frame signature incorrect";
+		return 0;
 	}
 
-	$self->{'error'} = "IS2 UDP frame signature incorrect";
-	return 0;
+	# frames whose timestamp is too far from our clock are replays or
+	# come from a peer with a wrong clock
+	my $age = time() - unpack('N', substr($signature, 2, 4));
+	if ($age > 10 || $age < -10) {
+		$self->{'error'} = "IS2 UDP frame timestamp is off by $age seconds";
+		return 0;
+	}
+
+	return 1;
 }
 
-sub is2_udp_sign($$$)
+# Sign a framed message for transmission to an UDP peer. The time can be
+# given to produce frames with a wrong timestamp for testing.
+sub is2_udp_sign($$;$)
 {
-	my($self, $frame) = @_;
+	my($self, $frame, $time) = @_;
 
+	$time = time() if (!defined $time);
 	my $hmac_key = $self->{'hmac-keys'}->{$self->{'hmac-key-tx'}};
 	#warn "tx hmac_key $hmac_key" . "\n";
-	my $hmac_result = hmac_sha256($frame, $hmac_key);
+	my $trailer = chr(0x05) . chr($self->{'hmac-key-tx'}) . pack('N', $time);
+	my $hmac_result = hmac_sha256($frame . $trailer, $hmac_key);
 	#warn "hmac_result " . unpack('H*', $hmac_result) . "\n";
 
-	return $frame . chr(0x05) . chr($self->{'hmac-key-tx'}) . $hmac_result;
+	return $frame . $trailer . $hmac_result;
 }
 
 sub is2_frame_in_nonping($;$)

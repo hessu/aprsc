@@ -13,7 +13,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 13 + 2 + 9 + 2 };
+BEGIN { plan tests => 13 + 2 + 9 + 8 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS2;
@@ -108,6 +108,39 @@ ok($r[0], $s, "Failed to pass packet from client to UDP peer");
 @r = $udp2->get_packets();
 ok($#r, 0, "Failed to pass packet from client to second UDP peer, packet list len < 0");
 ok($r[0], $s, "Failed to pass packet from client to second UDP peer");
+
+# 5) frame authentication: the signature covers a timestamp, and a frame
+# whose timestamp is more than 10 seconds from the server's clock is dropped,
+# so that captured frames can not be replayed later. Frames within the
+# window pass.
+
+sub signed_frame($$$)
+{
+	my($peer, $packet, $time) = @_;
+
+	my $im = APRSIS2::IS2Message->new({
+		'type' => APRSIS2::IS2Message::Type::IS_PACKET(),
+		'is_packet' => [ APRSIS2::ISPacket->new({
+			'type' => APRSIS2::ISPacket::Type::IS_PACKET(),
+			'is_packet_data' => $packet,
+		}) ],
+	});
+
+	return $peer->is2_udp_sign($peer->is2_frame_wrap($im->encode), $time);
+}
+
+# Both sides work in whole seconds, so stay a second away from the limit.
+foreach my $offset (-12, 12, -8, 8) {
+	$s = "SRC>DST,qAR,IGATE:timestamp offset $offset";
+	ok($udp->send_udp_packet(signed_frame($udp, $s, time() + $offset)) > 0, 1, "Failed to send frame with timestamp offset $offset");
+	if ($offset == -12 || $offset == 12) {
+		# must be dropped: the helper packet must be the next one received
+		my $helper = "SRC>DST,qAR,IGATE:helper after offset $offset";
+		istest::txrx(\&ok, $udp, $client, $helper, $helper);
+	} else {
+		istest::rx(\&ok, $client, $s, $s);
+	}
+}
 
 # disconnect ####################
 

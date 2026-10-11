@@ -448,8 +448,6 @@ struct client_t {
 	int is2_obuf_end;      /* write position in is2_obuf */
 	int is2_obuf_packets;  /* number of ISPacket elements in is2_obuf */
 	int is2_obuf_total_len; /* total length of the ISPacket elements in is2_obuf */
-	int is2_packet_writes; /* How many writes (since last check) an IS2 packet has been buffered? */
-	int is2_obuf_flushsize;
 
 	Aprsis2__ISPacket is2_input_template; /* IS2 plaintext #is2-meta metadata holding buffer */
 
@@ -532,6 +530,12 @@ struct worker_t {
 	struct pbuf_t *is2_enc_pb;
 	int is2_enc_len;
 	char is2_enc[APRSIS2_ENC_MAX];
+
+	/* IS2: set when a packet was left in the output buffer of a client or
+	 * a peer in this round, for is2_obuf_flush_pending() to send at the
+	 * end of the round.
+	 */
+	int is2_obuf_pending;
 };
 
 extern cJSON *worker_shutdown_clients;

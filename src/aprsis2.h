@@ -31,6 +31,7 @@ extern void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packe
 extern int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
 extern int is2_obuf_flush(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c);
+extern void is2_obuf_flush_pending(struct worker_t *self);
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 

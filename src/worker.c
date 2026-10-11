@@ -1872,17 +1872,6 @@ static void send_keepalives(struct worker_t *self)
 		}
 		
 		c->obuf_writes = 0;
-
-		if (c->flags & CLFLAGS_IS2) {
-			// Switching to buffered writes is done in is2_append_obuf_packet().
-			if (c->is2_obuf_flushsize != 0 && c->is2_packet_writes < obuf_writes_threshold_hys) {
-				c->is2_obuf_flushsize = 0;
-				//hlog(LOG_DEBUG, "IS2: Switch fd %d (%s) to unbuffered writes (%d writes)",
-				//	c->fd, c->addr_rem, c->is2_packet_writes);
-			}
-			c->is2_packet_writes = 0;
-		}
-
 	}
 }
 
@@ -1927,6 +1916,10 @@ void worker_thread(struct worker_t *self)
 		/* if we have new stuff in the global packet buffer, process it */
 		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
 			process_outgoing(self);
+#ifdef USE_IS2
+		/* the IS2 clients and peers get this round's packets in a frame */
+		is2_obuf_flush_pending(self);
+#endif
 
 		t2 = tick;
 

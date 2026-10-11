@@ -534,6 +534,67 @@ func TestIS2LoginReject(t *testing.T) {
 	s.Stop()
 }
 
+// The IS2 output buffers are flushed at the end of the worker's round, so a
+// packet reaches an IS2 client, and an IS2 peer, right away even after a burst
+// which filled frames: it used to wait for the next frame to fill up, or for
+// the next keepalive round up to two seconds later.
+func TestIS2OutputFlush(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", is2PeerKeys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
+
+	s := harness.Start(t, "is2-basic")
+
+	const login = "N5CAL-1"
+	tx := isclient.Connect(t, harness.Addr(t, 55580), login)
+	rx := isclient.ConnectIS2(t, harness.Addr(t, 56152), "N5CAL-2")
+	if err := udp.Negotiate(20 * time.Second); err != nil {
+		t.Fatalf("failed to negotiate the IS2 corepeer link: %v", err)
+	}
+
+	// a burst, which goes out in frames of several packets
+	const burst = 30
+	burstPacket := func(i int) string {
+		return fmt.Sprintf("SRC>DST,qAR,%s:burst packet %d", login, i)
+	}
+	for i := 0; i < burst; i++ {
+		tx.Send(t, burstPacket(i))
+	}
+	for _, r := range []struct {
+		name string
+		rx   isclient.Receiver
+	}{{"IS2 client", rx}, {"IS2 peer", udp}} {
+		for i := 0; i < burst; i++ {
+			got, err := r.rx.ReadPacket(isclient.DefaultTimeout)
+			if err != nil || got != burstPacket(i) {
+				t.Fatalf("%s: burst packet %d: got %q (%v)", r.name, i, got, err)
+			}
+		}
+	}
+
+	// A single packet after the burst must come out right away, not with
+	// the next keepalive round.
+	const lone = "SRC>DST,qAR," + login + ":lone packet after the burst"
+	const limit = 500 * time.Millisecond
+	start := time.Now()
+	tx.Send(t, lone)
+	for _, r := range []struct {
+		name string
+		rx   isclient.Receiver
+	}{{"IS2 client", rx}, {"IS2 peer", udp}} {
+		got, err := r.rx.ReadPacket(isclient.DefaultTimeout)
+		if err != nil || got != lone {
+			t.Errorf("%s: got %q (%v), want %q", r.name, got, err, lone)
+		} else if d := time.Since(start); d > limit {
+			t.Errorf("%s: the packet took %v to come out, limit %v", r.name, d, limit)
+		}
+	}
+
+	s.Stop()
+}
+
 // IS2 clients can only set filters on ports which allow user filters: a full
 // feed port must refuse the PARAMETER_SET and keep sending everything, while
 // the igate port applies it. Port of t/89is2-filter-port.t.

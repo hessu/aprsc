@@ -61,7 +61,7 @@ Thread names set with `thread_name_set()` are `aprsc time`, `aprsc accept`,
 |------|------|
 | `aprsis2.proto` | Protocol Buffers v3 schema. Edits here regenerate `aprsis2.pb-c.[ch]` via `protoc-c` at build time; the generated files are not committed and are removed by `make clean` |
 | `aprsis2.c` | IS2 framing (STX + reserved byte + 16-bit length + body + ETX), login, ping, buffering, UDP peergroup negotiation, HMAC signatures, frame loss tracking |
-| `aprsis2plain.c` | Parses `#is2-meta` key-value metadata lines from plaintext clients into IS2 fields |
+| `aprsis2plain.c` | Parses `#is2-meta` key-value metadata lines from plaintext clients into IS2 fields; `doc/IS2PLAIN.md` documents the lines |
 | `doc/IS2PEERING.md` | The UDP peering handshake spec |
 
 **Infrastructure and libraries**

@@ -703,7 +703,8 @@ type ISPacket struct {
 	Type ISPacket_Type `protobuf:"varint,1,opt,name=type,proto3,enum=aprsis2.ISPacket_Type" json:"type,omitempty"`
 	// packet data in traditional APRS-IS format, without CRLF
 	IsPacketData []byte `protobuf:"bytes,2,opt,name=is_packet_data,json=isPacketData,proto3" json:"is_packet_data,omitempty"`
-	// RSSI and SNR values at the receiver.
+	// RSSI in dBm and SNR in dB of the packet at the receiver, as LoRa
+	// radios report them.
 	// When building with protobuf 3.15+, the "optional float rx_rssi"
 	// syntax can be used again, it is compatible with this definition.
 	//

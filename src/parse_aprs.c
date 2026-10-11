@@ -1353,23 +1353,29 @@ int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 	if (!(pb->packettype & T_MESSAGE))
 		return -1;
 		
+	/* -2 for the CRLF already in place */
+	int info_len = pb->packet_len - 2 - (pb->info_start - pb->data);
+
+	/* ':' + 9 char addressee + ':' */
+	if (info_len < 11)
+		return -2;
+
 	if (pb->info_start[10] != ':')
 		return -2;
-	
+
 	am->body = pb->info_start + 11;
-	/* -2 for the CRLF already in place */
-	am->body_len = pb->packet_len - 2 - (pb->info_start - pb->data);
-	
+	am->body_len = info_len - 11;
+
 	/* search for { looking backwards from the end of the packet,
 	 * it separates the msgid
 	 */
 	p = am->body + am->body_len - 1;
-	while (p > am->body && *p != '{')
+	while (p >= am->body && *p != '{')
 		p--;
-	
-	if (*p == '{') {
+
+	if (p >= am->body) {
 		am->msgid = p+1;
-		am->msgid_len = pb->packet_len - 2 - (am->msgid - pb->data);
+		am->msgid_len = (am->body + am->body_len) - am->msgid;
 		am->body_len = p - am->body;
 	}
 	

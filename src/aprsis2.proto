@@ -152,6 +152,22 @@ message ISPacket {
 	oneof optional_rx_snr_db {
 		float rx_snr_db = 22;
 	}
+
+	// The modem the packet was received with, its bit rate in bit/s and
+	// the radio frequency in Hz, as the receiver reports them.
+	enum ModemType {
+		MODEM_UNDEFINED = 0;
+		MODEM_AX25 = 1;      // AX.25 packet radio
+		MODEM_LORA_APRS = 2;
+		MODEM_FLARM = 3;
+	}
+	ModemType rx_modem = 23;
+	oneof optional_rx_bitrate {
+		uint32 rx_bitrate = 24;
+	}
+	oneof optional_rx_frequency {
+		double rx_frequency = 25;
+	}
 }
 
 //

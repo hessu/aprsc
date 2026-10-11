@@ -1269,6 +1269,16 @@ void is2_pbuf_copy_additional(Aprsis2__ISPacket *dest, Aprsis2__ISPacket *src)
 		dest->optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
 		dest->rx_snr_db = src->rx_snr_db;
 	}
+	if (src->rx_modem != APRSIS2__ISPACKET__MODEM_TYPE__MODEM_UNDEFINED)
+		dest->rx_modem = src->rx_modem;
+	if (src->optional_rx_bitrate_case == APRSIS2__ISPACKET__OPTIONAL_RX_BITRATE_RX_BITRATE) {
+		dest->optional_rx_bitrate_case = APRSIS2__ISPACKET__OPTIONAL_RX_BITRATE_RX_BITRATE;
+		dest->rx_bitrate = src->rx_bitrate;
+	}
+	if (src->optional_rx_frequency_case == APRSIS2__ISPACKET__OPTIONAL_RX_FREQUENCY_RX_FREQUENCY) {
+		dest->optional_rx_frequency_case = APRSIS2__ISPACKET__OPTIONAL_RX_FREQUENCY_RX_FREQUENCY;
+		dest->rx_frequency = src->rx_frequency;
+	}
 }
 
 void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template)

@@ -488,54 +488,74 @@ func (c *IS2) SetFilter(filter string) error {
 	return nil
 }
 
-// optionalRSSI and optionalSNR return the value of an optional float field,
-// and whether it is set.
-func optionalRSSI(p *aprsis2.ISPacket) (float32, bool) {
-	if v, ok := p.GetOptionalRxRssi().(*aprsis2.ISPacket_RxRssi); ok {
-		return v.RxRssi, true
-	}
-	return 0, false
+// Meta is the metadata an ISPacket carries about the reception of the
+// packet. A nil pointer, or MODEM_UNDEFINED, is a field which is not set.
+type Meta struct {
+	RSSI, SNR *float32
+	Modem     aprsis2.ISPacket_ModemType
+	Bitrate   *uint32
+	Frequency *float64
 }
 
-func optionalSNR(p *aprsis2.ISPacket) (float32, bool) {
-	if v, ok := p.GetOptionalRxSnrDb().(*aprsis2.ISPacket_RxSnrDb); ok {
-		return v.RxSnrDb, true
-	}
-	return 0, false
-}
-
-// NewISPacket builds an ISPacket with optional RSSI and SNR values; a nil
-// pointer leaves the field unset.
-func NewISPacket(data string, rssi, snr *float32) *aprsis2.ISPacket {
+// NewISPacket builds an ISPacket with the given metadata.
+func NewISPacket(data string, m Meta) *aprsis2.ISPacket {
 	p := &aprsis2.ISPacket{
 		Type:         aprsis2.ISPacket_IS_PACKET,
 		IsPacketData: []byte(data),
+		RxModem:      m.Modem,
 	}
-	if rssi != nil {
-		p.OptionalRxRssi = &aprsis2.ISPacket_RxRssi{RxRssi: *rssi}
+	if m.RSSI != nil {
+		p.OptionalRxRssi = &aprsis2.ISPacket_RxRssi{RxRssi: *m.RSSI}
 	}
-	if snr != nil {
-		p.OptionalRxSnrDb = &aprsis2.ISPacket_RxSnrDb{RxSnrDb: *snr}
+	if m.SNR != nil {
+		p.OptionalRxSnrDb = &aprsis2.ISPacket_RxSnrDb{RxSnrDb: *m.SNR}
+	}
+	if m.Bitrate != nil {
+		p.OptionalRxBitrate = &aprsis2.ISPacket_RxBitrate{RxBitrate: *m.Bitrate}
+	}
+	if m.Frequency != nil {
+		p.OptionalRxFrequency = &aprsis2.ISPacket_RxFrequency{RxFrequency: *m.Frequency}
 	}
 	return p
 }
 
+// MetaOf returns the metadata of an ISPacket.
+func MetaOf(p *aprsis2.ISPacket) Meta {
+	m := Meta{Modem: p.GetRxModem()}
+	if v, ok := p.GetOptionalRxRssi().(*aprsis2.ISPacket_RxRssi); ok {
+		m.RSSI = &v.RxRssi
+	}
+	if v, ok := p.GetOptionalRxSnrDb().(*aprsis2.ISPacket_RxSnrDb); ok {
+		m.SNR = &v.RxSnrDb
+	}
+	if v, ok := p.GetOptionalRxBitrate().(*aprsis2.ISPacket_RxBitrate); ok {
+		m.Bitrate = &v.RxBitrate
+	}
+	if v, ok := p.GetOptionalRxFrequency().(*aprsis2.ISPacket_RxFrequency); ok {
+		m.Frequency = &v.RxFrequency
+	}
+	return m
+}
+
+// sameField compares two optional values: unset is only equal to unset.
+func sameField[T comparable](a, b *T) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
+}
+
 // SamePacket reports whether two ISPackets have the same data and the same
-// optional fields, with unset fields only equal to unset ones.
+// metadata, with unset fields only equal to unset ones.
 func SamePacket(a, b *aprsis2.ISPacket) bool {
 	if string(a.GetIsPacketData()) != string(b.GetIsPacketData()) {
 		return false
 	}
 
-	ar, aok := optionalRSSI(a)
-	br, bok := optionalRSSI(b)
-	if aok != bok || ar != br {
-		return false
-	}
-
-	as, aok := optionalSNR(a)
-	bs, bok := optionalSNR(b)
-	return aok == bok && as == bs
+	am, bm := MetaOf(a), MetaOf(b)
+	return am.Modem == bm.Modem &&
+		sameField(am.RSSI, bm.RSSI) && sameField(am.SNR, bm.SNR) &&
+		sameField(am.Bitrate, bm.Bitrate) && sameField(am.Frequency, bm.Frequency)
 }
 
 // ExpectISPacket expects the next packet from rx to be want, including its

@@ -48,7 +48,7 @@ VPATH = @srcdir@
 # Compiler and flags
 CC=		@CC@
 PROF=
-CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ $(PROF) $(DEFS)
+CFLAGS=		@CFLAGS@ @CPPFLAGS@ @CFLAGS_ARCH@ @OPENSSL_CFLAGS@ $(PROF) $(DEFS)
 
 # On solaris, should use -D_REENTRANT  CFLAGS
 
@@ -61,9 +61,12 @@ INSTALL_PROGRAM=$(INSTALL)  -m 755
 INSTALL_DATA=	$(INSTALL)  -m 644
 INSTALL_DIR=$(INSTALL)  -m 755 -d
 
+
 LIBS=		@LIBEVENT@ @LIBM@ @LIBRT@ @LIBPTHREAD@ \
 		@LIBSOCKET@ @LIBGETNAMEINFO@ \
-		@LIBCAP@ @LIBRESOLV@ @LIBZ@ @LIBCRYPTO@ @LIBSSL@
+		@LIBCAP@ @LIBRESOLV@ @LIBZ@ \
+		@LIBPROTOBUFC@ \
+		@OPENSSL_LIBS@
 
 #LIBS += -L/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/lib
 #CFLAGS += -I/data/www/mapt1/extsrc/libevent-2.0.14-stable/installed/usr/local/include
@@ -170,10 +173,11 @@ OBJS = aprsc.o accept.o worker.o errno_aprsc.o \
 	filter.o cellmalloc.o historydb.o \
 	counterdata.o status.o cJSON.o \
 	http.o tls.o sctp.o version.o \
+	aprsis2.pb-c.o aprsis2.o aprsis2plain.o \
 	@LIBOBJS@
 
 clean:
-	rm -f *.o *~ */*~ ../*~ core *.d
+	rm -f *.o *~ */*~ ../*~ core *.d *.pb-c.*
 	rm -f ../svn-commit* svn-commit*
 
 distclean: clean
@@ -197,6 +201,12 @@ aprsc: $(OBJS)
 	@$(CC) -MM $(CFLAGS) $< > $(@:.o=.d)
 
 version.o: version_data.h
+
+aprsis2.pb-c.c: aprsis2.proto
+	protoc-c --c_out=. $<
+
+aprsis2.pb-c.h: aprsis2.pb-c.c
+$(OBJS): aprsis2.pb-c.h
 
 aprsc.8 : % : %.in VERSION Makefile
 	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\

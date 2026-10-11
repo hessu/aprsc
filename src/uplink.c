@@ -44,6 +44,8 @@
 #include "outgoing.h"
 #include "filter.h"
 #include "tls.h"
+#include "aprsis2.h"
+
 
 int uplink_reconfiguring;
 int uplink_shutting_down;
@@ -190,6 +192,44 @@ void uplink_close(struct client_t *c, int errnum)
 	return;
 }
 
+#ifdef USE_SSL
+int uplink_server_validate_cert(struct worker_t *self, struct client_t *c)
+{
+	if (c->ssl_con && c->ssl_con->validate) {
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert against CA", c->addr_rem, c->username);
+		int ssl_res = ssl_validate_peer_cert_phase1(c);
+		
+		if (ssl_res != 0) {
+			hlog(LOG_WARNING, "%s/%s: TLS server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
+			return 0;
+		}
+	}
+	
+	return 1;
+}
+
+int uplink_server_validate_cert_cn(struct worker_t *self, struct client_t *c)
+{
+	if (c->ssl_con && c->ssl_con->validate) {
+		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert subject", c->addr_rem, c->username);
+		int ssl_res = ssl_validate_peer_cert_phase2(c);
+		
+		if (ssl_res != 0) {
+			hlog(LOG_WARNING, "%s/%s: TLS server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
+			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
+			return 0;
+		}
+		
+		c->validated = VALIDATED_STRONG;
+	}
+	
+	return 1;
+}
+
+#endif
+
+
 /*
  *	uplink_logresp_handler parses the "# logresp" string given by
  *	an upstream server after our "user" command has been sent.
@@ -210,37 +250,37 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
 		hlog(LOG_ERR, "%s: Uplink's logresp message is not recognized: no # in beginning (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (argc < 6) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not have enough arguments (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[1], "logresp") != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not say 'logresp' (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[2], serverid) != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it (protocol incompatibility)", c->addr_rem, serverid);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[3], "verified,") != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not say I'm verified (wrong passcode in my configuration?)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_NOT_VERIFIED);
-		return 0;
+		return -1;
 	}
 	
 	if (strcmp(argv[4], "server") != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not contain 'server' (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	p = strchr(argv[5], ',');
@@ -250,13 +290,13 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	if (strlen(argv[5]) > CALLSIGNLEN_MAX) {
 		hlog(LOG_ERR, "%s: Uplink's server name is too long: '%s'", c->addr_rem, argv[5]);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (strcasecmp(argv[5], serverid) == 0) {
 		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, argv[5]);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	/* todo: validate server callsign with the q valid path algorithm */
@@ -270,18 +310,8 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	
 	/* check the server name against certificate */
 #ifdef USE_SSL
-	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert subject", c->addr_rem, c->username);
-		int ssl_res = ssl_validate_peer_cert_phase2(c);
-		
-		if (ssl_res != 0) {
-			hlog(LOG_WARNING, "%s/%s: TLS server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
-			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
-			return 0;
-		}
-		
-		c->validated = VALIDATED_STRONG;
-	}
+	if (!uplink_server_validate_cert_cn(self, c))
+		return -1;
 #endif
 	
 	hlog(LOG_INFO, "%s: Uplink logged in to server %s", c->addr_rem, c->username);
@@ -305,21 +335,13 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	int rc;
 	int argc;
 	char *argv[256];
-
-	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 #ifdef USE_SSL
-	if (c->ssl_con && c->ssl_con->validate) {
-		hlog(LOG_DEBUG, "%s/%s: Uplink: Validating TLS server cert against CA", c->addr_rem, c->username);
-		int ssl_res = ssl_validate_peer_cert_phase1(c);
-		
-		if (ssl_res != 0) {
-			hlog(LOG_WARNING, "%s/%s: TLS server cert validation failed: %s", c->addr_rem, c->username, ssl_strerror(ssl_res));
-			client_close(self, c, CLIERR_UPLINK_PEER_CERT_FAIL);
-			return 0;
-		}
-	}
+	if (!uplink_server_validate_cert(self, c))
+		return -1;
 #endif
+
+	hlog_packet(LOG_INFO, s, len, "%s: Uplink server software: ", c->addr_rem);
 	
 	/* parse to arguments */
 	/* make it null-terminated for our string processing */
@@ -328,7 +350,7 @@ int uplink_login_handler(struct worker_t *self, struct client_t *c, int l4proto,
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
 		hlog(LOG_ERR, "%s: Uplink's welcome message is not recognized: no # in beginning", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return 0;
+		return -1;
 	}
 	
 	if (argc >= 3) {
@@ -617,7 +639,6 @@ connerr:
 	c->ai_protocol = req.ai_protocol;
 	c->state = CSTATE_INIT;
 	/* use the default login handler */
-	c->handler_line_in = &uplink_login_handler;
 	c->flags    = l->client_flags;
 	c->keepalive = tick;
 	c->last_read = tick;
@@ -625,6 +646,11 @@ connerr:
 	strncpy(c->username, l->name, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
 	c->username_len = strlen(c->username);
+	
+	if (c->flags & CLFLAGS_IS2)
+		c->is2_input_handler = &is2_input_handler_uplink_wait_signature;
+	else
+		c->handler_line_in = &uplink_login_handler;
 
 	/* These peer/sock name calls can not fail -- or the socket closed
 	   on us in which case it gets abandoned a bit further below. */

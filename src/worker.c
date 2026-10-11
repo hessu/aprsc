@@ -37,7 +37,7 @@
 #include "version.h"
 #include "status.h"
 #include "sctp.h"
-
+#include "aprsis2.h"
 
 time_t now;	/* current time, updated by the main thread, MAY be spun around by NTP */
 time_t tick;	/* monotonous clock, may or may not be wallclock */
@@ -389,6 +389,7 @@ struct client_t *client_alloc(void)
 	c->obuf_wtime = tick;
 	
 	c->cleanup   = tick + 120;
+	c->ping_rtt_sum = -1.0;
 
 	return c;
 }
@@ -402,6 +403,8 @@ void client_free(struct client_t *c)
 	if (c->ibuf)     hfree(c->ibuf);
 	if (c->obuf)     hfree(c->obuf);
 #endif
+	if (c->is2_obuf)
+		hfree(c->is2_obuf);
 
 	filter_free(c->posdefaultfilters);
 	filter_free(c->negdefaultfilters);
@@ -412,6 +415,9 @@ void client_free(struct client_t *c)
 
 	client_udp_free(c->udpclient);
 	clientlist_remove(c);
+	
+	if (c->corepeer_is2_challenge)
+		hfree(c->corepeer_is2_challenge);
 
 #ifdef USE_SSL
 	if (c->ssl_con)
@@ -949,19 +955,24 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	self->client_count--;
 }
 
+int udp_client_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	return udp_client_write(self, c, pb->data, pb->packet_len-2);
+}
+
 int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
 	/* Every packet ends with CRLF, but they are not sent over UDP ! */
 	/* Existing system doesn't send keepalives via UDP.. */
-	int i = sendto( c->udpclient->fd, p, len-2, MSG_DONTWAIT,
+	int i = sendto( c->udpclient->fd, p, len, MSG_DONTWAIT,
 		    &c->udpaddr.sa, c->udpaddrlen );
 		    
 	if (i < 0) {
 		hlog(LOG_ERR, "UDP transmit error to %s udp port %d: %s",
 			c->addr_rem, c->udp_port, strerror(errno));
-	} else if (i != len -2) {
+	} else if (i != len) {
 		hlog(LOG_ERR, "UDP transmit incomplete to %s udp port %d: wrote %d of %d bytes, errno: %s",
-			c->addr_rem, c->udp_port, i, len-2, strerror(errno));
+			c->addr_rem, c->udp_port, i, len, strerror(errno));
 	}
 
 	// hlog( LOG_DEBUG, "UDP from %d to client port %d, sendto rc=%d", c->udpclient->portnum, c->udp_port, i );
@@ -1050,11 +1061,6 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	
 	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
 	
-	/* a TCP client with a udp downstream socket? */
-	if (c->udp_port && c->udpclient && len > 0 && *p != '#') {
-		return udp_client_write(self, c, p, len);
-	}
-	
 	/* Count the number of writes towards this client,  the keepalive
 	   manager monitors this counter to determine if the socket should be
 	   kept in BUFFERED mode, or written immediately every time.
@@ -1128,6 +1134,29 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	return len; 
 }
 
+static int aprsis_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	if (pb->flags & F_DUPE) {
+		char dupe_sendbuf[PACKETLEN_MAX+7];
+		memcpy(dupe_sendbuf, "dup\t", 4);
+		memcpy(dupe_sendbuf + 4, pb->data, pb->packet_len);
+		int dupe_len = pb->packet_len + 4;
+		/* a TCP client with a udp downstream socket? */
+		if (c->udp_port && c->udpclient) {
+			return udp_client_write(self, c, dupe_sendbuf, dupe_len - 2);
+		}
+
+		return c->write(self, c, dupe_sendbuf, dupe_len);
+	}
+	
+	/* a TCP client with a udp downstream socket? */
+	if (c->udp_port && c->udpclient) {
+		return udp_client_write_packet(self, c, pb);
+	}
+
+	return c->write(self, c, pb->data, pb->packet_len);
+}
+
 /*
  *	printf to a client
  */
@@ -1195,6 +1224,16 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		return 0;
 	}
 	
+	/* With MSG_TRUNC, Linux returns the real length of the datagram even when
+	 * it did not fit in the buffer. The handlers below trust the length, so
+	 * such a datagram must not be passed on - a real peer never sends one.
+	 */
+	if (r > c->ibuf_size-1) {
+		hlog( LOG_INFO, "recv: Dropped oversized datagram of %d bytes (buffer %d) from corepeer UDP socket fd %d",
+			r, c->ibuf_size-1, c->udpclient->fd);
+		return 0;
+	}
+
 	// Figure the correct client/peer based on the remote IP address.
 	for (i = 0; i < worker_corepeer_client_count; i++) {
 		rc = worker_corepeer_clients[i];
@@ -1223,7 +1262,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	
 	if (i == worker_corepeer_client_count || !rc) {
 		addrs = strsockaddr(&addr.sa, addrlen);
-		hlog(LOG_INFO, "recv: Received UDP peergroup packet from unknown peer address %s: %*s", addrs, r, c->ibuf);
+		hlog_packet(LOG_INFO, c->ibuf, r, "recv: Received UDP peergroup packet from unknown peer address %s: ", addrs);
 		hfree(addrs);
 		return 0;
 	}
@@ -1236,9 +1275,23 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	clientaccount_add_rx(rc, IPPROTO_UDP, r, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
 	rc->last_read = tick;
 	
+	/* c is the peer whose xfd polls the shared UDP socket and owns the
+	 * input buffer, rc is the peer which sent this datagram.
+	 */
+#ifdef USE_IS2
+	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
+		is2_corepeer_control_in(self, rc, c->ibuf, r);
+		return 0;
+	}
+#endif
+	
+	if (rc->corepeer_is2) {
+		is2_corepeer_deframe_input(self, rc, c->ibuf, r);
+		return 0;
+	}
+	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
 	 * UDP frame.
-	 * TODO: consider processing multiple packets from an UDP frame, split up by CRLF.
 	 */
 	for (i = 0; i < r; i++) {
 		if (c->ibuf[i] == '\r' || c->ibuf[i] == '\n') {
@@ -1256,22 +1309,21 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
  *	Consume CRLF-separated data from an APRSIS stream input buffer
  */
  
-static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
-{	
-	int i = 0;
-	int row_start = 0;
+static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c, int start_at)
+{
+	int i;
 	char *ibuf = c->ibuf;
 	
 	/* parse out rows ending in CR and/or LF and pass them to the handler
 	 * without the CRLF (we accept either CR or LF or both, but make sure
-	 * to always output CRLF
+	 * to always output CRLF)
 	 */
-	for (i = 0; i < c->ibuf_end; i++) {
+	for (i = start_at; i < c->ibuf_end; i++) {
 		if (ibuf[i] == '\r' || ibuf[i] == '\n') {
 			/* found EOL - if the line is not empty, feed it forward */
-			if (i - row_start > 0) {
+			if (i - start_at > 0) {
 				/* NOTE: handler call CAN destroy the c-> object ! */
-				if (c->handler_line_in(self, c, c->ai_protocol, ibuf + row_start, i - row_start) < 0)
+				if (c->handler_line_in(self, c, c->ai_protocol, ibuf + start_at, i - start_at) < 0)
 					return -1;
 			}
 			
@@ -1281,11 +1333,20 @@ static int deframe_aprsis_input_lines(struct worker_t *self, struct client_t *c)
 			/* skip the rest of EOL */
 			while (i < c->ibuf_end && (ibuf[i] == '\r' || ibuf[i] == '\n'))
 				i++;
-			row_start = i;
+			start_at = i;
+			
+			/* the line handler may have switched the protocol, and with
+			 * it the deframer: let the new one consume the rest. Do not
+			 * recurse otherwise, the worker thread's stack is small and
+			 * a buffer full of short lines would exhaust it.
+			 */
+			if (c->handler_consume_input != &deframe_aprsis_input_lines)
+				return c->handler_consume_input(self, c, start_at);
 		}
 	}
 	
-	return row_start;
+	/* return the amount of data consumed */
+	return start_at;
 }
 
 /*
@@ -1305,7 +1366,7 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 	
 	c->last_read = tick; /* not simulated time */
 	
-	int consumed = c->handler_consume_input(self, c);
+	int consumed = c->handler_consume_input(self, c, 0);
 	
 	/* the client might have been freed, even */
 	if (consumed == -1)
@@ -1322,8 +1383,6 @@ int client_postread(struct worker_t *self, struct client_t *c, int r)
 	
 	return 0;
 }
-
-
 
 /*
  *	handle an event on an fd
@@ -1575,7 +1634,9 @@ static void collect_new_clients(struct worker_t *self)
 				hlog(LOG_DEBUG, "collect_new_clients(worker %d): starting poll for UDP fd %d xfd %p", self->id, c->udpclient->fd, c->xfd);
 			}
 			
+			is2_allocate_obuf(c);
 			c->handler_client_readable = &handle_corepeer_readable;
+			c->write_packet = &udp_client_write_packet;
 			c->write = &udp_client_write;
 			
 			continue;
@@ -1611,8 +1672,14 @@ static void collect_new_clients(struct worker_t *self)
 			c->write = &tcp_client_write;
 		}
 		
-		c->handler_consume_input = &deframe_aprsis_input_lines;
-
+		if (c->flags & CLFLAGS_IS2) {
+			c->handler_consume_input = &is2_deframe_input;
+			c->write_packet = &is2_write_packet;
+		} else {
+			c->handler_consume_input = &deframe_aprsis_input_lines;
+			c->write_packet = &aprsis_write_packet;
+		}
+		
 		/* The new client may end up destroyed right away, never mind it here.
 		 * We will notice it later and discard the client.
 		 */
@@ -1622,8 +1689,12 @@ static void collect_new_clients(struct worker_t *self)
 		 * In case of a live upgrade, this should maybe be skipped, but
 		 * I'll leave it in for now.
 		 */
-		if (c->flags & CLFLAGS_INPORT)
-			client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
+		if (c->flags & CLFLAGS_INPORT) {
+			if (c->flags & CLFLAGS_IS2)
+				is2_out_server_signature(self, c);
+			else
+				client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
+		}
 		
 		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */
 	}
@@ -1636,6 +1707,7 @@ static void collect_new_clients(struct worker_t *self)
 	hlog( LOG_DEBUG, "Worker %d accepted %d new clients, %d new connections, now total %d clients",
 	      self->id, i, self->xp.pollfd_used - n, self->client_count );
 }
+
 
 /* 
  *	Send keepalives to client sockets, run this once a second
@@ -1676,8 +1748,33 @@ static void send_keepalives(struct worker_t *self)
 		cnext = c->next;
 
 		/* No keepalives on PEER links.. */
-		if ( c->state == CSTATE_COREPEER )
+		if ( c->state == CSTATE_COREPEER ) {
+#ifdef USE_IS2
+			/* min/max limits for retry timer exponential backoff */
+			if (c->next_is2_peer_interval < COREPEER_IS2_PROPOSE_T_MIN)
+				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
+			if (c->next_is2_peer_interval > COREPEER_IS2_PROPOSE_T_MAX)
+				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MAX;
+			
+			if (!c->corepeer_is2 && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
+				c->next_is2_peer_offer = tick + c->next_is2_peer_interval + random() % 5;
+				c->next_is2_peer_interval *= 2;
+				
+				is2_corepeer_propose(self, c);
+			}
+			
+			if (c->corepeer_is2 && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
+				c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;
+				is2_corepeer_propose(self, c);
+			}
+			if (c->corepeer_is2 && c->is2_obuf_packets) {
+				if (is2_corepeer_obuf_flush(self, c) < 0)
+					continue;
+			}
+#endif
+			
 			continue;
+		}
 		
 		/* is it time to clean up? */
 		if (c->cleanup <= tick || c->cleanup > tick + 120+120) {
@@ -1689,17 +1786,28 @@ static void send_keepalives(struct worker_t *self)
 		if ((c->keepalive <= tick)
 		    || (c->keepalive > tick + keepalive_interval)) {
 			int flushlevel = c->obuf_flushsize;
-			c->keepalive = tick + keepalive_interval;
-
-			len = len0 + sprintf(s, "%s\r\n", c->addr_loc);
-
 			c->obuf_flushsize = 0;
-			/* Write out immediately */
-			rc = c->write(self, c, buf, len);
-			if (rc < -2) continue; // destroyed
+			c->keepalive = tick + keepalive_interval;
+			
+			if (c->flags & CLFLAGS_IS2) {
+				if (c->is2_obuf_packets)
+					if (is2_obuf_flush(self, c) < -2)
+						continue;
+				if (is2_out_ping(self, c) < -2)
+					continue; // destroyed
+			} else {
+				len = len0 + sprintf(s, "%s\r\n", c->addr_loc);
+				
+				/* Write out immediately */
+				rc = c->write(self, c, buf, len);
+				if (rc < -2) continue; // destroyed
+			}
 			c->obuf_flushsize = flushlevel;
 		} else {
 			/* just fush if there was anything to write */
+			if (c->is2_obuf_packets)
+				if (is2_obuf_flush(self, c) < -2)
+					continue; // destroyed
 			if (c->ai_protocol == IPPROTO_TCP || c->ai_protocol == IPPROTO_SCTP) {
 				rc = c->write(self, c, buf, 0);
 				if (rc < -2) continue; // destroyed..
@@ -1764,6 +1872,17 @@ static void send_keepalives(struct worker_t *self)
 		}
 		
 		c->obuf_writes = 0;
+
+		if (c->flags & CLFLAGS_IS2) {
+			// Switching to buffered writes is done in is2_append_obuf_packet().
+			if (c->is2_obuf_flushsize != 0 && c->is2_packet_writes < obuf_writes_threshold_hys) {
+				c->is2_obuf_flushsize = 0;
+				//hlog(LOG_DEBUG, "IS2: Switch fd %d (%s) to unbuffered writes (%d writes)",
+				//	c->fd, c->addr_rem, c->is2_packet_writes);
+			}
+			c->is2_packet_writes = 0;
+		}
+
 	}
 }
 
@@ -2238,6 +2357,13 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	if (c->ai_protocol == IPPROTO_SCTP)
 		cJSON_AddStringToObject(jc, "proto", "sctp");
 	
+	if (c->flags & CLFLAGS_IS2) {
+		cJSON_AddStringToObject(jc, "link", "is2");
+		cJSON_AddNumberToObject(jc, "is2_frames_rx", c->localaccount.is2_rx_frames);
+		cJSON_AddNumberToObject(jc, "is2_frames_lost", c->localaccount.is2_lost_frames);
+		cJSON_AddNumberToObject(jc, "is2_frames_rejected", c->localaccount.is2_rejected_frames);
+	}
+
 #ifdef USE_SSL
 	if (c->cert_subject[0])
 		cJSON_AddStringToObject(jc, "cert_subject", c->cert_subject);

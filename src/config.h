@@ -63,6 +63,14 @@
 #endif
 #endif
 
+/* IS2, the Protocol Buffers based protocol, is work in progress and is
+ * disabled by default: USE_IS2 is defined in ac-hdrs.h by
+ * "./configure --enable-is2". Without it, all the entry points are compiled
+ * out - the configuration keywords for IS2 listeners, uplinks and peer group
+ * keys are rejected, and no IS2 handshake is offered to or accepted from UDP
+ * peers or plaintext clients. The IS2 tests are skipped without it.
+ */
+
 extern int fork_a_daemon;	/* fork a daemon */
 
 extern int dump_requests;	/* print requests */
@@ -170,6 +178,16 @@ struct peerip_config_t {
 	int client_flags;
 };
 
+#define IS2_PEERGROUP_KEY_ID_NUM 16
+
+struct peergroup_key_t {
+	struct peergroup_key_t *next;
+	struct peergroup_key_t **prevp;
+
+	int key_id;
+	char *key;
+};
+
 struct uplink_config_t {
 	struct uplink_config_t *next;
 	struct uplink_config_t **prevp; /* pointer to the *next pointer in the previous node */
@@ -201,6 +219,8 @@ struct uplink_config_t {
 
 extern struct listen_config_t *listen_config;
 extern struct peerip_config_t *peerip_config;
+extern struct peergroup_key_t *peergroup_key_config;
+extern int peergroup_key_transmit;
 extern struct uplink_config_t *uplink_config_install;
 extern int uplink_config_updated;
 extern int listen_low_ports;
@@ -211,6 +231,10 @@ extern struct sockaddr_in6 uplink_bind_v6;		/* and the same for IPv6 */
 extern socklen_t uplink_bind_v6_len;
 
 #define MAX_COREPEERS		16
+#define COREPEER_IS2_PROPOSE_T_MIN	10 /* minimum/starting IS2 peering proposal timer, seconds */
+#define COREPEER_IS2_PROPOSE_T_MAX	600 /* max timer interval, cap for exponential backoff */
+#define IS2_PING_TIMEOUT	20 /* seconds */
+#define IS2_PING_AVG_LEN	10.0 /* number of samples */
 
 /* http server config */
 

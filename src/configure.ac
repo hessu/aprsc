@@ -11,6 +11,7 @@ dnl
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT
 AC_CONFIG_SRCDIR([aprsc.c])
+AC_CONFIG_MACRO_DIRS([m4])
 
 dnl For automake
 VERSION="`cat VERSION`"
@@ -51,6 +52,20 @@ AC_ARG_ENABLE([static-libevent],
 	[link against static libevent.a @<:@default=do not@:>@])],
 	[static_libevent=$enableval],
 	[])
+
+dnl IS2 is work in progress, disabled unless asked for
+AC_ARG_ENABLE([is2],
+	[AS_HELP_STRING([--enable-is2],
+	[enable the work in progress IS2 protocol @<:@default=disabled@:>@])],
+	[enable_is2=$enableval],
+	[enable_is2=no])
+AS_IF([test "x$enable_is2" = "xyes"],
+	[AC_DEFINE([USE_IS2], [1], [Enable the IS2 Protocol Buffers protocol])])
+
+dnl Check for Protocol Buffers
+AC_SUBST(LIBPROTOBUFC)
+AC_CHECK_LIB(protobuf-c,protobuf_c_message_pack,[LIBPROTOBUFC="-lprotobuf-c"],[AC_MSG_ERROR([libprotobuf-c not found])])
+AC_CHECK_HEADER([google/protobuf-c/protobuf-c.h],,[AC_MSG_ERROR([protobuf-c.h header not found - remember to install the development package too])])
 
 dnl Check for libevent
 AC_CHECK_HEADER([event2/event.h],,[AC_MSG_ERROR([libevent2 header not found - remember to install the development package too])])
@@ -270,17 +285,20 @@ if test "$ac_cv_search_deflate" = "-lz"; then
 fi
 
 dnl Check for openssl
-AC_CHECK_HEADERS([openssl/ssl.h])
-AC_SEARCH_LIBS(TLSv1_server_method, ssl, AC_DEFINE(HAVE_TLSV1_SERVER_METHOD, 1, [OpenSSL 0.9.7 or later]))
-AC_SEARCH_LIBS(X509_free, crypto, AC_DEFINE(HAVE_X509_FREE, 1, [OpenSSL 0.9.7 or later]))
-AC_SUBST(LIBSSL)
-AC_SUBST(LIBCRYPTO)
+PKG_CHECK_MODULES([OPENSSL], [openssl >= 1.1.1], [openssl_found=yes], [openssl_found=no])
 
-if test "$ac_cv_search_TLSv1_server_method" = "-lssl"; then
-  LIBSSL="-lssl"
-fi
-if test "$ac_cv_search_X509_free" = "-lcrypto"; then
-  LIBCRYPTO="-lcrypto"
+dnl Conditional compilation based on OpenSSL version check
+if test "x$openssl_found" = "xyes"; then
+  PKG_CHECK_MODULES([OPENSSL3], [openssl >= 3.0.0], [openssl3_found=yes], [openssl3_found=no])
+
+  if test "x$openssl3_found" = "xyes"; then
+    AC_DEFINE([HAVE_OPENSSL_3], [1], [Define if OpenSSL 3.0.0 or higher is available])
+    AC_MSG_NOTICE([Found OpenSSL 3.0.0 or higher])
+  else
+    AC_MSG_NOTICE([Found OpenSSL >= 1.1.1 but less than 3.0.0])
+  fi
+else
+  AC_MSG_ERROR([OpenSSL 1.1.1 or higher is required])
 fi
 
 dnl Output files

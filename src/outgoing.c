@@ -25,7 +25,7 @@
  *	should have a copy
  */
 
-static inline void send_single(struct worker_t *self, struct client_t *c, char *data, int len)
+static inline void send_single(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	/* if we're going to use the UDP sidechannel, account for UDP, otherwise
 	 * its TCP or SCTP or something.
@@ -35,13 +35,14 @@ static inline void send_single(struct worker_t *self, struct client_t *c, char *
 	else
 		clientaccount_add_tx( c, c->ai_protocol, 0, 1);
 	
-	c->write(self, c, data, len);
+	c->write_packet(self, c, pb);
 }
 
 static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
 	struct client_t *origin = pb->origin; /* reduce pointer deferencing in tight loops */
+	self->is2_enc_pb = NULL; /* new packet: invalidate the IS2 encoding cache of the worker */
 	
 	/*
 	// debug dump
@@ -59,17 +60,9 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 	if (pb->flags & F_DUPE) {
 		/* Duplicate packet. Don't send, unless client especially wants! */
 		if (self->clients_dupe) {
-			/* if we have any dupe clients at all, generate a version with "dup\t"
-			 * prefix to avoid regular clients processing dupes
-			 */
-			char dupe_sendbuf[PACKETLEN_MAX+7];
-			memcpy(dupe_sendbuf, "dup\t", 4);
-			memcpy(dupe_sendbuf + 4, pb->data, pb->packet_len);
-			int dupe_len = pb->packet_len + 4;
-			
 			for (c = self->clients_dupe; (c); c = cnext) {
 				cnext = c->class_next; // client_write() MAY destroy the client object!
-				send_single(self, c, dupe_sendbuf, dupe_len);
+				send_single(self, c, pb);
 			}
 		}
 		
@@ -92,7 +85,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		for (c = self->clients_ups; (c); c = cnext) {
 			cnext = c->class_next; // client_write() MAY destroy the client object!
 			if (c != origin)
-				send_single(self, c, pb->data, pb->packet_len);
+				send_single(self, c, pb);
 		}
 	}
 	
@@ -125,7 +118,7 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 		if (c->no_tx)
 			continue;
 		
-		send_single(self, c, pb->data, pb->packet_len);
+		send_single(self, c, pb);
 	}
 }
 
@@ -162,6 +155,7 @@ void process_outgoing(struct worker_t *self)
 				status_error(86400, "packet_drop_future");
 		} else if (tick - pb->t > 5) {
 			/* this is a bit too old, are we stuck? */
+			/* TODO: rate limit error logging - there would be a lot of these */
 			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d aged %ld sec (now %ld t %ld)\n%.*s",
 				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
 			self->internal_packet_drops++;

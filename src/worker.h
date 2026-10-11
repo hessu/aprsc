@@ -33,6 +33,7 @@
 #include "cJSON.h"
 #include "errno_aprsc.h"
 #include "tls.h"
+#include "aprsis2.pb-c.h"
 
 extern time_t now;	/* current wallclock time */
 extern time_t tick;	/* clocktick - monotonously increasing for timers, not affected by NTP et al */
@@ -142,6 +143,8 @@ struct pbuf_t {
 	char symbol[3]; /* 2(+1) chars of symbol, if any, NUL for not found */
 	char is_free;   /* 1: in global free list, 0: not in global free list */
 
+	Aprsis2__ISPacket is2packet;
+
 	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
 };
 
@@ -225,8 +228,9 @@ struct client_heard_t {
 #define INERR_DIS_DX			-34
 #define INERR_DIS_MSG_DST		-35
 #define INERR_DIS_IGATECALL		-36
+#define INERR_INV_CRLF			-37	/* CR or LF inside the packet (IS2) */
 
-#define INERR_MIN			-36	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-37	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 
@@ -242,6 +246,8 @@ struct portaccount_t {		/* Port accounter tracks port usage, and traffic
 	long long  rxpackets, txpackets;
 	long long  rxdrops,   rxdupes;
 	long long  rxerrs[INERR_BUCKETS];
+
+	long long  is2_rx_frames, is2_lost_frames, is2_rejected_frames;
 
 	/* record usage references */
 	int	refcount;	/* listener = 1, clients ++ */
@@ -280,6 +286,11 @@ struct client_udp_t {			/* UDP services can be available at multiple
 #define IBUF_SIZE  8000
 #endif
 
+#define APRSIS2_OBUF_PACKETS 20
+#define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of encoded ISPacket elements in IS2 obuf */
+#define APRSIS2_ENC_MAX (PACKETLEN_MAX + 64) /* max length of a single encoded ISPacket element */
+#define APRSIS2_COREPEER_SEQ_WINDOW 32 /* packet loss monitoring window - allow reordering by N packets */
+
 struct client_t {
 	struct client_t *next;
 	struct client_t **prevp;
@@ -307,7 +318,13 @@ struct client_t {
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t cleanup;     /* Time of next cleanup */
-
+	time_t next_is2_peer_offer;
+	time_t next_is2_peer_interval;
+	
+	unsigned int ping_request_id; /* The req id of the last outgoing IS2 ping */
+	time_t ping_timeout; /* When the last IS2 ping times out */
+	double ping_rtt_sum; /* Weighted rtt average sum, seconds */
+	
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 	
 #ifdef USE_SSL
@@ -347,6 +364,7 @@ struct client_t {
 #define CLFLAGS_CLIENTONLY     0x800 /* Client connected on client-only port */
 #define CLFLAGS_IGATE          0x1000 /* Igate port */
 #define CLFLAGS_UPLINKMULTI    0x2000 /* Allow multiple parallel outgoing connections */
+#define CLFLAGS_IS2            0x4000 /* IS2 Protocol Buffers */
 
 #define VALIDATED_WEAK         1 /* client validated with passcode */
 #define VALIDATED_STRONG       3 /* client validated with SSL certificate */
@@ -360,11 +378,14 @@ struct client_t {
 	char  quirks_mode;  /* is this a known buggy-and-unmaintained application on our blacklist */
 	char  no_tx;        /* is the TX igate implementation broken and on our blacklist */
 	char  loc_known;    /* have we received a position packet from this client */
+	char  corepeer_is2; /* is the core peer in IS2 mode currently */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
-	int	(*handler_consume_input) (struct worker_t *self, struct client_t *c);
+	int	(*is2_input_handler) (struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *message);
+	int	(*handler_consume_input) (struct worker_t *self, struct client_t *c, int start_at);
 	int	(*write) (struct worker_t *self, struct client_t *c, char *p, int len);
+	int	(*write_packet) (struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
 	
 	int	(*handler_client_readable) (struct worker_t *self, struct client_t *c);
 	int	(*handler_client_writable) (struct worker_t *self, struct client_t *c);
@@ -417,6 +438,26 @@ struct client_t {
 	char	obuf[OBUF_SIZE];
 #endif
 	char filter_s[FILTER_S_SIZE];
+
+	/* IS2 output buffer: a partially built IS2 frame, owned by the client.
+	 * Packets are serialized into it as they are passed to the client,
+	 * so that nothing in here refers to pbuf_t memory, which may be
+	 * recycled by the dupecheck thread before the frame is flushed.
+	 */
+	char *is2_obuf;
+	int is2_obuf_end;      /* write position in is2_obuf */
+	int is2_obuf_packets;  /* number of ISPacket elements in is2_obuf */
+	int is2_obuf_total_len; /* total length of the ISPacket elements in is2_obuf */
+	int is2_packet_writes; /* How many writes (since last check) an IS2 packet has been buffered? */
+	int is2_obuf_flushsize;
+
+	Aprsis2__ISPacket is2_input_template; /* IS2 plaintext #is2-meta metadata holding buffer */
+
+	char *corepeer_is2_challenge;	/* IS2 handshake random token */
+	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */
+	int corepeer_is2_sequence_window[APRSIS2_COREPEER_SEQ_WINDOW];
+	int corepeer_is2_sequence_window_pos;
+	int corepeer_is2_sequence_window_used;
 };
 
 extern struct client_t *client_alloc(void);
@@ -482,6 +523,15 @@ struct worker_t {
 	 * (process hangs and time jumps)
 	 */
 	unsigned int internal_packet_drops;
+
+	/* IS2: the encoded ISPacket element of the packet currently being
+	 * distributed by process_outgoing_single(), so that a packet going
+	 * to many IS2 clients is serialized only once per worker.
+	 * Valid only when is2_enc_pb points to the packet being processed.
+	 */
+	struct pbuf_t *is2_enc_pb;
+	int is2_enc_len;
+	char is2_enc[APRSIS2_ENC_MAX];
 };
 
 extern cJSON *worker_shutdown_clients;
@@ -519,6 +569,7 @@ extern struct client_udp_t *udppeers;
 extern void client_udp_free(struct client_udp_t *u);
 extern struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int portnum);
 extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int af, int portnum);
+extern int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len);
 
 extern void inbound_connects_account(const int add, struct portaccount_t *p);
 

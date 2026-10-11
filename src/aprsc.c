@@ -48,6 +48,7 @@
 
 #include "dupecheck.h"
 #include "filter.h"
+#include "aprsis2.h"
 #include "historydb.h"
 #include "client_heard.h"
 #include "keyhash.h"
@@ -949,6 +950,7 @@ int main(int argc, char **argv)
 	 * need a copy of the shared libs within the chroot dir
 	 */
 	generate_instance_id();
+	urandom_init(); /* kept open for random tokens needed after the chroot */
 	version_report("startup");
 	
 	/* do a chroot if required */
@@ -985,6 +987,13 @@ int main(int argc, char **argv)
 	int orig_log_dest = log_dest;
 	log_dest |= L_STDERR;
 	
+#ifdef USE_IS2
+	if (is2_wire_selfcheck()) {
+		hlog(LOG_CRIT, "IS2 wire format self-check failed, refusing to start.");
+		exit(1);
+	}
+#endif
+
 	if (read_config()) {
 		hlog(LOG_CRIT, "Initial configuration failed.");
 		exit(1);

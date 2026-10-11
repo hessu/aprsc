@@ -21,6 +21,21 @@ int urandom_open(void)
 	return fd;
 }
 
+/*
+ *	A descriptor for the pseudorandom source, opened once at startup
+ *	(before a possible chroot) and kept open for the lifetime of the
+ *	process, for callers which need random tokens at runtime.
+ */
+
+static int urandom_fd = -1;
+
+void urandom_init(void)
+{
+	urandom_fd = urandom_open();
+	if (urandom_fd >= 0)
+		fcntl(urandom_fd, F_SETFD, FD_CLOEXEC);
+}
+
 int urandom_alphanumeric(int fd, unsigned char *buf, int buflen)
 {
 	int l;
@@ -32,7 +47,7 @@ int urandom_alphanumeric(int fd, unsigned char *buf, int buflen)
 		l = read(fd, buf, len);
 		if (l != len) {
 			hlog(LOG_ERR, "read(/dev/urandom, %d) failed: %s", len, strerror(errno));
-			close(fd);
+			/* the descriptor belongs to the caller, do not close it */
 			fd = -1;
 		}
 	}
@@ -60,5 +75,14 @@ int urandom_alphanumeric(int fd, unsigned char *buf, int buflen)
 	buf[len] = 0;
 	
 	return len;
+}
+
+/*
+ *	Generate an alphanumeric token from the shared pseudorandom source
+ */
+
+int urandom_token(unsigned char *buf, int buflen)
+{
+	return urandom_alphanumeric(urandom_fd, buf, buflen);
 }
 

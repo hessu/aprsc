@@ -1,0 +1,44 @@
+/*
+ *	aprsc
+ *
+ *	(c) Heikki Hannikainen, OH7LZB <hessu@hes.iki.fi>
+ *
+ *     This program is licensed under the BSD license, which can be found
+ *     in the file LICENSE.
+ *
+ */
+
+/*
+ *	aprsis2.h: the APRS-IS2 Protocol Buffers based protocol
+ */
+
+#ifndef APRSIS2_H
+#define APRSIS2_H
+
+#include "worker.h"
+
+extern void is2_allocate_obuf(struct client_t *c);
+
+extern int is2_input_handler_login(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+extern int is2_input_handler_uplink_wait_signature(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+extern int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+
+extern int is2_out_server_signature(struct worker_t *self, struct client_t *c);
+extern int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at);
+extern int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *ibuf, int len);
+
+extern void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template);
+extern int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
+extern int is2_obuf_flush(struct worker_t *self, struct client_t *c);
+extern int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c);
+
+extern int is2_out_ping(struct worker_t *self, struct client_t *c);
+
+extern int is2_corepeer_propose(struct worker_t *self, struct client_t *c);
+extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
+
+extern int is2_corepeer_key_setup(void);
+extern int is2_wire_selfcheck(void);
+
+#endif
+

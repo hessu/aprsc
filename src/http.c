@@ -252,7 +252,7 @@ int pseudoclient_push_packet(struct worker_t *worker, struct client_t *pseudocli
 	pseudoclient->username_len = strlen(pseudoclient->username);
 	
 	/* ok, try to digest the packet */
-	e = incoming_parse(worker, pseudoclient, packet, packet_len);
+	e = incoming_parse(worker, pseudoclient, packet, packet_len, NULL);
 
 	pseudoclient->username[0] = 0;
 	pseudoclient->username_len = 0;

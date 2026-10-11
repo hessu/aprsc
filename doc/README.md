@@ -83,10 +83,10 @@ and automatic upgrades using APT.
 Quality control
 ------------------
 
-aprsc comes with an APRS-IS server test suite, implemented using the Perl
-Test framework.  A "make test" executed in the tests/ subdirectory will
-execute automated tests for all of the basic functions of the server in
-about 2 minutes.  Individual test scripts run fake APRS-IS servers, clients
+aprsc comes with an APRS-IS server test suite, implemented in Go (an older
+version in Perl is being replaced).  A "make gotest" executed in the tests/
+subdirectory will execute automated tests for all of the basic functions of
+the server in a few minutes.  The tests run fake APRS-IS servers, clients
 and peers around the tested server, and pass various valid and invalid
 packets through the server, checking for expected output.
 

@@ -11,11 +11,11 @@ in `doc/` remain authoritative; read `doc/CONTRIBUTING.md` and
 
 ```
 src/        All C sources, the autoconf build, packaging, and the web status UI
-tests/      Perl functional test suite (runs the real binary against fake peers)
+tests/      Functional test suites (run the real binary against fake peers): Go in tests/go, Perl in t/ (being replaced)
 doc/        Markdown documentation published to he.fi/aprsc (also installed as HTML)
 tools/      Standalone Perl helpers for feeding, copying and receiving APRS-IS traffic
 build/      build-all.pl: maintainer script that builds packages in LXD VMs per distro
-.github/    CI workflow: configure, make, make testinstall, run tests + aggrtest on Ubuntu
+.github/    CI workflow: configure, make, make testinstall, then two parallel jobs on Ubuntu (each with and without IS2): the Perl tests + aggrtest, and the Go tests
 ```
 
 There is no top-level Makefile. Everything is driven from `src/` and `tests/`.
@@ -118,25 +118,69 @@ make -j4
 
 ## Testing
 
-The test suite is functional: each `.t` file starts the real `aprsc` binary
-with a config from `tests/cfg-aprsc/`, connects with Perl APRS-IS clients,
-and asserts on what comes out. There are no C unit tests.
+The test suite is functional: each test starts the real `aprsc` binary with a
+config from `tests/cfg-aprsc/`, connects fake APRS-IS clients, upstreams and
+UDP peers to it, and asserts on what comes out. There are no C unit tests.
+
+There are two suites with the same tests. The Go suite in `tests/go/` is the
+one to extend, and replaces the Perl suite (`tests/t/`, `tests/aggregator/`,
+`tests/libperl/`) once it has been run on Linux. Write new tests in Go.
 
 ```sh
 cd src && make testinstall      # copies web/ files into tests/web, creates tests/data and tests/logs
 cd ../tests
-make test                       # all of t/*.t, also generates the TLS test CA and certs on first run
-make aggrtest                   # aggregator/*.t
-make travistest                 # skips the heavy t/64udp-load.t
-perl -Ilibperl t/10dupecheck.t  # one test, run from tests/
+make gotest                     # the Go suite, all of it; generates the TLS test CA and certs on first run
+make gotest-short               # skips the heavy TestUDPLoad
+make gotest-race                # with the race detector
+make gotest-run T=TestDupecheck # one test or a group, verbose (T is a regexp)
+make test                       # Perl: all of t/*.t, also generates the TLS test CA and certs on first run
+make aggrtest                   # Perl: aggregator/*.t
+make travistest                 # Perl: skips the heavy t/64udp-load.t
 ```
 
-Perl dependencies: `IO::Socket::INET6`, `JSON::XS`, `LWP`,
-`Parse::RecDescent`, `Digest::SHA`, and `Google::ProtocolBuffers::Dynamic`
-for the IS2 tests. The pure-Perl `Google::ProtocolBuffers` and the
-`Ham::APRS::IS*` client modules are vendored in `tests/libperl/`.
+Go dependencies: Go 1.26 or newer, and `github.com/hessu/go-aprs-fap` for
+the APRS parser and the `Conn` type behind the plaintext client. Go modules
+are fetched on first use. Subtests can be run with
+`go test -run 'TestDupecheck/long_dupe'` in `tests/go/`; see
+`tests/go/README.md`.
 
-How the suite is structured:
+IS2 is compiled out unless aprsc was configured with `--enable-is2`. The IS2
+tests (`TestIS2*`, `TestDupeClientIS2`, `TestLiveUpgrade`) skip themselves on
+a build without it, and `TestIS2Disabled` does the opposite. Run them with
+`APRSC_BIN=/path/to/aprsc make gotest`. The Go IS2 types are generated from
+`src/aprsis2.proto`: after changing the schema, run
+`go generate ./internal/aprsis2` in `tests/go/` (needs `protoc` and
+`protoc-gen-go`) and commit the result; `TestGeneratedIsCurrent` fails
+otherwise.
+
+How the Go suite is structured:
+
+- `tests/go/internal/harness` starts and stops the server. It passes
+  `-e debug -o file -r <temp dir>`, so a failed test prints the tail of that
+  server log. It waits for the log to say the listeners are open, and the
+  HTTP ports too when the config has them. It runs with `tests/` as the
+  working directory, because the configs use relative paths. `TEST_PRODUCT=javap` or `javap4` runs the tests against
+  javAPRSSrvr if a copy is present in `tests/javaprssrvr/` (not distributed);
+  tests of aprsc-only features skip.
+- `tests/go/internal/isclient` has the clients: `Connect` (plaintext, built on
+  the go-aprs-fap `Conn`), `ConnectIS2`, `ConnectUDP`, `FakeUpstream` for
+  uplinks the server connects to, and `UDPPeer` and `IS2Peer` for UDP
+  peers. `TxRx` (send on one connection, expect on another) and
+  `ExpectDrop` (send a packet that must be dropped followed by a helper
+  packet that must arrive) are the assertions, and `Step` with `RunSteps`
+  runs a table of them as subtests. Reads always have deadlines; avoid
+  sleeps, and prefer waiting for a reply the server sends (`SetFilter` waits
+  for the `# filter ... active` line).
+- Tests that start a server cannot run in parallel: the configs use fixed
+  ports. Cases that share server state (the dupe cache, heard lists) run in
+  order within one test.
+- Test files are named by area, as the Perl ones were numbered: login and
+  start-up, dupecheck, quirks and third-party, q constructs, filters,
+  messaging, load and uplinks, UDP/HTTP/SCTP/status, live upgrade, IS2,
+  aggregator.
+
+The Perl suite is structured as follows (the port map applies to both suites,
+since both use the configs in `tests/cfg-aprsc/`):
 
 - `tests/libperl/runproduct.pm` starts and stops the server. It passes
   `-e debug -o file -r logs`, so the server log for the last run is in

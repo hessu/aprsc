@@ -1,0 +1,6 @@
+github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
+github.com/hessu/go-aprs-fap v0.1.0 h1:0O9uXZQ54uLl1nRD5TXLyNcX5xSNVX5g0G9Zyi2ZRnI=
+github.com/hessu/go-aprs-fap v0.1.0/go.mod h1:ijCZO2LBfaOgvcCjmV086Z3ku8dVh7lH40IXiARWmuM=
+google.golang.org/protobuf v1.36.10 h1:AYd7cD/uASjIL6Q9LiTjz8JLcrh/88q5UObnmY3aOOE=
+google.golang.org/protobuf v1.36.10/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=

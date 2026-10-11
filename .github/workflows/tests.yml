@@ -8,8 +8,8 @@ on:
 
 jobs:
   build:
-    # The two variants run in parallel: one built with the work in progress
-    # IS2 protocol, and one without, which is the default.
+    # The Perl test suite. The two variants run in parallel: one built with
+    # the work in progress IS2 protocol, and one without, which is the default.
     name: build (${{ matrix.variant }})
     strategy:
       fail-fast: false
@@ -25,7 +25,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    
+
     - name: install deps
       run: |
         sudo apt-get install -y libevent-dev \
@@ -67,4 +67,58 @@ jobs:
         cd tests
         make test aggrtest
 
-  
+  go-tests:
+    # The Go test suite, which is replacing the Perl one. It runs as a
+    # separate job in parallel with the Perl tests (the tests use fixed ports,
+    # which is fine with a runner each). The IS2 tests run against the IS2
+    # variant of the build and skip themselves on the other; TestIS2Disabled
+    # does the opposite. TestSCTP runs because libsctp-dev is installed.
+    name: go tests (${{ matrix.variant }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest ]
+        variant: [ is2, no-is2 ]
+        include:
+          - variant: is2
+            configure_flags: --enable-is2
+          - variant: no-is2
+            configure_flags: ""
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: install deps
+      run: |
+        sudo apt-get install -y libevent-dev \
+            libprotobuf-c-dev protobuf-c-compiler \
+            libprotobuf-dev protobuf-compiler \
+            libsctp-dev \
+            libssl-dev pkg-config \
+            openssl
+
+    - name: configure
+      run: |
+        cd src
+        ./configure ${{ matrix.configure_flags }}
+
+    - name: make
+      run: |
+        cd src
+        make -j4
+
+    - name: make testinstall
+      run: |
+        cd src
+        make testinstall
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: tests/go/go.mod
+        cache-dependency-path: tests/go/go.sum
+
+    - name: Run Go tests
+      run: |
+        cd tests
+        make gotest

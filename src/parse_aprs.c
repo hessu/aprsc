@@ -364,7 +364,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 			lngp++;
 		if (*lngp == ',')
 			lngp++;
-		if (*lngp != ',')
+		if (lngp < body_end && *lngp != ',')
 			lngp++;
 		if (*lngp == ',')
 			lngp++;
@@ -381,7 +381,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 			lngp++;
 		if (*lngp == ',')
 			lngp++; // and lat designator
-		if (*lngp != ',')
+		if (lngp < body_end && *lngp != ',')
 			lngp++; // and lat designator
 		if (*lngp == ',')
 			lngp++;
@@ -419,7 +419,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		
 		if (*lngp == ',')
 			lngp++;
-		if (*lngp != ',')
+		if (lngp < body_end && *lngp != ',')
 			lngp++;
 		if (*lngp == ',')
 			lngp++;
@@ -438,7 +438,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 			lngp++;
 		if (*lngp == ',')
 			lngp++; // and lat designator
-		if (*lngp != ',')
+		if (lngp < body_end && *lngp != ',')
 			lngp++; // and lat designator
 		if (*lngp == ',')
 			lngp++;
@@ -501,7 +501,7 @@ static int parse_aprs_nmea(struct pbuf_t *pb, const char *body, const char *body
 		
 		if (*lngp == ',')
 			lngp++;
-		if (*lngp != ',')
+		if (lngp < body_end && *lngp != ',')
 			lngp++;
 		if (*lngp == ',')
 			lngp++;

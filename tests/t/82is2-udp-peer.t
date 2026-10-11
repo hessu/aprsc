@@ -13,7 +13,7 @@
 #
 
 use Test;
-BEGIN { plan tests => 10 + 2 + 6 + 2 };
+BEGIN { plan tests => 13 + 2 + 9 + 2 };
 use runproduct;
 use istest;
 use Ham::APRS::IS2;
@@ -33,6 +33,12 @@ my $udp = new Ham::APRS::IS2('127.0.0.1:16405', 'TESTIN-2', 'udp-peer' => 1, 'hm
 ok(defined $udp, 1, "Failed to initialize Ham::APRS::IS2 UDP server socket");
 ok($udp->bind_and_listen(), 1, "Failed to bind UDP server socket");
 $udp->set_destination('127.0.0.1:16404', 'TESTING');
+
+# second UDP peer in the same group, sharing the server's socket
+my $udp2 = new Ham::APRS::IS2('127.0.0.1:16406', 'TESTIN-3', 'udp-peer' => 1, 'hmac-keys' => $is2_hmac_keys, 'hmac-key-tx' => 3);
+ok(defined $udp2, 1, "Failed to initialize second Ham::APRS::IS2 UDP server socket");
+ok($udp2->bind_and_listen(), 1, "Failed to bind second UDP server socket");
+$udp2->set_destination('127.0.0.1:16404', 'TESTING');
 
 # TCP server socket
 my $upstream_call = 'FAKEUP';
@@ -59,7 +65,8 @@ my $is1 = $iss1->accept();
 ok(defined $is1, (1), "Failed to accept connection 1 from server");
 ok($iss1->process_login($is1), 'ok', "Failed to accept login 1 from server");
 
-ok($udp->is2_corepeer_negotiate(), 1, "Failed to negotiate IS2 corepeer link");
+ok($udp->is2_corepeer_negotiate(), 1, "Failed to negotiate IS2 corepeer link: " . $udp->{'error'});
+ok($udp2->is2_corepeer_negotiate(), 1, "Failed to negotiate IS2 corepeer link with the second peer: " . $udp2->{'error'});
 
 # Oversized datagrams, which do not fit in the server's input buffer, must be
 # dropped: with MSG_TRUNC, Linux reports the full length of a truncated datagram.
@@ -86,6 +93,10 @@ istest::txrx(\&ok, $udp, $client, $s, $rx);
 $s = "SRC>DST,qAR,IGATE:core peer to client, 2";
 istest::txrx(\&ok, $udp, $client, $s, $s);
 
+# 3b) from the second core peer to client
+$s = "SRC>DST,qAR,IGATE:core peer 2 to client";
+istest::txrx(\&ok, $udp2, $client, $s, $s);
+
 # 4) from client to peers and upstreams
 $s = "SRC>DST,qAR,IGATE:from client";
 istest::txrx(\&ok, $client, $is1, $s, $s);
@@ -93,6 +104,10 @@ istest::txrx(\&ok, $client, $is1, $s, $s);
 my @r = $udp->get_packets();
 ok($#r, 0, "Failed to pass packet from client to UDP peer, packet list len < 0");
 ok($r[0], $s, "Failed to pass packet from client to UDP peer");
+
+@r = $udp2->get_packets();
+ok($#r, 0, "Failed to pass packet from client to second UDP peer, packet list len < 0");
+ok($r[0], $s, "Failed to pass packet from client to second UDP peer");
 
 # disconnect ####################
 

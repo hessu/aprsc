@@ -975,15 +975,26 @@ sub send_udp_packet($$)
 	return $ret;
 }
 
-sub is2_corepeer_negotiate($)
+sub is2_corepeer_negotiate($;$)
 {
-        my($self) = @_;
+        my($self, $timeout) = @_;
+        $timeout = 20 if (!defined $timeout);
+        my $end_t = time() + $timeout;
+
+        # start from scratch - the server may have forgotten us after a reconfiguration
+        delete $self->{'corepeer-ok-tx'};
+        delete $self->{'corepeer-ok-rx'};
+
         my $hello = "# PEER2 v 2 hello " . $self->{'mycall'} . " vers perl-is1 1.0 token hq736t7q63";
         if (!$self->send_udp_packet($hello)) {
         	return undef;
         }
 	while (!$self->is2_corepeer_linked()) {
-		my $packet = $self->is2_udp_frame_in(10);
+		if (time() > $end_t) {
+			$self->{'error'} = "IS2 corepeer negotiation timed out";
+			return 0;
+		}
+		my $packet = $self->is2_udp_frame_in(2);
 	}
         return 1;
 }

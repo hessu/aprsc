@@ -1275,13 +1275,16 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	clientaccount_add_rx(rc, IPPROTO_UDP, r, 0, 0, 0); /* Account byte count. incoming_handler() will account packets. */
 	rc->last_read = tick;
 	
+	/* c is the peer whose xfd polls the shared UDP socket and owns the
+	 * input buffer, rc is the peer which sent this datagram.
+	 */
 	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
-		is2_corepeer_control_in(self, c, c->ibuf, r);
+		is2_corepeer_control_in(self, rc, c->ibuf, r);
 		return 0;
 	}
 	
-	if (c->corepeer_is2) {
-		is2_corepeer_deframe_input(self, c, c->ibuf, r);
+	if (rc->corepeer_is2) {
+		is2_corepeer_deframe_input(self, rc, c->ibuf, r);
 		return 0;
 	}
 	

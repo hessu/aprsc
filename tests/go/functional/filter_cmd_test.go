@@ -172,5 +172,37 @@ func TestServerMessageParsing(t *testing.T) {
 		})
 	}
 
+	// A message to SERVER inside a 3rd-party packet is not from the local
+	// client, so it is not a command, and it is dropped. The outer header
+	// is crafted so that the outer packet looks like a message too, which
+	// used to get it acked and replied to.
+	t.Run("3rd-party message is dropped", func(t *testing.T) {
+		full := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-3")
+		rx.Send(t, login+">APRS:}AB>C,D,E::SERVER   :filter p/OZ{9")
+
+		// The next packet on the full feed must be the helper sent
+		// after the 3rd-party packet.
+		rx.Send(t, login+">APRS:>should pass")
+		fwdRe := regexp.MustCompile(`^N5CAL-2>APRS,TCPIP\*,qAC,TESTING:>should pass$`)
+		fwd, err := full.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("helper packet not passed: %v", err)
+		}
+		if !fwdRe.MatchString(fwd) {
+			t.Errorf("unexpected packet %q, wanted the helper", fwd)
+		}
+
+		// The next thing the client gets must be the ack to a real
+		// command sent after the 3rd-party packet.
+		rx.Send(t, fmt.Sprintf("%s>APRS::%-9.9s:filter?{10", login, "SERVER"))
+		ack, err := rx.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no ack: %v", err)
+		}
+		if !ackRe("10").MatchString(ack) {
+			t.Errorf("unexpected packet %q, wanted ack10", ack)
+		}
+	})
+
 	s.Stop()
 }

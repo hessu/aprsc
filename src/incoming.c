@@ -1127,6 +1127,12 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 			goto free_pb_ret;
 		}
 		
+		/* A message inside a 3rd-party packet is not from the local client */
+		if (pb->packettype & T_3RDPARTY) {
+			hlog(LOG_DEBUG, "3rd-party message to SERVER from %.*s, dropping", pb->srcname_len, pb->srcname);
+			goto free_pb_ret;
+		}
+		
 		rc = incoming_server_message(self, c, pb);
 		goto free_pb_ret;
 	}

@@ -77,6 +77,43 @@ func TestUDPPeer(t *testing.T) {
 	s.Stop()
 }
 
+// Without PeerGroupKey lines in the configuration the server has nothing to
+// sign IS2 peer frames with, so it must not propose IS2 peering, nor accept it
+// when a peer proposes: the link stays on plain UDP.
+func TestUDPPeerWithoutKeys(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	udp := isclient.ListenUDPPeer(t, harness.AddrOn(t, "127.0.0.1", 16405), harness.AddrOn(t, "127.0.0.1", 16404))
+
+	s := harness.Start(t, "basic")
+
+	client := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
+
+	// plain UDP peering works both ways
+	const fromPeer = "SRC>DST,qAR,IGATE:peer to client without keys"
+	isclient.TxRx(t, udp, client, fromPeer, fromPeer)
+	const fromClient = "SRC>DST,qAR,IGATE:client to peer without keys"
+	isclient.TxRx(t, client, udp, fromClient, fromClient)
+
+	// A proposal from the peer (configured as PEER1) is ignored instead of
+	// being answered. The server would answer right away if it accepted.
+	if err := udp.SendLine("# PEER2 v 2 hello PEER1 vers go-gotest 1.0 token hq736t7q63"); err != nil {
+		t.Fatalf("failed to send an IS2 proposal: %v", err)
+	}
+	isclient.ExpectSilence(t, udp, 3*time.Second, "UDP peer after proposing IS2")
+	if n := s.LogCount("control packet ignored, no PeerGroupKey"); n != 1 {
+		t.Errorf("the server logged the ignored proposal %d times, want 1", n)
+	}
+
+	// and the server never proposed IS2 itself, which it logs when it does
+	if n := s.LogCount("proposing IS2"); n != 0 {
+		t.Errorf("the server proposed IS2 peering %d times without keys", n)
+	}
+
+	s.Stop()
+}
+
 // HTTP position upload. Port of t/62http-client.t.
 func TestHTTPUpload(t *testing.T) {
 	harness.Parallel(t)

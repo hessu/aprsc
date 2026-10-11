@@ -1756,7 +1756,7 @@ static void send_keepalives(struct worker_t *self)
 			if (c->next_is2_peer_interval > COREPEER_IS2_PROPOSE_T_MAX)
 				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MAX;
 			
-			if (!c->corepeer_is2 && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
+			if (!c->corepeer_is2 && is2_corepeer_enabled() && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
 				c->next_is2_peer_offer = tick + c->next_is2_peer_interval + random() % 5;
 				c->next_is2_peer_interval *= 2;
 				

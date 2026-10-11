@@ -120,6 +120,10 @@ The HMAC is calculated over everything before it: the frame, the
 marker, the key identifier and the timestamp.  The keys are shared
 secrets configured on all peers of a group (PeerGroupKey), the key
 identifier selects which one was used, so that keys can be rotated.
+The sender signs with the key selected by PeerGroupKeyTransmit.  A
+server which has no such key configured can not sign frames, so it does
+not propose the upgrade to its peers, nor accept it when a peer
+proposes: its peer links stay on plain UDP.
 
 A receiver drops a frame if it does not carry a trailer, the key
 identifier is not configured, the HMAC does not verify, or the

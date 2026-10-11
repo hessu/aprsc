@@ -1576,6 +1576,12 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 	
 	hlog_packet(LOG_DEBUG, p, len, "%s/%s: IS2 UDP: control packet in: ", c->addr_rem, c->username);
 	p[len] = 0;
+
+	/* without a key to sign frames with, the link stays on plain UDP */
+	if (!is2_corepeer_enabled()) {
+		hlog_packet(LOG_DEBUG, p, len, "%s/%s: IS2 UDP: control packet ignored, no PeerGroupKey configured: ", c->addr_rem, c->username);
+		return 0;
+	}
 	
 	/* parse to arguments */
 	if ((argc = parse_args_noshell(argv, p)) == 0)
@@ -1724,5 +1730,30 @@ int is2_corepeer_key_setup(void)
 	for (i = 0; i < IS2_PEERGROUP_KEY_ID_NUM; i++)
 		is2_corepeer_key_free(old_keys[i]);
 
+	/* IS2 peering is only done with a key to sign the frames with */
+	if (peerip_config && !new_keys[peergroup_key_transmit]) {
+		if (peergroup_key_config)
+			hlog(LOG_WARNING, "IS2 UDP peering disabled: PeerGroupKeyTransmit %d has no PeerGroupKey", peergroup_key_transmit);
+		else
+			hlog(LOG_INFO, "IS2 UDP peering disabled: no PeerGroupKey configured");
+	}
+
 	return 0;
+}
+
+/*
+ *	IS2 peering signs every frame with the PeerGroupKeyTransmit key, so it
+ *	is only proposed to peers, and accepted from them, when that key has
+ *	been configured. Without it the peer links stay on plain UDP.
+ */
+
+int is2_corepeer_enabled(void)
+{
+	int r;
+
+	rwl_rdlock(&is2_corepeer_keys_lock);
+	r = (is2_corepeer_keys[peergroup_key_transmit] != NULL);
+	rwl_rdunlock(&is2_corepeer_keys_lock);
+
+	return r;
 }

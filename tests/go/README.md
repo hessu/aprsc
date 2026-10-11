@@ -20,13 +20,12 @@ The tests run a few at a time, three unless `-parallel n` (or `make test
 PARALLEL=n`) says otherwise, each with a server of its own on ports of its
 own. The configurations in `../cfg-aprsc/` use fixed port numbers, and the
 tests refer to the same numbers through `harness.Port`, `harness.Addr` and
-`harness.AddrOn`, never literally. The first test to run gets those very
-ports, and the others get ranges from 20100 up, with the ports in their
-copies of the configuration mapped accordingly; `PARALLEL=1` runs the tests
-one at a time, all on the original ports. `internal/harness/ports.go` lists
-every port the configurations use, and a port added to a configuration must
-be added there. Nothing else (an old aprsc, for example) may be listening on
-port 55501.
+`harness.AddrOn`, never literally: each running test gets a block of ports
+in the 20000 range, and the harness maps the numbers to it in the copy of
+the configuration the server runs with. The blocks lie below the ephemeral
+port range, where the numbers in the configurations would be at the mercy of
+any outgoing connection. `internal/harness/ports.go` lists every port the
+configurations use, and a port added to a configuration must be added there.
 
 ## Options
 

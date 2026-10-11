@@ -8,7 +8,7 @@
 # another binary, for example one built with ./configure --enable-is2: the IS2
 # tests are skipped without it. PARALLEL is how many tests run at a time, each
 # with a server of its own on ports of its own; PARALLEL=1 runs them one at a
-# time, on the ports in the configurations.
+# time.
 GO=go
 PARALLEL=3
 GOTEST_FLAGS = -count=1 -timeout 20m -parallel $(PARALLEL)

@@ -69,9 +69,13 @@ It's a good idea to start by getting the test suite running on your system
 so that you will notice if your changes accidentally break some other
 functionality.
 
+The test suite is in the tests/ directory.  It is being rewritten in Go, in
+tests/go (run it with "make gotest" in tests/, after building aprsc and doing
+"make testinstall" in src/); the older Perl tests there ("make test") still
+exist until the Go suite has replaced them.  Write new tests in Go.
+
 Patches which simply add new test cases for existing, untested functionality
-are more than welcome.  Writing tests in Perl is fun and an easy way to
-start contributing.
+are more than welcome.  Writing tests is an easy way to start contributing.
 
 Broken code on the live APRS-IS server network can break the whole network.
 This has the potential of making a lot of people unhappy.  Before connecting

@@ -271,6 +271,17 @@ func start(t *testing.T, cfg string, checkStale bool, extraArgs []string) *Serve
 		t.Fatalf("no such configuration file: %v", err)
 	}
 
+	// The configurations keep the server's data in tests/data, and the status
+	// page serves the web files copied to tests/web by "make testinstall".
+	if err := os.MkdirAll(filepath.Join(TestsDir(), "data"), 0o755); err != nil {
+		t.Fatalf("cannot create the data directory: %v", err)
+	}
+	if prod.ownLogging {
+		if _, err := os.Stat(filepath.Join(TestsDir(), "web")); err != nil {
+			t.Fatalf("tests/web is missing; run \"make testinstall\" in src/ first: %v", err)
+		}
+	}
+
 	// A leftover server would hold the ports and answer in place of ours.
 	if checkStale {
 		if c, err := net.DialTimeout("tcp", StatusAddr, time.Second); err == nil {

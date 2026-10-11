@@ -6,7 +6,11 @@ peers to it, and checks what comes out. This is a Go port of the Perl suite in
 `../t/`; the Perl tests remain until the port has been run on Linux.
 
     cd src && ./configure && make       # build aprsc first
-    cd tests/go && go test ./...
+    make testinstall                    # copies the web files to tests/web
+    cd ../tests && make gotest          # or: cd go && go test ./...
+
+`make gotest-short`, `make gotest-race` and `make gotest-run T=TestDupecheck`
+are variants (see `../Makefile`).
 
 The tests use fixed ports, so they run one at a time, and nothing else (an old
 aprsc, for example) may be listening on port 55501.

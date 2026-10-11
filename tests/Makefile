@@ -15,6 +15,31 @@ TESTID=`echo $$$$_$$RANDOM$$RANDOM$$RANDOM`
 TEST_SRCCALLS="XX7FIT-1,XX7FIT-2"
 TEST_IGATE="XX7IG"
 
+# The Go test suite, in go/, replaces the Perl one. It needs the aprsc binary
+# built in ../src and "make testinstall" done there. Set APRSC_BIN to test
+# another binary, for example one built with ./configure --enable-is2: the IS2
+# tests are skipped without it.
+GO=go
+GOTEST_FLAGS = -count=1 -timeout 20m
+
+# the Go tests: all of them, including aggregator and live upgrade
+gotest:
+	cd go && $(GO) test $(GOTEST_FLAGS) ./...
+
+# the Go tests, skipping the heavy UDP load test (like travistest)
+gotest-short:
+	cd go && $(GO) test $(GOTEST_FLAGS) -short ./...
+
+# the Go tests with the race detector, to check the test code itself
+gotest-race:
+	cd go && $(GO) test $(GOTEST_FLAGS) -race ./...
+
+# one Go test or a group, for example: make gotest-run T=TestDupecheck
+gotest-run:
+	cd go && $(GO) test $(GOTEST_FLAGS) -v -run '$(T)' ./...
+
+.PHONY: gotest gotest-short gotest-race gotest-run
+
 test: tls-testcert
 	@rm -f logs/aprsc.log
 	PERL_DL_NONLAZY=1 $(PERL) "-MExtUtils::Command::MM" "-e" "test_harness($(TEST_VERBOSE), '$(INST_LIB)', '$(INST_ARCHLIB)')" $(TEST_FILES)

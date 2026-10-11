@@ -793,10 +793,10 @@ static int incoming_quirks(char *s, int len, char *quirked)
 		*np++ = *p++;
 	
 	/* skip spaces in end of srccall */
-	while (*p == ' ' && p < packet_end)
+	while (p < packet_end && *p == ' ')
 		p++;
 	
-	if (*p != '>')
+	if (p == packet_end || *p != '>')
 		return INERR_NO_DST;
 	
 	/* copy path, removing trailing spaces from callsigns */
@@ -816,7 +816,7 @@ static int incoming_quirks(char *s, int len, char *quirked)
 		}
 		
 		/* end of path? fine */
-		if (*p == ':')
+		if (p < packet_end && *p == ':')
 			continue;
 		
 		/* not fine. */

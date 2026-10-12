@@ -10,7 +10,6 @@ systems.
 aprsc has been built and tested on:
 
 * Ubuntu LTS (22.04, 24.04, 26.04): x86_64
-* Debian 11.0, "bullseye": i386 and x86_64
 * Debian 12.0, "bookworm": x86_64
 * Debian 13.0, "trixie": x86_64
 * Mac OS X 10.8 (Snow Leopard): x86
@@ -46,7 +45,7 @@ On Linux, aprsc can utilize POSIX capabilities to enable binding low
 library, and compiling against it requires it's development headers
 (package libcap-dev on Debian/Ubuntu).
 
-For build a .deb package on Debian 11 debhelper, libssl-dev and libsctp-dev
+To build a .deb package on Debian, debhelper, libssl-dev and libsctp-dev
 are also currently required and can be installed with apt.
 
 On Fedora Core, the following packages are required:

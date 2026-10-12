@@ -35,8 +35,6 @@ var platforms = []platform{
 	{name: "ubuntu-2604-amd64"},
 	{name: "ubuntu-2404-amd64"},
 	{name: "ubuntu-2204-amd64"},
-	{name: "debian-110-i386"},
-	{name: "debian-110-amd64"},
 	{name: "debian-120-amd64"},
 	{name: "debian-130-amd64"},
 	{name: "fedora-43-x86_64", dest: "fedora/43/x86_64"},

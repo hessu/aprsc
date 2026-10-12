@@ -145,7 +145,7 @@ struct pbuf_t {
 
 	Aprsis2__ISPacket is2packet;
 
-	char data[1];	/* contains the whole packet, including CRLF, ready to transmit */
+	char data[];	/* contains the whole packet, including CRLF, ready to transmit */
 };
 
 /* global packet buffer */

@@ -181,17 +181,17 @@ sub vm_build($$$)
 	$dir =~ s/\.tar.*//;
 	
 	print "... cleanup ...\n";
-	system("ssh $vm 'rm -rf buildtmp && mkdir -p buildtmp'") == 0 or die "vm buildtmp cleanup failed: $?\n";
+	system("ssh $vm 'rm -rf buildtmp && mkdir -p buildtmp'") == 0 or die "vm $vm buildtmp cleanup failed: $?\n";
 	print "... upload sources ...\n";
-	system("scp $tgz $vm:buildtmp/") == 0 or die "vm source upload failed: $?\n";
+	system("scp $tgz $vm:buildtmp/") == 0 or die "vm $vm source upload failed: $?\n";
 	print "... extract sources ...\n";
-	system("ssh $vm 'cd buildtmp && tar xvfz $d_tgz'") == 0 or die "vm source extract failed: $?\n";
+	system("ssh $vm 'cd buildtmp && tar xvfz $d_tgz'") == 0 or die "vm $vm source extract failed: $?\n";
 	print "... build ...\n";
-	system("ssh $vm 'cd buildtmp/$dir/src && ./configure && DEB_BUILD_HARDENING=1 make make-deb'") == 0 or die "vm build phase failed: $?\n";
+	system("ssh $vm 'cd buildtmp/$dir/src && ./configure && DEB_BUILD_HARDENING=1 make make-deb'") == 0 or die "vm $vm build phase failed: $?\n";
 	print "... download packages ...\n";
 	system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
 	mkdir($dir_build_down) || die "Could not mkdir $dir_build_down: $!\n";
-	system("scp $vm:buildtmp/$dir/*.deb $vm:buildtmp/$dir/*.changes $dir_build_down/") == 0 or die "vm build product download failed: $?\n";
+	system("scp $vm:buildtmp/$dir/*.deb $vm:buildtmp/$dir/*.changes $dir_build_down/") == 0 or die "vm $vm build product download failed: $?\n";
 	
 	opendir(my $dh, $dir_build_down) || die "Could not opendir $dir_build_down: $!\n";
 	my @products = grep { /^aprsc.*\.(changes|deb)/ && -f "$dir_build_down/$_" } readdir($dh);
@@ -226,15 +226,15 @@ sub vm_build_rpm($$$)
 	$arch =~ s/.*-//;
 	
 	print "... cleanup ...\n";
-	system("ssh $vm 'rm -rf buildtmp && mkdir -p buildtmp && rm -rf rpmbuild/*'") == 0 or die "vm buildtmp cleanup failed: $?\n";
+	system("ssh $vm 'rm -rf buildtmp && mkdir -p buildtmp && rm -rf rpmbuild/*'") == 0 or die "vm $vm buildtmp cleanup failed: $?\n";
 	print "... upload sources ...\n";
-	system("scp $tgz $vm:buildtmp/") == 0 or die "vm source upload failed: $?\n";
+	system("scp $tgz $vm:buildtmp/") == 0 or die "vm $vm source upload failed: $?\n";
 	print "... build RPM ...\n";
-	system("ssh $vm 'cd buildtmp && rpmbuild --target $arch -ta $d_tgz'") == 0 or die "vm build phase failed: $?\n";
+	system("ssh $vm 'cd buildtmp && rpmbuild --target $arch -ta $d_tgz'") == 0 or die "vm $vm build phase failed: $?\n";
 	print "... download packages ...\n";
 	system("rm -rf $dir_build_down") == 0 or die "failed to delete $dir_build_down directory\n";
 	mkdir($dir_build_down) || die "Could not mkdir $dir_build_down: $!\n";
-	system("scp $vm:rpmbuild/RPMS/*/aprsc-*.rpm $dir_build_down/") == 0 or die "vm build product download failed: $?\n";
+	system("scp $vm:rpmbuild/RPMS/*/aprsc-*.rpm $dir_build_down/") == 0 or die "vm $vm build product download failed: $?\n";
 	
 	print "... renaming products from $dir_build_down ...\n";
 	opendir(my $dh, $dir_build_down) || die "Could not opendir $dir_build_down: $!\n";

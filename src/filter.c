@@ -2595,6 +2595,8 @@ void filter_set(struct client_t *c, const char *s, const int len)
  *	line on the IS stream
  */
 
+static int filter_command_reply(struct worker_t *self, struct client_t *c, int in_message, const char *fmt, ...) PRINTF_LIKE(4, 5);
+
 static int filter_command_reply(struct worker_t *self, struct client_t *c, int in_message, const char *fmt, ...)
 {
 	va_list args;

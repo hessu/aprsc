@@ -37,6 +37,16 @@ typedef int cjbool;
 #define true ((cjbool)1)
 #define false ((cjbool)0)
 
+/* mark an intentional fall-through between switch cases */
+#if defined(__has_attribute)
+#if __has_attribute(fallthrough)
+#define CJSON_FALLTHROUGH __attribute__((fallthrough))
+#endif
+#endif
+#ifndef CJSON_FALLTHROUGH
+#define CJSON_FALLTHROUGH do { } while (0)
+#endif
+
 static const unsigned char *global_ep = NULL;
 
 const char *cJSON_GetErrorPtr(void)
@@ -517,13 +527,16 @@ static unsigned char utf16_literal_to_utf8(const unsigned char * const input_poi
             /* 10xxxxxx */
             (*output_pointer)[3] = (unsigned char)((codepoint | 0x80) & 0xBF);
             codepoint >>= 6;
+            CJSON_FALLTHROUGH;
         case 3:
             /* 10xxxxxx */
             (*output_pointer)[2] = (unsigned char)((codepoint | 0x80) & 0xBF);
             codepoint >>= 6;
+            CJSON_FALLTHROUGH;
         case 2:
             (*output_pointer)[1] = (unsigned char)((codepoint | 0x80) & 0xBF);
             codepoint >>= 6;
+            CJSON_FALLTHROUGH;
         case 1:
             /* depending on the length in bytes this determines the
                encoding of the first UTF8 byte */

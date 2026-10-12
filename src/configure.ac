@@ -318,6 +318,73 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <openssl/opensslv.h>
 CFLAGS="$t_oldCFLAGS"
 LIBS="$t_oldLIBS"
 
+dnl Compiler and linker hardening flags. Not all compilers, linkers and
+dnl targets support all of them (older gcc, clang on macOS, non-x86 CPUs),
+dnl so each flag is probed and only used if it produces no errors or
+dnl warnings. They are checked last so that they do not affect the other
+dnl configure tests.
+dnl See https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html
+AC_ARG_ENABLE([hardening],
+	[AS_HELP_STRING([--disable-hardening],
+	[do not build with compiler and linker hardening flags])],
+	[enable_hardening=$enableval],
+	[enable_hardening=yes])
+
+AC_SUBST(HARDEN_CFLAGS)
+AC_SUBST(HARDEN_LDFLAGS)
+
+AC_DEFUN([APRSC_CHECK_HARDEN_CFLAG], [
+  AC_MSG_CHECKING([whether the compiler accepts $1])
+  t_oldCFLAGS="$CFLAGS"
+  CFLAGS="$CFLAGS $HARDEN_CFLAGS $1"
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <string.h>]], [[]])],
+    [AC_MSG_RESULT([yes])
+     HARDEN_CFLAGS="$HARDEN_CFLAGS $1"],
+    [AC_MSG_RESULT([no])])
+  CFLAGS="$t_oldCFLAGS"
+])
+
+AC_DEFUN([APRSC_CHECK_HARDEN_LDFLAG], [
+  AC_MSG_CHECKING([whether the linker accepts $1])
+  t_oldCFLAGS="$CFLAGS"
+  t_oldLDFLAGS="$LDFLAGS"
+  CFLAGS="$CFLAGS $HARDEN_CFLAGS"
+  LDFLAGS="$LDFLAGS $HARDEN_LDFLAGS $1"
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+    [AC_MSG_RESULT([yes])
+     HARDEN_LDFLAGS="$HARDEN_LDFLAGS $1"],
+    [AC_MSG_RESULT([no])])
+  CFLAGS="$t_oldCFLAGS"
+  LDFLAGS="$t_oldLDFLAGS"
+])
+
+if test "x$enable_hardening" = "xyes"; then
+  dnl Any output on stderr (such as an "unused argument" or "ignored option"
+  dnl warning) makes a check fail.
+  t_oldWerror="$ac_c_werror_flag"
+  ac_c_werror_flag=yes
+
+  for flag in -Wformat -Wformat=2 -Wimplicit-fallthrough \
+      -Werror=format-security \
+      "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3" \
+      -fstrict-flex-arrays=3 -fstack-clash-protection \
+      -fstack-protector-strong \
+      -fcf-protection=full -mbranch-protection=standard \
+      -fno-delete-null-pointer-checks -fno-strict-overflow \
+      -fno-strict-aliasing -ftrivial-auto-var-init=zero \
+      -fexceptions -fPIE; do
+    APRSC_CHECK_HARDEN_CFLAG([$flag])
+  done
+
+  for flag in -pie -Wl,-z,nodlopen -Wl,-z,noexecstack \
+      -Wl,-z,relro -Wl,-z,now \
+      -Wl,--as-needed -Wl,--no-copy-dt-needed-entries; do
+    APRSC_CHECK_HARDEN_LDFLAG([$flag])
+  done
+
+  ac_c_werror_flag="$t_oldWerror"
+fi
+
 dnl Output files
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

@@ -623,6 +623,8 @@ ac_includes_default="\
 
 ac_header_c_list=
 ac_subst_vars='LTLIBOBJS
+HARDEN_LDFLAGS
+HARDEN_CFLAGS
 OPENSSL_LIBS
 OPENSSL_CFLAGS
 LIBZ
@@ -692,6 +694,7 @@ enable_option_checking
 enable_static_libevent
 enable_is2
 with_ipv6_replacement_libc
+enable_hardening
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1323,6 +1326,8 @@ Optional Features:
                           link against static libevent.a [default=do not]
   --enable-is2            enable the work in progress IS2 protocol
                           [default=disabled]
+  --disable-hardening     do not build with compiler and linker hardening
+                          flags
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -4976,6 +4981,108 @@ rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
 
 CFLAGS="$t_oldCFLAGS"
 LIBS="$t_oldLIBS"
+
+# Check whether --enable-hardening was given.
+if test ${enable_hardening+y}
+then :
+  enableval=$enable_hardening; enable_hardening=$enableval
+else case e in #(
+  e) enable_hardening=yes ;;
+esac
+fi
+
+
+
+
+
+
+
+
+
+if test "x$enable_hardening" = "xyes"; then
+      t_oldWerror="$ac_c_werror_flag"
+  ac_c_werror_flag=yes
+
+  for flag in -Wformat -Wformat=2 -Wimplicit-fallthrough \
+      -Werror=format-security \
+      "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3" \
+      -fstrict-flex-arrays=3 -fstack-clash-protection \
+      -fstack-protector-strong \
+      -fcf-protection=full -mbranch-protection=standard \
+      -fno-delete-null-pointer-checks -fno-strict-overflow \
+      -fno-strict-aliasing -ftrivial-auto-var-init=zero \
+      -fexceptions -fPIE; do
+
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking whether the compiler accepts $flag" >&5
+printf %s "checking whether the compiler accepts $flag... " >&6; }
+  t_oldCFLAGS="$CFLAGS"
+  CFLAGS="$CFLAGS $HARDEN_CFLAGS $flag"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <string.h>
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf '%s\n' "yes" >&6; }
+     HARDEN_CFLAGS="$HARDEN_CFLAGS $flag"
+else case e in #(
+  e) { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; } ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+  CFLAGS="$t_oldCFLAGS"
+
+  done
+
+  for flag in -pie -Wl,-z,nodlopen -Wl,-z,noexecstack \
+      -Wl,-z,relro -Wl,-z,now \
+      -Wl,--as-needed -Wl,--no-copy-dt-needed-entries; do
+
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking whether the linker accepts $flag" >&5
+printf %s "checking whether the linker accepts $flag... " >&6; }
+  t_oldCFLAGS="$CFLAGS"
+  t_oldLDFLAGS="$LDFLAGS"
+  CFLAGS="$CFLAGS $HARDEN_CFLAGS"
+  LDFLAGS="$LDFLAGS $HARDEN_LDFLAGS $flag"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf '%s\n' "yes" >&6; }
+     HARDEN_LDFLAGS="$HARDEN_LDFLAGS $flag"
+else case e in #(
+  e) { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; } ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+  CFLAGS="$t_oldCFLAGS"
+  LDFLAGS="$t_oldLDFLAGS"
+
+  done
+
+  ac_c_werror_flag="$t_oldWerror"
+fi
 
 ac_config_files="$ac_config_files Makefile"
 

@@ -139,7 +139,7 @@ static char *http_content_type(const char *fn)
 {
 	struct http_static_t *cmdp;
 	static char default_ctype[] = "text/html";
-	char *s;
+	const char *s;
 	
 	s = strrchr(fn, '.');
 	if (!s)

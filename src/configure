@@ -623,13 +623,8 @@ ac_includes_default="\
 
 ac_header_c_list=
 ac_subst_vars='LTLIBOBJS
-OPENSSL3_LIBS
-OPENSSL3_CFLAGS
 OPENSSL_LIBS
 OPENSSL_CFLAGS
-PKG_CONFIG_LIBDIR
-PKG_CONFIG_PATH
-PKG_CONFIG
 LIBZ
 LIBRT
 LIBOBJS
@@ -706,13 +701,8 @@ CFLAGS
 LDFLAGS
 LIBS
 CPPFLAGS
-PKG_CONFIG
-PKG_CONFIG_PATH
-PKG_CONFIG_LIBDIR
 OPENSSL_CFLAGS
-OPENSSL_LIBS
-OPENSSL3_CFLAGS
-OPENSSL3_LIBS'
+OPENSSL_LIBS'
 
 
 # Initialize some variables set by options.
@@ -1347,19 +1337,10 @@ Some influential environment variables:
   LIBS        libraries to pass to the linker, e.g. -l<library>
   CPPFLAGS    (Objective) C/C++ preprocessor flags, e.g. -I<include dir> if
               you have headers in a nonstandard directory <include dir>
-  PKG_CONFIG  path to pkg-config utility
-  PKG_CONFIG_PATH
-              directories to add to pkg-config's search path
-  PKG_CONFIG_LIBDIR
-              path overriding pkg-config's built-in search path
   OPENSSL_CFLAGS
-              C compiler flags for OPENSSL, overriding pkg-config
+              C compiler flags for OpenSSL
   OPENSSL_LIBS
-              linker flags for OPENSSL, overriding pkg-config
-  OPENSSL3_CFLAGS
-              C compiler flags for OPENSSL3, overriding pkg-config
-  OPENSSL3_LIBS
-              linker flags for OPENSSL3, overriding pkg-config
+              linker flags for OpenSSL, default -lssl -lcrypto
 
 Use these variables to override the choices made by 'configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -4925,294 +4906,76 @@ fi
 
 
 
+if test "x$OPENSSL_LIBS" = "x"; then
+  OPENSSL_LIBS="-lssl -lcrypto"
+fi
 
+t_oldCFLAGS="$CFLAGS"
+t_oldLIBS="$LIBS"
+CFLAGS="$CFLAGS $OPENSSL_CFLAGS"
+LIBS="$OPENSSL_LIBS $LIBS"
 
-
-
-
-if test "x$ac_cv_env_PKG_CONFIG_set" != "xset"; then
-	if test -n "$ac_tool_prefix"; then
-  # Extract the first word of "${ac_tool_prefix}pkg-config", so it can be a program name with args.
-set dummy ${ac_tool_prefix}pkg-config; ac_word=$2
-{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-printf %s "checking for $ac_word... " >&6; }
-if test ${ac_cv_path_PKG_CONFIG+y}
+{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for OpenSSL >= 1.1.1" >&5
+printf %s "checking for OpenSSL >= 1.1.1... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <openssl/ssl.h>
+#if OPENSSL_VERSION_NUMBER < 0x10101000L
+#error OpenSSL too old
+#endif
+int
+main (void)
+{
+SSL_CTX_free(SSL_CTX_new(TLS_method()));
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
 then :
-  printf %s "(cached) " >&6
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf '%s\n' "yes" >&6; }
 else case e in #(
-  e) case $PKG_CONFIG in
-  [\\/]* | ?:[\\/]*)
-  ac_cv_path_PKG_CONFIG="$PKG_CONFIG" # Let the user override the test with a path.
-  ;;
-  *)
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  case $as_dir in #(((
-    '') as_dir=./ ;;
-    */) ;;
-    *) as_dir=$as_dir/ ;;
-  esac
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
-    ac_cv_path_PKG_CONFIG="$as_dir$ac_word$ac_exec_ext"
-    printf '%s\n' "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  ;;
-esac ;;
+  e) { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; }
+   as_fn_error $? "OpenSSL 1.1.1 or higher is required (libssl-dev or openssl-devel)" "$LINENO" 5 ;;
 esac
 fi
-PKG_CONFIG=$ac_cv_path_PKG_CONFIG
-if test -n "$PKG_CONFIG"; then
-  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: $PKG_CONFIG" >&5
-printf '%s\n' "$PKG_CONFIG" >&6; }
-else
-  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
 
+{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for OpenSSL >= 3.0.0" >&5
+printf %s "checking for OpenSSL >= 3.0.0... " >&6; }
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <openssl/opensslv.h>
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#error OpenSSL older than 3
+#endif
+int
+main (void)
+{
 
-fi
-if test -z "$ac_cv_path_PKG_CONFIG"; then
-  ac_pt_PKG_CONFIG=$PKG_CONFIG
-  # Extract the first word of "pkg-config", so it can be a program name with args.
-set dummy pkg-config; ac_word=$2
-{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
-printf %s "checking for $ac_word... " >&6; }
-if test ${ac_cv_path_ac_pt_PKG_CONFIG+y}
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
 then :
-  printf %s "(cached) " >&6
-else case e in #(
-  e) case $ac_pt_PKG_CONFIG in
-  [\\/]* | ?:[\\/]*)
-  ac_cv_path_ac_pt_PKG_CONFIG="$ac_pt_PKG_CONFIG" # Let the user override the test with a path.
-  ;;
-  *)
-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
-for as_dir in $PATH
-do
-  IFS=$as_save_IFS
-  case $as_dir in #(((
-    '') as_dir=./ ;;
-    */) ;;
-    *) as_dir=$as_dir/ ;;
-  esac
-    for ac_exec_ext in '' $ac_executable_extensions; do
-  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
-    ac_cv_path_ac_pt_PKG_CONFIG="$as_dir$ac_word$ac_exec_ext"
-    printf '%s\n' "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
-    break 2
-  fi
-done
-  done
-IFS=$as_save_IFS
-
-  ;;
-esac ;;
-esac
-fi
-ac_pt_PKG_CONFIG=$ac_cv_path_ac_pt_PKG_CONFIG
-if test -n "$ac_pt_PKG_CONFIG"; then
-  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: $ac_pt_PKG_CONFIG" >&5
-printf '%s\n' "$ac_pt_PKG_CONFIG" >&6; }
-else
-  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-fi
-
-  if test "x$ac_pt_PKG_CONFIG" = x; then
-    PKG_CONFIG=""
-  else
-    case $cross_compiling:$ac_tool_warned in
-yes:)
-{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: WARNING: using cross tools not prefixed with host triplet" >&5
-printf '%s\n' "$as_me: WARNING: using cross tools not prefixed with host triplet" >&2;}
-ac_tool_warned=yes ;;
-esac
-    PKG_CONFIG=$ac_pt_PKG_CONFIG
-  fi
-else
-  PKG_CONFIG="$ac_cv_path_PKG_CONFIG"
-fi
-
-fi
-if test -n "$PKG_CONFIG"; then
-	_pkg_min_version=0.9.0
-	{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking pkg-config is at least version $_pkg_min_version" >&5
-printf %s "checking pkg-config is at least version $_pkg_min_version... " >&6; }
-	if $PKG_CONFIG --atleast-pkgconfig-version $_pkg_min_version; then
-		{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+  { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 printf '%s\n' "yes" >&6; }
-	else
-		{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-		PKG_CONFIG=""
-	fi
-fi
-
-pkg_failed=no
-{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for openssl >= 1.1.1" >&5
-printf %s "checking for openssl >= 1.1.1... " >&6; }
-
-if test -n "$OPENSSL_CFLAGS"; then
-    pkg_cv_OPENSSL_CFLAGS="$OPENSSL_CFLAGS"
- elif test -n "$PKG_CONFIG"; then
-    if test -n "$PKG_CONFIG" && \
-    { { printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"openssl >= 1.1.1\""; } >&5
-  ($PKG_CONFIG --exists --print-errors "openssl >= 1.1.1") 2>&5
-  ac_status=$?
-  printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; then
-  pkg_cv_OPENSSL_CFLAGS=`$PKG_CONFIG --cflags "openssl >= 1.1.1" 2>/dev/null`
-		      test "x$?" != "x0" && pkg_failed=yes
-else
-  pkg_failed=yes
-fi
- else
-    pkg_failed=untried
-fi
-if test -n "$OPENSSL_LIBS"; then
-    pkg_cv_OPENSSL_LIBS="$OPENSSL_LIBS"
- elif test -n "$PKG_CONFIG"; then
-    if test -n "$PKG_CONFIG" && \
-    { { printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"openssl >= 1.1.1\""; } >&5
-  ($PKG_CONFIG --exists --print-errors "openssl >= 1.1.1") 2>&5
-  ac_status=$?
-  printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; then
-  pkg_cv_OPENSSL_LIBS=`$PKG_CONFIG --libs "openssl >= 1.1.1" 2>/dev/null`
-		      test "x$?" != "x0" && pkg_failed=yes
-else
-  pkg_failed=yes
-fi
- else
-    pkg_failed=untried
-fi
-
-
-
-if test $pkg_failed = yes; then
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-
-if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
-        _pkg_short_errors_supported=yes
-else
-        _pkg_short_errors_supported=no
-fi
-        if test $_pkg_short_errors_supported = yes; then
-                OPENSSL_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "openssl >= 1.1.1" 2>&1`
-        else
-                OPENSSL_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "openssl >= 1.1.1" 2>&1`
-        fi
-        # Put the nasty error message in config.log where it belongs
-        echo "$OPENSSL_PKG_ERRORS" >&5
-
-        openssl_found=no
-elif test $pkg_failed = untried; then
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-        openssl_found=no
-else
-        OPENSSL_CFLAGS=$pkg_cv_OPENSSL_CFLAGS
-        OPENSSL_LIBS=$pkg_cv_OPENSSL_LIBS
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf '%s\n' "yes" >&6; }
-        openssl_found=yes
-fi
-
-if test "x$openssl_found" = "xyes"; then
-
-pkg_failed=no
-{ printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking for openssl >= 3.0.0" >&5
-printf %s "checking for openssl >= 3.0.0... " >&6; }
-
-if test -n "$OPENSSL3_CFLAGS"; then
-    pkg_cv_OPENSSL3_CFLAGS="$OPENSSL3_CFLAGS"
- elif test -n "$PKG_CONFIG"; then
-    if test -n "$PKG_CONFIG" && \
-    { { printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"openssl >= 3.0.0\""; } >&5
-  ($PKG_CONFIG --exists --print-errors "openssl >= 3.0.0") 2>&5
-  ac_status=$?
-  printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; then
-  pkg_cv_OPENSSL3_CFLAGS=`$PKG_CONFIG --cflags "openssl >= 3.0.0" 2>/dev/null`
-		      test "x$?" != "x0" && pkg_failed=yes
-else
-  pkg_failed=yes
-fi
- else
-    pkg_failed=untried
-fi
-if test -n "$OPENSSL3_LIBS"; then
-    pkg_cv_OPENSSL3_LIBS="$OPENSSL3_LIBS"
- elif test -n "$PKG_CONFIG"; then
-    if test -n "$PKG_CONFIG" && \
-    { { printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"openssl >= 3.0.0\""; } >&5
-  ($PKG_CONFIG --exists --print-errors "openssl >= 3.0.0") 2>&5
-  ac_status=$?
-  printf '%s\n' "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-  test $ac_status = 0; }; then
-  pkg_cv_OPENSSL3_LIBS=`$PKG_CONFIG --libs "openssl >= 3.0.0" 2>/dev/null`
-		      test "x$?" != "x0" && pkg_failed=yes
-else
-  pkg_failed=yes
-fi
- else
-    pkg_failed=untried
-fi
-
-
-
-if test $pkg_failed = yes; then
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-
-if $PKG_CONFIG --atleast-pkgconfig-version 0.20; then
-        _pkg_short_errors_supported=yes
-else
-        _pkg_short_errors_supported=no
-fi
-        if test $_pkg_short_errors_supported = yes; then
-                OPENSSL3_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "openssl >= 3.0.0" 2>&1`
-        else
-                OPENSSL3_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "openssl >= 3.0.0" 2>&1`
-        fi
-        # Put the nasty error message in config.log where it belongs
-        echo "$OPENSSL3_PKG_ERRORS" >&5
-
-        openssl3_found=no
-elif test $pkg_failed = untried; then
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf '%s\n' "no" >&6; }
-        openssl3_found=no
-else
-        OPENSSL3_CFLAGS=$pkg_cv_OPENSSL3_CFLAGS
-        OPENSSL3_LIBS=$pkg_cv_OPENSSL3_LIBS
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf '%s\n' "yes" >&6; }
-        openssl3_found=yes
-fi
-
-  if test "x$openssl3_found" = "xyes"; then
 
 printf '%s\n' "#define HAVE_OPENSSL_3 1" >>confdefs.h
 
-    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: Found OpenSSL 3.0.0 or higher" >&5
-printf '%s\n' "$as_me: Found OpenSSL 3.0.0 or higher" >&6;}
-  else
-    { printf '%s\n' "$as_me:${as_lineno-$LINENO}: Found OpenSSL >= 1.1.1 but less than 3.0.0" >&5
-printf '%s\n' "$as_me: Found OpenSSL >= 1.1.1 but less than 3.0.0" >&6;}
-  fi
-else
-  as_fn_error $? "OpenSSL 1.1.1 or higher is required" "$LINENO" 5
+else case e in #(
+  e) { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf '%s\n' "no" >&6; } ;;
+esac
 fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+
+CFLAGS="$t_oldCFLAGS"
+LIBS="$t_oldLIBS"
 
 ac_config_files="$ac_config_files Makefile"
 

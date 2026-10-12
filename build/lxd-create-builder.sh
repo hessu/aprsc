@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Create an LXD container for building aprsc packages with build-all.pl.
+# Create an LXD container for building aprsc packages with build-all.
 # Works with images that configure themselves with cloud-init on first
 # boot: Ubuntu cloud images from the ubuntu: remote, and the "cloud"
 # variant of Fedora (imported with lxd-import-image.sh).

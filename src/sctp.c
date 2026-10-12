@@ -264,14 +264,15 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	SCTP socket is now writable, but we really don't do SCTP buffering yet...
+ *	SCTP socket is now writable, flush the data buffered in obuf
  */
 
 int sctp_writable(struct worker_t *self, struct client_t *c)
 {
-	hlog(LOG_INFO, "sctp_writable: SCTP tx buffering not implemented, closing socket");
-	client_close(self, c, errno);
-	return -1;
+	if (sctp_client_write(self, c, NULL, 0) < 0)
+		return -1;
+	
+	return 0;
 }
 
 /*
@@ -323,7 +324,14 @@ int sctp_client_write(struct worker_t *self, struct client_t *c, char *p, int le
 		//hlog(LOG_DEBUG, "%s/%s: client_write obuf empty", c->addr_rem, c->username, c->addr_rem);
 		c->obuf_start = 0;
 		c->obuf_end   = 0;
+		return len;
 	}
+	
+	/* tell the poller that we have outgoing data, to flush it at the
+	 * end of this round instead of waiting for the next keepalive scan
+	 */
+	xpoll_outgoing(&self->xp, c->xfd, 1);
+	
 	return len;
 }
 

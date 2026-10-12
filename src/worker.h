@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#include "hlog.h"
 #include "xpoll.h"
 #include "rwlock.h"
 #include "cJSON.h"
@@ -551,7 +552,7 @@ extern void pbuf_dupe_dump(FILE *fp);
 extern int client_postread(struct worker_t *self, struct client_t *c, int r);
 extern int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char *p, int len);
 
-extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...);
+extern int client_printf(struct worker_t *self, struct client_t *c, const char *fmt, ...) PRINTF_LIKE(3, 4);
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
 extern int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
 extern void client_close(struct worker_t *self, struct client_t *c, int errnum);

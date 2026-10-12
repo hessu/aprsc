@@ -1293,7 +1293,7 @@ in_drop:
 	if (e < 0) {
 		/* failed parsing */
 		hlog_packet(LOG_DEBUG, (char *)is2_packet->is_packet_data.data, is2_packet->is_packet_data.len,
-			"%s/%s: IS2 Dropped packet (%d: %s) len %d: ",
+			"%s/%s: IS2 Dropped packet (%d: %s) len %zu: ",
 			c->addr_rem, c->username, e, incoming_strerror(e), is2_packet->is_packet_data.len);
 	}
 	

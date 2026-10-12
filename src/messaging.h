@@ -17,6 +17,6 @@
 
 extern void messaging_generate_msgid(char *buf, int buflen);
 extern int messaging_ack(struct worker_t *self, struct client_t *c, struct pbuf_t *pb, struct aprs_message_t *am);
-extern int messaging_message_client(struct worker_t *self, struct client_t *c, const char *fmt, ...);
+extern int messaging_message_client(struct worker_t *self, struct client_t *c, const char *fmt, ...) PRINTF_LIKE(3, 4);
 
 #endif

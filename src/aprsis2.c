@@ -786,7 +786,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 	hlog(LOG_DEBUG, "%s/%s: IS2: Ping %s received: request_id %lu",
 		c->addr_rem, c->username,
 		(ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) ? "request" : "reply",
-		ping->request_id);
+		(unsigned long)ping->request_id);
 	
 	if (ping->ping_type == APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REQUEST) {
 		ping->ping_type = APRSIS2__IS2_KEEPALIVE_PING__PING_TYPE__REPLY;
@@ -804,7 +804,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		clock_gettime(CLOCK_MONOTONIC, &ts);
 
 		if (ping->request_data.len != sizeof(ts)) {
-			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %d expected %d)",
+			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %zu expected %zu)",
 				c->addr_rem, c->username, ping->request_data.len, sizeof(ts));
 			return -1;
 		}
@@ -816,7 +816,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		gettimeofday(&tv, NULL);
 
 		if (ping->request_data.len != sizeof(tv)) {
-			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %d expected %d)",
+			hlog(LOG_WARNING, "%s/%s: IS2: ping reply data of wrong size (got %zu expected %zu)",
 				c->addr_rem, c->username, ping->request_data.len, sizeof(tv));
 			return -1;
 		}

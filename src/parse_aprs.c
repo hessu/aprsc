@@ -37,6 +37,16 @@
 #define DEBUG_LOG(...) { }
 #endif
 
+/* Mark an intentional fall-through between switch cases */
+#if defined(__has_attribute)
+#if __has_attribute(fallthrough)
+#define FALLTHROUGH __attribute__((fallthrough))
+#endif
+#endif
+#ifndef FALLTHROUGH
+#define FALLTHROUGH do { } while (0)
+#endif
+
 /*
  *	Check if the given character is a valid symbol table identifier
  *	or an overlay character. The set is different for compressed
@@ -1197,6 +1207,7 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 			return 0;
 		}
 		/* intentionally missing break here */
+		FALLTHROUGH;
 	case '=':
 	case '/':
 	case '@':

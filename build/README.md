@@ -95,3 +95,9 @@ starts and stops it as needed.
 - The Debian containers and the Fedora containers up to 43 were set up by
   hand. Debian could be added to `lxd-create-builder.sh` with the
   `cloud` variant of the linuxcontainers.org image.
+
+## Release announcement
+
+`announcement-template.txt` is the template for the mailing list
+announcement. The notes at its top explain the placeholders and how to
+summarise the commits since the previous release for server admins.

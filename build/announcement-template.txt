@@ -1,0 +1,108 @@
+Release announcement template for the aprsc mailing list.
+
+Everything above the "8<" line is notes for whoever (or whatever, usually
+an agent) fills the template in, and is not part of the message. Below it,
+the first line is the mail subject, then a blank line, then the body.
+
+Placeholders:
+
+  {{VERSION}}   the release version, from src/VERSION, e.g. 2.1.20
+  {{SUMMARY}}   a few highlights for the subject line, comma separated,
+                e.g. "Debian 13, Fedora 42/43, and thread titles"
+  {{CHANGES}}   a summary of the changes since the previous release tag:
+                git log --no-merges v<previous>..v{{VERSION}}
+
+How to write {{CHANGES}}:
+
+- The readers are people who run an aprsc server, not developers. A release
+  may have 70 commits and nobody will read 70 bullets. Summarise: read the
+  commits (and their diffs where the subject is unclear), work out what
+  changed for someone running the server, and write that. Several commits
+  that together fix one problem or add one feature become one bullet. Aim
+  for a handful of bullets; a large release can have more, but every one
+  has to be something a server admin would care about.
+- Describe the effect, not the code: what was broken and is now fixed,
+  what new thing can be done, what has to be done when upgrading. Avoid
+  function names, file names and internal terms; if one is needed, say
+  what it means in plain words.
+- One "* " bullet per change, a blank line between bullets. Long lines are
+  fine; do not hard-wrap them.
+- Packaging and platform changes first (new distribution builds, dropped
+  distributions, signing keys), then changes to the server itself, most
+  important first.
+- Changes to the server start with the area, as in the commit subjects:
+  "TLS: Fix builds with openssl 3.1+ which appears in Fedora 43."
+- Add a command or URL when the admin has to do something, on its own line.
+- Leave out what does not affect users: tests, CI, refactoring, code
+  cleanups, build tooling, documentation typos, version bumps, and fixes
+  to bugs that never made it into a release.
+- When a change came from an outside pull request, credit the author and
+  link the PR at the end of the bullet:
+  "... (thanks to Firstname Lastname, OH0XXX,
+  https://github.com/hessu/aprsc/pull/123)". Use the name the author goes by
+  on GitHub, with a callsign if their profile or commits give one.
+- Drop the Debian / Ubuntu, Fedora or FreeBSD section if that release has
+  no packages for it.
+- If versions were skipped (tagged but never released), say what the
+  changes are counted from: "Changes since 2.1.21 (...):".
+- When a release is mostly internal work (a big refactor, a new test suite,
+  unfinished features compiled out of the packages), a single short
+  "Behind the scenes" bullet at the end may say so, to explain why there
+  are so many commits and so few bullets. Make clear it changes nothing for
+  the reader.
+
+Tone:
+
+- Lightly funny, in the style of app store release notes from Slack: plain
+  facts first, with a dry joke where the change gives you one. At most one
+  joke per bullet, many bullets with none. The joke never replaces the
+  information and never makes a security fix sound less serious than it
+  is.
+- Find the humour in the change itself (an absurd value the old code
+  accepted, an off-by-a-lot count, an unreleased version), not in puns,
+  emoji, exclamation marks or jokes about the users.
+- Do not invent facts for a joke. Every claim in a joke has to be true.
+- This level is right (from the 2.1.23 announcement):
+
+  "Changes since 2.1.21 (2.1.22 got as far as a version number and then
+  wisely decided to stay home):"
+
+  "Stopped building for Ubuntu 20.04 and Fedora 40 and 42, which have gone
+  to the great package repository in the sky."
+
+  "... and neither are positions with minutes of 60 or more: 6060.00N used
+  to be accepted as 61 degrees north, which is a bold way to extend the
+  Arctic."
+
+  "The server used to think the message was 11 bytes longer than it was,
+  which is a lot when the whole command is "filter default"."
+
+  "Previously every one of them was logged as unknown NMEA and sent to the
+  corner."
+
+  Security fixes stay straight: "An oversized datagram sent to a UDP
+  submit port could make aprsc write past the end of its buffer. If you
+  have a UDP submit port open, this one's for you."
+
+-------------------------------- 8< --------------------------------
+Subject: aprsc {{VERSION}}: {{SUMMARY}}
+
+aprsc {{VERSION}} is now available.
+
+Upgrading on Debian / Ubuntu:
+
+  sudo apt update && sudo apt upgrade
+  sudo reboot (to run the new kernel if it was updated)
+
+Upgrading on Fedora:
+
+  sudo dnf upgrade
+  sudo reboot (to run the new kernel if it was updated)
+
+FreeBSD:
+
+  http://he.fi/aprsc/down/
+
+Changes in {{VERSION}}:
+
+{{CHANGES}}

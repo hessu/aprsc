@@ -568,7 +568,7 @@ static void generate_instance_id(void)
 	if (fd >= 0) {
 		l = read(fd, &seed, sizeof(seed));
 		if (l != sizeof(seed)) {
-			hlog(LOG_ERR, "read(/dev/urandom, %lu) for seed failed: %s", sizeof(seed), strerror(errno));
+			hlog(LOG_ERR, "read(/dev/urandom, %zu) for seed failed: %s", sizeof(seed), strerror(errno));
 			close(fd);
 			fd = -1;
 		}

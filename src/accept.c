@@ -796,7 +796,7 @@ struct client_t *accept_client_for_listener(struct listen_t *l, int fd, char *ad
 	/* text format of servers' connected IP address + port */
 	if (getsockname(fd, &sa_loc.sa, &addr_len_loc) == 0) { /* Fails very rarely.. */
 		if (addr_len_loc > sizeof(sa_loc))
-			hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s truncated local address of %d to %ld bytes", c->addr_rem, addr_len_loc, sizeof(sa_loc));
+			hlog(LOG_ERR, "accept_client_for_listener: getsockname for client %s truncated local address of %u to %zu bytes", c->addr_rem, addr_len_loc, sizeof(sa_loc));
 		/* present my socket end address as a malloced string... */
 		s = strsockaddr( &sa_loc.sa, addr_len_loc );
 	} else {

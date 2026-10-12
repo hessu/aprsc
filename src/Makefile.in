@@ -209,11 +209,10 @@ aprsis2.pb-c.h: aprsis2.pb-c.c
 $(OBJS): aprsis2.pb-c.h
 
 aprsc.8 : % : %.in VERSION Makefile
-	perl -ne "s{\@DATEVERSION\@}{$(VERSION)-$(SRCVERSION) - $(DATE)}g;	\
-	          s{\@VARRUN\@}{$(VARRUN)}g;			\
-	          s{\@VARLOG\@}{$(VARLOG)}g;			\
-	          s{\@CFGFILE\@}{$(CFGFILE)}g;			\
-		  print;"					\
+	sed -e "s|@DATEVERSION@|$(VERSION)-$(SRCVERSION) - $(DATE)|g"	\
+	    -e "s|@VARRUN@|$(VARRUN)|g"				\
+	    -e "s|@VARLOG@|$(VARLOG)|g"				\
+	    -e "s|@CFGFILE@|$(CFGFILE)|g"				\
 	 < $< > $@
 
 
@@ -273,9 +272,7 @@ dist-upload: dist
 	ssh aprsc-dist "cd /data/www/hes/html/aprsc/down/ && rm aprsc-latest.tar.gz; ln -s $(DISTVERSION).tar.gz aprsc-latest.tar.gz"
 
 rpm/aprsc.spec: rpm/aprsc.spec.in
-	perl -ne "s{\@VERSION\@}{$(RPMVERSION)}g;	\
-		  s{\@DATE0\@}{$(DATE0)}g;		\
-		  print;"				\
+	sed -e "s|@VERSION@|$(RPMVERSION)|g"	\
 		  < rpm/aprsc.spec.in	\
 		  > rpm/aprsc.spec
 
@@ -283,16 +280,14 @@ rpm/aprsc.spec: rpm/aprsc.spec.in
 
 .PHONY: make-deb make-rpm
 
+# Debian package version: the source version, the distribution codename and
+# a package revision, for example 2.1.23.g1234567+noble1
+DEBVERSION:=$(patsubst aprsc-%,%,$(DISTVERSION))+$(subst /,,$(LINUXCODENAME))1
+
 make-deb:
 	if [ -f debian/changelog.release ] ; then \
-	perl -ne "\$$ver = '$(DISTVERSION)'; 	\
-		  \$$ver =~ s/^.*?-//;	\
-		  \$$cname = '$(LINUXCODENAME)';	\
-		  \$$cname =~ s/\///g;		\
-		  \$$ver .= \"+\$$cname\" . '1';	\
-		  s{\@VERSION\@}{\$$ver}g;	\
-		  s{\@RFCDATE\@}{$(RFCDATE)}g;	\
-		  print;"			\
+	sed -e "s|@VERSION@|$(DEBVERSION)|g"	\
+	    -e "s|@RFCDATE@|$(RFCDATE)|g"	\
 		  < debian/changelog.release	\
 		  > debian/changelog ; \
 	fi

@@ -65,3 +65,31 @@ command shows them, from the resource usage the kernel reports for the
 process) for each of the four combinations. `make perftest
 PERF_ARGS="-duration 10s -rate 500 -peers is2 -clients tcp"` changes the
 load and the scenarios.
+
+## APRS-IS client tools
+
+`cmd/aprs-is` is a command for testing and loading a server by hand, which
+replaced the Perl scripts that were in `../../tools/`. Build it with `go build
+./cmd/aprs-is` here, and see `aprs-is <command> -h` for the options:
+
+* `rx`: log in and print what the server sends; `-t` prefixes the lines with
+  the Unix time, `-udp` asks for the packets over UDP, `-f` sets a filter.
+* `xmit`: send a few sample packets (or the lines of a file) slowly, and
+  print what comes back.
+* `copy`: copy the feed of one server into another, for loading a test
+  server with real traffic.
+* `feed`: send the packets read from standard input as fast as the server
+  takes them. The input is in the format `rx -t` writes, so traffic recorded
+  with it can be replayed; `-raw` takes plain packets.
+* `multirx`: keep many receiving connections open.
+* `coresim`: connect the 714 clients of the APRS-IS core servers of March
+  2008 (`cmd/aprs-is/coresim.txt`) with their filters, and discard what they
+  receive. `-map` maps their ports to the ports of the test server.
+* `post`: send packets with an HTTP POST to the position upload port.
+
+`copy`, `multirx` and `coresim` print the number of connections and the
+receive rate every 10 seconds.
+
+Run them against a local test server with no uplinks, not against the real
+APRS-IS: `copy` reading from a real server is the exception, and its
+destination must still be a test server.

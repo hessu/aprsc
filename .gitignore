@@ -19,3 +19,8 @@
 aprsc_*.changes
 aprsc_*.deb
 
+# build/build-all.go
+build/build-all
+build/build-logs/
+build/build-down/
+build/build-out/

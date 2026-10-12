@@ -1,18 +1,34 @@
 # Package build containers
 
-`build-all.pl` builds the release packages. For every platform in its
-`@platforms` list it starts a container called `build-<platform>` (for
-example `build-ubuntu-2404-amd64`, or `build-fedora-43-amd64` for the
+`build-all` (`build-all.go`, built with `go build` in this directory)
+builds the release packages. For every platform in its `platforms` list
+it starts a container called `build-<platform>` (for example
+`build-ubuntu-2404-amd64`, or `build-fedora-43-amd64` for the
 `fedora-43-x86_64` platform), copies the source tarball in over ssh, runs
 `./configure && make make-deb` (or `rpmbuild -ta` for Fedora), copies the
-packages out to `build-out/`, and stops the container. `build-all.pl -m
+packages out to `build-out/`, and stops the container. `build-all -m
 upload` then pushes them to the APT and RPM repositories.
+
+    cd build
+    go build
+    ./build-all ../../aprsc-<version>.tar.gz
+
+Three containers build at a time; `-j <n>` changes that. `-o <regexp>`
+builds only the matching platforms, and `-l` lists them. The console
+shows the steps of each build prefixed with the platform name, and the
+full output of each build goes to `build-logs/<platform>.log`; `-v`
+shows it on the console as well. A failed build does not stop the
+others. At the end there is a summary, with the last lines of the log of
+each failed build, and the exit status is non-zero if any failed. A
+container whose build failed is left running for a look inside;
+interrupting with ^C kills the running steps and leaves the containers
+as they are.
 
 The build host runs LXD. A build container needs:
 
 - a static IPv4 address on the LAN bridge, with a DNS name equal to the
   container name, so that `ssh build-<platform>` works from the build host,
-- a user with the same name as the one running `build-all.pl`, with the
+- a user with the same name as the one running `build-all`, with the
   build host user's SSH keys authorised,
 - a running SSH server and the packages needed to build aprsc.
 
@@ -68,21 +84,20 @@ key fingerprints at the end.
 
        ssh build-ubuntu-2604-amd64 true
 
-5. Add the platform to `@platforms` and `%platconf` in `build-all.pl`. All
-   use `'virtualisation' => 'lxd'`; Fedora platforms also need a `dest`
-   directory in the RPM repository, e.g. `'dest' => 'fedora/44/x86_64'`.
-   A trial build of only the new platform:
+5. Add the platform to `platforms` in `build-all.go`. Fedora platforms
+   also need a `dest` directory in the RPM repository, e.g.
+   `dest: "fedora/44/x86_64"`. A trial build of only the new platform:
 
-       cd build && ./build-all.pl -o ubuntu-2604 aprsc-<version>.tar.gz
+       cd build && go build && ./build-all -o ubuntu-2604 aprsc-<version>.tar.gz
 
 6. Debian packages are uploaded to the APT repository by distribution
    codename (`make make-deb` takes it from `lsb_release -sc`, `resolute` for
-   26.04). Before the first `build-all.pl -m upload`, add a section for the
+   26.04). Before the first `build-all -m upload`, add a section for the
    new codename to `conf/distributions` of the reprepro repository on the
    distribution host, copying an existing Ubuntu section and changing
    `Codename`. RPMs go to the `dest` directory, which the upload creates.
 
-The container is left running when the script finishes; `build-all.pl`
+The container is left running when the script finishes; `build-all`
 starts and stops it as needed.
 
 ## Notes

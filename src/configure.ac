@@ -284,22 +284,39 @@ if test "$ac_cv_search_deflate" = "-lz"; then
   LIBZ="-lz"
 fi
 
-dnl Check for openssl
-PKG_CHECK_MODULES([OPENSSL], [openssl >= 1.1.1], [openssl_found=yes], [openssl_found=no])
-
-dnl Conditional compilation based on OpenSSL version check
-if test "x$openssl_found" = "xyes"; then
-  PKG_CHECK_MODULES([OPENSSL3], [openssl >= 3.0.0], [openssl3_found=yes], [openssl3_found=no])
-
-  if test "x$openssl3_found" = "xyes"; then
-    AC_DEFINE([HAVE_OPENSSL_3], [1], [Define if OpenSSL 3.0.0 or higher is available])
-    AC_MSG_NOTICE([Found OpenSSL 3.0.0 or higher])
-  else
-    AC_MSG_NOTICE([Found OpenSSL >= 1.1.1 but less than 3.0.0])
-  fi
-else
-  AC_MSG_ERROR([OpenSSL 1.1.1 or higher is required])
+dnl Check for openssl. OPENSSL_CFLAGS and OPENSSL_LIBS can be given on the
+dnl command line if it is installed in an unusual place.
+AC_ARG_VAR([OPENSSL_CFLAGS], [C compiler flags for OpenSSL])
+AC_ARG_VAR([OPENSSL_LIBS], [linker flags for OpenSSL, default -lssl -lcrypto])
+if test "x$OPENSSL_LIBS" = "x"; then
+  OPENSSL_LIBS="-lssl -lcrypto"
 fi
+
+t_oldCFLAGS="$CFLAGS"
+t_oldLIBS="$LIBS"
+CFLAGS="$CFLAGS $OPENSSL_CFLAGS"
+LIBS="$OPENSSL_LIBS $LIBS"
+
+AC_MSG_CHECKING([for OpenSSL >= 1.1.1])
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <openssl/ssl.h>
+#if OPENSSL_VERSION_NUMBER < 0x10101000L
+#error OpenSSL too old
+#endif]], [[SSL_CTX_free(SSL_CTX_new(TLS_method()));]])],
+  [AC_MSG_RESULT([yes])],
+  [AC_MSG_RESULT([no])
+   AC_MSG_ERROR([OpenSSL 1.1.1 or higher is required (libssl-dev or openssl-devel)])])
+
+AC_MSG_CHECKING([for OpenSSL >= 3.0.0])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <openssl/opensslv.h>
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+#error OpenSSL older than 3
+#endif]], [[]])],
+  [AC_MSG_RESULT([yes])
+   AC_DEFINE([HAVE_OPENSSL_3], [1], [Define if OpenSSL 3.0.0 or higher is available])],
+  [AC_MSG_RESULT([no])])
+
+CFLAGS="$t_oldCFLAGS"
+LIBS="$t_oldLIBS"
 
 dnl Output files
 AC_CONFIG_FILES([Makefile])

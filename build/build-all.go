@@ -444,6 +444,18 @@ func runInteractive(name string, args ...string) error {
 	return cmd.Run()
 }
 
+var debDistRe = regexp.MustCompile(`.*\+([[:alpha:]]+)`)
+
+// debDist returns the distribution codename in a .changes file name, e.g.
+// bookworm in aprsc_2.1.20.g7ddd088+bookworm1_amd64.changes
+func debDist(name string) (string, error) {
+	m := debDistRe.FindStringSubmatch(name)
+	if m == nil {
+		return "", fmt.Errorf("no distribution codename in %s", name)
+	}
+	return m[1], nil
+}
+
 func upload() error {
 	ents, err := os.ReadDir(dirBuildOut)
 	if err != nil {
@@ -480,14 +492,17 @@ func upload() error {
 	}
 
 	if len(debChanges) > 0 {
-		// The distribution codename is in the .changes file name,
-		// e.g. aprsc_2.1.20.g7ddd088+bookworm1_amd64.changes
-		cmd := "cd " + dirUploadRepo + " && eval `gpg-agent --daemon`;" +
-			" for i in " + dirUploadTmp + "/*.changes;" +
-			` do DIST=$(echo "$i" | perl -pe 's/.*\+([[:alpha:]]+).*/$1/');` +
-			` echo "dist $DIST: $i";` +
-			` reprepro --ask-passphrase -Vb . include "$DIST" "$i";` +
-			" done; killall gpg-agent"
+		cmd := "cd " + dirUploadRepo + " && eval `gpg-agent --daemon`;"
+		for _, c := range debChanges {
+			dist, err := debDist(c)
+			if err != nil {
+				return err
+			}
+			path := dirUploadTmp + "/" + c
+			cmd += fmt.Sprintf(" echo 'dist %s: %s'; reprepro --ask-passphrase -Vb . include '%s' '%s';",
+				dist, path, dist, path)
+		}
+		cmd += " killall gpg-agent"
 		if err := runInteractive("ssh", "-t", uploadHost, cmd); err != nil {
 			return fmt.Errorf("APT repository update failed: %w", err)
 		}

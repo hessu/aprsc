@@ -490,17 +490,20 @@ func upload() error {
 	}
 
 	if len(debChanges) > 0 {
-		cmd := "cd " + dirUploadRepo + " && eval `gpg-agent --daemon`;"
+		// A failed include, such as a signing failure which leaves
+		// the indexes unexported, must fail the upload, but the
+		// other distributions are still tried.
+		cmd := "cd " + dirUploadRepo + " || exit 1; eval `gpg-agent --daemon`; rc=0;"
 		for _, c := range debChanges {
 			dist, err := debDist(c)
 			if err != nil {
 				return err
 			}
 			path := dirUploadTmp + "/" + c
-			cmd += fmt.Sprintf(" echo 'dist %s: %s'; reprepro --ask-passphrase -Vb . include '%s' '%s';",
-				dist, path, dist, path)
+			cmd += fmt.Sprintf(" echo 'dist %s: %s'; reprepro --ask-passphrase -Vb . include '%s' '%s' || { echo 'FAILED: %s: %s'; rc=1; };",
+				dist, path, dist, path, dist, path)
 		}
-		cmd += " killall gpg-agent"
+		cmd += " killall gpg-agent; exit $rc"
 		if err := runInteractive("ssh", "-t", uploadHost, cmd); err != nil {
 			return fmt.Errorf("APT repository update failed: %w", err)
 		}

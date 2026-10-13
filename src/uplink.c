@@ -241,30 +241,40 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 	char *argv[256];
 	char *p;
 	
-	hlog_packet(LOG_INFO, s, len, "%s: Uplink server login response: ", c->addr_rem);
-	
-	/* parse to arguments */
 	/* make it null-terminated for our string processing */
 	char *e = s + len;
 	*e = 0;
-	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] != '#') {
-		hlog(LOG_ERR, "%s: Uplink's logresp message is not recognized: no # in beginning (protocol incompatibility)", c->addr_rem);
+
+	/* Skip the other comment lines which may come before the logresp: the
+	 * server's keepalive beacon, if the login takes a while, or a line
+	 * after the banner announcing a capability. Anything else than a
+	 * comment is a protocol error.
+	 */
+	p = s;
+	while (*p == ' ' || *p == '\t')
+		p++;
+	if (*p != '#') {
+		hlog_packet(LOG_ERR, s, len, "%s: Uplink's logresp message is not recognized: no # in beginning (protocol incompatibility): ", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 		return -1;
 	}
-	
-	if (argc < 6) {
+	p++;
+	while (*p == ' ' || *p == '\t')
+		p++;
+	if (strncmp(p, "logresp", 7) != 0 || (p[7] != ' ' && p[7] != '\t' && p[7] != 0)) {
+		hlog_packet(LOG_DEBUG, s, len, "%s: Uplink server comment before login response, skipped: ", c->addr_rem);
+		return 0;
+	}
+
+	hlog_packet(LOG_INFO, s, len, "%s: Uplink server login response: ", c->addr_rem);
+
+	/* parse to arguments */
+	if ((argc = parse_args_noshell(argv, s)) < 6) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not have enough arguments (protocol incompatibility)", c->addr_rem);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
 		return -1;
 	}
-	
-	if (strcmp(argv[1], "logresp") != 0) {
-		hlog(LOG_ERR, "%s: Uplink's logresp message does not say 'logresp' (protocol incompatibility)", c->addr_rem);
-		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
-		return -1;
-	}
-	
+
 	if (strcmp(argv[2], serverid) != 0) {
 		hlog(LOG_ERR, "%s: Uplink's logresp message does not have my callsign '%s' on it (protocol incompatibility)", c->addr_rem, serverid);
 		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);

@@ -35,6 +35,10 @@ extern void is2_obuf_flush_pending(struct worker_t *self);
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 
+/* the UDP peer handshake datagrams start with this */
+#define IS2_COREPEER_CONTROL_PREFIX "#is2 peer "
+#define IS2_COREPEER_CONTROL_PREFIX_LEN 10
+
 extern int is2_corepeer_propose(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
 

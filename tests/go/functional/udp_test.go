@@ -98,7 +98,7 @@ func TestUDPPeerWithoutKeys(t *testing.T) {
 
 	// A proposal from the peer (configured as PEER1) is ignored instead of
 	// being answered. The server would answer right away if it accepted.
-	if err := udp.SendLine("# PEER2 v 2 hello PEER1 vers go-gotest 1.0 token hq736t7q63"); err != nil {
+	if err := udp.SendLine(isclient.PeerControlLine("hello", "2", "PEER1", isclient.PeerHelloToken)); err != nil {
 		t.Fatalf("failed to send an IS2 proposal: %v", err)
 	}
 	isclient.ExpectSilence(t, udp, 3*time.Second, "UDP peer after proposing IS2")

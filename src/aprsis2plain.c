@@ -10,7 +10,8 @@
 
 /*
  *	aprsis2plain.c: IS2 metadata from plaintext clients, given as
- *	key-value pairs on #is2-meta comment lines
+ *	key-value pairs on #is2-meta comment lines, and the key-value
+ *	parser shared with the IS2 handshake lines
  */
 
 #include <string.h>
@@ -74,10 +75,10 @@ static int is2_plain_metadata_float(const char *val, int val_len, float *out)
 }
 
 /*
- *	Parse a metadata value which is a whole number from min to max.
+ *	Parse a key-value value which is a whole number from min to max.
  *	Returns 1 with the number in *out, or 0 if the value is not one.
  */
-static int is2_plain_metadata_int(const char *val, int val_len, long min, long max, long *out)
+int is2_kv_int(const char *val, int val_len, long min, long max, long *out)
 {
 	char buf[32];
 	char *end;
@@ -97,10 +98,11 @@ static int is2_plain_metadata_int(const char *val, int val_len, long min, long m
 	return 1;
 }
 
-static void is2_plain_metadata_key(struct client_t *c,
+static void is2_plain_metadata_key(void *ctx,
 	const char *key, int key_len,
 	const char *val, int val_len)
 {
+	struct client_t *c = ctx;
 	double d;
 	float f;
 	long l;
@@ -120,11 +122,11 @@ static void is2_plain_metadata_key(struct client_t *c,
 		 * the generated enum descriptor so that new types need no change
 		 * here; 0 is MODEM_UNDEFINED, which is what an absent key means
 		 */
-		if (is2_plain_metadata_int(val, val_len, 1, INT32_MAX, &l)
+		if (is2_kv_int(val, val_len, 1, INT32_MAX, &l)
 		    && protobuf_c_enum_descriptor_get_value(&aprsis2__ispacket__modem_type__descriptor, l))
 			c->is2_input_template.rx_modem = l;
 	} else if (key_len == 10 && memcmp(key, "rx_bitrate", 10) == 0) {
-		if (is2_plain_metadata_int(val, val_len, 1, UINT32_MAX, &l)) {
+		if (is2_kv_int(val, val_len, 1, UINT32_MAX, &l)) {
 			c->is2_input_template.rx_bitrate = l;
 			c->is2_input_template.optional_rx_bitrate_case = APRSIS2__ISPACKET__OPTIONAL_RX_BITRATE_RX_BITRATE;
 		}
@@ -144,6 +146,20 @@ int is2_plain_metadata(struct worker_t *self, struct client_t *c, const char *s,
 {
 	hlog(LOG_DEBUG, "is2-meta: '%.*s'", len, s);
 
+	is2_kv_parse(s, len, is2_plain_metadata_key, c);
+
+	return 0;
+}
+
+/*
+ *	Split a line of space-separated key=value pairs, as used on the
+ *	#is2-meta lines and in the IS2 handshake lines, and call key_cb for
+ *	each pair with a non-empty key and value. A bare word without '='
+ *	is skipped alone, so that the pairs after it still apply. The values
+ *	are not NUL-terminated.
+ */
+void is2_kv_parse(const char *s, int len, is2_kv_cb_t key_cb, void *ctx)
+{
 	for (int i = 0; i < len; i++) {
 		// skip whitespace
 		for (; i < len; i++) {
@@ -177,8 +193,37 @@ int is2_plain_metadata(struct worker_t *self, struct client_t *c, const char *s,
 		//if (value_len > 0)
 		//	hlog(LOG_DEBUG, "is2-meta value: '%.*s'", value_len, &s[value_start]);
 		if (key_len > 0 && value_len > 0)
-			is2_plain_metadata_key(c, &s[key_start], key_len, &s[value_start], value_len);	
+			key_cb(ctx, &s[key_start], key_len, &s[value_start], value_len);
+	}
+}
+
+/*
+ *	Pick a protocol version from a comma-separated list of versions
+ *	offered by the other end ("v=2,3"): the highest one from min to max.
+ *	Returns 0 if there is none, or the list is not valid.
+ */
+int is2_kv_version_pick(const char *val, int val_len, int min, int max)
+{
+	int best = 0;
+	int i = 0;
+
+	while (i < val_len) {
+		int v = 0;
+		int digits = 0;
+
+		for (; i < val_len && val[i] >= '0' && val[i] <= '9'; i++) {
+			if (v < 100000)
+				v = v * 10 + (val[i] - '0');
+			digits++;
+		}
+
+		if (digits == 0 || (i < val_len && val[i] != ','))
+			return 0;
+		i++; /* skip the comma */
+
+		if (v >= min && v <= max && v > best)
+			best = v;
 	}
 
-	return 0;
+	return best;
 }

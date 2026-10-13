@@ -1248,9 +1248,11 @@ int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *
 
 	hlog(LOG_DEBUG, "%s: IS2 upgrade: switching to IS2, v=%d", c->addr_rem, v);
 
-	/* the last plaintext line */
+	/* the last plaintext line; a result below -2 means the write destroyed
+	 * the client, while -1 only means the socket would block, with the
+	 * line left in the output buffer */
 	int r = client_printf(self, c, "%s v=%d\r\n", IS2_UPGRADE_HELLO_PREFIX, v);
-	if (r < 0)
+	if (r < -2)
 		return r;
 
 	c->flags |= CLFLAGS_IS2;
@@ -1261,7 +1263,7 @@ int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *
 
 	/* then IS2, starting with the server signature, as on an IS2 port */
 	r = is2_out_server_signature(self, c);
-	if (r < 0)
+	if (r < -2)
 		return r;
 
 	return 1;

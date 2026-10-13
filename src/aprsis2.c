@@ -1778,7 +1778,8 @@ static int is2_corepeer_control_out(struct worker_t *self, struct client_t *c, c
 	int l = snprintf(buf, sizeof(buf), IS2_COREPEER_CONTROL_PREFIX "%s v=%s id=%s vers=%s token=%.*s key=%u ts=%u",
 		type, vlist, serverid, vers, token_len, token, key_id, (uint32_t)now);
 
-	if (l + IS2_COREPEER_MAC_SUFFIX_LEN + 1 > sizeof(buf)) {
+	/* room for the signature, the CRLF and the terminating NUL */
+	if (l + IS2_COREPEER_MAC_SUFFIX_LEN + 2 + 1 > sizeof(buf)) {
 		hlog(LOG_ERR, "%s/%s: IS2 UDP: handshake line too long", c->addr_rem, c->username);
 		return -1;
 	}

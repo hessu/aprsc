@@ -111,6 +111,12 @@ func TestUDPPeerWithoutKeys(t *testing.T) {
 		t.Errorf("the server proposed IS2 peering %d times without keys", n)
 	}
 
+	// the status tells that the peer link is on plain UDP
+	links := getStatus(t).peerLinks()
+	if link, ok := links["PEER1"]; !ok || link != "" {
+		t.Errorf("status of peer PEER1: link %q (listed %v), want plain UDP (peers: %v)", link, ok, links)
+	}
+
 	s.Stop()
 }
 

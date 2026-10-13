@@ -153,7 +153,7 @@
 <tr ng-repeat="c in status.uplinks">
   <td class='username'>{{ c.username }}</td>
   <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
-  <td>{{ c.mode }} <span ng-show="c.proto == 'sctp'">SCTP</span></td>
+  <td>{{ c.mode }} <span ng-show="c.proto == 'sctp'">SCTP</span> <span ng-show="c.link == 'is2'">is2</span></td>
   <td>{{ c.t_connect | datetime }}</td>
   <td>{{ c.since_connect | duration }}</td>
   <td>{{ c.since_last_read | duration }}</td>
@@ -182,7 +182,7 @@
   </tr>
 <tr ng-repeat="c in status.peers | orderBy : peers_sort.column : peers_sort.descending">
   <td class='username'>{{ c.username }}</td>
-  <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
+  <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a> <span ng-show="c.link == 'is2'">is2</span></td>
   <td>{{ c.since_last_read | duration }}</td>
   <td>{{ c.pkts_tx }}</td>
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
@@ -213,6 +213,7 @@
       <span ng-show="!linkable(c)">{{ c.addr_rem }}</span>
       <span ng-show="c.udp_downstream">+UDP</span>
       <span ng-show="c.proto == 'sctp'">SCTP</span>
+      <span ng-show="c.link == 'is2'">is2</span>
       </td>
   <td><span ng-show='c.verified == 0' class='red'>No</span>
       <span ng-show='c.verified == 1'>Yes</span>

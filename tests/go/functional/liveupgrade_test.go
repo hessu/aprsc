@@ -20,6 +20,19 @@ type statusJSON struct {
 	Server    map[string]any   `json:"server"`
 	Dupecheck map[string]any   `json:"dupecheck"`
 	Listeners []map[string]any `json:"listeners"`
+	Peers     []map[string]any `json:"peers"`
+}
+
+// peerLinks returns the link type of each peer in the status, by username:
+// "is2", or "" for plain UDP peering.
+func (j *statusJSON) peerLinks() map[string]string {
+	links := make(map[string]string)
+	for _, p := range j.Peers {
+		name, _ := p["username"].(string)
+		link, _ := p["link"].(string)
+		links[name] = link
+	}
+	return links
 }
 
 // getStatus fetches and decodes the status page of the server under test.

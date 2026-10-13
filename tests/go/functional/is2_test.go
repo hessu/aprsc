@@ -253,6 +253,14 @@ func TestIS2UDPPeer(t *testing.T) {
 		})
 	}
 
+	// the status tells that both peer links are on IS2
+	links := getStatus(t).peerLinks()
+	for _, name := range []string{"TESTIN-2", "TESTIN-3"} {
+		if links[name] != "is2" {
+			t.Errorf("status of peer %s: link %q, want \"is2\" (peers: %v)", name, links[name], links)
+		}
+	}
+
 	s.Stop()
 }
 

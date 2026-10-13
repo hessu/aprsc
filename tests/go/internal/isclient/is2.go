@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,6 +83,9 @@ type IS2 struct {
 	Callsign   string
 	Signature  *aprsis2.IS2ServerSignature
 	LoginReply *aprsis2.IS2LoginReply
+	// Preamble has the plaintext lines received before an in-band upgrade
+	// to IS2, up to and including the server's answer to the hello.
+	Preamble []string
 
 	// the packet type the receiver expects; duplicates for a dupe feed
 	wantType aprsis2.ISPacket_Type
@@ -102,6 +106,26 @@ func WithDuplicates() Option { return func(c *config) { c.dupes = true } }
 // *LoginError. If the login works but the filter given with WithFilter is
 // refused, it returns both the connected client and an error.
 func DialIS2(addr, callsign string, opts ...Option) (*IS2, error) {
+	c, cfg, err := dialIS2(addr, callsign, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.loginResult(c.login(cfg))
+}
+
+// loginResult returns the client after a login, or nil if the login failed
+// and the connection was closed.
+func (c *IS2) loginResult(err error) (*IS2, error) {
+	if err != nil && c.closed {
+		return nil, err
+	}
+	return c, err
+}
+
+// dialIS2 connects to a TCP port, retrying for a few seconds while the port
+// is not open.
+func dialIS2(addr, callsign string, opts []Option) (*IS2, config, error) {
 	cfg := config{passcode: fmt.Sprint(passcodeFor(callsign)), appName: is2AppName}
 	for _, o := range opts {
 		o(&cfg)
@@ -116,7 +140,7 @@ func DialIS2(addr, callsign string, opts ...Option) (*IS2, error) {
 			break
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("failed to connect to %s: %w", addr, err)
+			return nil, cfg, fmt.Errorf("failed to connect to %s: %w", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -131,19 +155,141 @@ func DialIS2(addr, callsign string, opts ...Option) (*IS2, error) {
 		c.wantType = aprsis2.ISPacket_IS_PACKET_DUPLICATE
 	}
 
+	return c, cfg, nil
+}
+
+// ErrNoUpgrade is returned by DialIS2Upgrade when the server logged the
+// client in on plaintext instead of upgrading the connection to IS2.
+var ErrNoUpgrade = errors.New("the server did not upgrade the connection to IS2")
+
+// UpgradeHello is the line a client sends to upgrade a plaintext connection
+// to IS2.
+const UpgradeHello = "#is2 hello v=1"
+
+// WithHello sets the hello line sent by DialIS2Upgrade, instead of
+// UpgradeHello.
+func WithHello(line string) Option { return func(c *config) { c.hello = line } }
+
+// DialIS2Upgrade connects to a plaintext port and upgrades the connection to
+// IS2 in-band: it sends the hello and a plaintext login line right away, as a
+// client would to fall back on plaintext on a server which does not know of
+// IS2, reads the plaintext lines up to the server's answer to the hello into
+// Preamble, and logs in with IS2. If the server logs the client in on
+// plaintext instead, the error is ErrNoUpgrade, and the connection is closed.
+func DialIS2Upgrade(addr, callsign string, opts ...Option) (*IS2, error) {
+	c, cfg, err := dialIS2(addr, callsign, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	hello := cfg.hello
+	if hello == "" {
+		hello = UpgradeHello
+	}
+	login := fmt.Sprintf("user %s pass %s vers %s %s", callsign, cfg.passcode, cfg.appName, is2AppVersion)
+	text := []string{hello + "\r\n" + login + "\r\n"}
+	if cfg.slowUpgrade {
+		// line terminators split, in separate reads
+		text = []string{hello + "\r", "\n" + login + "\r", "\n"}
+	}
+	for _, s := range text {
+		if err := c.SendRaw([]byte(s)); err != nil {
+			c.conn.Close()
+			return nil, err
+		}
+		if cfg.slowUpgrade {
+			time.Sleep(slowUpgradeDelay)
+		}
+	}
+
+	for {
+		line, err := c.readTextLine(is2Timeout)
+		if err != nil {
+			c.conn.Close()
+			return nil, fmt.Errorf("no answer to the IS2 hello: %w (got %q)", err, c.Preamble)
+		}
+		c.Preamble = append(c.Preamble, line)
+		if line == "#is2 hello" || strings.HasPrefix(line, "#is2 hello ") {
+			break
+		}
+		if strings.HasPrefix(line, "# logresp") {
+			c.Close()
+			return c, ErrNoUpgrade
+		}
+	}
+
+	if cfg.slowUpgrade {
+		// plaintext lines the server must still skip after the switch,
+		// including an empty one
+		if err := c.SendRaw([]byte("# a comment after the hello\r\n\r\n# another\n")); err != nil {
+			c.Close()
+			return nil, err
+		}
+		time.Sleep(slowUpgradeDelay)
+	}
+
+	return c.loginResult(c.login(cfg))
+}
+
+// slowUpgradeDelay separates the writes of WithSlowUpgrade, so that the
+// server reads them separately.
+const slowUpgradeDelay = 200 * time.Millisecond
+
+// WithSlowUpgrade makes DialIS2Upgrade send the plaintext lines in pieces,
+// with the line terminators split in separate reads, comment lines after the
+// server has switched to IS2, and the STX of the first frame alone.
+func WithSlowUpgrade() Option { return func(c *config) { c.slowUpgrade = true } }
+
+// ConnectIS2Upgrade is like DialIS2Upgrade, but fails the test if it cannot
+// connect, upgrade and log in. The connection is closed when the test
+// finishes.
+func ConnectIS2Upgrade(t *testing.T, addr, callsign string, opts ...Option) *IS2 {
+	t.Helper()
+
+	c, err := DialIS2Upgrade(addr, callsign, opts...)
+	if c != nil {
+		t.Cleanup(func() { c.Close() })
+	}
+	if err != nil {
+		t.Fatalf("%s: IS2 upgrade and login to %s failed: %v", callsign, addr, err)
+	}
+
+	return c
+}
+
+// readTextLine reads a plaintext line, before an upgrade to IS2.
+func (c *IS2) readTextLine(timeout time.Duration) (string, error) {
+	if err := c.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return "", err
+	}
+	line, err := c.r.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// login does the IS2 login: the server sends its signature first, then the
+// client its login request, and the server answers it. If the server rejects
+// the login, the error is a *LoginError. If the login works but the filter
+// given with WithFilter is refused, it returns an error, and the client stays
+// connected.
+func (c *IS2) login(cfg config) error {
+	callsign := c.Callsign
+
 	// the server sends its signature first
 	m, err := c.ReadFrame(is2Timeout)
 	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to read the server signature: %w", err)
+		c.Close()
+		return fmt.Errorf("failed to read the server signature: %w", err)
 	}
 	if m.GetType() != aprsis2.IS2Message_SERVER_SIGNATURE || m.GetServerSignature() == nil {
-		conn.Close()
-		return nil, fmt.Errorf("wrong type of message received instead of SERVER_SIGNATURE: %v", m.GetType())
+		c.Close()
+		return fmt.Errorf("wrong type of message received instead of SERVER_SIGNATURE: %v", m.GetType())
 	}
 	c.Signature = m.GetServerSignature()
 
-	err = c.SendMessage(&aprsis2.IS2Message{
+	req := &aprsis2.IS2Message{
 		Type: aprsis2.IS2Message_LOGIN_REQUEST,
 		LoginRequest: &aprsis2.IS2LoginRequest{
 			Username:   callsign,
@@ -151,39 +297,53 @@ func DialIS2(addr, callsign string, opts ...Option) (*IS2, error) {
 			AppName:    cfg.appName,
 			AppVersion: is2AppVersion,
 		},
-	})
+	}
+	if cfg.slowUpgrade {
+		// the STX alone, then the rest of the frame
+		var b []byte
+		b, err = proto.Marshal(req)
+		if err == nil {
+			frame := FrameWrap(b)
+			if err = c.SendRaw(frame[:1]); err == nil {
+				time.Sleep(slowUpgradeDelay)
+				err = c.SendRaw(frame[1:])
+			}
+		}
+	} else {
+		err = c.SendMessage(req)
+	}
 	if err != nil {
-		conn.Close()
-		return nil, err
+		c.Close()
+		return err
 	}
 
 	m, err = c.ReadFrame(is2Timeout)
 	if err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("no LOGIN_REPLY received: %w", err)
+		c.Close()
+		return fmt.Errorf("no LOGIN_REPLY received: %w", err)
 	}
 	if m.GetType() != aprsis2.IS2Message_LOGIN_REPLY || m.GetLoginReply() == nil {
-		conn.Close()
-		return nil, fmt.Errorf("wrong type of response received for LOGIN_REQUEST: %v", m.GetType())
+		c.Close()
+		return fmt.Errorf("wrong type of response received for LOGIN_REQUEST: %v", m.GetType())
 	}
 
 	c.LoginReply = m.GetLoginReply()
 	if c.LoginReply.GetResult() != aprsis2.IS2LoginReply_OK {
-		conn.Close()
-		return nil, &LoginError{Reply: c.LoginReply, Msg: "rejected"}
+		c.Close()
+		return &LoginError{Reply: c.LoginReply, Msg: "rejected"}
 	}
 	if cfg.passcode != "-1" && c.LoginReply.GetVerified() < aprsis2.VerificationStatus_WEAK {
-		conn.Close()
-		return nil, &LoginError{Reply: c.LoginReply, Msg: "not verified"}
+		c.Close()
+		return &LoginError{Reply: c.LoginReply, Msg: "not verified"}
 	}
 
 	if cfg.filter != "" {
 		if err := c.SetFilter(cfg.filter); err != nil {
-			return c, err
+			return err
 		}
 	}
 
-	return c, nil
+	return nil
 }
 
 // ConnectIS2 is like DialIS2, but fails the test if it cannot connect and log

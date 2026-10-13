@@ -21,6 +21,19 @@ type statusJSON struct {
 	Dupecheck map[string]any   `json:"dupecheck"`
 	Listeners []map[string]any `json:"listeners"`
 	Peers     []map[string]any `json:"peers"`
+	Clients   []map[string]any `json:"clients"`
+}
+
+// clientLinks returns the link type of each client in the status, by
+// username: "is2", or "" for plaintext.
+func (j *statusJSON) clientLinks() map[string]string {
+	links := make(map[string]string)
+	for _, c := range j.Clients {
+		name, _ := c["username"].(string)
+		link, _ := c["link"].(string)
+		links[name] = link
+	}
+	return links
 }
 
 // peerLinks returns the link type of each peer in the status, by username:

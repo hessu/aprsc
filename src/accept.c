@@ -1640,6 +1640,9 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		else
 			cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
 		cJSON_AddBoolToObject(jl, "is2", (l->client_flags & CLFLAGS_IS2) ? 1 : 0);
+		/* plaintext port on which the clients can upgrade to IS2 in-band;
+		 * not offered at all in quirks mode or with a fake version */
+		cJSON_AddBoolToObject(jl, "is2_upgrade", ((l->client_flags & CLFLAGS_IS2_UPGRADE) && !quirks_mode && !fake_version) ? 1 : 0);
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);
 		if (l->filter_s)
 			cJSON_AddStringToObject(jl, "filter", l->filter_s);

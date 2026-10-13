@@ -1123,6 +1123,13 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	for (i = 0; i < LISTEN_MAX_FILTERS; i++)
 		l->filters[i] = NULL;
 	
+#ifdef USE_IS2
+	/* plaintext client ports offer an in-band upgrade to IS2, unless
+	 * disabled with noIS2upgrade */
+	if (!(clflags & (CLFLAGS_IS2|CLFLAGS_UDPSUBMIT)) && req.ai_protocol != IPPROTO_UDP)
+		l->client_flags |= CLFLAGS_IS2_UPGRADE;
+#endif
+
 	/* parse rest of arguments */
 	i = 6;
 	while (i < argc) {
@@ -1199,6 +1206,10 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		} else if (strcasecmp(argv[i], "hidden") == 0) {
 			/* Hide the listener from status view */
 			l->hidden = 1;
+		} else if (strcasecmp(argv[i], "noIS2upgrade") == 0) {
+			/* Do not offer an upgrade to IS2 to the plaintext clients.
+			 * Accepted without IS2 too, as there is nothing to disable. */
+			l->client_flags &= ~CLFLAGS_IS2_UPGRADE;
 		} else {
 			hlog(LOG_ERR, "Listen: Unknown argument '%s' for '%s'", argv[i], argv[1]);
 			free_listen_config(&l);

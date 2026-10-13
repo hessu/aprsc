@@ -1142,6 +1142,142 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 	return i;
 }
 
+/*
+ *	In-band upgrade of a plaintext client connection to IS2 (see
+ *	doc/IS2UPGRADE.md). After the banner, the server tells that it can
+ *	do it ("#is2 v=1"), the client sends "#is2 hello v=1[,2...]" before
+ *	its login line, and the server answers "#is2 hello v=1" and switches
+ *	to IS2.
+ */
+
+/* the range of upgrade protocol versions supported */
+#define IS2_UPGRADE_VERSION_MIN 1
+#define IS2_UPGRADE_VERSION_MAX 1
+
+/*
+ *	Is the upgrade offered to this client? Not on servers which pretend to
+ *	be some other software, or have picky clients which are all handled
+ *	in quirks mode, since they might not like the extra line. Only before
+ *	login.
+ */
+int is2_upgrade_offered(struct client_t *c)
+{
+	return (c->flags & CLFLAGS_IS2_UPGRADE) && !(c->flags & CLFLAGS_IS2)
+		&& c->state == CSTATE_LOGIN && !quirks_mode && !fake_version;
+}
+
+/*
+ *	Send the capability line after the banner, if the upgrade is offered.
+ */
+int is2_upgrade_out_capability(struct worker_t *self, struct client_t *c)
+{
+	if (!is2_upgrade_offered(c))
+		return 0;
+
+	return client_printf(self, c, "%s v=%d\r\n", IS2_UPGRADE_PREFIX, IS2_UPGRADE_VERSION_MAX);
+}
+
+/* the fields of a "#is2 hello" line, not NUL-terminated */
+struct is2_upgrade_hello_t {
+	const char *v;
+	int v_len;
+};
+
+static void is2_upgrade_hello_key(void *ctx, const char *key, int key_len, const char *val, int val_len)
+{
+	struct is2_upgrade_hello_t *hello = ctx;
+
+	if (key_len == 1 && memcmp(key, "v", 1) == 0) {
+		hello->v = val;
+		hello->v_len = val_len;
+	}
+	/* unknown keys are ignored, so that later versions can add them */
+}
+
+/*
+ *	After the upgrade, the client may still send plaintext lines which it
+ *	sent before receiving our answer: the login line, and maybe comments.
+ *	Discard them until an IS2 frame starts with STX at the beginning of a
+ *	line. Lines are only skipped when complete, so that the STX is found
+ *	at the start of the next one even if the line terminator arrives later.
+ */
+static int is2_upgrade_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
+{
+	char *ibuf = c->ibuf;
+	int i = start_at;
+
+	while (i < c->ibuf_end) {
+		if (ibuf[i] == STX) {
+			c->handler_consume_input = &is2_deframe_input;
+			return is2_deframe_input(self, c, i);
+		}
+
+		int eol = i;
+		while (eol < c->ibuf_end && ibuf[eol] != '\r' && ibuf[eol] != '\n')
+			eol++;
+
+		if (eol >= c->ibuf_end)
+			break; /* not complete yet */
+
+		/* the line may contain the passcode, so it is not logged */
+		if (eol > i)
+			hlog(LOG_DEBUG, "%s: IS2 upgrade: discarding a plaintext line of %d bytes", c->addr_rem, eol - i);
+
+		i = eol;
+		while (i < c->ibuf_end && (ibuf[i] == '\r' || ibuf[i] == '\n'))
+			i++;
+	}
+
+	return i;
+}
+
+/*
+ *	A "#is2 hello" line from a plaintext client before login. Returns 0 if
+ *	the line was ignored, and the client stays on plaintext, 1 if the
+ *	connection was upgraded, or < 0 if the client was closed.
+ */
+int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *s, int len)
+{
+	struct is2_upgrade_hello_t hello;
+
+	if (!is2_upgrade_offered(c)) {
+		hlog(LOG_DEBUG, "%s: IS2 upgrade: hello ignored, upgrade not offered", c->addr_rem);
+		return 0;
+	}
+
+	memset(&hello, 0, sizeof(hello));
+	is2_kv_parse(s + IS2_UPGRADE_HELLO_PREFIX_LEN, len - IS2_UPGRADE_HELLO_PREFIX_LEN, is2_upgrade_hello_key, &hello);
+
+	int v = (hello.v) ? is2_kv_version_pick(hello.v, hello.v_len, IS2_UPGRADE_VERSION_MIN, IS2_UPGRADE_VERSION_MAX) : 0;
+	if (!v) {
+		/* no answer: the client logs in on plaintext, as it would on
+		 * a server which does not know of IS2 */
+		hlog(LOG_INFO, "%s: IS2 upgrade: client offered versions %.*s, none of which are supported, staying on plaintext",
+			c->addr_rem, (hello.v) ? hello.v_len : 1, (hello.v) ? hello.v : "-");
+		return 0;
+	}
+
+	hlog(LOG_DEBUG, "%s: IS2 upgrade: switching to IS2, v=%d", c->addr_rem, v);
+
+	/* the last plaintext line */
+	int r = client_printf(self, c, "%s v=%d\r\n", IS2_UPGRADE_HELLO_PREFIX, v);
+	if (r < 0)
+		return r;
+
+	c->flags |= CLFLAGS_IS2;
+	is2_allocate_obuf(c);
+	c->write_packet = &is2_write_packet;
+	c->is2_input_handler = &is2_input_handler_login;
+	c->handler_consume_input = &is2_upgrade_deframe_input;
+
+	/* then IS2, starting with the server signature, as on an IS2 port */
+	r = is2_out_server_signature(self, c);
+	if (r < 0)
+		return r;
+
+	return 1;
+}
+
 static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, int len, int signature_start)
 {
 	int hmac_start = signature_start + IS2_UDP_HMAC_START;

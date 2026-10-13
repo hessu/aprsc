@@ -250,6 +250,13 @@ char *status_json_string(int no_cache, int periodical)
 	char q_protocol_id_s[2] = { q_protocol_id, 0 };
 	cJSON_AddStringToObject(server, "q_protocol_id", q_protocol_id_s);
 	cJSON_AddNumberToObject(server, "disallow_other_q_protocols", disallow_other_protocol_id);
+	/* IS2 support in this build; the listeners which accept IS2 clients
+	 * have their own is2 flag */
+#ifdef USE_IS2
+	cJSON_AddTrueToObject(server, "is2");
+#else
+	cJSON_AddFalseToObject(server, "is2");
+#endif
 	
 	status_uname(server);
 	cJSON_AddItemToObject(root, "server", server);

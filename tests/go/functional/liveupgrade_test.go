@@ -17,8 +17,9 @@ import (
 
 // statusJSON is the part of the server's status.json the tests look at.
 type statusJSON struct {
-	Server    map[string]any `json:"server"`
-	Dupecheck map[string]any `json:"dupecheck"`
+	Server    map[string]any   `json:"server"`
+	Dupecheck map[string]any   `json:"dupecheck"`
+	Listeners []map[string]any `json:"listeners"`
 }
 
 // getStatus fetches and decodes the status page of the server under test.

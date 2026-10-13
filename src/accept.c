@@ -1639,6 +1639,7 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 			cJSON_AddStringToObject(jl, "proto", "sctp");
 		else
 			cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
+		cJSON_AddBoolToObject(jl, "is2", (l->client_flags & CLFLAGS_IS2) ? 1 : 0);
 		cJSON_AddStringToObject(jl, "addr", l->addr_s);
 		if (l->filter_s)
 			cJSON_AddStringToObject(jl, "filter", l->filter_s);

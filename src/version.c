@@ -46,4 +46,7 @@ const char verstr_features[] =
 #ifdef USE_SCTP
 	" sctp"
 #endif
+#ifdef USE_IS2
+	" is2"
+#endif
 ;

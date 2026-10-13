@@ -724,6 +724,45 @@ func TestIS2FilterPort(t *testing.T) {
 	s.Stop()
 }
 
+// status.json tells that the server supports IS2, and which listeners accept
+// IS2 clients, so that the IS2 capable servers and ports can be found.
+func TestIS2Status(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+	s := harness.Start(t, "is2-basic")
+
+	j := getStatus(t)
+
+	if is2, ok := j.Server["is2"].(bool); !ok || !is2 {
+		t.Errorf("server is2 is %v, want true", j.Server["is2"])
+	}
+	if f, _ := j.Server["software_build_features"].(string); !strings.Contains(f, " is2") {
+		t.Errorf("software_build_features %q does not list is2", f)
+	}
+
+	if len(j.Listeners) == 0 {
+		t.Fatal("status.json lists no listeners")
+	}
+	is2Listeners := 0
+	for _, l := range j.Listeners {
+		name, _ := l["name"].(string)
+		want := strings.HasPrefix(name, "IS2 ")
+		is2, ok := l["is2"].(bool)
+		if !ok || is2 != want {
+			t.Errorf("listener %q is2 is %v, want %v", name, l["is2"], want)
+		}
+		if want {
+			is2Listeners++
+		}
+	}
+	// the full feed and igate ports - dupefeed ports are always hidden
+	if is2Listeners != 2 {
+		t.Errorf("found %d IS2 listeners, want 2", is2Listeners)
+	}
+
+	s.Stop()
+}
+
 // A server built without IS2 (the default) rejects every IS2 configuration
 // keyword, so that IS2 can not be enabled by configuration. Skipped when IS2 is
 // enabled. Port of t/90is2-disabled.t.

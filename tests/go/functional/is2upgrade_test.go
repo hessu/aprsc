@@ -11,10 +11,10 @@ import (
 	"github.com/hessu/aprsc/tests/go/internal/isclient"
 )
 
-// The in-band upgrade of plaintext client connections to IS2: "#is2 v=1"
-// after the banner, "#is2 hello v=1" from the client before its login line,
-// and the server's "#is2 hello v=1" answer, after which the connection
-// continues in IS2. See doc/IS2UPGRADE.md.
+// The in-band upgrade of plaintext client connections to IS2: "#is2 hello v=1"
+// from the client before its login line, and the server's "#is2 hello v=1"
+// answer, after which the connection continues in IS2. The server does not
+// announce the upgrade after its banner. See doc/IS2UPGRADE.md.
 
 const upgradeLogin = "user N0TEST pass -1 vers gotest 1.0"
 
@@ -57,11 +57,12 @@ func TestIS2Upgrade(t *testing.T) {
 	harness.RequireIS2(t)
 	s := harness.Start(t, "is2-basic")
 
-	// a plaintext client sees the offer after the banner, and logs in as
-	// usual
+	// a plaintext client sees only the banner before its login reply: the
+	// upgrade is not announced, as other servers uplinking to this one
+	// expect the logresp right after the banner
 	lines := isclient.PreLogin(t, harness.Addr(t, 55580), upgradeLogin)
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "# aprsc") || lines[1] != "#is2 v=1" || !strings.HasPrefix(lines[2], "# logresp") {
-		t.Errorf("plaintext login: got %q, want the banner, \"#is2 v=1\" and a logresp", lines)
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "# aprsc") || !strings.HasPrefix(lines[1], "# logresp") {
+		t.Errorf("plaintext login: got %q, want the banner and a logresp", lines)
 	}
 
 	// hellos which do not upgrade: the client logs in on plaintext
@@ -77,8 +78,8 @@ func TestIS2Upgrade(t *testing.T) {
 	full := isclient.ConnectIS2Upgrade(t, harness.Addr(t, 55152), "N5CAL-3")
 	for _, c := range []*isclient.IS2{igate, full} {
 		p := c.Preamble
-		if len(p) != 3 || !strings.HasPrefix(p[0], "# aprsc") || p[1] != "#is2 v=1" || p[2] != "#is2 hello v=1" {
-			t.Errorf("%s: got %q before the switch, want the banner, \"#is2 v=1\" and \"#is2 hello v=1\"", c.Callsign, p)
+		if len(p) != 2 || !strings.HasPrefix(p[0], "# aprsc") || p[1] != "#is2 hello v=1" {
+			t.Errorf("%s: got %q before the switch, want the banner and \"#is2 hello v=1\"", c.Callsign, p)
 		}
 		if err := c.Ping(); err != nil {
 			t.Errorf("%s: ping after the upgrade failed: %v", c.Callsign, err)
@@ -175,8 +176,8 @@ func TestIS2UpgradeNotOffered(t *testing.T) {
 			}
 
 			// the full feed port offers it, unless the whole server does not
-			lines := isclient.PreLogin(t, harness.Addr(t, 55152), upgradeLogin)
-			offered := len(lines) > 1 && lines[1] == "#is2 v=1"
+			lines := isclient.PreLogin(t, harness.Addr(t, 55152), isclient.UpgradeHello, upgradeLogin)
+			offered := len(lines) > 0 && lines[len(lines)-1] == "#is2 hello v=1"
 			if offered != tc.other {
 				t.Errorf("the other port offered the upgrade: %v, want %v (%q)", offered, tc.other, lines)
 			}

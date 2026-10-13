@@ -1692,12 +1692,8 @@ static void collect_new_clients(struct worker_t *self)
 		if (c->flags & CLFLAGS_INPORT) {
 			if (c->flags & CLFLAGS_IS2)
 				is2_out_server_signature(self, c);
-			else if (client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis) >= 0) {
-#ifdef USE_IS2
-				/* the second line tells that the client can upgrade to IS2 */
-				is2_upgrade_out_capability(self, c);
-#endif
-			}
+			else
+				client_printf(self, c, "# %s\r\n", (fake_version) ? fake_version : verstr_aprsis);
 		}
 		
 		/* If the write failed immediately, c is already invalid at this point. Don't touch it. */

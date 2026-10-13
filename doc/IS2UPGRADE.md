@@ -12,22 +12,25 @@ round trip.
 Work in progress, like IS2 itself.
 
 
-The capability line
-----------------------
+No announcement from the server
+----------------------------------
 
-A server which offers the upgrade sends a second line after its banner:
+The server does not announce the upgrade: it sends only its usual banner,
+and the client finds out whether the upgrade is available by sending the
+hello.  A comment line after the banner should be harmless, since clients
+are to ignore comment lines, but in practice some of them expect exactly
+the lines the servers have always sent.  The uplink code of existing aprsc
+releases, connecting as a client to take a feed from another server,
+expects the `# logresp` line right after the banner, and closes the
+connection on anything else, so a server sending an extra line could not
+have aprsc downstreams until all of them were upgraded.  Other client
+software may well be confused by an unexpected line the same way, and
+there are many clients, so the server sends nothing a client has not
+asked for.
 
-    # aprsc 2.1.20
-    #is2 v=1
-
-`v` lists the versions of the upgrade it supports, separated by commas.
-Further `key=value` pairs may follow in later versions, and must be
-ignored when not known.  Clients ignore comment lines from the server, so
-the line is harmless to clients which do not know of IS2.  It also lets a
-monitoring tool find the servers and ports which support IS2 by reading
-the first two lines, without logging in.
-
-The line is advisory: a client may send the hello regardless of it.
+A monitoring tool can find the servers and ports which support the
+upgrade the same way, without logging in: send the hello, read the
+answer, and disconnect.
 
 
 The hello
@@ -90,8 +93,8 @@ connection works like one on the corresponding IS2 port type.
 The upgrade is not offered, and the hello is ignored:
 
 * on ports configured with the `noIS2upgrade` option
-* when `quirks_mode` is enabled for all clients: some clients are
-  picky about what they receive, and might not like an extra line
+* when `quirks_mode` is enabled for all clients: the server then keeps
+  strictly to the plain protocol which the picky clients expect
 * when a `fake_version` is configured, since the server is then
   pretending to be some other software
 

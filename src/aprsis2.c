@@ -1144,10 +1144,11 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 
 /*
  *	In-band upgrade of a plaintext client connection to IS2 (see
- *	doc/IS2UPGRADE.md). After the banner, the server tells that it can
- *	do it ("#is2 v=1"), the client sends "#is2 hello v=1[,2...]" before
+ *	doc/IS2UPGRADE.md). The client sends "#is2 hello v=1[,2...]" before
  *	its login line, and the server answers "#is2 hello v=1" and switches
- *	to IS2.
+ *	to IS2. The server does not announce the upgrade after its banner:
+ *	the uplink code of existing aprsc releases expects the logresp right
+ *	after the banner, and closes the connection on any other line.
  */
 
 /* the range of upgrade protocol versions supported */
@@ -1157,24 +1158,12 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 /*
  *	Is the upgrade offered to this client? Not on servers which pretend to
  *	be some other software, or have picky clients which are all handled
- *	in quirks mode, since they might not like the extra line. Only before
- *	login.
+ *	in quirks mode. Only before login.
  */
 int is2_upgrade_offered(struct client_t *c)
 {
 	return (c->flags & CLFLAGS_IS2_UPGRADE) && !(c->flags & CLFLAGS_IS2)
 		&& c->state == CSTATE_LOGIN && !quirks_mode && !fake_version;
-}
-
-/*
- *	Send the capability line after the banner, if the upgrade is offered.
- */
-int is2_upgrade_out_capability(struct worker_t *self, struct client_t *c)
-{
-	if (!is2_upgrade_offered(c))
-		return 0;
-
-	return client_printf(self, c, "%s v=%d\r\n", IS2_UPGRADE_PREFIX, IS2_UPGRADE_VERSION_MAX);
 }
 
 /* the fields of a "#is2 hello" line, not NUL-terminated */

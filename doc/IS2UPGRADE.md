@@ -64,8 +64,12 @@ The server answers in one of two ways:
    at the beginning of a line.  The client then logs in with an IS2
    login request, as on an IS2 port.
 
-So the client knows which way it went from the first line after the
-banner and the capability line: `#is2 hello` or `# logresp`.
+So the client knows which way it went from the first of these two lines
+it receives: `#is2 hello` or `# logresp`.  Other comment lines may come
+before it, such as the server's periodic keepalive comment, and are
+ignored as usual.  After the switch, the server may likewise send an IS2
+keepalive ping before the login reply, which the client answers as at
+any other time.
 
 The hello is only accepted before the login.  After it, `#is2 hello` is
 an ordinary comment.

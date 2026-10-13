@@ -317,7 +317,8 @@ func (c *IS2) login(cfg config) error {
 		return err
 	}
 
-	m, err = c.ReadFrame(is2Timeout)
+	// the server may send a keepalive ping before the reply
+	m, err = c.readNonPing(is2Timeout)
 	if err != nil {
 		c.Close()
 		return fmt.Errorf("no LOGIN_REPLY received: %w", err)

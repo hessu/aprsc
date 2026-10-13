@@ -77,12 +77,14 @@ static int is2_plain_metadata_float(const char *val, int val_len, float *out)
 /*
  *	Parse a key-value value which is a whole number from min to max.
  *	Returns 1 with the number in *out, or 0 if the value is not one.
+ *	The numbers are 64-bit, so that the full range of an uint32 can be
+ *	parsed on 32-bit platforms too, where long is 32 bits.
  */
-int is2_kv_int(const char *val, int val_len, long min, long max, long *out)
+int is2_kv_int(const char *val, int val_len, long long min, long long max, long long *out)
 {
 	char buf[32];
 	char *end;
-	long l;
+	long long l;
 
 	if (val_len <= 0 || val_len >= sizeof(buf))
 		return 0;
@@ -90,7 +92,7 @@ int is2_kv_int(const char *val, int val_len, long min, long max, long *out)
 	buf[val_len] = 0;
 
 	errno = 0;
-	l = strtol(buf, &end, 10);
+	l = strtoll(buf, &end, 10);
 	if (errno != 0 || end != buf + val_len || l < min || l > max)
 		return 0;
 
@@ -105,7 +107,7 @@ static void is2_plain_metadata_key(void *ctx,
 	struct client_t *c = ctx;
 	double d;
 	float f;
-	long l;
+	long long l;
 
 	if (key_len == 7 && memcmp(key, "rx_rssi", 7) == 0) {
 		if (is2_plain_metadata_float(val, val_len, &f)) {

@@ -1807,7 +1807,7 @@ static int is2_corepeer_control_verify(struct client_t *c, const char *p, int le
 	struct is2_corepeer_control_t *ctl)
 {
 	int signed_len = len - IS2_COREPEER_MAC_SUFFIX_LEN;
-	long key_id, ts;
+	long long key_id, ts;
 
 	if (signed_len <= 0 || memcmp(p + signed_len, " mac=", 5) != 0
 	    || ctl->mac != p + signed_len + 5 || ctl->mac_len != IS2_COREPEER_MAC_HEX_LEN) {
@@ -1825,11 +1825,11 @@ static int is2_corepeer_control_verify(struct client_t *c, const char *p, int le
 	unsigned int md_len = 0;
 	int r = is2_corepeer_hmac(key_id, p, signed_len, md, &md_len);
 	if (r == IS2_HMAC_NO_KEY) {
-		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet signed with undefined key ID %ld", c->addr_rem, c->username, key_id);
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet signed with undefined key ID %lld", c->addr_rem, c->username, key_id);
 		return -1;
 	}
 	if (r != 0 || md_len != sizeof(md)) {
-		hlog(LOG_ERR, "%s/%s: IS2 UDP: HMAC calculation failed (key %ld)", c->addr_rem, c->username, key_id);
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: HMAC calculation failed (key %lld)", c->addr_rem, c->username, key_id);
 		return -1;
 	}
 
@@ -1846,7 +1846,7 @@ static int is2_corepeer_control_verify(struct client_t *c, const char *p, int le
 	}
 
 	if (CRYPTO_memcmp(md, rmd, sizeof(md)) != 0) {
-		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet with wrong signature (key_id %ld)", c->addr_rem, c->username, key_id);
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet with wrong signature (key_id %lld)", c->addr_rem, c->username, key_id);
 		return -1;
 	}
 

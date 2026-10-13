@@ -23,6 +23,6 @@ extern int is2_plain_metadata(struct worker_t *self, struct client_t *c, const c
 typedef void (*is2_kv_cb_t)(void *ctx, const char *key, int key_len, const char *val, int val_len);
 extern void is2_kv_parse(const char *s, int len, is2_kv_cb_t key_cb, void *ctx);
 extern int is2_kv_version_pick(const char *val, int val_len, int min, int max);
-extern int is2_kv_int(const char *val, int val_len, long min, long max, long *out);
+extern int is2_kv_int(const char *val, int val_len, long long min, long long max, long long *out);
 
 #endif

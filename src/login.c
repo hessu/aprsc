@@ -24,6 +24,7 @@
 #include "clientlist.h"
 #include "parse_qc.h"
 #include "tls.h"
+#include "aprsis2.h"
 
 /* a static list of usernames which are not allowed to log in */
 const char *disallow_login_usernames[] = {
@@ -263,6 +264,15 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	*e = 0;
 	hlog_packet(LOG_DEBUG, s, len, "%s: login string: ", c->addr_rem);
 	
+#ifdef USE_IS2
+	/* an in-band upgrade to IS2, before the login line */
+	if (len >= IS2_UPGRADE_HELLO_PREFIX_LEN && memcmp(s, IS2_UPGRADE_HELLO_PREFIX, IS2_UPGRADE_HELLO_PREFIX_LEN) == 0
+	    && (len == IS2_UPGRADE_HELLO_PREFIX_LEN || s[IS2_UPGRADE_HELLO_PREFIX_LEN] == ' ')) {
+		rc = is2_upgrade_hello_in(self, c, s, len);
+		return (rc < 0) ? rc : 0;
+	}
+#endif
+
 	/* parse to arguments */
 	if ((argc = parse_args_noshell(argv, s)) == 0 || *argv[0] == '#')
 		return 0;

@@ -1279,7 +1279,7 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	 * input buffer, rc is the peer which sent this datagram.
 	 */
 #ifdef USE_IS2
-	if (c->ibuf[0] == '#' && strncmp(c->ibuf, "# PEER2 v 2", 11) == 0) {
+	if (r >= IS2_COREPEER_CONTROL_PREFIX_LEN && memcmp(c->ibuf, IS2_COREPEER_CONTROL_PREFIX, IS2_COREPEER_CONTROL_PREFIX_LEN) == 0) {
 		is2_corepeer_control_in(self, rc, c->ibuf, r);
 		return 0;
 	}
@@ -2350,7 +2350,8 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 	if (c->ai_protocol == IPPROTO_SCTP)
 		cJSON_AddStringToObject(jc, "proto", "sctp");
 	
-	if (c->flags & CLFLAGS_IS2) {
+	/* IS2 clients and uplinks, and UDP peers which have switched to IS2 */
+	if ((c->flags & CLFLAGS_IS2) || c->corepeer_is2) {
 		cJSON_AddStringToObject(jc, "link", "is2");
 		cJSON_AddNumberToObject(jc, "is2_frames_rx", c->localaccount.is2_rx_frames);
 		cJSON_AddNumberToObject(jc, "is2_frames_lost", c->localaccount.is2_lost_frames);

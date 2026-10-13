@@ -67,31 +67,66 @@ Handshake
 The handshake packets are comment packets, starting with a '#',
 so that they can be safely ignored by older server versions.
 
-1. Peer 1 (SERVER-I1) transmits an UDP comment handshake packet,
-   saying it supports "v2" protocol, gives its Server ID, app version,
-   and a random token unique to this packet.
+A handshake packet is `#is2 peer`, the packet type (`hello` or `ok`), and
+space-separated `key=value` pairs:
 
-   \# PEER2 v 2 hello SERVER-I1 vers aprsc 1.2.3.4 token hq736t7q63
+* `v`: the protocol versions: in a hello, a comma-separated list of the
+  versions the sender supports, and in an ok, the one version picked
+* `id`: the Server ID of the sender
+* `vers`: the software name and version of the sender, as one word
+  (`aprsc/2.1.20`), for logging
+* `token`: a random token, unique to each hello, and returned in the ok;
+  printable characters, at most 64
+* `key`: the identifier of the PeerGroupKey the packet is signed with
+* `ts`: the time of sending, in seconds since 1970-01-01 UTC
+* `mac`: the signature, an HMAC-SHA256 in 64 hexadecimal digits, of all of
+  the packet before the space preceding `mac=`, made with the key
+
+All of them except `vers` are required, and `mac` must be the last one;
+the others can come in any order.  Keys which are not known must be
+ignored, so that later versions can add them, and words without a '='
+are skipped.  This is the same key-value format as used on the `#is2-meta`
+lines of plaintext clients (see IS2PLAIN.md), and the prefix follows the
+`#is2` lines used to upgrade plaintext client connections.
+
+The signature uses the same keys as the data frames (see below): a
+handshake packet is only accepted if it is signed with a key configured
+for the peer group, and its time is within 10 seconds of the receiver's
+clock.  A handshake can therefore not be spoofed, and IS2 is only enabled
+with a peer which shares a key, so that a peer with no common key stays on
+plain UDP instead of switching to frames which would be dropped.
+
+1. Peer 1 (SERVER-I1) transmits an UDP comment handshake packet,
+   saying which versions of the protocol it supports, giving its Server
+   ID, app version, and a random token unique to this packet.
+
+        #is2 peer hello v=2 id=SERVER-I1 vers=aprsc/1.2.3.4 token=hq736t7q63 key=1 ts=1760000000 mac=4f1c...
 
 2. Peer 2 (SERVER-I2), upon receiving the packet from a preconfigured
-   peer's IP address, replies, saying it also can do the "v2" protocol,
-   and returns the random token. If the peer does not understand v2,
-   it will not reply.
-   
-   \# PEER2 v 2 ok SERVER-I2 vers aprsc 2.3.4 got hq736t7q63
+   peer's IP address, with that peer's Server ID and a valid signature,
+   picks the highest version it supports from the list, and replies with
+   it, returning the random token. If the peer does not support any of the
+   versions offered, or does not understand the handshake at all, it will
+   not reply.
 
-3. Peer 1 (SERVER-I1), upon receiving this packet, with the correct token,
-   knows that Peer 2 will understand the v2 protocol, and can start
-   sending v2 data packets to it.
+        #is2 peer ok v=2 id=SERVER-I2 vers=aprsc/2.3.4 token=hq736t7q63 key=1 ts=1760000000 mac=9a07...
 
-For compatibility with future versions, if Peer 2 receives a "v 4 hello"
-packet, and does not understand v4 yet, it should respond with a "v 2 ok"
-packet.  Any additional keys and values after the token must be ignored, so
-that further versions can add parameters in the hello packet.
+3. Peer 1 (SERVER-I1), upon receiving this packet, with a valid signature,
+   the correct token and one of the versions it offered, knows that Peer 2
+   will understand that version of the protocol, and can start sending its
+   data packets to it.
+
+For compatibility with future versions, a peer supporting versions 2 and 3
+sends `v=2,3`, and a peer which only supports version 2 replies with `v=2`.
+Further capabilities can be negotiated by adding keys: the hello offers
+them, and the ok tells which of them were accepted.
+
+Version 1 is the plain UDP peering without a handshake.
 
 Peer 2 will individually send it's own 'hello' packet (step 1) to confirm
-that Peer 1 does v2.  Receiving a 'hello' packet does not necessarily
-mean that the peer would do v2 - the packet could have been spoofed.
+that Peer 1 does v2.  Receiving a 'hello' packet does not by itself enable
+v2 in the other direction: only a signed 'ok' with the token of our own
+hello does.
 
 A node can transmit an initial "hello" packet immediately after starting up,
 and at regular intervals (once per 10 minutes?) when receiving non-v2

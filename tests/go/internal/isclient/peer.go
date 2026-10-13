@@ -67,6 +67,11 @@ func (p *Peer) Close() error {
 type FakeUpstream struct {
 	ln   *net.TCPListener
 	call string
+	// Comment lines which Accept sends in addition to the banner and the
+	// logresp: AfterBanner right after the banner, before the server has
+	// logged in, and BeforeLogresp after its login, where a keepalive
+	// beacon would come. The server must skip them.
+	AfterBanner, BeforeLogresp []string
 }
 
 // ListenFakeUpstream starts listening on addr (for example "127.0.0.1:54153"
@@ -105,8 +110,10 @@ func (f *FakeUpstream) Accept(t *testing.T) *Peer {
 	p := &Peer{conn: conn, r: bufio.NewReader(conn)}
 	t.Cleanup(func() { conn.Close() })
 
-	if err := p.SendLine("# IS_Fake 1.00"); err != nil {
-		t.Fatalf("failed to send the server banner to the upstream connection: %v", err)
+	for _, l := range append([]string{"# IS_Fake 1.00"}, f.AfterBanner...) {
+		if err := p.SendLine(l); err != nil {
+			t.Fatalf("failed to send the server banner to the upstream connection: %v", err)
+		}
 	}
 
 	login, err := p.ReadPacket(time.Second)
@@ -122,6 +129,11 @@ func (f *FakeUpstream) Accept(t *testing.T) *Peer {
 	verified := "unverified"
 	if m[2] == fmt.Sprint(fap.AprsPasscode(m[1])) {
 		verified = "verified"
+	}
+	for _, l := range f.BeforeLogresp {
+		if err := p.SendLine(l); err != nil {
+			t.Fatalf("failed to send a comment to the upstream connection: %v", err)
+		}
 	}
 	if err := p.SendLine(fmt.Sprintf("# logresp %s %s, server %s", p.User, verified, f.call)); err != nil {
 		t.Fatalf("failed to send logresp to the upstream connection: %v", err)

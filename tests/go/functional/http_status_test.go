@@ -99,5 +99,17 @@ func TestHTTPStatus(t *testing.T) {
 		})
 	}
 
+	// the IS2 capability flags are there, and none of the listeners of
+	// this configuration accept IS2 clients
+	j := getStatus(t)
+	if _, ok := j.Server["is2"].(bool); !ok {
+		t.Errorf("server is2 is %v, want a boolean", j.Server["is2"])
+	}
+	for _, l := range j.Listeners {
+		if is2, ok := l["is2"].(bool); !ok || is2 {
+			t.Errorf("listener %q is2 is %v, want false", l["name"], l["is2"])
+		}
+	}
+
 	s.Stop()
 }

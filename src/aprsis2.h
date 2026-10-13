@@ -35,6 +35,17 @@ extern void is2_obuf_flush_pending(struct worker_t *self);
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 
+/* the in-band upgrade of plaintext client connections */
+#define IS2_UPGRADE_HELLO_PREFIX "#is2 hello"
+#define IS2_UPGRADE_HELLO_PREFIX_LEN 10
+
+extern int is2_upgrade_offered(struct client_t *c);
+extern int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *s, int len);
+
+/* the UDP peer handshake datagrams start with this */
+#define IS2_COREPEER_CONTROL_PREFIX "#is2 peer "
+#define IS2_COREPEER_CONTROL_PREFIX_LEN 10
+
 extern int is2_corepeer_propose(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
 

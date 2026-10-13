@@ -3,6 +3,7 @@ package functional
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -188,7 +189,7 @@ func TestIS2UDPPeer(t *testing.T) {
 	// must be dropped: with MSG_TRUNC, Linux reports the full length of a
 	// truncated datagram. The traffic tests below verify that the server
 	// survived them.
-	big := []byte("# PEER2 v 2 hello TESTIN-2 " + strings.Repeat("x", 9000))
+	big := []byte(isclient.PeerControlLine("hello", "2", "TESTIN-2", strings.Repeat("x", 9000)))
 	if n, err := udp.SendDatagram(big); err != nil || n != len(big) {
 		t.Fatalf("failed to send an oversized control datagram: %d, %v", n, err)
 	}
@@ -251,6 +252,139 @@ func TestIS2UDPPeer(t *testing.T) {
 				}
 			}
 		})
+	}
+
+	// the status tells that both peer links are on IS2
+	links := getStatus(t).peerLinks()
+	for _, name := range []string{"TESTIN-2", "TESTIN-3"} {
+		if links[name] != "is2" {
+			t.Errorf("status of peer %s: link %q, want \"is2\" (peers: %v)", name, links[name], links)
+		}
+	}
+
+	s.Stop()
+}
+
+// The UDP peer handshake: version negotiation, extensibility, signatures,
+// and the handshake datagrams which must not be answered or must not
+// enable IS2.
+func TestIS2UDPPeerHandshake(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	// the peer also has a key which the server does not
+	keys := maps.Clone(is2PeerKeys)
+	keys[9] = "ninthkey"
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", keys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
+
+	s := harness.Start(t, "is2-basic")
+
+	send := func(line string) {
+		t.Helper()
+		if _, err := udp.SendDatagram([]byte(line)); err != nil {
+			t.Fatalf("failed to send %q: %v", line, err)
+		}
+	}
+	sign := func(line string) string {
+		return udp.SignControl(line, udp.TxKey, time.Now())
+	}
+	readOK := func(what string) *isclient.PeerControl {
+		t.Helper()
+		ok, err := udp.ReadControl("ok", isclient.DefaultTimeout)
+		if err != nil {
+			t.Fatalf("no ok for %s: %v", what, err)
+		}
+		if err := udp.VerifyControl(ok); err != nil {
+			t.Errorf("the ok for %s: %v", what, err)
+		}
+		return ok
+	}
+
+	// 1) a hello offering versions up from 2, with the keys in another
+	// order, an unknown key and a bare word, is answered with the highest
+	// common version and the token, signed
+	send(sign("#is2 peer hello x-future=1 token=t0k3n bareword id=TESTIN-2 v=2,3,17 vers=go-gotest/1.0"))
+	ok := readOK("the hello")
+	for k, want := range map[string]string{"v": "2", "id": "TESTING", "token": "t0k3n"} {
+		if ok.Fields[k] != want {
+			t.Errorf("ok %s=%q, want %q (%v)", k, ok.Fields[k], want, ok.Fields)
+		}
+	}
+	if !strings.HasPrefix(ok.Fields["vers"], "aprsc/") {
+		t.Errorf("ok vers=%q, want aprsc/<version>", ok.Fields["vers"])
+	}
+
+	// 2) hellos which are not answered: the answer to the last, valid one
+	// must be the next ok received
+	send(udp.ControlLine("hello", "3,4", "nocommon"))
+	send(sign(isclient.PeerControlLine("hello", "2", "TESTIN-9", "wrongid")))
+	send(udp.ControlLine("hello", "2,x", "badlist"))
+	send(sign("#is2 peer hello v=2 id=TESTIN-2 vers=go-gotest/1.0"))
+	// signatures: none, a tampered line, a key the server does not have,
+	// a time out of the window, and the mac not at the end
+	send(isclient.PeerControlLine("hello", "2", "TESTIN-2", "unsigned"))
+	send(strings.Replace(udp.ControlLine("hello", "2", "tampered0"), "tampered0", "tampered1", 1))
+	send(udp.SignControl(isclient.PeerControlLine("hello", "2", "TESTIN-2", "key9"), 9, time.Now()))
+	send(udp.SignControl(isclient.PeerControlLine("hello", "2", "TESTIN-2", "stale"), udp.TxKey, time.Now().Add(-30*time.Second)))
+	send(udp.ControlLine("hello", "2", "macfirst") + " x-after=1")
+	send(udp.ControlLine("hello", "2", "last"))
+	ok = readOK("the last hello")
+	if ok.Fields["token"] != "last" {
+		t.Errorf("got an ok with token %q, want the one for the last hello", ok.Fields["token"])
+	}
+	for text, want := range map[string]int{
+		"none of which are supported":         2, // "3,4" and the invalid "2,x"
+		"peer ID mismatch":                    1,
+		"v, id or token missing":              1,
+		"without a signature at the end":      2, // unsigned, and macfirst
+		"control packet with wrong signature": 1,
+		"signed with undefined key ID 9":      1,
+		"control packet timestamp is off by":  1,
+		"IS2 UDP peer mode enabled":           0,
+	} {
+		if n := s.LogCount(text); n != want {
+			t.Errorf("server logged %q %d times, want %d", text, n, want)
+		}
+	}
+
+	// 3) the server's own hello offers version 2. The hellos above make it
+	// propose soon; it uses a new token in each, so take the last one.
+	var hello *isclient.PeerControl
+	for {
+		h, err := udp.ReadControl("hello", 3*time.Second)
+		if err != nil {
+			break
+		}
+		hello = h
+	}
+	if hello == nil {
+		t.Fatal("the server did not propose IS2 peering")
+	}
+	if hello.Fields["v"] != "2" || hello.Fields["id"] != "TESTING" || hello.Fields["token"] == "" {
+		t.Fatalf("unexpected hello from the server: %v", hello.Fields)
+	}
+	if err := udp.VerifyControl(hello); err != nil {
+		t.Errorf("the hello from the server: %v", err)
+	}
+
+	// an ok with more than one version, with a wrong token, or without a
+	// signature does not enable IS2, a proper one does
+	token := hello.Fields["token"]
+	send(udp.ControlLine("ok", "2,3", token))
+	s.WaitLog("'ok' packet: invalid version", 1, 5*time.Second)
+	send(udp.ControlLine("ok", "2", token+"x"))
+	s.WaitLog("'ok' packet: challenge mismatch", 1, 5*time.Second)
+	send(isclient.PeerControlLine("ok", "2", "TESTIN-2", token))
+	s.WaitLog("without a signature at the end", 3, 5*time.Second)
+	if n := s.LogCount("IS2 UDP peer mode enabled"); n != 0 {
+		t.Fatalf("IS2 peering enabled by an invalid ok")
+	}
+	send(udp.ControlLine("ok", "2", token))
+	s.WaitLog("IS2 UDP peer mode enabled, v=2, peer software go-gotest/1.0", 1, 5*time.Second)
+
+	if link := getStatus(t).peerLinks()["TESTIN-2"]; link != "is2" {
+		t.Errorf("status of peer TESTIN-2: link %q, want \"is2\"", link)
 	}
 
 	s.Stop()
@@ -558,12 +692,22 @@ func TestIS2KeyReload(t *testing.T) {
 	s.Signal(syscall.SIGUSR1)
 	s.WaitLog(readOK, reloads+1, 10*time.Second)
 
-	// the peers are set up again on reload, so negotiate again
+	// the peers are set up again on reload, so negotiate again: a
+	// handshake signed with the removed key 2 is not accepted, key 1 is
+	const removedKey = "signed with undefined key ID 2"
+	if err := udp.Negotiate(3 * time.Second); err == nil {
+		t.Fatal("negotiated the IS2 corepeer link with a handshake signed with a removed key")
+	}
+	if s.LogCount(removedKey) == 0 {
+		t.Errorf("the server did not log %q", removedKey)
+	}
+	udp.TxKey = 1
 	if err := udp.Negotiate(20 * time.Second); err != nil {
 		t.Fatalf("failed to negotiate the IS2 corepeer link after reload: %v", err)
 	}
 
 	// a frame signed with the removed key 2 must be dropped, key 1 still works
+	udp.TxKey = 2
 	if err := udp.SendLine("SRC>DST,qAR,IGATE:signed with key 2 after reload"); err != nil {
 		t.Fatalf("failed to send a packet signed with the removed key: %v", err)
 	}
@@ -720,6 +864,45 @@ func TestIS2FilterPort(t *testing.T) {
 	const inside = "M1SRC>APRS,OH2RDG*,WIDE," + loginTx + ",I:!6028.51N/02505.68E# inside the filter"
 	isclient.TxRx(t, tx, full, outside, outsideRx)
 	isclient.ExpectDropLiteral(t, tx, igate, outside, inside)
+
+	s.Stop()
+}
+
+// status.json tells that the server supports IS2, and which listeners accept
+// IS2 clients, so that the IS2 capable servers and ports can be found.
+func TestIS2Status(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+	s := harness.Start(t, "is2-basic")
+
+	j := getStatus(t)
+
+	if is2, ok := j.Server["is2"].(bool); !ok || !is2 {
+		t.Errorf("server is2 is %v, want true", j.Server["is2"])
+	}
+	if f, _ := j.Server["software_build_features"].(string); !strings.Contains(f, " is2") {
+		t.Errorf("software_build_features %q does not list is2", f)
+	}
+
+	if len(j.Listeners) == 0 {
+		t.Fatal("status.json lists no listeners")
+	}
+	is2Listeners := 0
+	for _, l := range j.Listeners {
+		name, _ := l["name"].(string)
+		want := strings.HasPrefix(name, "IS2 ")
+		is2, ok := l["is2"].(bool)
+		if !ok || is2 != want {
+			t.Errorf("listener %q is2 is %v, want %v", name, l["is2"], want)
+		}
+		if want {
+			is2Listeners++
+		}
+	}
+	// the full feed and igate ports - dupefeed ports are always hidden
+	if is2Listeners != 2 {
+		t.Errorf("found %d IS2 listeners, want 2", is2Listeners)
+	}
 
 	s.Stop()
 }

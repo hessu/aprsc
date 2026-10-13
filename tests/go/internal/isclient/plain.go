@@ -3,6 +3,7 @@
 package isclient
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -50,6 +51,9 @@ type config struct {
 	udp      int
 	appName  string // IS2 login
 	dupes    bool   // IS2 dupe feed
+	hello    string // IS2 in-band upgrade
+	// IS2 in-band upgrade with the writes in pieces
+	slowUpgrade bool
 }
 
 // passcodeFor returns the correct passcode for a callsign.
@@ -174,6 +178,52 @@ func LoginReply(t *testing.T, addr, login string) (reply string, accepted bool) 
 		}
 		if loginRejectRe.MatchString(l) {
 			return l, false
+		}
+	}
+}
+
+// PreLogin connects to addr, sends the lines as they are, and returns the
+// lines the server sends up to its answer: a "# logresp", a rejection, or the
+// "#is2 hello" of an upgrade to IS2. A timeout or the server closing the
+// connection ends the lines too. The connection is closed before returning.
+func PreLogin(t *testing.T, addr string, lines ...string) []string {
+	t.Helper()
+
+	var conn net.Conn
+	var err error
+	deadline := time.Now().Add(connectRetry)
+	for {
+		conn, err = net.DialTimeout("tcp", addr, time.Second)
+		if err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("failed to connect to %s: %v", addr, err)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	defer conn.Close()
+
+	var out strings.Builder
+	for _, l := range lines {
+		out.WriteString(l + "\r\n")
+	}
+	if _, err := conn.Write([]byte(out.String())); err != nil {
+		t.Fatalf("failed to send to %s: %v", addr, err)
+	}
+
+	r := bufio.NewReader(conn)
+	conn.SetReadDeadline(time.Now().Add(DefaultTimeout))
+	var got []string
+	for {
+		l, err := r.ReadString('\n')
+		if err != nil {
+			return got
+		}
+		l = strings.TrimRight(l, "\r\n")
+		got = append(got, l)
+		if strings.HasPrefix(l, "# logresp") || strings.HasPrefix(l, "#is2 hello") || loginRejectRe.MatchString(l) {
+			return got
 		}
 	}
 }

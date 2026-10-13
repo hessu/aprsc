@@ -202,6 +202,9 @@ The basic syntax is:
     - maxclients 100 - limit clients connected on this port (defaults to 200)
     - acl etc/client.acl - match client addresses against ACL
     - hidden - don't show the port in the status page
+    - noIS2upgrade - don't offer the in-band upgrade to the IS2 protocol
+      on this port (see [IS2UPGRADE](IS2UPGRADE.html)). Only servers built
+      with IS2 support offer it; it is accepted, and does nothing, on others.
 
 If you wish to provide UDP service for clients, set up a second listener on
 the same address, port and address family (IPv4/IPv6).

@@ -24,6 +24,7 @@
 #include "worker.h"
 #include "aprsis2.h"
 #include "aprsis2.pb-c.h"
+#include "aprsis2plain.h"
 #include "version.h"
 #include "hlog.h"
 #include "uplink.h"
@@ -1141,6 +1142,133 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 	return i;
 }
 
+/*
+ *	In-band upgrade of a plaintext client connection to IS2 (see
+ *	doc/IS2UPGRADE.md). The client sends "#is2 hello v=1[,2...]" before
+ *	its login line, and the server answers "#is2 hello v=1" and switches
+ *	to IS2. The server does not announce the upgrade after its banner:
+ *	the uplink code of existing aprsc releases expects the logresp right
+ *	after the banner, and closes the connection on any other line.
+ */
+
+/* the range of upgrade protocol versions supported */
+#define IS2_UPGRADE_VERSION_MIN 1
+#define IS2_UPGRADE_VERSION_MAX 1
+
+/*
+ *	Is the upgrade offered to this client? Not on servers which pretend to
+ *	be some other software, or have picky clients which are all handled
+ *	in quirks mode. Only before login.
+ */
+int is2_upgrade_offered(struct client_t *c)
+{
+	return (c->flags & CLFLAGS_IS2_UPGRADE) && !(c->flags & CLFLAGS_IS2)
+		&& c->state == CSTATE_LOGIN && !quirks_mode && !fake_version;
+}
+
+/* the fields of a "#is2 hello" line, not NUL-terminated */
+struct is2_upgrade_hello_t {
+	const char *v;
+	int v_len;
+};
+
+static void is2_upgrade_hello_key(void *ctx, const char *key, int key_len, const char *val, int val_len)
+{
+	struct is2_upgrade_hello_t *hello = ctx;
+
+	if (key_len == 1 && memcmp(key, "v", 1) == 0) {
+		hello->v = val;
+		hello->v_len = val_len;
+	}
+	/* unknown keys are ignored, so that later versions can add them */
+}
+
+/*
+ *	After the upgrade, the client may still send plaintext lines which it
+ *	sent before receiving our answer: the login line, and maybe comments.
+ *	Discard them until an IS2 frame starts with STX at the beginning of a
+ *	line. Lines are only skipped when complete, so that the STX is found
+ *	at the start of the next one even if the line terminator arrives later.
+ */
+static int is2_upgrade_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
+{
+	char *ibuf = c->ibuf;
+	int i = start_at;
+
+	while (i < c->ibuf_end) {
+		if (ibuf[i] == STX) {
+			c->handler_consume_input = &is2_deframe_input;
+			return is2_deframe_input(self, c, i);
+		}
+
+		int eol = i;
+		while (eol < c->ibuf_end && ibuf[eol] != '\r' && ibuf[eol] != '\n')
+			eol++;
+
+		if (eol >= c->ibuf_end)
+			break; /* not complete yet */
+
+		/* the line may contain the passcode, so it is not logged */
+		if (eol > i)
+			hlog(LOG_DEBUG, "%s: IS2 upgrade: discarding a plaintext line of %d bytes", c->addr_rem, eol - i);
+
+		i = eol;
+		while (i < c->ibuf_end && (ibuf[i] == '\r' || ibuf[i] == '\n'))
+			i++;
+	}
+
+	return i;
+}
+
+/*
+ *	A "#is2 hello" line from a plaintext client before login. Returns 0 if
+ *	the line was ignored, and the client stays on plaintext, 1 if the
+ *	connection was upgraded, or < 0 if the client was closed.
+ */
+int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *s, int len)
+{
+	struct is2_upgrade_hello_t hello;
+
+	if (!is2_upgrade_offered(c)) {
+		hlog(LOG_DEBUG, "%s: IS2 upgrade: hello ignored, upgrade not offered", c->addr_rem);
+		return 0;
+	}
+
+	memset(&hello, 0, sizeof(hello));
+	is2_kv_parse(s + IS2_UPGRADE_HELLO_PREFIX_LEN, len - IS2_UPGRADE_HELLO_PREFIX_LEN, is2_upgrade_hello_key, &hello);
+
+	int v = (hello.v) ? is2_kv_version_pick(hello.v, hello.v_len, IS2_UPGRADE_VERSION_MIN, IS2_UPGRADE_VERSION_MAX) : 0;
+	if (!v) {
+		/* no answer: the client logs in on plaintext, as it would on
+		 * a server which does not know of IS2 */
+		hlog(LOG_INFO, "%s: IS2 upgrade: client offered versions %.*s, none of which are supported, staying on plaintext",
+			c->addr_rem, (hello.v) ? hello.v_len : 1, (hello.v) ? hello.v : "-");
+		return 0;
+	}
+
+	hlog(LOG_DEBUG, "%s: IS2 upgrade: switching to IS2, v=%d", c->addr_rem, v);
+
+	/* the last plaintext line; a result below -2 means the write destroyed
+	 * the client, while -1 only means the socket would block, with the
+	 * line left in the output buffer */
+	int r = client_printf(self, c, "%s v=%d\r\n", IS2_UPGRADE_HELLO_PREFIX, v);
+	if (r < -2)
+		return r;
+
+	c->flags |= CLFLAGS_IS2;
+	is2_allocate_obuf(c);
+	c->write_packet = &is2_write_packet;
+	c->is2_input_handler = &is2_input_handler_login;
+	c->handler_consume_input = &is2_upgrade_deframe_input;
+
+	/* then IS2, starting with the server signature, as on an IS2 port */
+	r = is2_out_server_signature(self, c);
+	if (r < -2)
+		return r;
+
+	return 1;
+}
+
 static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, int len, int signature_start)
 {
 	int hmac_start = signature_start + IS2_UDP_HMAC_START;
@@ -1567,25 +1695,185 @@ int is2_wire_selfcheck(void)
 
 
 #define IS2_COREPEER_PROPOSAL_CHALLENGE_LEN 10
+#define IS2_COREPEER_TOKEN_MAX_LEN 64
+
+/* the range of UDP peering protocol versions supported; version 1 is the
+ * plain UDP peering without a handshake */
+#define IS2_COREPEER_VERSION_MIN 2
+#define IS2_COREPEER_VERSION_MAX 2
+
+/* the handshake lines end in " mac=" and an HMAC-SHA256 in hex */
+#define IS2_COREPEER_MAC_HEX_LEN 64
+#define IS2_COREPEER_MAC_SUFFIX_LEN (5 + IS2_COREPEER_MAC_HEX_LEN)
+
+/* the fields of a "#is2 peer" handshake line, not NUL-terminated */
+struct is2_corepeer_control_t {
+	const char *v, *id, *vers, *token, *key, *ts, *mac;
+	int v_len, id_len, vers_len, token_len, key_len, ts_len, mac_len;
+};
+
+static void is2_corepeer_control_key(void *ctx, const char *key, int key_len, const char *val, int val_len)
+{
+	struct is2_corepeer_control_t *ctl = ctx;
+
+	if (key_len == 1 && memcmp(key, "v", 1) == 0) {
+		ctl->v = val;
+		ctl->v_len = val_len;
+	} else if (key_len == 2 && memcmp(key, "id", 2) == 0) {
+		ctl->id = val;
+		ctl->id_len = val_len;
+	} else if (key_len == 4 && memcmp(key, "vers", 4) == 0) {
+		ctl->vers = val;
+		ctl->vers_len = val_len;
+	} else if (key_len == 5 && memcmp(key, "token", 5) == 0) {
+		ctl->token = val;
+		ctl->token_len = val_len;
+	} else if (key_len == 3 && memcmp(key, "key", 3) == 0) {
+		ctl->key = val;
+		ctl->key_len = val_len;
+	} else if (key_len == 2 && memcmp(key, "ts", 2) == 0) {
+		ctl->ts = val;
+		ctl->ts_len = val_len;
+	} else if (key_len == 3 && memcmp(key, "mac", 3) == 0) {
+		ctl->mac = val;
+		ctl->mac_len = val_len;
+	}
+	/* unknown keys are ignored, so that later versions can add them */
+}
+
+static int hexval(char c)
+{
+	if (c >= '0' && c <= '9')
+		return c - '0';
+	if (c >= 'a' && c <= 'f')
+		return c - 'a' + 10;
+	if (c >= 'A' && c <= 'F')
+		return c - 'A' + 10;
+	return -1;
+}
+
+/*
+ *	Send a "#is2 peer" handshake line: a hello offering the versions from
+ *	v_min to v_max, or an ok with the one picked (v_min == v_max).
+ */
+static int is2_corepeer_control_out(struct worker_t *self, struct client_t *c, const char *type,
+	int v_min, int v_max, const char *token, int token_len)
+{
+	unsigned int key_id = peergroup_key_transmit;
+	char vlist[64];
+	char vers[64];
+	char buf[512];
+	int vl = 0;
+
+	for (int v = v_min; v <= v_max && vl < sizeof(vlist) - 12; v++)
+		vl += snprintf(vlist + vl, sizeof(vlist) - vl, "%s%d", (vl) ? "," : "", v);
+
+	/* the software name and version as one value, without spaces */
+	snprintf(vers, sizeof(vers), "%s/%s", verstr_progname, version_build);
+	for (char *s = vers; *s; s++)
+		if (*s == ' ' || *s == '=')
+			*s = '_';
+
+	/* the signature goes last: it covers everything before " mac=" */
+	int l = snprintf(buf, sizeof(buf), IS2_COREPEER_CONTROL_PREFIX "%s v=%s id=%s vers=%s token=%.*s key=%u ts=%u",
+		type, vlist, serverid, vers, token_len, token, key_id, (uint32_t)now);
+
+	/* room for the signature, the CRLF and the terminating NUL */
+	if (l + IS2_COREPEER_MAC_SUFFIX_LEN + 2 + 1 > sizeof(buf)) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: handshake line too long", c->addr_rem, c->username);
+		return -1;
+	}
+
+	unsigned char md[32];
+	unsigned int md_len = 0;
+	int r = is2_corepeer_hmac(key_id, buf, l, md, &md_len);
+	if (r != 0 || md_len != sizeof(md)) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: HMAC calculation failed for handshake (key %u)", c->addr_rem, c->username, key_id);
+		return -1;
+	}
+
+	l += snprintf(buf + l, sizeof(buf) - l, " mac=");
+	for (int i = 0; i < md_len; i++)
+		l += snprintf(buf + l, sizeof(buf) - l, "%02x", md[i]);
+	l += snprintf(buf + l, sizeof(buf) - l, "\r\n");
+
+	return c->write(self, c, buf, l);
+}
+
+/*
+ *	Check the signature of a "#is2 peer" handshake line, which must end in
+ *	" mac=<64 hex digits>", an HMAC-SHA256 of everything before it, with
+ *	the key given in the key= field, and the time in ts= within the same
+ *	window as for the data frames. Returns 0 if the line is authentic.
+ */
+static int is2_corepeer_control_verify(struct client_t *c, const char *p, int len,
+	struct is2_corepeer_control_t *ctl)
+{
+	int signed_len = len - IS2_COREPEER_MAC_SUFFIX_LEN;
+	long long key_id, ts;
+
+	if (signed_len <= 0 || memcmp(p + signed_len, " mac=", 5) != 0
+	    || ctl->mac != p + signed_len + 5 || ctl->mac_len != IS2_COREPEER_MAC_HEX_LEN) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: control packet without a signature at the end: ", c->addr_rem, c->username);
+		return -1;
+	}
+
+	if (!ctl->key || !is2_kv_int(ctl->key, ctl->key_len, 0, IS2_PEERGROUP_KEY_ID_NUM-1, &key_id)
+	    || !ctl->ts || !is2_kv_int(ctl->ts, ctl->ts_len, 0, UINT32_MAX, &ts)) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: control packet signature without a valid key or ts: ", c->addr_rem, c->username);
+		return -1;
+	}
+
+	unsigned char md[32];
+	unsigned int md_len = 0;
+	int r = is2_corepeer_hmac(key_id, p, signed_len, md, &md_len);
+	if (r == IS2_HMAC_NO_KEY) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet signed with undefined key ID %lld", c->addr_rem, c->username, key_id);
+		return -1;
+	}
+	if (r != 0 || md_len != sizeof(md)) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: HMAC calculation failed (key %lld)", c->addr_rem, c->username, key_id);
+		return -1;
+	}
+
+	/* the received MAC in hex, both cases accepted */
+	unsigned char rmd[32];
+	for (int i = 0; i < sizeof(rmd); i++) {
+		int hi = hexval(ctl->mac[i*2]);
+		int lo = hexval(ctl->mac[i*2+1]);
+		if (hi < 0 || lo < 0) {
+			hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: control packet with an invalid mac: ", c->addr_rem, c->username);
+			return -1;
+		}
+		rmd[i] = hi << 4 | lo;
+	}
+
+	if (CRYPTO_memcmp(md, rmd, sizeof(md)) != 0) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet with wrong signature (key_id %lld)", c->addr_rem, c->username, key_id);
+		return -1;
+	}
+
+	int64_t age = (int64_t)(uint32_t)now - (int64_t)ts;
+	if (age > IS2_UDP_FRAME_MAX_AGE || age < -IS2_UDP_FRAME_MAX_AGE) {
+		hlog(LOG_WARNING, "%s/%s: IS2 UDP: control packet timestamp is off by %lld seconds, dropping (clocks not in sync, or a replayed packet)",
+			c->addr_rem, c->username, (long long)age);
+		return -1;
+	}
+
+	return 0;
+}
 
 int is2_corepeer_propose(struct worker_t *self, struct client_t *c)
 {
-	char buf[256];
-	
 	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: control: proposing IS2", c->addr_rem, c->username);
 	
 	if (!c->corepeer_is2_challenge)
 		c->corepeer_is2_challenge = hmalloc(IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
 	
 	urandom_token((unsigned char *)c->corepeer_is2_challenge, IS2_COREPEER_PROPOSAL_CHALLENGE_LEN+1);
-	
-	int l = snprintf(buf, sizeof(buf), "# PEER2 v 2 hello %s vers %s %s token %s\r\n",
-		serverid, verstr_progname, version_build, c->corepeer_is2_challenge);
-	
-	if (l > sizeof(buf))
-		l = sizeof(buf) - 1;
-	
-	return c->write(self, c, buf, l);
+
+	return is2_corepeer_control_out(self, c, "hello", IS2_COREPEER_VERSION_MIN, IS2_COREPEER_VERSION_MAX,
+		c->corepeer_is2_challenge, strlen(c->corepeer_is2_challenge));
 }
 
 typedef enum {
@@ -1594,122 +1882,145 @@ typedef enum {
         IS2_COREPEER_CONTROL_OK
 } IS2CorepeerControlEnum;
 
+/*
+ *	The token is echoed back in the reply: only take printable
+ *	characters of a sane length.
+ */
+static int is2_corepeer_token_valid(const char *token, int token_len)
+{
+	if (token_len < 1 || token_len > IS2_COREPEER_TOKEN_MAX_LEN)
+		return 0;
+
+	for (int i = 0; i < token_len; i++)
+		if (token[i] <= ' ' || token[i] > '~')
+			return 0;
+
+	return 1;
+}
+
+/*
+ *	Handle a "#is2 peer" handshake datagram from a UDP peer:
+ *
+ *	#is2 peer hello v=2[,3...] id=SERVERID vers=aprsc/2.1.20 token=abc123 [key=value ...] key=1 ts=1760000000 mac=<hex>
+ *	#is2 peer ok v=2 id=SERVERID vers=aprsc/2.1.20 token=abc123 [key=value ...] key=1 ts=1760000000 mac=<hex>
+ *
+ *	The keys may come in any order, and unknown ones are ignored, but the
+ *	mac must be the last one: it signs everything before it.
+ */
 int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	int argc;
-	char *argv[256];
 	IS2CorepeerControlEnum type = IS2_COREPEER_CONTROL_UNDEF;
-	
+	struct is2_corepeer_control_t ctl;
+
+	/* a line terminator is optional */
+	while (len > 0 && (p[len-1] == '\r' || p[len-1] == '\n'))
+		len--;
+
 	hlog_packet(LOG_DEBUG, p, len, "%s/%s: IS2 UDP: control packet in: ", c->addr_rem, c->username);
-	p[len] = 0;
 
 	/* without a key to sign frames with, the link stays on plain UDP */
 	if (!is2_corepeer_enabled()) {
 		hlog_packet(LOG_DEBUG, p, len, "%s/%s: IS2 UDP: control packet ignored, no PeerGroupKey configured: ", c->addr_rem, c->username);
 		return 0;
 	}
-	
-	/* parse to arguments */
-	if ((argc = parse_args_noshell(argv, p)) == 0)
-		return -1;
-	
-	
-	if (argc < 11) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, too few arguments: ", c->addr_rem, c->username);
-		return -1;
-	}
-	
-	if (strcasecmp(argv[1], "PEER2") != 0) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'PEER2': ", c->addr_rem, c->username);
-		return -1;
-	}
-	
-	if (strcasecmp(argv[2], "v") != 0) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'v': ", c->addr_rem, c->username);
-		return -1;
-	}
-	
-	if (strcasecmp(argv[3], "2") != 0) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, v != 2: ", c->addr_rem, c->username);
-		return -1;
-	}
-	
-	if (strcasecmp(argv[4], "hello") == 0) {
+
+	/* the caller has checked for the "#is2 peer " prefix */
+	const char *s = p + IS2_COREPEER_CONTROL_PREFIX_LEN;
+	int slen = len - IS2_COREPEER_CONTROL_PREFIX_LEN;
+	int type_len = 0;
+
+	while (type_len < slen && s[type_len] != ' ')
+		type_len++;
+
+	if (type_len == 5 && memcmp(s, "hello", 5) == 0) {
 		type = IS2_COREPEER_CONTROL_HELLO;
-	} else if (strcasecmp(argv[4], "ok") == 0) {
+	} else if (type_len == 2 && memcmp(s, "ok", 2) == 0) {
 		type = IS2_COREPEER_CONTROL_OK;
 	} else {
 		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, unknown type: ", c->addr_rem, c->username);
 		return -1;
 	}
-	
-	char *peer_id = argv[5];
-	
-	if (strcmp(peer_id, c->username) != 0) {
-		hlog(LOG_ERR, "%s/%s: IS2 UDP: PeerGroup config peer ID mismatch with ID reported by peer '%s'",
-			c->addr_rem, c->username, peer_id);
+
+	memset(&ctl, 0, sizeof(ctl));
+	is2_kv_parse(s + type_len, slen - type_len, is2_corepeer_control_key, &ctl);
+
+	/* only trust a handshake signed with one of our peer group keys, so
+	 * that it can not be spoofed, and IS2 is only enabled with a peer
+	 * which has a common key */
+	if (is2_corepeer_control_verify(c, p, len, &ctl) != 0)
+		return -1;
+
+	if (!ctl.v || !ctl.id || !ctl.token) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, v, id or token missing: ", c->addr_rem, c->username);
 		return -1;
 	}
-	
-	if (strcasecmp(argv[6], "vers") != 0) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'vers': ", c->addr_rem, c->username);
+
+	if (ctl.id_len != c->username_len || memcmp(ctl.id, c->username, ctl.id_len) != 0) {
+		hlog(LOG_ERR, "%s/%s: IS2 UDP: PeerGroup config peer ID mismatch with ID reported by peer '%.*s'",
+			c->addr_rem, c->username, ctl.id_len, ctl.id);
 		return -1;
 	}
-	
-	if (strcasecmp(argv[9], "token") != 0) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no 'token': ", c->addr_rem, c->username);
+
+	if (!is2_corepeer_token_valid(ctl.token, ctl.token_len)) {
+		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, bad token: ", c->addr_rem, c->username);
 		return -1;
 	}
-	
-	char *token = argv[10];
-	if (!token) {
-		hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP: Invalid control packet, no token present: ", c->addr_rem, c->username);
-		return -1;
-	}
-	
+
 	if (type == IS2_COREPEER_CONTROL_HELLO) {
-		/* the peer asks us whether we can do IS2 peering */
-		char buf[256];
-		
-		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: control: peer proposed IS2, responding OK", c->addr_rem, c->username);
-		
-		int l = snprintf(buf, sizeof(buf), "# PEER2 v 2 ok %s vers %s %s token %s\r\n",
-			serverid, verstr_progname, version_build, token);
-		
-		if (l > sizeof(buf))
-			l = sizeof(buf) - 1;
-		
+		/* the peer asks us whether we can do IS2 peering, and which
+		 * versions it can do: pick the highest common one */
+		int v = is2_kv_version_pick(ctl.v, ctl.v_len, IS2_COREPEER_VERSION_MIN, IS2_COREPEER_VERSION_MAX);
+
+		if (!v) {
+			/* no reply: the link stays on plain UDP, as with a peer
+			 * which does not do IS2 at all */
+			hlog(LOG_INFO, "%s/%s: IS2 UDP: peer proposed IS2 versions %.*s, none of which are supported",
+				c->addr_rem, c->username, ctl.v_len, ctl.v);
+			return 0;
+		}
+
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: control: peer proposed IS2, responding OK with v=%d", c->addr_rem, c->username, v);
+
 		if (!c->corepeer_is2) {
 			// If we're not yet in IS2 mode ourself, offer again soon
 			c->next_is2_peer_offer = tick + 1;
 		}
-		
-		return c->write(self, c, buf, l);
+
+		return is2_corepeer_control_out(self, c, "ok", v, v, ctl.token, ctl.token_len);
 	}
-	
+
 	if (type == IS2_COREPEER_CONTROL_OK) {
-		/* the peer replies "I can do IS2" */
+		/* the peer replies "I can do IS2", with the version it picked */
 		if (!c->corepeer_is2_challenge) {
 			hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP control 'ok' packet: no challenge stored, no 'hello' sent: ", c->addr_rem, c->username);
 			return -1;
 		}
-		
-		if (strcmp(token, c->corepeer_is2_challenge) != 0) {
+
+		if (ctl.token_len != strlen(c->corepeer_is2_challenge)
+		    || memcmp(ctl.token, c->corepeer_is2_challenge, ctl.token_len) != 0) {
 			hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP control 'ok' packet: challenge mismatch: ", c->addr_rem, c->username);
 			return -1;
 		}
-		
+
+		/* exactly one version, which we offered */
+		int v = is2_kv_version_pick(ctl.v, ctl.v_len, IS2_COREPEER_VERSION_MIN, IS2_COREPEER_VERSION_MAX);
+		if (!v || memchr(ctl.v, ',', ctl.v_len)) {
+			hlog_packet(LOG_WARNING, p, len, "%s/%s: IS2 UDP control 'ok' packet: invalid version: ", c->addr_rem, c->username);
+			return -1;
+		}
+
 		/* OK, enable */
 		c->corepeer_is2 = 1;
 		c->write_packet = is2_corepeer_write_packet;
 		c->is2_input_handler = is2_input_handler_corepeer;
-		
+
 		/* Do send offers every 10 minutes away */
 		c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;
-		
-		hlog(LOG_INFO, "%s/%s: IS2 UDP peer mode enabled", c->addr_rem, c->username);
+
+		hlog(LOG_INFO, "%s/%s: IS2 UDP peer mode enabled, v=%d, peer software %.*s",
+			c->addr_rem, c->username, v, (ctl.vers) ? ctl.vers_len : 1, (ctl.vers) ? ctl.vers : "-");
 	}
-	
+
 	return 0;
 }
 

@@ -187,12 +187,24 @@ Delivery order
 -----------------
 
 aprsc sends its SCTP messages unordered (`SCTP_UNORDERED` in the default
-send parameters of the socket), and turns off the delay of small
-messages (`SCTP_NODELAY`).  An unordered message is handed to the
-receiver as soon as it arrives, without waiting for the messages sent
-before it.  On a path without losses the messages arrive in the order
-they were sent, but a message which has to be retransmitted can arrive
-after the ones sent after it.
+send parameters of the socket) once the login is done, and turns off
+the delay of small messages (`SCTP_NODELAY`).  An unordered message is
+handed to the receiver as soon as it arrives, without waiting for the
+messages sent before it.  On a path without losses the messages arrive
+in the order they were sent, but a message which has to be retransmitted
+can arrive after the ones sent after it.
+
+The messages of the login handshake are sent in order: the banner, the
+logresp, the `#is2 hello` line of an in-band upgrade, the IS2 server
+signature and the login reply.  So that the first unordered messages can
+not overtake a retransmitted message of the handshake, the server only
+starts sending packets after the login when the peer has acknowledged
+all of the handshake (the `SCTP_SENDER_DRY_EVENT` notification).  This
+takes a round trip, or up to 200 ms more if the peer delays its
+acknowledgements; packets in the meantime are not sent to the client,
+as if it had logged in a moment later.  The flag is set by the sender of
+each message, so a server only decides the order of the messages it
+sends.
 
 So the packets of one message stay in order, but the messages can be
 reordered.  An APRS-IS server does not promise to keep the packets in

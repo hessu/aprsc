@@ -29,16 +29,61 @@
  */
 #define SCTP_SNDBUF_SIZE (256*1024)
 
+/*
+ *	Select the notifications we want, and the sender dry event if
+ *	sender_dry is set
+ */
+
+static int sctp_subscribe_events(struct client_t *c, int sender_dry)
+{
+	struct sctp_event_subscribe subscribe;
+	
+	memset(&subscribe, 0, sizeof(subscribe));
+	
+	subscribe.sctp_shutdown_event = 1;
+	subscribe.sctp_association_event = 1;
+	subscribe.sctp_address_event = 1;
+	subscribe.sctp_send_failure_event = 1;
+	subscribe.sctp_peer_error_event = 1;
+	subscribe.sctp_partial_delivery_event = 1;
+	subscribe.sctp_sender_dry_event = sender_dry;
+	
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	return 0;
+}
+
 int sctp_set_client_sockopt(struct client_t *c)
 {
-	struct sctp_sndrcvinfo sri;
-	socklen_t len;
-	
 	int sndbuf = SCTP_SNDBUF_SIZE;
 	if (setsockopt(c->fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) == -1) {
 		/* not fatal, the default buffer works too */
 		hlog(LOG_WARNING, "setsockopt(%s, SO_SNDBUF, %d): %s", c->addr_rem, sndbuf, strerror(errno));
 	}
+	
+	int enable = 1;
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_NODELAY, &enable, sizeof(enable)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_NODELAY): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	return sctp_subscribe_events(c, 0);
+}
+
+/*
+ *	Set the socket options which take effect after the login: send the
+ *	messages unordered from now on. The messages of the login handshake
+ *	are sent in order, since a retransmitted message could otherwise be
+ *	delivered after the ones sent after it.
+ */
+
+int sctp_set_client_sockopt_post_login(struct client_t *c)
+{
+	struct sctp_sndrcvinfo sri;
+	socklen_t len;
 	
 	/* default sendmsg() parameters */
 	len = sizeof(sri);
@@ -53,31 +98,43 @@ int sctp_set_client_sockopt(struct client_t *c)
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
-
-	int enable = 1;
-	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_NODELAY, &enable, sizeof(enable)) == -1) {
-		hlog(LOG_ERR, "setsockopt(%s, SCTP_NODELAY): %s", c->addr_rem, strerror(errno));
-		return -1;
-	}
-	
-	/* which notifications do we want? */
-	struct sctp_event_subscribe subscribe;
-	
-	memset(&subscribe, 0, sizeof(subscribe));
-	
-	subscribe.sctp_shutdown_event = 1;
-	subscribe.sctp_association_event = 1;
-	subscribe.sctp_address_event = 1;
-	subscribe.sctp_send_failure_event = 1;
-	subscribe.sctp_peer_error_event = 1;
-	subscribe.sctp_partial_delivery_event = 1;
-	
-	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
-		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", c->addr_rem, strerror(errno));
-		return -1;
-	}
 	
 	return 0;
+}
+
+/*
+ *	After the login, ask for the sender dry event, which arrives when the
+ *	peer has acknowledged all the data sent so far, or right away if it
+ *	already has. Returns -1 if the event can not be had, and the data can
+ *	be started at once.
+ */
+
+int sctp_wait_sender_dry(struct client_t *c)
+{
+	if (sctp_subscribe_events(c, 1))
+		return -1;
+	
+	c->sctp_dry_wait = 1;
+	
+	return 0;
+}
+
+/*
+ *	The peer has acknowledged the login handshake, start sending data.
+ *	The sender dry event is not needed any more: it would arrive every
+ *	time the peer has caught up.
+ */
+
+static void sctp_rx_sender_dry(struct worker_t *self, struct client_t *c)
+{
+	if (!c->sctp_dry_wait)
+		return;
+	
+	hlog(LOG_DEBUG, "%s/%s: SCTP login acknowledged, starting data", c->addr_rem, c->username);
+	
+	c->sctp_dry_wait = 0;
+	sctp_subscribe_events(c, 0);
+	worker_client_data_start(self, c);
 }
 
 /*
@@ -170,7 +227,7 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 }
 
-static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
+static int sctp_rx_notification(struct worker_t *self, struct client_t *c, struct msghdr *m)
 {
 	union sctp_notification *sn;
 	
@@ -203,7 +260,7 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 		hlog(LOG_DEBUG, "%s/%s: SCTP authentication indication", c->addr_rem, c->username);
 		return 0;
 	case SCTP_SENDER_DRY_EVENT:
-		hlog(LOG_DEBUG, "%s/%s: SCTP sender dry", c->addr_rem, c->username);
+		sctp_rx_sender_dry(self, c);
 		return 0;
 	default:
 		hlog(LOG_ERR, "%s/%s: sctp_rx_notification: Received unexpected notification: %d",
@@ -271,7 +328,7 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 	
 	if (inmsg.msg_flags & MSG_NOTIFICATION) {
 		//hlog(LOG_DEBUG, "%s/%s: sctp_readable: got MSG_NOTIFICATION", c->addr_rem, c->username);
-		sctp_rx_notification(c, &inmsg);
+		sctp_rx_notification(self, c, &inmsg);
 		return 0;
 	}
 	

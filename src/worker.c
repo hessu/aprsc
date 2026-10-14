@@ -514,6 +514,11 @@ int set_client_sockopt(struct client_t *c)
 
 int set_client_sockopt_post_login(struct client_t *c)
 {	
+#ifdef USE_SCTP
+	if (c->ai_protocol == IPPROTO_SCTP)
+		return sctp_set_client_sockopt_post_login(c);
+#endif
+	
 	/* Use TCP_NODELAY for APRS-IS sockets. High delays can cause packets getting past
 	 * the dupe filters.
 	 */
@@ -1525,6 +1530,19 @@ static void worker_classify_client(struct worker_t *self, struct client_t *c)
 }
 
 /*
+ *	Start transmitting data to a client which has logged in: set the
+ *	socket options for the rest of the connection, and classify the client
+ *	and put it in the right list of clients for outgoing data to start
+ *	flowing.
+ */
+
+void worker_client_data_start(struct worker_t *self, struct client_t *c)
+{
+	set_client_sockopt_post_login(c);
+	worker_classify_client(self, c);
+}
+
+/*
  *	Mark the client connected and do whatever processing is needed
  *	to start transmitting data to it.
  */
@@ -1533,12 +1551,17 @@ void worker_mark_client_connected(struct worker_t *self, struct client_t *c)
 {
 	c->state = CSTATE_CONNECTED;
 	
-	set_client_sockopt_post_login(c);
-	
-	/* classify the client and put it in the right list of clients for
-	 * outgoing data to start flowing.
+#ifdef USE_SCTP
+	/* The data after the login is sent unordered on SCTP, and could
+	 * overtake a retransmitted message of the login handshake. Wait until
+	 * the peer has acknowledged all of them: sctp_readable() starts the
+	 * data when the sender dry event arrives.
 	 */
-	worker_classify_client(self, c);
+	if (c->ai_protocol == IPPROTO_SCTP && sctp_wait_sender_dry(c) == 0)
+		return;
+#endif
+	
+	worker_client_data_start(self, c);
 }
 
 /*

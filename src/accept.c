@@ -1353,6 +1353,9 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	if (set_client_sockopt(c) != 0)
 		goto err;
 	
+	/* the client has logged in already */
+	set_client_sockopt_post_login(c);
+	
 	/* Add the client to the client list. */
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {

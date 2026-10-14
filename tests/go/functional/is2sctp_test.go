@@ -1,6 +1,7 @@
 package functional
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
+	"github.com/hessu/aprsc/tests/go/internal/aprsis2"
 	"github.com/hessu/aprsc/tests/go/internal/harness"
 	"github.com/hessu/aprsc/tests/go/internal/isclient"
 )
@@ -281,4 +285,69 @@ func TestIS2SCTPUplink(t *testing.T) {
 
 	hub.Stop()
 	leaf.Stop()
+}
+
+// sctpFrame returns the first IS2 message in an SCTP message.
+func sctpFrame(t *testing.T, msg []byte) *aprsis2.IS2Message {
+	t.Helper()
+
+	if len(msg) < 5 || msg[0] != 0x02 || msg[1] != 0 {
+		t.Fatalf("not an IS2 frame: %q", msg)
+	}
+	length := int(binary.BigEndian.Uint16(msg[2:4]))
+	if len(msg) < length+5 || msg[4+length] != 0x03 {
+		t.Fatalf("incomplete IS2 frame: %q", msg)
+	}
+	m := &aprsis2.IS2Message{}
+	if err := proto.Unmarshal(msg[4:4+length], m); err != nil {
+		t.Fatalf("failed to decode IS2 frame: %v", err)
+	}
+	return m
+}
+
+// The messages of the in-band upgrade and of the IS2 login are sent in
+// order, and the ones after the login unordered (doc/SCTP.md).
+func TestIS2SCTPDeliveryOrder(t *testing.T) {
+	harness.Parallel(t)
+	requireIS2SCTP(t)
+	harness.Start(t, "is2-sctp")
+
+	rx := dialSCTPMsg(t, harness.Addr(t, 55152))
+	if msg := readSCTPMsg(t, rx, "banner", false); !strings.HasPrefix(string(msg), "# aprsc ") {
+		t.Errorf("got %q, want the banner", msg)
+	}
+	if _, err := rx.Write([]byte(isclient.UpgradeHello + "\r\n" + upgradeLogin + "\r\n")); err != nil {
+		t.Fatalf("failed to send the hello: %v", err)
+	}
+	if msg := readSCTPMsg(t, rx, "hello", false); string(msg) != "#is2 hello v=1\r\n" {
+		t.Errorf("got %q, want the hello", msg)
+	}
+	if m := sctpFrame(t, readSCTPMsg(t, rx, "signature", false)); m.GetType() != aprsis2.IS2Message_SERVER_SIGNATURE {
+		t.Errorf("got %v, want SERVER_SIGNATURE", m.GetType())
+	}
+
+	req, err := proto.Marshal(&aprsis2.IS2Message{
+		Type: aprsis2.IS2Message_LOGIN_REQUEST,
+		LoginRequest: &aprsis2.IS2LoginRequest{
+			Username:   "N0TEST",
+			Password:   "-1",
+			AppName:    "gotest",
+			AppVersion: "1.0",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rx.Write(isclient.FrameWrap(req)); err != nil {
+		t.Fatalf("failed to send the login request: %v", err)
+	}
+	if m := sctpFrame(t, readSCTPMsg(t, rx, "login reply", false)); m.GetType() != aprsis2.IS2Message_LOGIN_REPLY {
+		t.Errorf("got %v, want LOGIN_REPLY", m.GetType())
+	}
+
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-6", isclient.WithSCTP())
+	tx.Send(t, "SRC>DST,qAR,IGATE:delivery order")
+	if m := sctpFrame(t, readSCTPMsg(t, rx, "packet", true)); m.GetType() != aprsis2.IS2Message_IS_PACKET {
+		t.Errorf("got %v, want IS_PACKET", m.GetType())
+	}
 }

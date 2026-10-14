@@ -54,6 +54,22 @@ type config struct {
 	hello    string // IS2 in-band upgrade
 	// IS2 in-band upgrade with the writes in pieces
 	slowUpgrade bool
+	sctp        bool // connect over SCTP instead of TCP
+}
+
+// ErrNoSCTP is returned by the SCTP dialer when this host can not make SCTP
+// connections.
+var ErrNoSCTP = errors.New("SCTP is not supported on this host")
+
+// WithSCTP makes the client connect over SCTP instead of TCP.
+func WithSCTP() Option { return func(c *config) { c.sctp = true } }
+
+// dialConn connects to addr over TCP, or over SCTP if WithSCTP was given.
+func (c config) dialConn(addr string, timeout time.Duration) (net.Conn, error) {
+	if c.sctp {
+		return DialSCTP(addr, timeout)
+	}
+	return net.DialTimeout("tcp", addr, timeout)
 }
 
 // passcodeFor returns the correct passcode for a callsign.
@@ -114,6 +130,9 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 		if cfg.filter != "" {
 			o.LoginLine += " filter " + cfg.filter
 		}
+	}
+	if cfg.sctp {
+		o.Dialer = func(_, addr string) (net.Conn, error) { return DialSCTP(addr, time.Second) }
 	}
 
 	conn := dial(t, addr, o)
@@ -188,12 +207,23 @@ func LoginReply(t *testing.T, addr, login string) (reply string, accepted bool) 
 // connection ends the lines too. The connection is closed before returning.
 func PreLogin(t *testing.T, addr string, lines ...string) []string {
 	t.Helper()
+	return preLogin(t, config{}, addr, lines)
+}
+
+// PreLoginSCTP is like PreLogin, over SCTP.
+func PreLoginSCTP(t *testing.T, addr string, lines ...string) []string {
+	t.Helper()
+	return preLogin(t, config{sctp: true}, addr, lines)
+}
+
+func preLogin(t *testing.T, cfg config, addr string, lines []string) []string {
+	t.Helper()
 
 	var conn net.Conn
 	var err error
 	deadline := time.Now().Add(connectRetry)
 	for {
-		conn, err = net.DialTimeout("tcp", addr, time.Second)
+		conn, err = cfg.dialConn(addr, time.Second)
 		if err == nil {
 			break
 		}

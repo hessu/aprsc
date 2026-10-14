@@ -75,7 +75,7 @@ func (e *LoginError) Error() string {
 		e.Msg, e.Reply.GetResult(), e.Reply.GetResultCode(), e.Reply.GetResultMessage())
 }
 
-// IS2 is a client of the IS2 protocol over TCP.
+// IS2 is a client of the IS2 protocol over TCP or SCTP.
 type IS2 struct {
 	conn net.Conn
 	r    *bufio.Reader
@@ -123,8 +123,8 @@ func (c *IS2) loginResult(err error) (*IS2, error) {
 	return c, err
 }
 
-// dialIS2 connects to a TCP port, retrying for a few seconds while the port
-// is not open.
+// dialIS2 connects to a TCP port, or an SCTP one with WithSCTP, retrying for
+// a few seconds while the port is not open.
 func dialIS2(addr, callsign string, opts []Option) (*IS2, config, error) {
 	cfg := config{passcode: fmt.Sprint(passcodeFor(callsign)), appName: is2AppName}
 	for _, o := range opts {
@@ -135,11 +135,11 @@ func dialIS2(addr, callsign string, opts []Option) (*IS2, config, error) {
 	var err error
 	deadline := time.Now().Add(connectRetry)
 	for {
-		conn, err = net.DialTimeout("tcp", addr, time.Second)
+		conn, err = cfg.dialConn(addr, time.Second)
 		if err == nil {
 			break
 		}
-		if time.Now().After(deadline) {
+		if errors.Is(err, ErrNoSCTP) || time.Now().After(deadline) {
 			return nil, cfg, fmt.Errorf("failed to connect to %s: %w", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)

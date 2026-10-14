@@ -50,7 +50,11 @@ without it. The IS2 client uses Go types generated from `../../src/aprsis2.proto
 ## SCTP
 
 `TestSCTP` needs a Linux aprsc build with SCTP support, and is skipped if the
-server rejects the `sctp` listener.
+server rejects the `sctp` listener. The IS2 over SCTP tests (`TestIS2SCTP*`)
+need IS2 too, and an SCTP client: the Go standard library has none, so
+`internal/isclient` connects one with system calls (Linux only), selected with
+the `WithSCTP` option. They are skipped if the kernel can not create SCTP
+sockets.
 
 ## Performance scenarios
 

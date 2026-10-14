@@ -72,7 +72,7 @@ Thread names set with `thread_name_set()` are `aprsc time`, `aprsc accept`,
 | `config.c` / `config.h` | Config file parsing, validation, reload, and all global configuration variables. `config.h` also selects feature macros (`USE_SCTP`, `USE_POSIX_CAP`, `USE_CLOCK_GETTIME`) |
 | `cfgfile.c` | Generic keyword-driven config parser used by `config.c` |
 | `tls.c` / `tls.h` | OpenSSL TLS for listeners and uplinks, client cert auth. `USE_SSL` is defined unconditionally in `tls.h` |
-| `sctp.c` | SCTP socket setup, compiled only when `USE_SCTP` is set |
+| `sctp.c` | SCTP socket setup, compiled only when `USE_SCTP` is set; `doc/SCTP.md` describes how lines and IS2 frames go in SCTP messages |
 | `xpoll.c` | Wrapper over `poll()` and `epoll()`; `XP_USE_EPOLL` is chosen in `xpoll.h` |
 | `hlog.c` | Logging to stderr, syslog or rotated file. Use `hlog(LOG_x, fmt, ...)`; `hlog_packet()` logs a packet alongside |
 | `hmalloc.c` | `hmalloc`, `hrealloc`, `hfree`, `hstrdup`. Use these, never bare `malloc` |

@@ -1,0 +1,25 @@
+# IS2 over SCTP: a leaf server which uplinks to the IS2 full feed SCTP port
+# of is2-sctp.
+
+ServerId   TESTING-2
+PassCode   31421
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+### Intervals #########
+UpstreamTimeout		90s
+ClientTimeout		48h
+
+### TCP listeners ##########
+Listen "Full feed"       fullfeed    tcp ::0      55153    acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port"      igate       tcp 0.0.0.0  55583    acl "cfg-aprsc/acl-all.acl"
+
+### IS2 uplink over SCTP
+Uplink is2sctp full sctp 127.0.0.1 56152 is2
+
+### HTTP server
+HTTPStatus 127.0.0.1 55502

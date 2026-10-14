@@ -18,10 +18,27 @@
 #include "worker.h"
 #include "sctp.h"
 
+/* The socket send buffer. A client which does not keep up is disconnected
+ * when the buffer is full, since the SCTP messages are not buffered in obuf.
+ * Each queued message is charged with the kernel's overhead of up to a
+ * kilobyte, so the default buffer of net.core.wmem_default holds only a
+ * second or two of a full feed in small messages. Linux doubles the
+ * request, to 512 kB, which holds at most some 15 seconds of a full feed of
+ * 200 packets per second in the most efficiently packed messages, and caps
+ * it at twice net.core.wmem_max (416 kB by default).
+ */
+#define SCTP_SNDBUF_SIZE (256*1024)
+
 int sctp_set_client_sockopt(struct client_t *c)
 {
 	struct sctp_sndrcvinfo sri;
 	socklen_t len;
+	
+	int sndbuf = SCTP_SNDBUF_SIZE;
+	if (setsockopt(c->fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) == -1) {
+		/* not fatal, the default buffer works too */
+		hlog(LOG_WARNING, "setsockopt(%s, SO_SNDBUF, %d): %s", c->addr_rem, sndbuf, strerror(errno));
+	}
 	
 	/* default sendmsg() parameters */
 	len = sizeof(sri);

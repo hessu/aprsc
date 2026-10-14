@@ -1,0 +1,33 @@
+# IS2 over SCTP: IS2 ports on SCTP, and plaintext SCTP ports which offer the
+# in-band upgrade to IS2. The leaf server of is2-sctp-leaf uplinks to the
+# IS2 full feed SCTP port.
+
+ServerId   TESTING-1
+PassCode   31421
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+### Intervals #########
+UpstreamTimeout		90s
+ClientTimeout		48h
+
+### TCP/SCTP listeners ##########
+# The TCP and SCTP listeners can have the same port numbers.
+Listen "Full feed"                fullfeed    tcp  ::0      55152   acl "cfg-aprsc/acl-all.acl"
+Listen "Full feed SCTP"           fullfeed    sctp ::0      55152   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port"               igate       tcp  0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate SCTP"               igate       sctp 0.0.0.0  55580   acl "cfg-aprsc/acl-all.acl"
+Listen "Client-only SCTP"         clientonly  sctp 0.0.0.0  55581   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate SCTP no upgrade"    igate       sctp 0.0.0.0  55582   acl "cfg-aprsc/acl-all.acl" noIS2upgrade
+Listen "IS2 Full feed SCTP"       is2fullfeed sctp ::0      56152   acl "cfg-aprsc/acl-all.acl"
+Listen "IS2 Igate SCTP"           is2igate    sctp 0.0.0.0  56580   acl "cfg-aprsc/acl-all.acl"
+
+### HTTP server
+HTTPStatus 127.0.0.1 55501
+
+WorkerThreads 3
+FileLimit        10000

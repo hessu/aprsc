@@ -35,6 +35,11 @@
  */
 #define SCTP_HB_INTERVAL 15000
 
+/* The value of SCTP_EXPOSE_POTENTIALLY_FAILED_STATE which enables the
+ * notifications, the same as the sysctl net.sctp.pf_expose takes.
+ */
+#define SCTP_PF_EXPOSE_ENABLE 2
+
 /*
  *	Select the notifications we want, and the sender dry event if
  *	sender_dry is set
@@ -92,6 +97,22 @@ static void sctp_set_failover_params(struct client_t *c)
 	
 	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_PEER_ADDR_THLDS, (char *)&th, sizeof(th)) == -1)
 		hlog(LOG_WARNING, "setsockopt(%s, SCTP_PEER_ADDR_THLDS): %s", c->addr_rem, strerror(errno));
+#endif
+
+#ifdef SCTP_EXPOSE_POTENTIALLY_FAILED_STATE
+	/* Ask to be notified of a path becoming potentially failed, and
+	 * available again, so that a failover gets logged. The kernel's
+	 * default (sysctl net.sctp.pf_expose 0) leaves it to the socket.
+	 * The values are those of the sysctl: 0 unset, 1 disabled,
+	 * 2 enabled; the enum is not in the public kernel headers.
+	 */
+	struct sctp_assoc_value av;
+
+	memset(&av, 0, sizeof(av));
+	av.assoc_value = SCTP_PF_EXPOSE_ENABLE;
+
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EXPOSE_POTENTIALLY_FAILED_STATE, (char *)&av, sizeof(av)) == -1)
+		hlog(LOG_WARNING, "setsockopt(%s, SCTP_EXPOSE_POTENTIALLY_FAILED_STATE): %s", c->addr_rem, strerror(errno));
 #endif
 }
 
@@ -259,7 +280,7 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 		break;
 #ifdef SCTP_ADDR_PF
 	case SCTP_ADDR_PF:
-		/* only notified if enabled with sysctl net.sctp.pf_expose = 2 */
+		/* enabled in sctp_set_failover_params(), or with sysctl net.sctp.pf_expose = 2 */
 		hlog(LOG_INFO, "%s/%s: SCTP peer address potentially failed, traffic moves to another address if one is available: %s", c->addr_rem, c->username, addr_s);
 		break;
 #endif

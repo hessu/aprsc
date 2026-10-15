@@ -88,25 +88,24 @@ again when it answers a heartbeat:
 
 The potentially failed state, in which the traffic has moved to another
 path after the first timeout, is not notified to applications by
-default, so a short failover is not logged at all: the path recovers
-before it is counted as unreachable.  The kernel setting
-`net.sctp.pf_expose` decides this:
+default, and a short failover would not be logged at all: the path
+recovers before it is counted as unreachable.  aprsc asks for the
+notification on each of its sockets
+(`SCTP_EXPOSE_POTENTIALLY_FAILED_STATE`, Linux 5.5 and later), and logs
+the path becoming potentially failed (`SCTP_ADDR_PF`), and available
+again:
 
-* 0, the default, or 1: the state is not notified.  An application could
-  ask for it on its socket (`SCTP_EXPOSE_POTENTIALLY_FAILED_STATE`), but
-  aprsc does not, since the value which enables it is not defined in the
-  public kernel headers.
+    SCTP peer address potentially failed, traffic moves to another address if one is available: 192.0.2.1:10152
+    SCTP peer address available: 192.0.2.1:10152
 
-* 2: the state is notified (`SCTP_ADDR_PF`), and aprsc logs it, and the
-  path becoming available again:
-
-        SCTP peer address potentially failed, traffic moves to another address if one is available: 192.0.2.1:10152
-        SCTP peer address available: 192.0.2.1:10152
-
-With 2, every failover is logged, also one which only delays the traffic
-by a second.  The kernel reads the setting when a socket is created, so
-set it before aprsc is started.  The case is only compiled in if the
-SCTP headers aprsc is built with define `SCTP_ADDR_PF`.
+So every failover is logged, also one which only delays the traffic by
+a second.  The kernel setting `net.sctp.pf_expose` has the same values
+as the socket option (0 unset, 1 disabled, 2 enabled), and the socket
+option is what counts for aprsc's sockets.  The notification and the
+option are only compiled in if the SCTP headers aprsc is built with
+define them; an older kernel than the headers refuses the option, which
+is logged as a warning when a connection is set up, and failovers are
+then not logged.
 
 
 Messages, not a stream

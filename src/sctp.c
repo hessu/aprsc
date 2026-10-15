@@ -29,6 +29,12 @@
  */
 #define SCTP_SNDBUF_SIZE (256*1024)
 
+/* The interval of heartbeats on each path of a multi-homed association, in
+ * milliseconds. The heartbeats find out whether the alternate paths work,
+ * before the traffic has to move to one of them. 30 s by default.
+ */
+#define SCTP_HB_INTERVAL 15000
+
 /*
  *	Select the notifications we want, and the sender dry event if
  *	sender_dry is set
@@ -56,6 +62,39 @@ static int sctp_subscribe_events(struct client_t *c, int sender_dry)
 	return 0;
 }
 
+/*
+ *	Failover between the paths of a multi-homed association. These are not
+ *	fatal, the defaults work too.
+ */
+
+static void sctp_set_failover_params(struct client_t *c)
+{
+	/* heartbeat interval, for all the paths of the association */
+	struct sctp_paddrparams pp;
+	
+	memset(&pp, 0, sizeof(pp));
+	pp.spp_hbinterval = SCTP_HB_INTERVAL;
+	pp.spp_flags = SPP_HB_ENABLE;
+	
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, (char *)&pp, sizeof(pp)) == -1)
+		hlog(LOG_WARNING, "setsockopt(%s, SCTP_PEER_ADDR_PARAMS): %s", c->addr_rem, strerror(errno));
+	
+#ifdef SCTP_PEER_ADDR_THLDS
+	/* Move the traffic to another path after the first retransmission
+	 * timeout on a path, when it becomes potentially failed (RFC 7829).
+	 * It is the default of Linux (net.sctp.pf_retrans), but do not depend
+	 * on the host's setting. A zero spt_pathmaxrxt leaves it unchanged.
+	 */
+	struct sctp_paddrthlds th;
+	
+	memset(&th, 0, sizeof(th));
+	th.spt_pathpfthld = 0;
+	
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_PEER_ADDR_THLDS, (char *)&th, sizeof(th)) == -1)
+		hlog(LOG_WARNING, "setsockopt(%s, SCTP_PEER_ADDR_THLDS): %s", c->addr_rem, strerror(errno));
+#endif
+}
+
 int sctp_set_client_sockopt(struct client_t *c)
 {
 	int sndbuf = SCTP_SNDBUF_SIZE;
@@ -69,6 +108,8 @@ int sctp_set_client_sockopt(struct client_t *c)
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_NODELAY): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
+	
+	sctp_set_failover_params(c);
 	
 	return sctp_subscribe_events(c, 0);
 }

@@ -1353,6 +1353,14 @@ static int accept_liveupgrade_single(cJSON *client, int *rxerr_map, int rxerr_ma
 	if (set_client_sockopt(c) != 0)
 		goto err;
 	
+	/* A client which has logged in already gets the options of the rest of
+	 * the connection: it may have been waiting for the peer to acknowledge
+	 * the login on SCTP, and it starts the data at once now. A client
+	 * still logging in gets them when the login is done.
+	 */
+	if (c->state == CSTATE_CONNECTED)
+		set_client_sockopt_post_login(c);
+	
 	/* Add the client to the client list. */
 	int old_fd = clientlist_add(c);
 	if (c->validated && old_fd != -1) {

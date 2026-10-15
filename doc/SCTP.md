@@ -37,8 +37,78 @@ UDP datagrams only.
 
 aprsc uses one-to-one style SCTP sockets (`SOCK_STREAM`, `IPPROTO_SCTP`):
 each client or uplink connection is an SCTP association of its own,
-accepted and connected like a TCP connection.  Multi-homing is not used,
-an association has the single address it was set up with.
+accepted and connected like a TCP connection.
+
+An association is multi-homed when either end has more than one address.
+aprsc binds a listener to the address given in its configuration, and an
+uplink to the `UplinkBind` address if one is configured, otherwise to
+none.  An end bound to a wildcard address (`0.0.0.0` or `::0`), or to
+none, advertises all the addresses of its host when the association is
+set up, and the kernel moves the traffic to another of them if the path
+to one fails.  An end bound to a single address has only that one.  The
+kernel leaves private and link-local addresses out of an association
+with a peer on a global address (`net.sctp.addr_scope_policy`).
+Firewalls have to pass SCTP to and from each of the addresses, and
+multi-homing does not work through NAT.
+
+
+Failover
+-----------
+
+Each address of the peer is a path of its own, with heartbeats sent on
+it to find out whether it works.  aprsc asks for them every 15 seconds
+instead of the default 30 (`SCTP_PEER_ADDR_PARAMS`), so that the state of
+the alternate paths is known before the traffic has to move to one of
+them.  The kernel adds half the retransmission timeout and a random part
+of up to one to each interval, and the first heartbeat of an
+association is scheduled when it is set up, before aprsc has set the
+interval, so it follows the default of 30 seconds.
+
+The kernel moves the traffic to another working path after the first
+retransmission timeout on a path, when the path becomes "potentially
+failed" (RFC 7829).  This is the default of Linux (`net.sctp.pf_retrans`
+0), and aprsc sets it on its sockets (`SCTP_PEER_ADDR_THLDS`), so that it
+does not depend on the host's setting.  The retransmission timeout is at
+least a second (`net.sctp.rto_min`), so the packets sent when a path
+fails are delayed by about a second, and none are lost.  An address
+which has not yet been confirmed with a heartbeat, a few seconds after
+the association is set up, can not be used.
+
+The failed path is probed with heartbeats at intervals of the
+retransmission timeout, which doubles after each failure up to a minute
+(`net.sctp.rto_max`), and the traffic moves back to it when it answers.
+There is no hurry to return, since the alternate path works.  If all the
+paths fail, an uplink is closed by aprsc after `UpstreamTimeout`, and a
+client after 10 retransmissions in a row
+(`net.sctp.association_max_retrans`), some five minutes.
+
+aprsc logs a path becoming unreachable, after more than 5 retransmission
+timeouts on it (`net.sctp.path_max_retrans`), and becoming available
+again when it answers a heartbeat:
+
+    SCTP peer address unreachable: 192.0.2.1:10152
+    SCTP peer address available: 192.0.2.1:10152
+
+The potentially failed state, in which the traffic has moved to another
+path after the first timeout, is not notified to applications by
+default, and a short failover would not be logged at all: the path
+recovers before it is counted as unreachable.  aprsc asks for the
+notification on each of its sockets
+(`SCTP_EXPOSE_POTENTIALLY_FAILED_STATE`, Linux 5.5 and later), and logs
+the path becoming potentially failed (`SCTP_ADDR_PF`), and available
+again:
+
+    SCTP peer address potentially failed, traffic moves to another address if one is available: 192.0.2.1:10152
+    SCTP peer address available: 192.0.2.1:10152
+
+So every failover is logged, also one which only delays the traffic by
+a second.  The kernel setting `net.sctp.pf_expose` has the same values
+as the socket option (0 unset, 1 disabled, 2 enabled), and the socket
+option is what counts for aprsc's sockets.  The notification and the
+option are only compiled in if the SCTP headers aprsc is built with
+define them; an older kernel than the headers refuses the option, which
+is logged as a warning when a connection is set up, and failovers are
+then not logged.
 
 
 Messages, not a stream
@@ -187,12 +257,27 @@ Delivery order
 -----------------
 
 aprsc sends its SCTP messages unordered (`SCTP_UNORDERED` in the default
-send parameters of the socket), and turns off the delay of small
-messages (`SCTP_NODELAY`).  An unordered message is handed to the
-receiver as soon as it arrives, without waiting for the messages sent
-before it.  On a path without losses the messages arrive in the order
-they were sent, but a message which has to be retransmitted can arrive
-after the ones sent after it.
+send parameters of the socket) once the login is done, and turns off
+the delay of small messages (`SCTP_NODELAY`).  An unordered message is
+handed to the receiver as soon as it arrives, without waiting for the
+messages sent before it.  On a path without losses the messages arrive
+in the order they were sent, but a message which has to be retransmitted
+can arrive after the ones sent after it.
+
+The messages of the login handshake are sent in order: the banner, the
+logresp, the `#is2 hello` line of an in-band upgrade, the IS2 server
+signature and the login reply.  So that the first unordered messages can
+not overtake a retransmitted message of the handshake, the server only
+starts sending packets after the login when the peer has acknowledged
+all of the handshake (the `SCTP_SENDER_DRY_EVENT` notification).  This
+takes a round trip, or up to 200 ms more if the peer delays its
+acknowledgements; packets in the meantime are not sent to the client,
+as if it had logged in a moment later.  Should the notification not
+arrive in 10 seconds, the server logs a warning and starts the data
+anyway, so that a stack which does not send it can not leave the client
+without data.  The flag is set by the sender of
+each message, so a server only decides the order of the messages it
+sends.
 
 So the packets of one message stay in order, but the messages can be
 reordered.  An APRS-IS server does not promise to keep the packets in

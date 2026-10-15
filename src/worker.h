@@ -319,6 +319,7 @@ struct client_t {
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t cleanup;     /* Time of next cleanup */
+	time_t sctp_dry_wait_tick; /* When the wait for the SCTP login acknowledgement started */
 	time_t next_is2_peer_offer;
 	time_t next_is2_peer_interval;
 	
@@ -381,6 +382,7 @@ struct client_t {
 	char  no_tx;        /* is the TX igate implementation broken and on our blacklist */
 	char  loc_known;    /* have we received a position packet from this client */
 	char  corepeer_is2; /* is the core peer in IS2 mode currently */
+	char  sctp_dry_wait; /* logged in on SCTP, waiting for the peer to acknowledge the login before sending data */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
@@ -463,8 +465,10 @@ struct client_t {
 extern struct client_t *client_alloc(void);
 extern void client_free(struct client_t *c);
 extern int set_client_sockopt(struct client_t *c);
+extern int set_client_sockopt_post_login(struct client_t *c);
 extern int pass_client_to_worker(struct worker_t *wc, struct client_t *c);
 extern void worker_mark_client_connected(struct worker_t *self, struct client_t *c);
+extern void worker_client_data_start(struct worker_t *self, struct client_t *c);
 extern struct client_t *pseudoclient_setup(int portnum);
 
 

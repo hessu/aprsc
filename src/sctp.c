@@ -29,16 +29,131 @@
  */
 #define SCTP_SNDBUF_SIZE (256*1024)
 
+/* The interval of heartbeats on each path of a multi-homed association, in
+ * milliseconds. The heartbeats find out whether the alternate paths work,
+ * before the traffic has to move to one of them. 30 s by default.
+ */
+#define SCTP_HB_INTERVAL 15000
+
+/* The value of SCTP_EXPOSE_POTENTIALLY_FAILED_STATE which enables the
+ * notifications, the same as the sysctl net.sctp.pf_expose takes.
+ */
+#define SCTP_PF_EXPOSE_ENABLE 2
+
+/* How long to wait for the peer to acknowledge the login handshake, in
+ * seconds, before starting the data anyway. The sender dry event arrives
+ * within a round trip, and a peer which does not acknowledge at all fails
+ * the association, so this only guards against a stack which does not
+ * send the event.
+ */
+#define SCTP_DRY_WAIT_TIMEOUT 10
+
+/*
+ *	Select the notifications we want, and the sender dry event if
+ *	sender_dry is set
+ */
+
+static int sctp_subscribe_events(struct client_t *c, int sender_dry)
+{
+	struct sctp_event_subscribe subscribe;
+	
+	memset(&subscribe, 0, sizeof(subscribe));
+	
+	subscribe.sctp_shutdown_event = 1;
+	subscribe.sctp_association_event = 1;
+	subscribe.sctp_address_event = 1;
+	subscribe.sctp_send_failure_event = 1;
+	subscribe.sctp_peer_error_event = 1;
+	subscribe.sctp_partial_delivery_event = 1;
+	subscribe.sctp_sender_dry_event = sender_dry;
+	
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	return 0;
+}
+
+/*
+ *	Failover between the paths of a multi-homed association. These are not
+ *	fatal, the defaults work too.
+ */
+
+static void sctp_set_failover_params(struct client_t *c)
+{
+	/* heartbeat interval, for all the paths of the association */
+	struct sctp_paddrparams pp;
+	
+	memset(&pp, 0, sizeof(pp));
+	pp.spp_hbinterval = SCTP_HB_INTERVAL;
+	pp.spp_flags = SPP_HB_ENABLE;
+	
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_PEER_ADDR_PARAMS, (char *)&pp, sizeof(pp)) == -1)
+		hlog(LOG_WARNING, "setsockopt(%s, SCTP_PEER_ADDR_PARAMS): %s", c->addr_rem, strerror(errno));
+	
+#ifdef SCTP_PEER_ADDR_THLDS
+	/* Move the traffic to another path after the first retransmission
+	 * timeout on a path, when it becomes potentially failed (RFC 7829).
+	 * It is the default of Linux (net.sctp.pf_retrans), but do not depend
+	 * on the host's setting. A zero spt_pathmaxrxt leaves it unchanged.
+	 */
+	struct sctp_paddrthlds th;
+	
+	memset(&th, 0, sizeof(th));
+	th.spt_pathpfthld = 0;
+	
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_PEER_ADDR_THLDS, (char *)&th, sizeof(th)) == -1)
+		hlog(LOG_WARNING, "setsockopt(%s, SCTP_PEER_ADDR_THLDS): %s", c->addr_rem, strerror(errno));
+#endif
+
+#ifdef SCTP_EXPOSE_POTENTIALLY_FAILED_STATE
+	/* Ask to be notified of a path becoming potentially failed, and
+	 * available again, so that a failover gets logged. The kernel's
+	 * default (sysctl net.sctp.pf_expose 0) leaves it to the socket.
+	 * The values are those of the sysctl: 0 unset, 1 disabled,
+	 * 2 enabled; the enum is not in the public kernel headers.
+	 */
+	struct sctp_assoc_value av;
+
+	memset(&av, 0, sizeof(av));
+	av.assoc_value = SCTP_PF_EXPOSE_ENABLE;
+
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EXPOSE_POTENTIALLY_FAILED_STATE, (char *)&av, sizeof(av)) == -1)
+		hlog(LOG_WARNING, "setsockopt(%s, SCTP_EXPOSE_POTENTIALLY_FAILED_STATE): %s", c->addr_rem, strerror(errno));
+#endif
+}
+
 int sctp_set_client_sockopt(struct client_t *c)
 {
-	struct sctp_sndrcvinfo sri;
-	socklen_t len;
-	
 	int sndbuf = SCTP_SNDBUF_SIZE;
 	if (setsockopt(c->fd, SOL_SOCKET, SO_SNDBUF, &sndbuf, sizeof(sndbuf)) == -1) {
 		/* not fatal, the default buffer works too */
 		hlog(LOG_WARNING, "setsockopt(%s, SO_SNDBUF, %d): %s", c->addr_rem, sndbuf, strerror(errno));
 	}
+	
+	int enable = 1;
+	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_NODELAY, &enable, sizeof(enable)) == -1) {
+		hlog(LOG_ERR, "setsockopt(%s, SCTP_NODELAY): %s", c->addr_rem, strerror(errno));
+		return -1;
+	}
+	
+	sctp_set_failover_params(c);
+	
+	return sctp_subscribe_events(c, 0);
+}
+
+/*
+ *	Set the socket options which take effect after the login: send the
+ *	messages unordered from now on. The messages of the login handshake
+ *	are sent in order, since a retransmitted message could otherwise be
+ *	delivered after the ones sent after it.
+ */
+
+int sctp_set_client_sockopt_post_login(struct client_t *c)
+{
+	struct sctp_sndrcvinfo sri;
+	socklen_t len;
 	
 	/* default sendmsg() parameters */
 	len = sizeof(sri);
@@ -53,31 +168,70 @@ int sctp_set_client_sockopt(struct client_t *c)
 		hlog(LOG_ERR, "setsockopt(%s, SCTP_DEFAULT_SEND_PARAM): %s", c->addr_rem, strerror(errno));
 		return -1;
 	}
-
-	int enable = 1;
-	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_NODELAY, &enable, sizeof(enable)) == -1) {
-		hlog(LOG_ERR, "setsockopt(%s, SCTP_NODELAY): %s", c->addr_rem, strerror(errno));
-		return -1;
-	}
-	
-	/* which notifications do we want? */
-	struct sctp_event_subscribe subscribe;
-	
-	memset(&subscribe, 0, sizeof(subscribe));
-	
-	subscribe.sctp_shutdown_event = 1;
-	subscribe.sctp_association_event = 1;
-	subscribe.sctp_address_event = 1;
-	subscribe.sctp_send_failure_event = 1;
-	subscribe.sctp_peer_error_event = 1;
-	subscribe.sctp_partial_delivery_event = 1;
-	
-	if (setsockopt(c->fd, IPPROTO_SCTP, SCTP_EVENTS, (char *)&subscribe, sizeof(subscribe)) == -1) {
-		hlog(LOG_ERR, "setsockopt(%s, SCTP_EVENTS): %s", c->addr_rem, strerror(errno));
-		return -1;
-	}
 	
 	return 0;
+}
+
+/*
+ *	After the login, ask for the sender dry event, which arrives when the
+ *	peer has acknowledged all the data sent so far, or right away if it
+ *	already has. Returns -1 if the event can not be had, and the data can
+ *	be started at once.
+ */
+
+int sctp_wait_sender_dry(struct client_t *c)
+{
+	if (sctp_subscribe_events(c, 1))
+		return -1;
+	
+	c->sctp_dry_wait = 1;
+	c->sctp_dry_wait_tick = tick;
+
+	return 0;
+}
+
+/*
+ *	Stop waiting for the login acknowledgement and start sending data.
+ *	The sender dry event is not needed any more: it would arrive every
+ *	time the peer has caught up.
+ */
+
+static void sctp_dry_wait_end(struct worker_t *self, struct client_t *c)
+{
+	c->sctp_dry_wait = 0;
+	sctp_subscribe_events(c, 0);
+	worker_client_data_start(self, c);
+}
+
+/*
+ *	The peer has acknowledged the login handshake, start sending data.
+ */
+
+static void sctp_rx_sender_dry(struct worker_t *self, struct client_t *c)
+{
+	if (!c->sctp_dry_wait)
+		return;
+
+	hlog(LOG_DEBUG, "%s/%s: SCTP login acknowledged, starting data", c->addr_rem, c->username);
+
+	sctp_dry_wait_end(self, c);
+}
+
+/*
+ *	Called periodically for a client waiting for the login
+ *	acknowledgement: start the data anyway if the sender dry event has
+ *	not arrived in SCTP_DRY_WAIT_TIMEOUT seconds.
+ */
+
+void sctp_dry_wait_expire(struct worker_t *self, struct client_t *c)
+{
+	if (!c->sctp_dry_wait || tick < c->sctp_dry_wait_tick + SCTP_DRY_WAIT_TIMEOUT)
+		return;
+
+	hlog(LOG_WARNING, "%s/%s: SCTP login not acknowledged in %d s, starting data anyway",
+		c->addr_rem, c->username, SCTP_DRY_WAIT_TIMEOUT);
+
+	sctp_dry_wait_end(self, c);
 }
 
 /*
@@ -141,7 +295,7 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 	switch (sn->sn_paddr_change.spc_state) {
 	case SCTP_ADDR_AVAILABLE:
-		hlog(LOG_DEBUG, "%s/%s: SCTP peer address available: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address available: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_UNREACHABLE:
 		hlog(LOG_INFO, "%s/%s: SCTP peer address unreachable: %s", c->addr_rem, c->username, addr_s);
@@ -156,11 +310,18 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 		hlog(LOG_INFO, "%s/%s: SCTP peer address made primary: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_CONFIRMED:
-		hlog(LOG_INFO, "%s/%s: SCTP peer address confirmed: %s", c->addr_rem, c->username, addr_s);
+		/* each address of a multi-homed peer, when the association is set up */
+		hlog(LOG_DEBUG, "%s/%s: SCTP peer address confirmed: %s", c->addr_rem, c->username, addr_s);
 		break;
+#ifdef SCTP_ADDR_PF
+	case SCTP_ADDR_PF:
+		/* enabled in sctp_set_failover_params(), or with sysctl net.sctp.pf_expose = 2 */
+		hlog(LOG_INFO, "%s/%s: SCTP peer address potentially failed, traffic moves to another address if one is available: %s", c->addr_rem, c->username, addr_s);
+		break;
+#endif
 	default:
 		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected peer_addr_change %d: %s",
-			c->addr_rem, c->username, sn->sn_assoc_change.sac_state, addr_s);
+			c->addr_rem, c->username, sn->sn_paddr_change.spc_state, addr_s);
 		break;
 	}
 	
@@ -170,7 +331,7 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 }
 
-static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
+static int sctp_rx_notification(struct worker_t *self, struct client_t *c, struct msghdr *m)
 {
 	union sctp_notification *sn;
 	
@@ -203,7 +364,7 @@ static int sctp_rx_notification(struct client_t *c, struct msghdr *m)
 		hlog(LOG_DEBUG, "%s/%s: SCTP authentication indication", c->addr_rem, c->username);
 		return 0;
 	case SCTP_SENDER_DRY_EVENT:
-		hlog(LOG_DEBUG, "%s/%s: SCTP sender dry", c->addr_rem, c->username);
+		sctp_rx_sender_dry(self, c);
 		return 0;
 	default:
 		hlog(LOG_ERR, "%s/%s: sctp_rx_notification: Received unexpected notification: %d",
@@ -271,7 +432,7 @@ int sctp_readable(struct worker_t *self, struct client_t *c)
 	
 	if (inmsg.msg_flags & MSG_NOTIFICATION) {
 		//hlog(LOG_DEBUG, "%s/%s: sctp_readable: got MSG_NOTIFICATION", c->addr_rem, c->username);
-		sctp_rx_notification(c, &inmsg);
+		sctp_rx_notification(self, c, &inmsg);
 		return 0;
 	}
 	

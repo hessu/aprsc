@@ -239,7 +239,7 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 	
 	switch (sn->sn_paddr_change.spc_state) {
 	case SCTP_ADDR_AVAILABLE:
-		hlog(LOG_DEBUG, "%s/%s: SCTP peer address available: %s", c->addr_rem, c->username, addr_s);
+		hlog(LOG_INFO, "%s/%s: SCTP peer address available: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_UNREACHABLE:
 		hlog(LOG_INFO, "%s/%s: SCTP peer address unreachable: %s", c->addr_rem, c->username, addr_s);
@@ -254,8 +254,15 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 		hlog(LOG_INFO, "%s/%s: SCTP peer address made primary: %s", c->addr_rem, c->username, addr_s);
 		break;
 	case SCTP_ADDR_CONFIRMED:
-		hlog(LOG_INFO, "%s/%s: SCTP peer address confirmed: %s", c->addr_rem, c->username, addr_s);
+		/* each address of a multi-homed peer, when the association is set up */
+		hlog(LOG_DEBUG, "%s/%s: SCTP peer address confirmed: %s", c->addr_rem, c->username, addr_s);
 		break;
+#ifdef SCTP_ADDR_PF
+	case SCTP_ADDR_PF:
+		/* only notified if enabled with sysctl net.sctp.pf_expose = 2 */
+		hlog(LOG_INFO, "%s/%s: SCTP peer address potentially failed, traffic moves to another address if one is available: %s", c->addr_rem, c->username, addr_s);
+		break;
+#endif
 	default:
 		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected peer_addr_change %d: %s",
 			c->addr_rem, c->username, sn->sn_assoc_change.sac_state, addr_s);

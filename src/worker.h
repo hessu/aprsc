@@ -319,6 +319,7 @@ struct client_t {
 	time_t last_read;   /* Time of last read - not necessarily last packet... */
 	time_t keepalive;   /* Time of next keepalive chime */
 	time_t cleanup;     /* Time of next cleanup */
+	time_t sctp_dry_wait_tick; /* When the wait for the SCTP login acknowledgement started */
 	time_t next_is2_peer_offer;
 	time_t next_is2_peer_interval;
 	

@@ -269,7 +269,10 @@ starts sending packets after the login when the peer has acknowledged
 all of the handshake (the `SCTP_SENDER_DRY_EVENT` notification).  This
 takes a round trip, or up to 200 ms more if the peer delays its
 acknowledgements; packets in the meantime are not sent to the client,
-as if it had logged in a moment later.  The flag is set by the sender of
+as if it had logged in a moment later.  Should the notification not
+arrive in 10 seconds, the server logs a warning and starts the data
+anyway, so that a stack which does not send it can not leave the client
+without data.  The flag is set by the sender of
 each message, so a server only decides the order of the messages it
 sends.
 

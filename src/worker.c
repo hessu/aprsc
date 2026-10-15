@@ -1804,7 +1804,13 @@ static void send_keepalives(struct worker_t *self)
 			c->cleanup = tick + 120;
 			client_heard_expire(c);
 		}
-		
+
+#ifdef USE_SCTP
+		/* start the data if the SCTP login acknowledgement does not arrive */
+		if (c->sctp_dry_wait)
+			sctp_dry_wait_expire(self, c);
+#endif
+
 		/* Is it time for keepalive? Also send a keepalive if clock jumped backwards. */
 		if ((c->keepalive <= tick)
 		    || (c->keepalive > tick + keepalive_interval)) {

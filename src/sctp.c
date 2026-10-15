@@ -40,6 +40,14 @@
  */
 #define SCTP_PF_EXPOSE_ENABLE 2
 
+/* How long to wait for the peer to acknowledge the login handshake, in
+ * seconds, before starting the data anyway. The sender dry event arrives
+ * within a round trip, and a peer which does not acknowledge at all fails
+ * the association, so this only guards against a stack which does not
+ * send the event.
+ */
+#define SCTP_DRY_WAIT_TIMEOUT 10
+
 /*
  *	Select the notifications we want, and the sender dry event if
  *	sender_dry is set
@@ -177,26 +185,53 @@ int sctp_wait_sender_dry(struct client_t *c)
 		return -1;
 	
 	c->sctp_dry_wait = 1;
-	
+	c->sctp_dry_wait_tick = tick;
+
 	return 0;
 }
 
 /*
- *	The peer has acknowledged the login handshake, start sending data.
+ *	Stop waiting for the login acknowledgement and start sending data.
  *	The sender dry event is not needed any more: it would arrive every
  *	time the peer has caught up.
+ */
+
+static void sctp_dry_wait_end(struct worker_t *self, struct client_t *c)
+{
+	c->sctp_dry_wait = 0;
+	sctp_subscribe_events(c, 0);
+	worker_client_data_start(self, c);
+}
+
+/*
+ *	The peer has acknowledged the login handshake, start sending data.
  */
 
 static void sctp_rx_sender_dry(struct worker_t *self, struct client_t *c)
 {
 	if (!c->sctp_dry_wait)
 		return;
-	
+
 	hlog(LOG_DEBUG, "%s/%s: SCTP login acknowledged, starting data", c->addr_rem, c->username);
-	
-	c->sctp_dry_wait = 0;
-	sctp_subscribe_events(c, 0);
-	worker_client_data_start(self, c);
+
+	sctp_dry_wait_end(self, c);
+}
+
+/*
+ *	Called periodically for a client waiting for the login
+ *	acknowledgement: start the data anyway if the sender dry event has
+ *	not arrived in SCTP_DRY_WAIT_TIMEOUT seconds.
+ */
+
+void sctp_dry_wait_expire(struct worker_t *self, struct client_t *c)
+{
+	if (!c->sctp_dry_wait || tick < c->sctp_dry_wait_tick + SCTP_DRY_WAIT_TIMEOUT)
+		return;
+
+	hlog(LOG_WARNING, "%s/%s: SCTP login not acknowledged in %d s, starting data anyway",
+		c->addr_rem, c->username, SCTP_DRY_WAIT_TIMEOUT);
+
+	sctp_dry_wait_end(self, c);
 }
 
 /*

@@ -52,6 +52,40 @@ Firewalls have to pass SCTP to and from each of the addresses, and
 multi-homing does not work through NAT.
 
 
+Failover
+-----------
+
+Each address of the peer is a path of its own, with heartbeats sent on
+it to find out whether it works.  aprsc sends them every 15 seconds
+instead of the default 30 (`SCTP_PEER_ADDR_PARAMS`), so that the state of
+the alternate paths is known before the traffic has to move to one of
+them.
+
+The kernel moves the traffic to another working path after the first
+retransmission timeout on a path, when the path becomes "potentially
+failed" (RFC 7829).  This is the default of Linux (`net.sctp.pf_retrans`
+0), and aprsc sets it on its sockets (`SCTP_PEER_ADDR_THLDS`), so that it
+does not depend on the host's setting.  The retransmission timeout is at
+least a second (`net.sctp.rto_min`), so the packets sent when a path
+fails are delayed by about a second, and none are lost.  An address
+which has not yet been confirmed with a heartbeat, a few seconds after
+the association is set up, can not be used.
+
+The failed path is probed with heartbeats at intervals of the
+retransmission timeout, which doubles after each failure up to a minute
+(`net.sctp.rto_max`), and the traffic moves back to it when it answers.
+There is no hurry to return, since the alternate path works.  If all the
+paths fail, an uplink is closed by aprsc after `UpstreamTimeout`, and a
+client after 10 retransmissions in a row
+(`net.sctp.association_max_retrans`), some five minutes.
+
+aprsc logs a path becoming unreachable, after more than 5 retransmission
+timeouts on it (`net.sctp.path_max_retrans`), and becoming available
+again.  The move of the traffic after the first timeout is logged only if
+the notification of the potentially failed state is enabled with
+`net.sctp.pf_expose = 2`.
+
+
 Messages, not a stream
 -------------------------
 

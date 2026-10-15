@@ -65,10 +65,11 @@
 
 /* IS2, the Protocol Buffers based protocol, is work in progress and is
  * disabled by default: USE_IS2 is defined in ac-hdrs.h by
- * "./configure --enable-is2". Without it, all the entry points are compiled
- * out - the configuration keywords for IS2 listeners, uplinks and peer group
- * keys are rejected, and no IS2 handshake is offered to or accepted from UDP
- * peers or plaintext clients. The IS2 tests are skipped without it.
+ * "./configure --enable-is2", which the Debian and RPM packages are built
+ * with. Without it, all the entry points are compiled out - the
+ * configuration keywords for IS2 listeners, uplinks and peer group keys are
+ * rejected, and no IS2 handshake is offered to or accepted from UDP peers or
+ * plaintext clients. The IS2 tests are skipped without it.
  */
 
 extern int fork_a_daemon;	/* fork a daemon */

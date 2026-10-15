@@ -24,7 +24,7 @@ HARDWARE=`uname -m`
 
 cd src
 
-./configure --sbindir=/usr/sbin --sysconfdir=/etc \
+./configure --enable-is2 --sbindir=/usr/sbin --sysconfdir=/etc \
 	--localstatedir=/var --mandir=/usr/share/man \
 	CC="gcc" \
 	CFLAGS="-g ${RPM_OPT_FLAGS}" \

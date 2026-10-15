@@ -265,7 +265,7 @@ static int sctp_rx_peer_addr_change(struct client_t *c, union sctp_notification 
 #endif
 	default:
 		hlog(LOG_DEBUG, "%s/%s: SCTP Received unexpected peer_addr_change %d: %s",
-			c->addr_rem, c->username, sn->sn_assoc_change.sac_state, addr_s);
+			c->addr_rem, c->username, sn->sn_paddr_change.spc_state, addr_s);
 		break;
 	}
 	

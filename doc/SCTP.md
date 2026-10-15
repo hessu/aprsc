@@ -56,10 +56,13 @@ Failover
 -----------
 
 Each address of the peer is a path of its own, with heartbeats sent on
-it to find out whether it works.  aprsc sends them every 15 seconds
+it to find out whether it works.  aprsc asks for them every 15 seconds
 instead of the default 30 (`SCTP_PEER_ADDR_PARAMS`), so that the state of
 the alternate paths is known before the traffic has to move to one of
-them.
+them.  The kernel adds half the retransmission timeout and a random part
+of up to one to each interval, and the first heartbeat of an
+association is scheduled when it is set up, before aprsc has set the
+interval, so it follows the default of 30 seconds.
 
 The kernel moves the traffic to another working path after the first
 retransmission timeout on a path, when the path becomes "potentially

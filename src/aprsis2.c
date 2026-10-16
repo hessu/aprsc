@@ -412,13 +412,9 @@ void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c)
 
 /*
  *	Start the ping tracking and the frame loss tracking of an IS2 UDP peer
- *	link afresh: when it is upgraded to IS2, and when the peer proposes
- *	IS2 on a link which is in IS2 mode here already, after it restarted
- *	or fell back and comes back. No round-trip times are left over from
- *	an earlier IS2 period of the link. The fallback timer starts over
- *	too: the signed proposal is a sign of life, and the timer would
- *	otherwise count from before the outage of the peer and fire right
- *	after it has recovered.
+ *	link afresh when it is upgraded to IS2. No round-trip times are left
+ *	over from an earlier IS2 period of the link, and the fallback timer
+ *	starts over.
  *
  *	After a fallback and this re-upgrade, the sequence numbers of the peer
  *	have moved on past the window, or started over with the peer, and the
@@ -2140,9 +2136,15 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 			// If we're not yet in IS2 mode ourself, offer again soon
 			c->next_is2_peer_offer = tick + 1;
 		} else {
-			/* the peer restarted, or fell back and comes back: it
-			 * is alive, so do not fall back on its past silence */
-			is2_corepeer_track_reset(c);
+			/* The peer restarted, or fell back and comes back, or
+			 * proposes again on a working link, as it does every
+			 * ten minutes. The signed proposal is a sign of life:
+			 * start the fallback timer over, so that it does not
+			 * count from before an outage of the peer and fire
+			 * right after it has recovered. The round-trip times
+			 * and the frame loss window are kept: on a working
+			 * link they would be lost on every proposal. */
+			c->ping_reply_tick = tick;
 		}
 
 		return is2_corepeer_control_out(self, c, "ok", v, v, ctl.token, ctl.token_len);

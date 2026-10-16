@@ -168,66 +168,59 @@ static void listener_copy_filters(struct listen_t *l, struct listen_config_t *lc
 static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char *which)
 {
 	int arg;
-	int f;
-	int family = ai->ai_family;
-#ifdef USE_SCTP
-	const struct addrinfo *a;
-	
-	/* An SCTP listener with a list of addresses is multi-homed on them,
-	 * unlike separate IPv4 and IPv6 listeners, which give single-path
-	 * associations without failover. They go on one socket, an IPv6 one
-	 * when any of them is IPv6, which takes the IPv4 ones too when not
-	 * restricted to IPv6 only.
-	 */
-	if (ai->ai_protocol == IPPROTO_SCTP)
-		for (a = ai->ai_next; (a); a = a->ai_next)
-			if (a->ai_family == AF_INET6)
-				family = AF_INET6;
-#endif
+	int f = -1;
 	
 	hlog(LOG_INFO, "Binding listening %s socket: %s", which, l->addr_s);
 	
-	if ((f = socket(family, ai->ai_socktype, ai->ai_protocol)) < 0) {
-		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
-		return -1;
-	}
-	
 #ifdef USE_SCTP
-	if (ai->ai_protocol == IPPROTO_SCTP && ai->ai_next && family == AF_INET6) {
-		arg = 0;
-		if (setsockopt(f, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&arg, sizeof(arg)) == -1)
-			hlog(LOG_ERR, "setsockopt(%s, IPV6_V6ONLY) failed for listener: %s", l->addr_s, strerror(errno));
-	}
-#endif
-	
-	arg = 1;
-	if (setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)) == -1)
-		hlog(LOG_ERR, "setsockopt(%s, SO_REUSEADDR) failed for listener: %s", l->addr_s, strerror(errno));
-#ifdef SO_REUSEPORT
-	if (setsockopt(f, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg)) == -1)
-		hlog(LOG_ERR, "setsockopt(%s, SO_REUSEPORT) failed for listener: %s", l->addr_s, strerror(errno));
-#endif
-	
-	if (bind(f, ai->ai_addr, ai->ai_addrlen)) {
-		hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
-		close(f);
-		return -1;
-	}
-	
-#ifdef USE_SCTP
-	/* the rest of the addresses of a multi-homed listener */
 	if (ai->ai_protocol == IPPROTO_SCTP) {
-		for (a = ai->ai_next; (a); a = a->ai_next) {
-			if (sctp_bindx_add(f, a->ai_addr, a->ai_addrlen)) {
-				char *s = strsockaddr(a->ai_addr, a->ai_addrlen);
-				hlog(LOG_CRIT, "bind(%s): adding address %s for SCTP multi-homing: %s", l->addr_s, s, strerror(errno));
-				hfree(s);
-				close(f);
-				return -1;
-			}
+		/* An SCTP listener with a list of addresses is multi-homed on
+		 * them, unlike separate IPv4 and IPv6 listeners, which give
+		 * single-path associations without failover.
+		 */
+		const struct addrinfo *a;
+		const struct sockaddr **addrs;
+		socklen_t *lens;
+		int n = 0;
+		
+		for (a = ai; (a); a = a->ai_next)
+			n++;
+		addrs = hmalloc(n * sizeof(*addrs));
+		lens = hmalloc(n * sizeof(*lens));
+		for (a = ai, n = 0; (a); a = a->ai_next, n++) {
+			addrs[n] = a->ai_addr;
+			lens[n] = a->ai_addrlen;
+		}
+		
+		f = sctp_socket_multihome(ai->ai_family, addrs, lens, n, 1, "Listener", l->name);
+		hfree(addrs);
+		hfree(lens);
+		if (f < 0)
+			return -1;
+	}
+#endif
+	
+	if (f < 0) {
+		/* a TCP socket, bound to the one address */
+		if ((f = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
+			hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
+			return -1;
+		}
+		
+		arg = 1;
+		if (setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)) == -1)
+			hlog(LOG_ERR, "setsockopt(%s, SO_REUSEADDR) failed for listener: %s", l->addr_s, strerror(errno));
+#ifdef SO_REUSEPORT
+		if (setsockopt(f, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg)) == -1)
+			hlog(LOG_ERR, "setsockopt(%s, SO_REUSEPORT) failed for listener: %s", l->addr_s, strerror(errno));
+#endif
+		
+		if (bind(f, ai->ai_addr, ai->ai_addrlen)) {
+			hlog(LOG_CRIT, "bind(%s): %s", l->addr_s, strerror(errno));
+			close(f);
+			return -1;
 		}
 	}
-#endif
 	
 	if (listen(f, SOMAXCONN)) {
 		hlog(LOG_CRIT, "listen(%s) failed: %s", l->addr_s, strerror(errno));

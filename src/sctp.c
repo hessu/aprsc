@@ -246,6 +246,68 @@ int sctp_bindx_add(int fd, const struct sockaddr *sa, socklen_t len)
 }
 
 /*
+ *	Open an SCTP socket bound to the given local addresses. With more than
+ *	one address the endpoint is multi-homed on them, which gives each
+ *	association a path per address, with failover between the paths. They
+ *	go on one socket: an IPv6 one when any of them is IPv6, which takes
+ *	the IPv4 ones too when not restricted to IPv6 only. With no addresses
+ *	the socket is of the given family and left unbound. Failures are
+ *	logged with the kind and name of the owner of the socket, such as
+ *	"Uplink full1". Returns the socket, or -1.
+ */
+
+int sctp_socket_multihome(int family, const struct sockaddr *const *addrs, const socklen_t *lens, int n, int reuseport, const char *kind, const char *name)
+{
+	int fd, arg, i, v4 = 0;
+	char *s;
+	
+	for (i = 0; i < n; i++) {
+		if (addrs[i]->sa_family == AF_INET6)
+			family = AF_INET6;
+		else
+			v4 = 1;
+	}
+	
+	if ((fd = socket(family, SOCK_STREAM, IPPROTO_SCTP)) < 0) {
+		hlog(LOG_CRIT, "%s %s: socket(SCTP): %s", kind, name, strerror(errno));
+		return -1;
+	}
+	
+	if (family == AF_INET6 && v4) {
+		arg = 0;
+		if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&arg, sizeof(arg)) == -1)
+			hlog(LOG_ERR, "%s %s: setsockopt(IPV6_V6ONLY) failed: %s", kind, name, strerror(errno));
+	}
+	
+	arg = 1;
+	if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)) == -1)
+		hlog(LOG_ERR, "%s %s: setsockopt(SO_REUSEADDR) failed: %s", kind, name, strerror(errno));
+#ifdef SO_REUSEPORT
+	if (reuseport && setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, (char *)&arg, sizeof(arg)) == -1)
+		hlog(LOG_ERR, "%s %s: setsockopt(SO_REUSEPORT) failed: %s", kind, name, strerror(errno));
+#endif
+	
+	/* the first address with bind(), the rest with bindx, which gives
+	 * them the port of the first */
+	for (i = 0; i < n; i++) {
+		if ((i == 0) ? bind(fd, addrs[0], lens[0]) : sctp_bindx_add(fd, addrs[i], lens[i])) {
+			s = strsockaddr(addrs[i], lens[i]);
+			hlog(LOG_ERR, "%s %s: bind(%s)%s failed: %s", kind, name, s, (i) ? " for SCTP multi-homing" : "", strerror(errno));
+			hfree(s);
+			close(fd);
+			return -1;
+		}
+		if (i) {
+			s = strsockaddr(addrs[i], lens[i]);
+			hlog(LOG_DEBUG, "%s %s: SCTP multi-homing: also bound address %s", kind, name, s);
+			hfree(s);
+		}
+	}
+	
+	return fd;
+}
+
+/*
  *	Set parameters for a listener socket
  */
 

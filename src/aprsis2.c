@@ -1389,9 +1389,9 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 
 void is2_pbuf_copy_additional(Aprsis2__ISPacket *dest, Aprsis2__ISPacket *src)
 {
-	if (src->optional_rx_rssi_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI) {
-		dest->optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
-		dest->rx_rssi = src->rx_rssi;
+	if (src->optional_rx_rssi_dbm_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM) {
+		dest->optional_rx_rssi_dbm_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM;
+		dest->rx_rssi_dbm = src->rx_rssi_dbm;
 	}
 	if (src->optional_rx_snr_db_case == APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB) {
 		dest->optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
@@ -1651,8 +1651,8 @@ int is2_wire_selfcheck(void)
 	p.type = APRSIS2__ISPACKET__TYPE__IS_PACKET_DUPLICATE;
 	p.is_packet_data.data = (uint8_t *)"N0CALL>APRS,qAR,TEST:>IS2 wire format self-check";
 	p.is_packet_data.len = strlen((char *)p.is_packet_data.data);
-	p.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
-	p.rx_rssi = -101.5;
+	p.optional_rx_rssi_dbm_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM;
+	p.rx_rssi_dbm = -101.5;
 	p.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
 	p.rx_snr_db = 7.25;
 

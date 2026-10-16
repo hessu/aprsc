@@ -419,7 +419,7 @@ func TestIS2Optionals(t *testing.T) {
 
 	// a position packet on the plain IS connection, with metadata
 	t.Run("plain with RSSI and SNR", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=42 rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 2")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 2", isclient.Meta{RSSI: &rssi, SNR: &snr}))
@@ -436,13 +436,13 @@ func TestIS2Optionals(t *testing.T) {
 	// A value which is not a number is ignored, with its key, and so is
 	// one with anything after the number; the other key still applies.
 	t.Run("plain with an unparsable RSSI", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=strong rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=strong rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 4")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 4", isclient.Meta{SNR: &snr}))
 	})
 	t.Run("plain with trailing garbage in the SNR", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12dB")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=42 rx_snr_db=12dB")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 5")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 5", isclient.Meta{RSSI: &rssi}))
@@ -482,7 +482,7 @@ func TestIS2Optionals(t *testing.T) {
 
 	// a value beyond the range of a float is ignored, not stored as infinity
 	t.Run("plain with an RSSI beyond the float range", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=1e40 rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=1e40 rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 9")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 9", isclient.Meta{SNR: &snr}))

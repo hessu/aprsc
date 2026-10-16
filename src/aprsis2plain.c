@@ -27,7 +27,7 @@
 void is2_plain_metadata_reset(struct client_t *c)
 {
 	// only use the received plain metadata for the immediately next packet
-	c->is2_input_template.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI__NOT_SET;
+	c->is2_input_template.optional_rx_rssi_dbm_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM__NOT_SET;
 	c->is2_input_template.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB__NOT_SET;
 	c->is2_input_template.rx_modem = APRSIS2__ISPACKET__MODEM_TYPE__MODEM_UNDEFINED;
 	c->is2_input_template.optional_rx_bitrate_case = APRSIS2__ISPACKET__OPTIONAL_RX_BITRATE__NOT_SET;
@@ -109,10 +109,10 @@ static void is2_plain_metadata_key(void *ctx,
 	float f;
 	long long l;
 
-	if (key_len == 7 && memcmp(key, "rx_rssi", 7) == 0) {
+	if (key_len == 11 && memcmp(key, "rx_rssi_dbm", 11) == 0) {
 		if (is2_plain_metadata_float(val, val_len, &f)) {
-			c->is2_input_template.rx_rssi = f;
-			c->is2_input_template.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
+			c->is2_input_template.rx_rssi_dbm = f;
+			c->is2_input_template.optional_rx_rssi_dbm_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM;
 		}
 	} else if (key_len == 9 && memcmp(key, "rx_snr_db", 9) == 0) {
 		if (is2_plain_metadata_float(val, val_len, &f)) {

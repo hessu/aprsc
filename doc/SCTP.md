@@ -23,6 +23,7 @@ can be used on:
 
         Listen "Full feed SCTP"     fullfeed    sctp ::0  10152
         Listen "IS2 Full feed SCTP" is2fullfeed sctp ::0  20152
+        Listen "SCTP on 2 addresses" fullfeed   sctp 192.0.2.1,2001:db8::1 30152
 
   A TCP and an SCTP listener can use the same port number.
 
@@ -45,10 +46,14 @@ uplink to the `UplinkBind` address if one is configured, otherwise to
 none.  An end bound to a wildcard address (`0.0.0.0` or `::0`), or to
 none, advertises all the addresses of its host when the association is
 set up, and the kernel moves the traffic to another of them if the path
-to one fails.  An end bound to a single address has only that one.  An
-uplink with both an IPv4 and an IPv6 `UplinkBind` address is bound to the
-two, and advertises exactly those, whichever family the upstream server's
-address is of.  The kernel leaves private and link-local addresses out of
+to one fails.  An end bound to a single address has only that one.  A
+listener with a comma-separated list of addresses, such as
+`192.0.2.1,2001:db8::1`, is bound to all of them on one socket, and
+advertises exactly those.  Use that rather than two separate IPv4 and
+IPv6 SCTP listeners: a client of one of those has a single-path
+association, which can not fail over to the other address.  An uplink with both an IPv4 and an IPv6
+`UplinkBind` address is bound to the two, and advertises exactly those,
+whichever family the upstream server's address is of.  The kernel leaves private and link-local addresses out of
 an association with a peer on a global address
 (`net.sctp.addr_scope_policy`).
 Firewalls have to pass SCTP to and from each of the addresses, and

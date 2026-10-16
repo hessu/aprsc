@@ -45,10 +45,7 @@
 #include "filter.h"
 #include "tls.h"
 #include "aprsis2.h"
-
-#ifdef USE_SCTP
-#include <netinet/sctp.h>
-#endif
+#include "sctp.h"
 
 
 int uplink_reconfiguring;
@@ -602,11 +599,11 @@ int make_uplink(struct uplink_config_t *l)
 		}
 		
 #ifdef USE_SCTP
-		/* Add the bind address of the other family to the SCTP socket,
-		 * as sctp_bindx() does. It takes the port of the first one.
+		/* Add the bind address of the other family to the SCTP socket.
+		 * It takes the port of the first one.
 		 */
 		if (addaddr_len) {
-			if (setsockopt(fd, IPPROTO_SCTP, SCTP_SOCKOPT_BINDX_ADD, (char *)addaddr, addaddr_len)) {
+			if (sctp_bindx_add(fd, addaddr, addaddr_len)) {
 				char *s = strsockaddr(addaddr, addaddr_len);
 				hlog(LOG_ERR, "Uplink %s: Failed to bind second source address '%s' for SCTP multi-homing: %s", l->name, s, strerror(errno));
 				hfree(s);

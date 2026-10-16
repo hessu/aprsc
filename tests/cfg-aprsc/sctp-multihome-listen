@@ -1,0 +1,28 @@
+
+# SCTP listener multi-homed on an IPv4 and an IPv6 address
+
+ServerId   TESTING
+PassCode   31421
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+### Intervals #########
+UpstreamTimeout		90s
+ClientTimeout		48h
+
+### Listeners ##########
+# the SCTP listener is bound to both loopback addresses
+Listen "Full feed SCTP"  fullfeed    sctp 127.0.0.1,::1  55152   acl "cfg-aprsc/acl-all.acl"
+Listen "Igate port"      igate       tcp  0.0.0.0        55580   acl "cfg-aprsc/acl-all.acl"
+
+### HTTP listener ##########
+HTTPStatus 127.0.0.1 55501
+
+### Internals ############
+WorkerThreads 3
+FileLimit        10000
+

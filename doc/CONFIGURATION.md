@@ -187,6 +187,13 @@ The basic syntax is:
     IPv4 addresses).  On Linux and Solaris, just put "::" here and it will
     handle both IPv6 and IPv4 connections with a single configuration line! 
     On FreeBSD and Windows, separate IPv4 and IPv6 listeners are needed.
+    An SCTP listener takes a comma-separated list of addresses, such as
+    "192.0.2.1,2001:db8::1", and is then multi-homed on exactly those
+    addresses (see [SCTP](SCTP.html)). This is much better than two
+    separate IPv4 and IPv6 SCTP listeners: each of those gives a client
+    an association with one path only, and no failover between the
+    addresses. The addresses of a list must be specific ones, not
+    wildcards.
     
  *  port: the local TCP or UDP port to listen on. Must be larger than 1023.
     aprsc drops root privileges quickly after startup (if it has them), and

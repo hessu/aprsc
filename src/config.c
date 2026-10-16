@@ -1010,6 +1010,94 @@ int config_listen_tls(char **argv, int argc, int *i, const char *key, char **dst
 #endif
 }
 
+/*
+ *	Resolve the address of a Listen directive. For an SCTP listener it may
+ *	be a comma-separated list of addresses, which are all bound to the one
+ *	socket, so that the listener is multi-homed on them: each must then be
+ *	a single, non-wildcard address. One listener on both an IPv4 and an
+ *	IPv6 address is much better than two separate SCTP listeners, whose
+ *	associations have a single path each, with no failover.
+ */
+
+static int listen_resolve_addrs(const char *hosts, const char *port, struct addrinfo *req, struct addrinfo **res, int multi_ok)
+{
+	struct addrinfo *ai, *a, *tail = NULL;
+	char *list, *h, *saveptr;
+	int i, n = 0;
+	
+	*res = NULL;
+	list = hstrdup(hosts);
+	
+	for (h = strtok_r(list, ",", &saveptr); (h); h = strtok_r(NULL, ",", &saveptr)) {
+		n++;
+		ai = NULL;
+		i = getaddrinfo(h, port, req, &ai);
+		if (i != 0) {
+			hlog(LOG_ERR, "Listen: address parse failure of '%s' '%s': %s", h, port, gai_strerror(i));
+			goto err;
+		}
+		
+		if (!*res) {
+			*res = ai;
+		} else {
+			/* a list: the nodes of each list of the libc are freed
+			 * one by one, so they can be chained together
+			 */
+			tail->ai_next = ai;
+		}
+		for (tail = ai; tail->ai_next; tail = tail->ai_next);
+	}
+	
+	if (n == 0) {
+		hlog(LOG_ERR, "Listen: no address given");
+		goto err;
+	}
+	
+	if (n == 1)
+		goto out;
+	
+	if (!multi_ok) {
+		hlog(LOG_ERR, "Listen: a list of addresses, '%s', is only supported on an SCTP listener", hosts);
+		goto err;
+	}
+	
+	for (a = *res, i = 0; (a); a = a->ai_next, i++) {
+		if (a->ai_family == AF_INET) {
+			if (((struct sockaddr_in *)a->ai_addr)->sin_addr.s_addr == INADDR_ANY) {
+				hlog(LOG_ERR, "Listen: a wildcard address can not be in the address list '%s'", hosts);
+				goto err;
+			}
+		} else if (a->ai_family == AF_INET6) {
+			if (IN6_IS_ADDR_UNSPECIFIED(&((struct sockaddr_in6 *)a->ai_addr)->sin6_addr)) {
+				hlog(LOG_ERR, "Listen: a wildcard address can not be in the address list '%s'", hosts);
+				goto err;
+			}
+		}
+		for (ai = *res; ai != a; ai = ai->ai_next) {
+			if (ai->ai_family == a->ai_family && ai->ai_addrlen == a->ai_addrlen
+			    && memcmp(ai->ai_addr, a->ai_addr, a->ai_addrlen) == 0) {
+				hlog(LOG_ERR, "Listen: the address list '%s' has an address twice", hosts);
+				goto err;
+			}
+		}
+	}
+	if (i != n) {
+		hlog(LOG_ERR, "Listen: the address list '%s' has a name with more than one address - can only have one each", hosts);
+		goto err;
+	}
+	
+out:
+	hfree(list);
+	return 0;
+	
+err:
+	if (*res)
+		freeaddrinfo(*res);
+	*res = NULL;
+	hfree(list);
+	return -1;
+}
+
 int do_listen(struct listen_config_t **lq, int argc, char **argv)
 {
 	int i, port;
@@ -1100,11 +1188,8 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 		return -2;
 	}
 
-	i = getaddrinfo(argv[4], argv[5], &req, &ai);
-	if (i != 0) {
-		hlog(LOG_ERR, "Listen: address parse failure of '%s' '%s': %s", argv[4], argv[5], gai_strerror(i));
+	if (listen_resolve_addrs(argv[4], argv[5], &req, &ai, (req.ai_protocol == IPPROTO_SCTP)))
 		return -2;
-	}
 	
 	l = hmalloc(sizeof(*l));
 	memset(l, 0, sizeof(*l));

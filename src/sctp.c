@@ -235,6 +235,17 @@ void sctp_dry_wait_expire(struct worker_t *self, struct client_t *c)
 }
 
 /*
+ *	Add an address to the ones a socket is bound to, for multi-homing on
+ *	them, as sctp_bindx() of libsctp does. The address takes the port of
+ *	the first one bound. Returns -1 with errno set on failure.
+ */
+
+int sctp_bindx_add(int fd, const struct sockaddr *sa, socklen_t len)
+{
+	return setsockopt(fd, IPPROTO_SCTP, SCTP_SOCKOPT_BINDX_ADD, (const char *)sa, len);
+}
+
+/*
  *	Set parameters for a listener socket
  */
 

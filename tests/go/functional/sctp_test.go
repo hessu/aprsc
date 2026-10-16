@@ -2,10 +2,14 @@ package functional
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -222,4 +226,114 @@ func TestSCTPUplinkMultihoming(t *testing.T) {
 	})
 
 	s.Stop()
+}
+
+// sctpLogin logs in on an SCTP connection to the server, reading the banner
+// and the logresp.
+func sctpLogin(t *testing.T, c *isclient.SCTPMsgConn, call string) {
+	t.Helper()
+
+	if msg := readSCTPMsg(t, c, "banner", false); !strings.HasPrefix(string(msg), "# aprsc ") {
+		t.Fatalf("got %q, want the banner", msg)
+	}
+	if _, err := c.Write([]byte("user " + call + " pass -1 vers gotest 1.0\r\n")); err != nil {
+		t.Fatalf("failed to send login: %v", err)
+	}
+	if msg := readSCTPMsg(t, c, "logresp", false); !strings.HasPrefix(string(msg), "# logresp "+call+" ") {
+		t.Fatalf("got %q, want the logresp", msg)
+	}
+}
+
+// An SCTP listener with a list of addresses is bound to all of them on one
+// socket, and is multi-homed on exactly those: a client connecting to either
+// address sees both, both clients are on the one listener, and packets go
+// to both.
+func TestSCTPListenMultihoming(t *testing.T) {
+	harness.Parallel(t)
+	requireSCTP(t)
+	if err := isclient.SCTPSupported(); err != nil {
+		t.Skipf("no SCTP client: %v", err)
+	}
+
+	harness.Start(t, "sctp-multihome-listen")
+
+	// An IPv6 socket takes the IPv4 address of the INIT-ACK too; the Go
+	// client makes an IPv4 socket for an IPv4 address, which would not.
+	rx6 := dialSCTPMsg(t, harness.AddrOn(t, "::1", 55152))
+	sctpLogin(t, rx6, "N1GAT")
+	addrs, err := isclient.SCTPPeerAddrs(rx6.Conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(addrs)
+	if want := []string{"127.0.0.1", "::1"}; !slices.Equal(addrs, want) {
+		t.Errorf("the association has the server addresses %v, want %v", addrs, want)
+	}
+
+	rx4 := dialSCTPMsg(t, harness.AddrOn(t, "127.0.0.1", 55152))
+	sctpLogin(t, rx4, "N2GAT")
+
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N0GAT")
+	tx.Send(t, "N0GAT>APRS:>multi-homed listener")
+	for _, rx := range []*isclient.SCTPMsgConn{rx6, rx4} {
+		if msg := readSCTPMsg(t, rx, "packet", true); !strings.HasPrefix(string(msg), "N0GAT>APRS,") {
+			t.Errorf("got %q, want the packet", msg)
+		}
+	}
+
+	// the status shows the one listener, with both addresses and clients
+	res, err := http.Get("http://" + harness.AddrOn(t, "127.0.0.1", 55501) + "/status.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var j struct {
+		Listeners []struct {
+			Proto   string `json:"proto"`
+			Addr    string `json:"addr"`
+			Clients int    `json:"clients"`
+		} `json:"listeners"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&j); err != nil {
+		t.Fatal(err)
+	}
+	var sctp []string
+	for _, l := range j.Listeners {
+		if l.Proto == "sctp" {
+			sctp = append(sctp, fmt.Sprintf("%s with %d clients", l.Addr, l.Clients))
+		}
+	}
+	port := strconv.Itoa(harness.Port(t, 55152))
+	if want := []string{"127.0.0.1:" + port + ", [::1]:" + port + " with 2 clients"}; !slices.Equal(sctp, want) {
+		t.Errorf("the status has the SCTP listeners %q, want %q", sctp, want)
+	}
+}
+
+// A list of addresses is only for an SCTP listener, and takes specific
+// addresses only.
+func TestSCTPListenAddressListRejected(t *testing.T) {
+	harness.Parallel(t)
+	requireSCTP(t)
+
+	const head = "ServerId TESTING\nPassCode 31421\nMyEmail email@example.com\nMyAdmin \"Admin, N0CALL\"\nRunDir data\n"
+	for _, c := range []struct{ name, listen, want string }{
+		{"tcp", `Listen "Full feed" fullfeed tcp 127.0.0.1,::1 55152`, "only supported on an SCTP listener"},
+		{"udp", `Listen "Full feed" fullfeed udp 127.0.0.1,::1 55152`, "only supported on an SCTP listener"},
+		{"wildcard", `Listen "Full feed" fullfeed sctp ::,127.0.0.1 55152`, "wildcard address can not be"},
+		{"twice", `Listen "Full feed" fullfeed sctp 127.0.0.1,::1,127.0.0.1 55152`, "has an address twice"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "aprsc.conf")
+			if err := os.WriteFile(path, []byte(head+c.listen+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out, err := harness.CheckConfigFile(t, path)
+			if err == nil {
+				t.Fatalf("the configuration was accepted:\n%s", out)
+			}
+			if !strings.Contains(out, c.want) {
+				t.Errorf("the configuration was rejected without %q:\n%s", c.want, out)
+			}
+		})
+	}
 }

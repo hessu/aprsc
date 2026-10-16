@@ -57,3 +57,9 @@ func ListenFakeUpstreamSCTP(t *testing.T, addr, call string) *FakeUpstream {
 func (p *Peer) PeerAddrs() ([]string, error) {
 	return nil, ErrNoSCTP
 }
+
+// SCTPPeerAddrs lists the addresses of the peer of an SCTP connection. The
+// SCTP client is only implemented on Linux.
+func SCTPPeerAddrs(c net.Conn) ([]string, error) {
+	return nil, ErrNoSCTP
+}

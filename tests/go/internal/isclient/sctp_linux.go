@@ -297,13 +297,19 @@ func ListenFakeUpstreamSCTP(t *testing.T, addr, call string) *FakeUpstream {
 	return &FakeUpstream{ln: tl, call: call}
 }
 
-// PeerAddrs lists the addresses of the peer of an SCTP connection, as the
-// association knows them (SCTP_GET_PEER_ADDRS): the ones it is multi-homed
-// on. The port is left out.
+// PeerAddrs lists the addresses of the peer of an SCTP connection accepted
+// by the fake upstream, like SCTPPeerAddrs.
 func (p *Peer) PeerAddrs() ([]string, error) {
-	sc, ok := p.conn.(syscall.Conn)
+	return SCTPPeerAddrs(p.conn)
+}
+
+// SCTPPeerAddrs lists the addresses of the peer of an SCTP connection, as
+// the association knows them (SCTP_GET_PEER_ADDRS): the ones it is
+// multi-homed on. The port is left out.
+func SCTPPeerAddrs(c net.Conn) ([]string, error) {
+	sc, ok := c.(syscall.Conn)
 	if !ok {
-		return nil, fmt.Errorf("connection %T has no file descriptor", p.conn)
+		return nil, fmt.Errorf("connection %T has no file descriptor", c)
 	}
 	rc, err := sc.SyscallConn()
 	if err != nil {

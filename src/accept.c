@@ -169,13 +169,36 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char
 {
 	int arg;
 	int f;
+	int family = ai->ai_family;
+#ifdef USE_SCTP
+	const struct addrinfo *a;
+	
+	/* An SCTP listener with a list of addresses is multi-homed on them,
+	 * unlike separate IPv4 and IPv6 listeners, which give single-path
+	 * associations without failover. They go on one socket, an IPv6 one
+	 * when any of them is IPv6, which takes the IPv4 ones too when not
+	 * restricted to IPv6 only.
+	 */
+	if (ai->ai_protocol == IPPROTO_SCTP)
+		for (a = ai->ai_next; (a); a = a->ai_next)
+			if (a->ai_family == AF_INET6)
+				family = AF_INET6;
+#endif
 	
 	hlog(LOG_INFO, "Binding listening %s socket: %s", which, l->addr_s);
 	
-	if ((f = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol)) < 0) {
+	if ((f = socket(family, ai->ai_socktype, ai->ai_protocol)) < 0) {
 		hlog(LOG_CRIT, "socket(): %s\n", strerror(errno));
 		return -1;
 	}
+	
+#ifdef USE_SCTP
+	if (ai->ai_protocol == IPPROTO_SCTP && ai->ai_next && family == AF_INET6) {
+		arg = 0;
+		if (setsockopt(f, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&arg, sizeof(arg)) == -1)
+			hlog(LOG_ERR, "setsockopt(%s, IPV6_V6ONLY) failed for listener: %s", l->addr_s, strerror(errno));
+	}
+#endif
 	
 	arg = 1;
 	if (setsockopt(f, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)) == -1)
@@ -190,6 +213,21 @@ static int open_tcp_listener(struct listen_t *l, const struct addrinfo *ai, char
 		close(f);
 		return -1;
 	}
+	
+#ifdef USE_SCTP
+	/* the rest of the addresses of a multi-homed listener */
+	if (ai->ai_protocol == IPPROTO_SCTP) {
+		for (a = ai->ai_next; (a); a = a->ai_next) {
+			if (sctp_bindx_add(f, a->ai_addr, a->ai_addrlen)) {
+				char *s = strsockaddr(a->ai_addr, a->ai_addrlen);
+				hlog(LOG_CRIT, "bind(%s): adding address %s for SCTP multi-homing: %s", l->addr_s, s, strerror(errno));
+				hfree(s);
+				close(f);
+				return -1;
+			}
+		}
+	}
+#endif
 	
 	if (listen(f, SOMAXCONN)) {
 		hlog(LOG_CRIT, "listen(%s) failed: %s", l->addr_s, strerror(errno));
@@ -291,8 +329,23 @@ static int open_listener(struct listen_config_t *lc)
 	
 	l->portaccount = port_accounter_alloc();
 	
-	/* Pick first of the AIs for this listen definition */
+	/* Pick first of the AIs for this listen definition. An SCTP listener
+	 * binds all of them, and shows them all.
+	 */
 	l->addr_s = strsockaddr( lc->ai->ai_addr, lc->ai->ai_addrlen );
+#ifdef USE_SCTP
+	if (lc->ai->ai_protocol == IPPROTO_SCTP) {
+		struct addrinfo *a;
+		for (a = lc->ai->ai_next; (a); a = a->ai_next) {
+			char *s = strsockaddr(a->ai_addr, a->ai_addrlen);
+			char *joined = hmalloc(strlen(l->addr_s) + 2 + strlen(s) + 1);
+			sprintf(joined, "%s, %s", l->addr_s, s);
+			hfree(s);
+			hfree(l->addr_s);
+			l->addr_s = joined;
+		}
+	}
+#endif
 	l->name   = hstrdup(lc->name);
 	l->portnum = lc->portnum;
 	l->ai_protocol = lc->ai->ai_protocol;

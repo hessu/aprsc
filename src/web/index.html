@@ -154,9 +154,9 @@
   <td class='username'>{{ c.username }}</td>
   <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a></td>
   <td>{{ c.mode }} <span ng-show="c.proto == 'sctp'">SCTP</span> <span ng-show="c.link == 'is2'">is2</span></td>
-  <td>{{ c.t_connect | datetime }}</td>
-  <td>{{ c.since_connect | duration }}</td>
-  <td>{{ c.since_last_read | duration }}</td>
+  <td class='link' ng-click='timing_dialog(c)'>{{ c.t_connect | datetime }}</td>
+  <td class='link' ng-click='timing_dialog(c)'>{{ c.since_connect | duration }}</td>
+  <td class='link' ng-click='timing_dialog(c)'>{{ c.since_last_read | duration }}</td>
   <td>{{ c.app_name }} {{ c.app_version }}</td>
   <td>{{ c.pkts_tx }}</td>
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
@@ -183,7 +183,7 @@
 <tr ng-repeat="c in status.peers | orderBy : peers_sort.column : peers_sort.descending">
   <td class='username'>{{ c.username }}</td>
   <td><a ng-href="{{ server_status_href(c) }}">{{ c.addr_rem }}</a> <span ng-show="c.link == 'is2'">is2</span></td>
-  <td>{{ c.since_last_read | duration }}</td>
+  <td class='link' ng-click='timing_dialog(c)'>{{ c.since_last_read | duration }}</td>
   <td>{{ c.pkts_tx }}</td>
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
   <td>{{ c.bytes_tx }}</td>
@@ -219,8 +219,8 @@
       <span ng-show='c.verified == 1'>Yes</span>
       <span ng-show='c.verified == 3' class='link' ng-click='client_cert_dialog(c)'>Cert</span>
       </td>
-  <td>{{ c.since_connect | duration }}</td>
-  <td>{{ c.since_last_read | duration }}</td>
+  <td class='link' ng-click='timing_dialog(c)'>{{ c.since_connect | duration }}</td>
+  <td class='link' ng-click='timing_dialog(c)'>{{ c.since_last_read | duration }}</td>
   <td>{{ c.app_name }} {{ c.app_version }}</td>
   <td>{{ c.pkts_tx }}</td>
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
@@ -272,6 +272,21 @@
 	<p>{{'RXERR_DIALOG_MESSAGE' | translate:sel_c }}</p>
 	<p>
 	<span ng-repeat='i in sel_c.rx_errs track by $index' ng-show='i > 0'>{{ 'RXERR_' + status.rx_errs[$index] | translate }}: {{ i }}<br></span>
+	</p>
+</script>
+
+<script type="text/ng-template" id="timing_dialog">
+	<p><strong>{{ 'TIMING_DIALOG_TITLE' | translate:sel_c }}</strong></p>
+	<p>
+	<strong>{{ 'TIMING_CONNECTED' | translate }}</strong> {{ sel_c.t_connect | datetime }}<br>
+	<strong>{{ 'TIMING_UP' | translate }}</strong> {{ sel_c.since_connect | duration }}<br>
+	<strong>{{ 'TIMING_LAST_IN' | translate }}</strong> {{ sel_c.since_last_read | duration }} {{ 'TIMING_AGO' | translate }}
+	</p>
+	<p ng-show="sel_c.rtt_avg != null">
+	<strong>{{ 'TIMING_RTT' | translate }}</strong><br>
+	{{ sel_c.rtt_avg | number:1 }} {{ 'TIMING_RTT_AVG' | translate }}<br>
+	{{ sel_c.rtt_max | number:1 }} {{ 'TIMING_RTT_MAX' | translate }}<br>
+	{{ 'TIMING_RTT_WINDOW' | translate:sel_rtt }}
 	</p>
 </script>
 

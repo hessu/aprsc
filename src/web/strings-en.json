@@ -130,5 +130,15 @@
 	
 	"CERT_DIALOG_TITLE": "{{ username }} authenticated using a certificate.",
 	"CERT_SUBJECT": "Certificate subject:",
-	"CERT_ISSUER": "Certificate issuer:"
+	"CERT_ISSUER": "Certificate issuer:",
+	
+	"TIMING_DIALOG_TITLE": "{{ username }} connection timing",
+	"TIMING_CONNECTED": "Connected:",
+	"TIMING_UP": "Up for:",
+	"TIMING_LAST_IN": "Last input received:",
+	"TIMING_AGO": "ago",
+	"TIMING_RTT": "IS2 ping round-trip time:",
+	"TIMING_RTT_AVG": "ms average",
+	"TIMING_RTT_MAX": "ms maximum",
+	"TIMING_RTT_WINDOW": "{{ samples }} pings over the last {{ period }}"
 }

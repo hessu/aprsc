@@ -405,7 +405,9 @@ void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c)
 	c->ping_rtt_i = 0;
 	
 	c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
-	c->next_is2_peer_offer = tick;
+	/* due already, so that the proposal goes out on the same keepalive
+	 * pass which did the fallback: the check is a strict comparison */
+	c->next_is2_peer_offer = tick - 1;
 }
 
 /*

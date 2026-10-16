@@ -411,6 +411,31 @@ void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c)
 }
 
 /*
+ *	Start the ping tracking and the frame loss tracking of an IS2 UDP peer
+ *	link afresh: when it is upgraded to IS2, and when the peer proposes
+ *	IS2 on a link which is in IS2 mode here already, after it restarted
+ *	or fell back and comes back. No round-trip times are left over from
+ *	an earlier IS2 period of the link. The fallback timer starts over
+ *	too: the signed proposal is a sign of life, and the timer would
+ *	otherwise count from before the outage of the peer and fire right
+ *	after it has recovered.
+ *
+ *	After a fallback and this re-upgrade, the sequence numbers of the peer
+ *	have moved on past the window, or started over with the peer, and the
+ *	frames of the gap were dropped on purpose, not lost.
+ */
+
+static void is2_corepeer_track_reset(struct client_t *c)
+{
+	c->ping_reply_tick = tick;
+	c->ping_rtt_n = 0;
+	c->ping_rtt_i = 0;
+	
+	c->corepeer_is2_sequence_window_pos = 0;
+	c->corepeer_is2_sequence_window_used = 0;
+}
+
+/*
  *	Transmit a server signature to a new client
  */
 
@@ -2093,6 +2118,10 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		if (!c->corepeer_is2) {
 			// If we're not yet in IS2 mode ourself, offer again soon
 			c->next_is2_peer_offer = tick + 1;
+		} else {
+			/* the peer restarted, or fell back and comes back: it
+			 * is alive, so do not fall back on its past silence */
+			is2_corepeer_track_reset(c);
 		}
 
 		return is2_corepeer_control_out(self, c, "ok", v, v, ctl.token, ctl.token_len);
@@ -2122,20 +2151,9 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		c->corepeer_is2 = 1;
 		c->write_packet = is2_corepeer_write_packet;
 		c->is2_input_handler = is2_input_handler_corepeer;
-		
-		/* start pinging right away, with no round-trip times left over
-		 * from an earlier IS2 period of the link */
-		c->ping_reply_tick = tick;
-		c->ping_rtt_n = 0;
-		c->ping_rtt_i = 0;
+		is2_corepeer_track_reset(c);
+		/* and start pinging right away */
 		c->keepalive = tick;
-		
-		/* and track frame loss afresh: after a fallback and this
-		 * re-upgrade, the sequence numbers of the peer have moved on
-		 * past the window, and the frames of the gap were dropped on
-		 * purpose, not lost */
-		c->corepeer_is2_sequence_window_pos = 0;
-		c->corepeer_is2_sequence_window_used = 0;
 
 		/* Do send offers every 10 minutes away */
 		c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;

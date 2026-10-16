@@ -1297,9 +1297,12 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 	/* An IS2 frame from a peer which is in the plain mode here: the peer
 	 * is still in IS2 mode after this side fell back, or this side has
 	 * restarted. The handshake sorts it out shortly; the frame is not a
-	 * packet and is not parsed as one. */
+	 * packet and is not parsed as one, but counted as a rejected frame. */
 	if (r > 0 && c->ibuf[0] == STX) {
 		hlog_packet(LOG_DEBUG, c->ibuf, r, "%s/%s: IS2 UDP: IS2 frame from a peer in plain mode, dropped: ", rc->addr_rem, rc->username);
+#ifdef USE_IS2
+		is2_corepeer_plain_frame_rejected(rc);
+#endif
 		return 0;
 	}
 	

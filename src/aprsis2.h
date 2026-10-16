@@ -26,6 +26,7 @@ extern int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2_
 extern int is2_out_server_signature(struct worker_t *self, struct client_t *c);
 extern int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at);
 extern int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *ibuf, int len);
+extern void is2_corepeer_plain_frame_rejected(struct client_t *c);
 
 extern void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template);
 extern int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);

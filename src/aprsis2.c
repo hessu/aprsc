@@ -1469,11 +1469,18 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 	return 0;
 }
 
+/*
+ *	Deframe a datagram received on an IS2 UDP peer link. A datagram which
+ *	is not an acceptable frame is counted as a rejected frame, so that
+ *	the status shows what is going on, even when the log is quiet.
+ */
+
 int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *ibuf, int len)
 {
 	if (len < IS2_MINIMUM_FRAME_LEN) {
 		hlog_packet(LOG_DEBUG, ibuf, len, "%s/%s: IS2 UDP: Too short UDP frame (%d): ",
 			c->addr_rem, c->username, len);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
@@ -1485,6 +1492,7 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 		 * logged quietly. */
 		hlog_packet(LOG_DEBUG, ibuf, len, "%s/%s: IS2 UDP: Frame missing STX in beginning, plain datagram from an IS2 peer: ",
 			c->addr_rem, c->username);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
@@ -1494,17 +1502,20 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 	if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Too short frame content (%d): ",
 			c->addr_rem, c->username, clen);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
 	if (IS2_HEAD_LEN + clen + IS2_TAIL_LEN > len) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Frame length points behind buffer end (%d+%d buflen %d): ", c->addr_rem, c->username, clen, IS2_HEAD_LEN + IS2_TAIL_LEN, len);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
 	if (ibuf[IS2_HEAD_LEN + clen] != ETX) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2: Frame missing terminating ETX: ",
 			c->addr_rem, c->username);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 
@@ -1515,6 +1526,16 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 	}
 	
 	return is2_unpack_message(self, c, ibuf + IS2_HEAD_LEN, clen);
+}
+
+/*
+ *	Count an IS2 frame which arrived on a UDP peer link in the plain mode,
+ *	and was dropped, as a rejected frame.
+ */
+
+void is2_corepeer_plain_frame_rejected(struct client_t *c)
+{
+	is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 }
 
 /*

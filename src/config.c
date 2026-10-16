@@ -248,6 +248,9 @@ void sanitize_ascii_string(char *s)
  *	Free a listen config tree
  */
 
+static struct addrinfo *addrinfo_copy(const struct addrinfo *src);
+static void addrinfo_free(struct addrinfo *ai);
+
 void free_listen_config(struct listen_config_t **lc)
 {
 	struct listen_config_t *this;
@@ -262,7 +265,7 @@ void free_listen_config(struct listen_config_t **lc)
 		for (i = 0; i < (sizeof(this->filters)/sizeof(this->filters[0])); ++i)
 			if (this->filters[i])
 				hfree((void*)this->filters[i]);
-		freeaddrinfo(this->ai);
+		addrinfo_free(this->ai);
 		if (this->acl)
 			acl_free(this->acl);
 		if (this->keyfile)
@@ -589,7 +592,8 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 	li->portnum      = localport;
 	li->client_flags = 0;
 	li->clients_max  = 1;
-	li->ai = my_ai;
+	li->ai = addrinfo_copy(my_ai);
+	freeaddrinfo(my_ai);
 	li->acl = NULL;
 	li->next = NULL;
 	li->prevp = NULL;
@@ -656,7 +660,7 @@ int do_peergroup(struct peerip_config_t **lq, int argc, char **argv)
 		 * peer configs on all nodes.
 		 */
 		
-		if (ai_comp(ai, my_ai)) {
+		if (ai_comp(ai, li->ai)) {
 			//hlog(LOG_DEBUG, "PeerGroup: Ignoring %s - it's me, my local address", fullhost);
 			hfree(fullhost);
 			fullhost = NULL;
@@ -1011,12 +1015,60 @@ int config_listen_tls(char **argv, int argc, int *i, const char *key, char **dst
 }
 
 /*
+ *	Copy a getaddrinfo() result into a list of our own, and free such a
+ *	list. The lists of several names are chained together for a
+ *	multi-homed listener, and a chained list can not be given to
+ *	freeaddrinfo(): glibc allocates the nodes one by one, but musl
+ *	allocates a whole list in one piece and frees it by walking to its
+ *	last node, which with a chain is the node of another list. Every
+ *	listen config has such a copy, the UDP socket of a peer group too.
+ */
+
+static struct addrinfo *addrinfo_copy(const struct addrinfo *src)
+{
+	struct addrinfo *head = NULL, *tail = NULL, *a;
+
+	for (; (src); src = src->ai_next) {
+		a = hmalloc(sizeof(*a));
+		memset(a, 0, sizeof(*a));
+		a->ai_flags = src->ai_flags;
+		a->ai_family = src->ai_family;
+		a->ai_socktype = src->ai_socktype;
+		a->ai_protocol = src->ai_protocol;
+		a->ai_addrlen = src->ai_addrlen;
+		a->ai_addr = hmalloc(src->ai_addrlen);
+		memcpy(a->ai_addr, src->ai_addr, src->ai_addrlen);
+
+		if (tail)
+			tail->ai_next = a;
+		else
+			head = a;
+		tail = a;
+	}
+
+	return head;
+}
+
+static void addrinfo_free(struct addrinfo *ai)
+{
+	struct addrinfo *next;
+
+	for (; (ai); ai = next) {
+		next = ai->ai_next;
+		hfree(ai->ai_addr);
+		hfree(ai);
+	}
+}
+
+/*
  *	Resolve the address of a Listen directive. For an SCTP listener it may
  *	be a comma-separated list of addresses, which are all bound to the one
  *	socket, so that the listener is multi-homed on them: each must then be
  *	a single, non-wildcard address. One listener on both an IPv4 and an
  *	IPv6 address is much better than two separate SCTP listeners, whose
  *	associations have a single path each, with no failover.
+ *
+ *	The result is a list made by addrinfo_copy(), freed with addrinfo_free().
  */
 
 static int listen_resolve_addrs(const char *hosts, const char *port, struct addrinfo *req, struct addrinfo **res, int multi_ok)
@@ -1037,15 +1089,14 @@ static int listen_resolve_addrs(const char *hosts, const char *port, struct addr
 			goto err;
 		}
 		
-		if (!*res) {
-			*res = ai;
-		} else {
-			/* a list: the nodes of each list of the libc are freed
-			 * one by one, so they can be chained together
-			 */
-			tail->ai_next = ai;
-		}
-		for (tail = ai; tail->ai_next; tail = tail->ai_next);
+		a = addrinfo_copy(ai);
+		freeaddrinfo(ai);
+		
+		if (!*res)
+			*res = a;
+		else
+			tail->ai_next = a;
+		for (tail = a; tail->ai_next; tail = tail->ai_next);
 	}
 	
 	if (n == 0) {
@@ -1091,8 +1142,7 @@ out:
 	return 0;
 	
 err:
-	if (*res)
-		freeaddrinfo(*res);
+	addrinfo_free(*res);
 	*res = NULL;
 	hfree(list);
 	return -1;

@@ -150,7 +150,7 @@ struct listen_config_t {
 	const char *cafile;		/* SSL ca certificate for validating client certs */
 	const char *crlfile;		/* SSL certificate revocation file */
 
-	struct addrinfo *ai;
+	struct addrinfo *ai;		/* the addresses bound, in a list of config.c's own, not of getaddrinfo() */
 	struct acl_t *acl;
 	
 	const char *filters[LISTEN_MAX_FILTERS];		/* up to 10 filters, NULL when not defined */

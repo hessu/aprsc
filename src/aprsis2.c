@@ -830,7 +830,7 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		} else {
 			c->ping_rtt_sum = c->ping_rtt_sum - c->ping_rtt_sum/IS2_PING_AVG_LEN + diff;
 		}
-		hlog(LOG_INFO, "%s/%s: IS2: Ping reply received, rtt %.1f ms avg %.1f ms",
+		hlog(LOG_DEBUG, "%s/%s: IS2: Ping reply received, rtt %.1f ms avg %.1f ms",
 			c->addr_rem, c->username, diff * 1000.0, c->ping_rtt_sum*1000.0/IS2_PING_AVG_LEN);
 		
 	}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -187,4 +189,37 @@ func leafUplink(c *http.Client, url string) map[string]any {
 		return j.Uplinks[0]
 	}
 	return nil
+}
+
+// An SCTP uplink with both an IPv4 and an IPv6 UplinkBind address is
+// multi-homed on the two: the upstream sees both addresses of the server,
+// although the server connected to its IPv4 address, and packets go through.
+func TestSCTPUplinkMultihoming(t *testing.T) {
+	harness.Parallel(t)
+	requireSCTP(t)
+	if err := isclient.SCTPSupported(); err != nil {
+		t.Skipf("no SCTP client: %v", err)
+	}
+
+	const upstreamCall = "FAKEUP"
+	fake := isclient.ListenFakeUpstreamSCTP(t, harness.AddrOn(t, "::", 54153), upstreamCall)
+
+	s := harness.Start(t, "sctp-multihome")
+	up := fake.Accept(t)
+
+	addrs, err := up.PeerAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(addrs)
+	if want := []string{"127.0.0.1", "::1"}; !slices.Equal(addrs, want) {
+		t.Errorf("the uplink association has the addresses %v, want %v", addrs, want)
+	}
+
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N1GAT")
+	isclient.RunSteps(t, up, rx, []isclient.Step{
+		passSame("packet from the uplink", "N0GAT>APRS,qAR,"+upstreamCall+":>multi-homed"),
+	})
+
+	s.Stop()
 }

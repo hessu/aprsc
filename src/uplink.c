@@ -46,6 +46,10 @@
 #include "tls.h"
 #include "aprsis2.h"
 
+#ifdef USE_SCTP
+#include <netinet/sctp.h>
+#endif
+
 
 int uplink_reconfiguring;
 int uplink_shutting_down;
@@ -442,6 +446,11 @@ int make_uplink(struct uplink_config_t *l)
 	int port;
 	struct sockaddr *srcaddr;
 	socklen_t srcaddr_len;
+	int family;
+#ifdef USE_SCTP
+	struct sockaddr *addaddr;
+	socklen_t addaddr_len;
+#endif
 
 	memset(&req, 0, sizeof(req));
 	req.ai_family   = 0;
@@ -535,11 +544,39 @@ int make_uplink(struct uplink_config_t *l)
 		if (i == addrc)
 			i = 0;
 		
-		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
+		/* An SCTP uplink bound to both an IPv4 and an IPv6 address is
+		 * multi-homed on the two. They go on one IPv6 socket, which
+		 * takes an IPv4 address, and an IPv4 peer, when it is not
+		 * restricted to IPv6 only.
+		 */
+		family = a->ai_family;
+#ifdef USE_SCTP
+		addaddr_len = 0;
+		if (a->ai_protocol == IPPROTO_SCTP && uplink_bind_v4_len != 0 && uplink_bind_v6_len != 0) {
+			family = AF_INET6;
+			if (a->ai_family == AF_INET) {
+				addaddr = (struct sockaddr *)&uplink_bind_v6;
+				addaddr_len = uplink_bind_v6_len;
+			} else {
+				addaddr = (struct sockaddr *)&uplink_bind_v4;
+				addaddr_len = uplink_bind_v4_len;
+			}
+		}
+#endif
+		
+		if ((fd = socket(family, a->ai_socktype, a->ai_protocol)) < 0) {
 			hlog(LOG_CRIT, "Uplink %s: socket(): %s\n", l->name, strerror(errno));
 			hfree(addr_s);
 			continue;
 		}
+		
+#ifdef USE_SCTP
+		if (addaddr_len) {
+			arg = 0;
+			if (setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, (char *)&arg, sizeof(arg)))
+				hlog(LOG_ERR, "Uplink %s: Failed to clear IPV6_V6ONLY on new socket: %s", l->name, strerror(errno));
+		}
+#endif
 		
 		arg = 1;
 		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)))
@@ -563,6 +600,23 @@ int make_uplink(struct uplink_config_t *l)
 				goto connerr;
 			}
 		}
+		
+#ifdef USE_SCTP
+		/* Add the bind address of the other family to the SCTP socket,
+		 * as sctp_bindx() does. It takes the port of the first one.
+		 */
+		if (addaddr_len) {
+			if (setsockopt(fd, IPPROTO_SCTP, SCTP_SOCKOPT_BINDX_ADD, (char *)addaddr, addaddr_len)) {
+				char *s = strsockaddr(addaddr, addaddr_len);
+				hlog(LOG_ERR, "Uplink %s: Failed to bind second source address '%s' for SCTP multi-homing: %s", l->name, s, strerror(errno));
+				hfree(s);
+				goto connerr;
+			}
+			char *s = strsockaddr(addaddr, addaddr_len);
+			hlog(LOG_DEBUG, "Uplink %s: SCTP multi-homing: also bound source address '%s'", l->name, s);
+			hfree(s);
+		}
+#endif
 		
 		/* set non-blocking mode at this point, so that we can make a
 		 * non-blocking connect() with a short timeout

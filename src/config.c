@@ -922,7 +922,7 @@ int do_uplinkbind(void *new, int argc, char **argv)
 			return -2;
 		}
 		
-		/* we can only take one address per peer at this point, SCTP multihoming ignored */
+		/* one address per family: an SCTP uplink is multi-homed on the IPv4 and the IPv6 one */
 		d = 0;
 		for (a = ai; (a); a = a->ai_next, ++d);
 		if (d != 1) {

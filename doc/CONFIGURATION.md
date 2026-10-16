@@ -258,6 +258,12 @@ directives, one with an IPv4 address and another with the IPv6 one.
     UplinkBind 127.0.0.1
     UplinkBind dead:beef::15:f00d
 
+An SCTP uplink with both an IPv4 and an IPv6 UplinkBind address is
+multi-homed on the two: the association has a path over each of them, and
+no other addresses of the server, whichever family the upstream server's
+address is of. See SCTP.md for the details of multi-homing. A TCP uplink
+uses the address of the family it connects with.
+
 
 ### HTTP server ###
 

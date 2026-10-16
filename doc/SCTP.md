@@ -45,9 +45,12 @@ uplink to the `UplinkBind` address if one is configured, otherwise to
 none.  An end bound to a wildcard address (`0.0.0.0` or `::0`), or to
 none, advertises all the addresses of its host when the association is
 set up, and the kernel moves the traffic to another of them if the path
-to one fails.  An end bound to a single address has only that one.  The
-kernel leaves private and link-local addresses out of an association
-with a peer on a global address (`net.sctp.addr_scope_policy`).
+to one fails.  An end bound to a single address has only that one.  An
+uplink with both an IPv4 and an IPv6 `UplinkBind` address is bound to the
+two, and advertises exactly those, whichever family the upstream server's
+address is of.  The kernel leaves private and link-local addresses out of
+an association with a peer on a global address
+(`net.sctp.addr_scope_policy`).
 Firewalls have to pass SCTP to and from each of the addresses, and
 multi-homing does not work through NAT.
 

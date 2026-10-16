@@ -390,6 +390,60 @@ func TestIS2UDPPeerHandshake(t *testing.T) {
 	s.Stop()
 }
 
+// The keepalive pings of an IS2 UDP peer link: once the link is up, the
+// server pings the peer in signed frames, starting right away, and reports
+// the round-trip time in the status of the peer. It answers the pings of
+// the peer too.
+func TestIS2UDPPeerPing(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", is2PeerKeys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
+
+	s := harness.Start(t, "is2-basic")
+
+	if err := udp.Negotiate(20 * time.Second); err != nil {
+		t.Fatalf("failed to negotiate the IS2 corepeer link: %v", err)
+	}
+
+	if _, err := udp.AwaitPing(isclient.DefaultTimeout); err != nil {
+		t.Fatalf("no ping request from the server after the upgrade: %v", err)
+	}
+
+	// the reply shows up as the round-trip time in the status of the peer
+	var peer map[string]any
+	deadline := time.Now().Add(isclient.DefaultTimeout)
+	for peer == nil && time.Now().Before(deadline) {
+		for _, p := range getStatus(t).Peers {
+			if p["username"] == "TESTIN-2" && p["rtt_avg"] != nil {
+				peer = p
+			}
+		}
+		if peer == nil {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	if peer == nil {
+		t.Fatal("the status of the peer does not report a ping rtt")
+	}
+	if peer["link"] != "is2" {
+		t.Errorf("peer status: link %v, want is2", peer["link"])
+	}
+	rttAvg, _ := peer["rtt_avg"].(float64)
+	rttMax, _ := peer["rtt_max"].(float64)
+	samples, _ := peer["rtt_samples"].(float64)
+	if rttAvg < 0 || rttMax < rttAvg || rttMax > 1000 || samples != 1 {
+		t.Errorf("peer ping rtt avg %.3f ms max %.3f ms of %v samples is not sane", rttAvg, rttMax, peer["rtt_samples"])
+	}
+
+	if err := udp.Ping(isclient.DefaultTimeout); err != nil {
+		t.Errorf("the server did not answer the ping of the peer: %v", err)
+	}
+
+	s.Stop()
+}
+
 // The forwarding of optional packet fields: RSSI and SNR. Port of
 // t/83is2-optionals.t.
 func TestIS2Optionals(t *testing.T) {

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"slices"
 	"strconv"
@@ -115,6 +116,83 @@ func (p *IS2Peer) SendFrameSigned(frame []byte, at time.Time) error {
 	}
 	_, err := p.SendDatagram(signed)
 	return err
+}
+
+// SendMessage sends a message in a signed frame.
+func (p *IS2Peer) SendMessage(m *aprsis2.IS2Message) error {
+	b, err := proto.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return p.SendFrameSigned(FrameWrap(b), time.Now())
+}
+
+// replyPing answers a keepalive ping request.
+func (p *IS2Peer) replyPing(ping *aprsis2.IS2KeepalivePing) error {
+	return p.SendMessage(&aprsis2.IS2Message{
+		Type: aprsis2.IS2Message_KEEPALIVE_PING,
+		KeepalivePing: &aprsis2.IS2KeepalivePing{
+			PingType:    aprsis2.IS2KeepalivePing_REPLY,
+			RequestId:   ping.GetRequestId(),
+			RequestData: ping.GetRequestData(),
+		},
+	})
+}
+
+// AwaitPing reads frames until a keepalive ping request from the server,
+// replies to it, and returns the frame it came in. Other frames are dropped.
+func (p *IS2Peer) AwaitPing(timeout time.Duration) (*aprsis2.IS2Message, error) {
+	end := time.Now().Add(timeout)
+
+	for {
+		m, err := p.readFrame(time.Until(end))
+		if err != nil {
+			return nil, err
+		}
+		ping := m.GetKeepalivePing()
+		if m.GetType() != aprsis2.IS2Message_KEEPALIVE_PING || ping.GetPingType() != aprsis2.IS2KeepalivePing_REQUEST {
+			continue
+		}
+		return m, p.replyPing(ping)
+	}
+}
+
+// Ping sends a keepalive ping request and waits for the reply to it,
+// answering any ping requests of the server on the way.
+func (p *IS2Peer) Ping(timeout time.Duration) error {
+	reqID := uint32(rand.Int31())
+	err := p.SendMessage(&aprsis2.IS2Message{
+		Type: aprsis2.IS2Message_KEEPALIVE_PING,
+		KeepalivePing: &aprsis2.IS2KeepalivePing{
+			PingType:  aprsis2.IS2KeepalivePing_REQUEST,
+			RequestId: reqID,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	end := time.Now().Add(timeout)
+	for {
+		m, err := p.readFrame(time.Until(end))
+		if err != nil {
+			return fmt.Errorf("no ping reply: %w", err)
+		}
+		if m.GetType() != aprsis2.IS2Message_KEEPALIVE_PING {
+			continue
+		}
+		ping := m.GetKeepalivePing()
+		if ping.GetPingType() == aprsis2.IS2KeepalivePing_REQUEST {
+			if err := p.replyPing(ping); err != nil {
+				return err
+			}
+			continue
+		}
+		if ping.GetRequestId() != reqID {
+			return fmt.Errorf("ping request id mismatch, sent %d, got %d", reqID, ping.GetRequestId())
+		}
+		return nil
+	}
 }
 
 // SendLine sends one packet in a signed frame.

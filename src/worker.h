@@ -326,6 +326,7 @@ struct client_t {
 #define IS2_PING_WINDOW 15 /* rtt samples kept for the average and max: 5 minutes at the 20 s keepalive interval */
 	unsigned int ping_request_id; /* The req id of the last outgoing IS2 ping */
 	time_t ping_timeout; /* When the last IS2 ping times out */
+	time_t ping_reply_tick; /* When the last IS2 ping reply arrived, or an UDP peer link was upgraded to IS2 */
 	float  ping_rtt[IS2_PING_WINDOW]; /* The rtt of the last IS2 pings, seconds, a ring */
 	time_t ping_rtt_tick[IS2_PING_WINDOW]; /* When each of the samples was taken, tick */
 	int    ping_rtt_n;  /* Number of samples in the ring, up to IS2_PING_WINDOW */
@@ -584,6 +585,7 @@ extern void client_udp_free(struct client_udp_t *u);
 extern struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int portnum);
 extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int af, int portnum);
 extern int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len);
+extern int udp_client_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
 
 extern void inbound_connects_account(const int add, struct portaccount_t *p);
 

@@ -38,8 +38,6 @@
 #include "random.h"
 #include "rwlock.h"
 
-#define STX 0x02
-#define ETX 0x03
 
 #define IS2_HEAD_LEN 4 /* STX + reserved 8 bits + network byte order 16 bits uint to specify body length */
 #define IS2_TAIL_LEN 1 /* ETX */
@@ -231,9 +229,14 @@ void is2_allocate_obuf(struct client_t *c)
  *	Write a message to a client, return result from c->write
  */
 
+static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+
 static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	char buf[IS2_MAXIMUM_FRAME_LEN];
+	
+	if (c->state == CSTATE_COREPEER)
+		return is2_corepeer_write_message(self, c, m);
 	
 	int len = aprsis2__is2_message__get_packed_size(m);
 	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
@@ -346,6 +349,63 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 	memcpy(&obuf[hmac_start], md, md_len);
 
 	return hmac_start + md_len;
+}
+
+/*
+ *	Write a single message, such as a ping, to an UDP peer in a frame of
+ *	its own: numbered like the packet frames, so that the peer counts
+ *	frame loss right, and signed. Returns the result of udp_client_write.
+ */
+
+static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
+{
+	char buf[IS2_MAXIMUM_FRAME_LEN + IS2_UDP_HMAC_TRAILER_LEN];
+	int len, blen, signed_len;
+	
+	/* protobuf-c does not transmit a zero, the first number is skipped */
+	m->sequence = c->corepeer_is2_sequence++;
+	
+	len = aprsis2__is2_message__get_packed_size(m);
+	blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
+	if (blen > IS2_MAXIMUM_FRAME_LEN) {
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized IS2 frame length %d too large, > %d", c->addr_rem, c->username, blen, IS2_MAXIMUM_FRAME_LEN);
+		return -1;
+	}
+	
+	is2_setup_buffer(buf, len);
+	aprsis2__is2_message__pack(m, (void *)buf + IS2_HEAD_LEN);
+	
+	signed_len = is2_corepeer_message_sign(c, buf, sizeof(buf), blen);
+	if (signed_len < IS2_MINIMUM_FRAME_LEN)
+		return -1;
+	
+	return udp_client_write(self, c, buf, signed_len);
+}
+
+/*
+ *	Fall back to the plain UDP peer protocol, when the pings of an IS2
+ *	peer link have gone unanswered for IS2_COREPEER_PING_FAIL seconds:
+ *	the peer may have been downgraded to software without IS2, as
+ *	doc/IS2PEERING.md says. Packets waiting in the IS2 output buffer
+ *	go out first. The upgrade is proposed again, with the usual backoff,
+ *	so that a peer which merely went quiet for a while comes back to IS2.
+ */
+
+void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c)
+{
+	hlog(LOG_WARNING, "%s/%s: IS2 UDP peer: no ping reply in %d seconds, falling back to the plain UDP protocol",
+		c->addr_rem, c->username, (int)(tick - c->ping_reply_tick));
+	
+	if (c->is2_obuf_packets)
+		is2_corepeer_obuf_flush(self, c);
+	
+	c->corepeer_is2 = 0;
+	c->write_packet = &udp_client_write_packet;
+	c->ping_rtt_n = 0;
+	c->ping_rtt_i = 0;
+	
+	c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
+	c->next_is2_peer_offer = tick;
 }
 
 /*
@@ -860,6 +920,8 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		struct timeval *tx_tv = (void *)ping->request_data.data;
 		diff = (tv.tv_sec - tx_tv->tv_sec) + ((tv.tv_usec - tx_tv->tv_usec) / 1000000.0);
 #endif
+		c->ping_reply_tick = tick;
+		
 		/* keep the sample in the ring of the last ones, for the average and max */
 		c->ping_rtt[c->ping_rtt_i] = diff;
 		c->ping_rtt_tick[c->ping_rtt_i] = tick;
@@ -1389,7 +1451,12 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 	}
 	
 	if (*ibuf != STX) {
-		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Frame missing STX in beginning: ",
+		/* a plain datagram: the peer may have fallen back to the plain
+		 * protocol, or restarted with software without IS2. Until the
+		 * pings fail and this side falls back too, a busy peer sends
+		 * many of these, so they are counted as rejected frames and
+		 * logged quietly. */
+		hlog_packet(LOG_DEBUG, ibuf, len, "%s/%s: IS2 UDP: Frame missing STX in beginning, plain datagram from an IS2 peer: ",
 			c->addr_rem, c->username);
 		return -1;
 	}
@@ -2053,6 +2120,13 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		c->corepeer_is2 = 1;
 		c->write_packet = is2_corepeer_write_packet;
 		c->is2_input_handler = is2_input_handler_corepeer;
+		
+		/* start pinging right away, with no round-trip times left over
+		 * from an earlier IS2 period of the link */
+		c->ping_reply_tick = tick;
+		c->ping_rtt_n = 0;
+		c->ping_rtt_i = 0;
+		c->keepalive = tick;
 
 		/* Do send offers every 10 minutes away */
 		c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;

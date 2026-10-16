@@ -44,9 +44,14 @@ upgrade method to the new protocol: if it doesn't happen, old protocol
 is used as before.
 
 Once an upgrade to the new protocol is made, a ping-pong polling
-routine is started. Should it fail for more than 5 minutes, the sender
-must revert to the old protocol, in case the peer would be downgraded
-to software which does not understand v2 binary packets.
+routine is started: the server sends an IS2 keepalive ping to the peer
+at the keepalive interval of 20 seconds, in a signed frame of its own
+which carries a sequence number like the packet frames, and the peer
+answers it the same way. The round-trip times of the last pings are
+shown in the status of the peer. Should the replies stop for more than
+5 minutes, the sender reverts to the old protocol, in case the peer
+would be downgraded to software which does not understand v2 binary
+packets, and starts proposing the upgrade again as at the beginning.
 
 The Protocol Buffers encoding is chosen due to the following features:
 * Small overhead, binary encoding

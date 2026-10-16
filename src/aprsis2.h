@@ -36,6 +36,10 @@ extern void is2_obuf_flush_pending(struct worker_t *self);
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 extern int is2_ping_rtt_stats(struct client_t *c, double *avg, double *max, time_t *period);
 
+/* the IS2 frame delimiters */
+#define STX 0x02
+#define ETX 0x03
+
 /* the in-band upgrade of plaintext client connections */
 #define IS2_UPGRADE_HELLO_PREFIX "#is2 hello"
 #define IS2_UPGRADE_HELLO_PREFIX_LEN 10
@@ -48,6 +52,7 @@ extern int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const
 #define IS2_COREPEER_CONTROL_PREFIX_LEN 10
 
 extern int is2_corepeer_propose(struct worker_t *self, struct client_t *c);
+extern void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
 
 extern int is2_corepeer_key_setup(void);

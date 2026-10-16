@@ -1294,6 +1294,15 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		return 0;
 	}
 	
+	/* An IS2 frame from a peer which is in the plain mode here: the peer
+	 * is still in IS2 mode after this side fell back, or this side has
+	 * restarted. The handshake sorts it out shortly; the frame is not a
+	 * packet and is not parsed as one. */
+	if (r > 0 && c->ibuf[0] == STX) {
+		hlog_packet(LOG_DEBUG, c->ibuf, r, "%s/%s: IS2 UDP: IS2 frame from a peer in plain mode, dropped: ", rc->addr_rem, rc->username);
+		return 0;
+	}
+	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
 	 * UDP frame.
 	 */
@@ -1769,7 +1778,7 @@ static void send_keepalives(struct worker_t *self)
 		// the  c  may get destroyed from underneath of ourselves!
 		cnext = c->next;
 
-		/* No keepalives on PEER links.. */
+		/* No keepalives on plain PEER links.. */
 		if ( c->state == CSTATE_COREPEER ) {
 #ifdef USE_IS2
 			/* min/max limits for retry timer exponential backoff */
@@ -1777,6 +1786,19 @@ static void send_keepalives(struct worker_t *self)
 				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
 			if (c->next_is2_peer_interval > COREPEER_IS2_PROPOSE_T_MAX)
 				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MAX;
+			
+			/* An IS2 peer link is pinged like the other IS2 links, and
+			 * falls back to the plain protocol when the replies stop.
+			 * The proposal below then goes out on this same pass. */
+			if (c->corepeer_is2) {
+				if (tick - c->ping_reply_tick > IS2_COREPEER_PING_FAIL) {
+					is2_corepeer_downgrade(self, c);
+				} else if (c->keepalive <= tick || c->keepalive > tick + keepalive_interval) {
+					c->keepalive = tick + keepalive_interval;
+					if (is2_out_ping(self, c) < -2)
+						continue; // destroyed
+				}
+			}
 			
 			if (!c->corepeer_is2 && is2_corepeer_enabled() && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
 				c->next_is2_peer_offer = tick + c->next_is2_peer_interval + random() % 5;

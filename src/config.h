@@ -234,6 +234,7 @@ extern socklen_t uplink_bind_v6_len;
 #define COREPEER_IS2_PROPOSE_T_MIN	10 /* minimum/starting IS2 peering proposal timer, seconds */
 #define COREPEER_IS2_PROPOSE_T_MAX	600 /* max timer interval, cap for exponential backoff */
 #define IS2_PING_TIMEOUT	20 /* seconds */
+#define IS2_COREPEER_PING_FAIL	300 /* seconds without a ping reply before an IS2 UDP peer link falls back to the plain protocol */
 
 /* http server config */
 

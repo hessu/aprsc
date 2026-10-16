@@ -254,11 +254,39 @@ func TestIS2UDPPeer(t *testing.T) {
 		})
 	}
 
-	// the status tells that both peer links are on IS2
-	links := getStatus(t).peerLinks()
-	for _, name := range []string{"TESTIN-2", "TESTIN-3"} {
-		if links[name] != "is2" {
-			t.Errorf("status of peer %s: link %q, want \"is2\" (peers: %v)", name, links[name], links)
+	// 6) a plain datagram from a peer whose link is in IS2 mode here is
+	// dropped: the peer may have fallen back to the plain protocol, or
+	// restarted with software without IS2. The helper packet after it must
+	// be the next one received.
+	if _, err := udp.SendDatagram([]byte("SRC>DST,qAR,IGATE:plain datagram on an IS2 link\r\n")); err != nil {
+		t.Fatalf("failed to send a plain datagram: %v", err)
+	}
+	const helper = "SRC>DST,qAR,IGATE:helper after the plain datagram"
+	isclient.TxRx(t, udp, client, helper, helper)
+
+	// the status tells that both peer links are on IS2, and counts the
+	// plain datagram as a rejected frame of the first peer, after the two
+	// frames with a timestamp out of the window. The counters of the
+	// workers reach the status with a delay.
+	const wantRejected = 3
+	peers := make(map[string]map[string]any)
+	deadline := time.Now().Add(isclient.DefaultTimeout)
+	for {
+		for _, p := range getStatus(t).Peers {
+			name, _ := p["username"].(string)
+			peers[name] = p
+		}
+		if rejected, _ := peers["TESTIN-2"]["is2_frames_rejected"].(float64); rejected == wantRejected || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	for name, want := range map[string]float64{"TESTIN-2": wantRejected, "TESTIN-3": 0} {
+		if peers[name]["link"] != "is2" {
+			t.Errorf("status of peer %s: link %v, want \"is2\" (peers: %v)", name, peers[name]["link"], peers)
+		}
+		if got, _ := peers[name]["is2_frames_rejected"].(float64); got != want {
+			t.Errorf("status of peer %s: is2_frames_rejected %v, want %v", name, peers[name]["is2_frames_rejected"], want)
 		}
 	}
 

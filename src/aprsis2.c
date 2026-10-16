@@ -2129,6 +2129,13 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		c->ping_rtt_n = 0;
 		c->ping_rtt_i = 0;
 		c->keepalive = tick;
+		
+		/* and track frame loss afresh: after a fallback and this
+		 * re-upgrade, the sequence numbers of the peer have moved on
+		 * past the window, and the frames of the gap were dropped on
+		 * purpose, not lost */
+		c->corepeer_is2_sequence_window_pos = 0;
+		c->corepeer_is2_sequence_window_used = 0;
 
 		/* Do send offers every 10 minutes away */
 		c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;

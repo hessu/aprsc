@@ -421,7 +421,10 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 	 * in the new one, and the dialog follows along. */
 	var select_client = function(c) {
 		$scope.sel_c = c;
-		$scope.sel_rtt = (c.rtt_samples) ? { 'samples': c.rtt_samples, 'period': dur_str(c.rtt_period) } : null;
+		/* The period of the ping samples is rounded to the nearest minute,
+		 * so that the 4m40s to 5m of a full window reads as 5m. */
+		var period = (c.rtt_period > 60) ? Math.round(c.rtt_period / 60) + 'm' : dur_str(c.rtt_period);
+		$scope.sel_rtt = (c.rtt_samples) ? { 'samples': c.rtt_samples, 'period': period } : null;
 	};
 	
 	var select_client_refresh = function(d) {

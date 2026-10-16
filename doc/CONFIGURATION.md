@@ -187,6 +187,13 @@ The basic syntax is:
     IPv4 addresses).  On Linux and Solaris, just put "::" here and it will
     handle both IPv6 and IPv4 connections with a single configuration line! 
     On FreeBSD and Windows, separate IPv4 and IPv6 listeners are needed.
+    An SCTP listener takes a comma-separated list of addresses, such as
+    "192.0.2.1,2001:db8::1", and is then multi-homed on exactly those
+    addresses (see [SCTP](SCTP.html)). This is much better than two
+    separate IPv4 and IPv6 SCTP listeners: each of those gives a client
+    an association with one path only, and no failover between the
+    addresses. The addresses of a list must be specific ones, not
+    wildcards.
     
  *  port: the local TCP or UDP port to listen on. Must be larger than 1023.
     aprsc drops root privileges quickly after startup (if it has them), and
@@ -257,6 +264,12 @@ directives, one with an IPv4 address and another with the IPv6 one.
 
     UplinkBind 127.0.0.1
     UplinkBind dead:beef::15:f00d
+
+An SCTP uplink with both an IPv4 and an IPv6 UplinkBind address is
+multi-homed on the two: the association has a path over each of them, and
+no other addresses of the server, whichever family the upstream server's
+address is of. See SCTP.md for the details of multi-homing. A TCP uplink
+uses the address of the family it connects with.
 
 
 ### HTTP server ###

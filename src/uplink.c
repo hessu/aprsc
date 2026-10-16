@@ -45,6 +45,7 @@
 #include "filter.h"
 #include "tls.h"
 #include "aprsis2.h"
+#include "sctp.h"
 
 
 int uplink_reconfiguring;
@@ -535,16 +536,6 @@ int make_uplink(struct uplink_config_t *l)
 		if (i == addrc)
 			i = 0;
 		
-		if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
-			hlog(LOG_CRIT, "Uplink %s: socket(): %s\n", l->name, strerror(errno));
-			hfree(addr_s);
-			continue;
-		}
-		
-		arg = 1;
-		if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)))
-			hlog(LOG_ERR, "Uplink %s: Failed to set SO_REUSEADDR on new socket: %s", l->name, strerror(errno));
-		
 		/* bind source address */
 		srcaddr_len = 0;
 		if (a->ai_family == AF_INET && uplink_bind_v4_len != 0) {
@@ -555,12 +546,59 @@ int make_uplink(struct uplink_config_t *l)
 			srcaddr_len = uplink_bind_v6_len;
 		}
 		
-		if (srcaddr_len) {
-			if (bind(fd, srcaddr, srcaddr_len)) {
-				char *s = strsockaddr(srcaddr, srcaddr_len);
-				hlog(LOG_ERR, "Uplink %s: Failed to bind source address '%s': %s", l->name, s, strerror(errno));
-				hfree(s);
-				goto connerr;
+		fd = -1;
+#ifdef USE_SCTP
+		if (a->ai_protocol == IPPROTO_SCTP) {
+			/* An SCTP uplink bound to both an IPv4 and an IPv6 address
+			 * is multi-homed on the two: the bind address of the other
+			 * family goes on the socket too.
+			 */
+			const struct sockaddr *addrs[2];
+			socklen_t lens[2];
+			int n = 0;
+			
+			if (srcaddr_len) {
+				addrs[n] = srcaddr;
+				lens[n++] = srcaddr_len;
+			}
+			if (uplink_bind_v4_len != 0 && uplink_bind_v6_len != 0) {
+				if (a->ai_family == AF_INET) {
+					addrs[n] = (struct sockaddr *)&uplink_bind_v6;
+					lens[n++] = uplink_bind_v6_len;
+				} else {
+					addrs[n] = (struct sockaddr *)&uplink_bind_v4;
+					lens[n++] = uplink_bind_v4_len;
+				}
+			}
+			
+			fd = sctp_socket_multihome(a->ai_family, addrs, lens, n, 0, "Uplink", l->name);
+			if (fd < 0) {
+				hfree(addr_s);
+				addr_s = NULL;
+				continue;
+			}
+		}
+#endif
+		
+		if (fd < 0) {
+			/* a TCP socket, bound to the source address of its family */
+			if ((fd = socket(a->ai_family, a->ai_socktype, a->ai_protocol)) < 0) {
+				hlog(LOG_CRIT, "Uplink %s: socket(): %s\n", l->name, strerror(errno));
+				hfree(addr_s);
+				continue;
+			}
+			
+			arg = 1;
+			if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&arg, sizeof(arg)))
+				hlog(LOG_ERR, "Uplink %s: Failed to set SO_REUSEADDR on new socket: %s", l->name, strerror(errno));
+			
+			if (srcaddr_len) {
+				if (bind(fd, srcaddr, srcaddr_len)) {
+					char *s = strsockaddr(srcaddr, srcaddr_len);
+					hlog(LOG_ERR, "Uplink %s: Failed to bind source address '%s': %s", l->name, s, strerror(errno));
+					hfree(s);
+					goto connerr;
+				}
 			}
 		}
 		

@@ -38,8 +38,6 @@
 #include "random.h"
 #include "rwlock.h"
 
-#define STX 0x02
-#define ETX 0x03
 
 #define IS2_HEAD_LEN 4 /* STX + reserved 8 bits + network byte order 16 bits uint to specify body length */
 #define IS2_TAIL_LEN 1 /* ETX */
@@ -231,9 +229,14 @@ void is2_allocate_obuf(struct client_t *c)
  *	Write a message to a client, return result from c->write
  */
 
+static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m);
+
 static int is2_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
 {
 	char buf[IS2_MAXIMUM_FRAME_LEN];
+	
+	if (c->state == CSTATE_COREPEER)
+		return is2_corepeer_write_message(self, c, m);
 	
 	int len = aprsis2__is2_message__get_packed_size(m);
 	int blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
@@ -346,6 +349,86 @@ static int is2_corepeer_message_sign(struct client_t *c, char *obuf, int obuf_si
 	memcpy(&obuf[hmac_start], md, md_len);
 
 	return hmac_start + md_len;
+}
+
+/*
+ *	Write a single message, such as a ping, to an UDP peer in a frame of
+ *	its own: numbered like the packet frames, so that the peer counts
+ *	frame loss right, and signed. Returns the result of udp_client_write.
+ */
+
+static int is2_corepeer_write_message(struct worker_t *self, struct client_t *c, Aprsis2__IS2Message *m)
+{
+	char buf[IS2_MAXIMUM_FRAME_LEN + IS2_UDP_HMAC_TRAILER_LEN];
+	int len, blen, signed_len;
+	
+	/* protobuf-c does not transmit a zero, the first number is skipped */
+	m->sequence = c->corepeer_is2_sequence++;
+	
+	len = aprsis2__is2_message__get_packed_size(m);
+	blen = len + IS2_HEAD_LEN + IS2_TAIL_LEN;
+	if (blen > IS2_MAXIMUM_FRAME_LEN) {
+		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: serialized IS2 frame length %d too large, > %d", c->addr_rem, c->username, blen, IS2_MAXIMUM_FRAME_LEN);
+		return -1;
+	}
+	
+	is2_setup_buffer(buf, len);
+	aprsis2__is2_message__pack(m, (void *)buf + IS2_HEAD_LEN);
+	
+	signed_len = is2_corepeer_message_sign(c, buf, sizeof(buf), blen);
+	if (signed_len < IS2_MINIMUM_FRAME_LEN)
+		return -1;
+	
+	return udp_client_write(self, c, buf, signed_len);
+}
+
+/*
+ *	Fall back to the plain UDP peer protocol, when the pings of an IS2
+ *	peer link have gone unanswered for IS2_COREPEER_PING_FAIL seconds:
+ *	the peer may have been downgraded to software without IS2, as
+ *	doc/IS2PEERING.md says. Packets waiting in the IS2 output buffer
+ *	go out first. The upgrade is proposed again, with the usual backoff,
+ *	so that a peer which merely went quiet for a while comes back to IS2.
+ */
+
+void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c)
+{
+	hlog(LOG_WARNING, "%s/%s: IS2 UDP peer: no ping reply in %d seconds, falling back to the plain UDP protocol",
+		c->addr_rem, c->username, (int)(tick - c->ping_reply_tick));
+	
+	if (c->is2_obuf_packets)
+		is2_corepeer_obuf_flush(self, c);
+	
+	c->corepeer_is2 = 0;
+	c->write_packet = &udp_client_write_packet;
+	c->ping_rtt_n = 0;
+	c->ping_rtt_i = 0;
+	
+	c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
+	/* due already, so that the proposal goes out on the same keepalive
+	 * pass which did the fallback: the check is a strict comparison */
+	c->next_is2_peer_offer = tick - 1;
+}
+
+/*
+ *	Start the ping tracking and the frame loss tracking of an IS2 UDP peer
+ *	link afresh when it is upgraded to IS2. No round-trip times are left
+ *	over from an earlier IS2 period of the link, and the fallback timer
+ *	starts over.
+ *
+ *	After a fallback and this re-upgrade, the sequence numbers of the peer
+ *	have moved on past the window, or started over with the peer, and the
+ *	frames of the gap were dropped on purpose, not lost.
+ */
+
+static void is2_corepeer_track_reset(struct client_t *c)
+{
+	c->ping_reply_tick = tick;
+	c->ping_rtt_n = 0;
+	c->ping_rtt_i = 0;
+	
+	c->corepeer_is2_sequence_window_pos = 0;
+	c->corepeer_is2_sequence_window_used = 0;
 }
 
 /*
@@ -735,6 +818,41 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 
 
 /*
+ *	The average and the maximum round-trip time of the last IS2 pings
+ *	of a client, in seconds, over the IS2_PING_WINDOW samples kept,
+ *	and the period the samples cover: the seconds from the oldest
+ *	sample to now. Returns the number of samples the values are from,
+ *	0 when there has been no ping reply yet.
+ */
+
+int is2_ping_rtt_stats(struct client_t *c, double *avg, double *max, time_t *period)
+{
+	double sum = 0.0;
+	double m = 0.0;
+	int i;
+	
+	for (i = 0; i < c->ping_rtt_n; i++) {
+		sum += c->ping_rtt[i];
+		if (c->ping_rtt[i] > m)
+			m = c->ping_rtt[i];
+	}
+	
+	if (c->ping_rtt_n > 0) {
+		*avg = sum / c->ping_rtt_n;
+		/* the oldest sample is the one the next one will overwrite,
+		 * once the ring is full; before that, the first one */
+		i = (c->ping_rtt_n == IS2_PING_WINDOW) ? c->ping_rtt_i : 0;
+		*period = tick - c->ping_rtt_tick[i];
+	} else {
+		*avg = 0.0;
+		*period = 0;
+	}
+	*max = m;
+	
+	return c->ping_rtt_n;
+}
+
+/*
  *	Transmit a ping
  */
 
@@ -825,13 +943,20 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		struct timeval *tx_tv = (void *)ping->request_data.data;
 		diff = (tv.tv_sec - tx_tv->tv_sec) + ((tv.tv_usec - tx_tv->tv_usec) / 1000000.0);
 #endif
-		if (c->ping_rtt_sum < -0.5) {
-			c->ping_rtt_sum = diff * IS2_PING_AVG_LEN;
-		} else {
-			c->ping_rtt_sum = c->ping_rtt_sum - c->ping_rtt_sum/IS2_PING_AVG_LEN + diff;
-		}
-		hlog(LOG_INFO, "%s/%s: IS2: Ping reply received, rtt %.1f ms avg %.1f ms",
-			c->addr_rem, c->username, diff * 1000.0, c->ping_rtt_sum*1000.0/IS2_PING_AVG_LEN);
+		c->ping_reply_tick = tick;
+		
+		/* keep the sample in the ring of the last ones, for the average and max */
+		c->ping_rtt[c->ping_rtt_i] = diff;
+		c->ping_rtt_tick[c->ping_rtt_i] = tick;
+		c->ping_rtt_i = (c->ping_rtt_i + 1) % IS2_PING_WINDOW;
+		if (c->ping_rtt_n < IS2_PING_WINDOW)
+			c->ping_rtt_n++;
+		
+		double avg, max;
+		time_t period;
+		int n = is2_ping_rtt_stats(c, &avg, &max, &period);
+		hlog(LOG_DEBUG, "%s/%s: IS2: Ping reply received, rtt %.1f ms, avg %.1f ms max %.1f ms of the last %d in %ld s",
+			c->addr_rem, c->username, diff * 1000.0, avg * 1000.0, max * 1000.0, n, (long)period);
 		
 	}
 	
@@ -1340,17 +1465,30 @@ static int is2_corepeer_signature_check(struct client_t *c, const char *ibuf, in
 	return 0;
 }
 
+/*
+ *	Deframe a datagram received on an IS2 UDP peer link. A datagram which
+ *	is not an acceptable frame is counted as a rejected frame, so that
+ *	the status shows what is going on, even when the log is quiet.
+ */
+
 int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *ibuf, int len)
 {
 	if (len < IS2_MINIMUM_FRAME_LEN) {
 		hlog_packet(LOG_DEBUG, ibuf, len, "%s/%s: IS2 UDP: Too short UDP frame (%d): ",
 			c->addr_rem, c->username, len);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
 	if (*ibuf != STX) {
-		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Frame missing STX in beginning: ",
+		/* a plain datagram: the peer may have fallen back to the plain
+		 * protocol, or restarted with software without IS2. Until the
+		 * pings fail and this side falls back too, a busy peer sends
+		 * many of these, so they are counted as rejected frames and
+		 * logged quietly. */
+		hlog_packet(LOG_DEBUG, ibuf, len, "%s/%s: IS2 UDP: Frame missing STX in beginning, plain datagram from an IS2 peer: ",
 			c->addr_rem, c->username);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
@@ -1360,17 +1498,20 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 	if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Too short frame content (%d): ",
 			c->addr_rem, c->username, clen);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
 	if (IS2_HEAD_LEN + clen + IS2_TAIL_LEN > len) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Frame length points behind buffer end (%d+%d buflen %d): ", c->addr_rem, c->username, clen, IS2_HEAD_LEN + IS2_TAIL_LEN, len);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 	
 	if (ibuf[IS2_HEAD_LEN + clen] != ETX) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2: Frame missing terminating ETX: ",
 			c->addr_rem, c->username);
+		is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 		return -1;
 	}
 
@@ -1384,14 +1525,24 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 }
 
 /*
+ *	Count an IS2 frame which arrived on a UDP peer link in the plain mode,
+ *	and was dropped, as a rejected frame.
+ */
+
+void is2_corepeer_plain_frame_rejected(struct client_t *c)
+{
+	is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
+}
+
+/*
  *	Prepare a pbuf to have an IS2 formatted packet, when handling an incoming packet
  */
 
 void is2_pbuf_copy_additional(Aprsis2__ISPacket *dest, Aprsis2__ISPacket *src)
 {
-	if (src->optional_rx_rssi_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI) {
-		dest->optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
-		dest->rx_rssi = src->rx_rssi;
+	if (src->optional_rx_rssi_dbm_case == APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM) {
+		dest->optional_rx_rssi_dbm_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM;
+		dest->rx_rssi_dbm = src->rx_rssi_dbm;
 	}
 	if (src->optional_rx_snr_db_case == APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB) {
 		dest->optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
@@ -1651,8 +1802,8 @@ int is2_wire_selfcheck(void)
 	p.type = APRSIS2__ISPACKET__TYPE__IS_PACKET_DUPLICATE;
 	p.is_packet_data.data = (uint8_t *)"N0CALL>APRS,qAR,TEST:>IS2 wire format self-check";
 	p.is_packet_data.len = strlen((char *)p.is_packet_data.data);
-	p.optional_rx_rssi_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_RX_RSSI;
-	p.rx_rssi = -101.5;
+	p.optional_rx_rssi_dbm_case = APRSIS2__ISPACKET__OPTIONAL_RX_RSSI_DBM_RX_RSSI_DBM;
+	p.rx_rssi_dbm = -101.5;
 	p.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
 	p.rx_snr_db = 7.25;
 
@@ -1984,6 +2135,16 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		if (!c->corepeer_is2) {
 			// If we're not yet in IS2 mode ourself, offer again soon
 			c->next_is2_peer_offer = tick + 1;
+		} else {
+			/* The peer restarted, or fell back and comes back, or
+			 * proposes again on a working link, as it does every
+			 * ten minutes. The signed proposal is a sign of life:
+			 * start the fallback timer over, so that it does not
+			 * count from before an outage of the peer and fire
+			 * right after it has recovered. The round-trip times
+			 * and the frame loss window are kept: on a working
+			 * link they would be lost on every proposal. */
+			c->ping_reply_tick = tick;
 		}
 
 		return is2_corepeer_control_out(self, c, "ok", v, v, ctl.token, ctl.token_len);
@@ -2013,6 +2174,9 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 		c->corepeer_is2 = 1;
 		c->write_packet = is2_corepeer_write_packet;
 		c->is2_input_handler = is2_input_handler_corepeer;
+		is2_corepeer_track_reset(c);
+		/* and start pinging right away */
+		c->keepalive = tick;
 
 		/* Do send offers every 10 minutes away */
 		c->next_is2_peer_offer = tick + COREPEER_IS2_PROPOSE_T_MAX + random() % 5;

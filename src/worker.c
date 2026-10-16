@@ -389,7 +389,6 @@ struct client_t *client_alloc(void)
 	c->obuf_wtime = tick;
 	
 	c->cleanup   = tick + 120;
-	c->ping_rtt_sum = -1.0;
 
 	return c;
 }
@@ -1295,6 +1294,18 @@ static int handle_corepeer_readable(struct worker_t *self, struct client_t *c)
 		return 0;
 	}
 	
+	/* An IS2 frame from a peer which is in the plain mode here: the peer
+	 * is still in IS2 mode after this side fell back, or this side has
+	 * restarted. The handshake sorts it out shortly; the frame is not a
+	 * packet and is not parsed as one, but counted as a rejected frame. */
+	if (r > 0 && c->ibuf[0] == STX) {
+		hlog_packet(LOG_DEBUG, c->ibuf, r, "%s/%s: IS2 UDP: IS2 frame from a peer in plain mode, dropped: ", rc->addr_rem, rc->username);
+#ifdef USE_IS2
+		is2_corepeer_plain_frame_rejected(rc);
+#endif
+		return 0;
+	}
+	
 	/* Ignore CRs and LFs in UDP input packet - the current core peer system puts 1 APRS packet in each
 	 * UDP frame.
 	 */
@@ -1770,7 +1781,7 @@ static void send_keepalives(struct worker_t *self)
 		// the  c  may get destroyed from underneath of ourselves!
 		cnext = c->next;
 
-		/* No keepalives on PEER links.. */
+		/* No keepalives on plain PEER links.. */
 		if ( c->state == CSTATE_COREPEER ) {
 #ifdef USE_IS2
 			/* min/max limits for retry timer exponential backoff */
@@ -1778,6 +1789,19 @@ static void send_keepalives(struct worker_t *self)
 				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MIN;
 			if (c->next_is2_peer_interval > COREPEER_IS2_PROPOSE_T_MAX)
 				c->next_is2_peer_interval = COREPEER_IS2_PROPOSE_T_MAX;
+			
+			/* An IS2 peer link is pinged like the other IS2 links, and
+			 * falls back to the plain protocol when the replies stop.
+			 * The proposal below then goes out on this same pass. */
+			if (c->corepeer_is2) {
+				if (tick - c->ping_reply_tick > IS2_COREPEER_PING_FAIL) {
+					is2_corepeer_downgrade(self, c);
+				} else if (c->keepalive <= tick || c->keepalive > tick + keepalive_interval) {
+					c->keepalive = tick + keepalive_interval;
+					if (is2_out_ping(self, c) < -2)
+						continue; // destroyed
+				}
+			}
 			
 			if (!c->corepeer_is2 && is2_corepeer_enabled() && (c->next_is2_peer_offer < tick || c->next_is2_peer_offer > tick + COREPEER_IS2_PROPOSE_T_MAX*2)) {
 				c->next_is2_peer_offer = tick + c->next_is2_peer_interval + random() % 5;
@@ -2385,6 +2409,16 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 		cJSON_AddNumberToObject(jc, "is2_frames_rx", c->localaccount.is2_rx_frames);
 		cJSON_AddNumberToObject(jc, "is2_frames_lost", c->localaccount.is2_lost_frames);
 		cJSON_AddNumberToObject(jc, "is2_frames_rejected", c->localaccount.is2_rejected_frames);
+		
+		double rtt_avg, rtt_max;
+		time_t rtt_period;
+		int rtt_samples = is2_ping_rtt_stats(c, &rtt_avg, &rtt_max, &rtt_period);
+		if (rtt_samples > 0) {
+			cJSON_AddNumberToObject(jc, "rtt_avg", rtt_avg * 1000.0);
+			cJSON_AddNumberToObject(jc, "rtt_max", rtt_max * 1000.0);
+			cJSON_AddNumberToObject(jc, "rtt_samples", rtt_samples);
+			cJSON_AddNumberToObject(jc, "rtt_period", rtt_period);
+		}
 	}
 
 #ifdef USE_SSL

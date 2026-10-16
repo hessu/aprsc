@@ -254,11 +254,39 @@ func TestIS2UDPPeer(t *testing.T) {
 		})
 	}
 
-	// the status tells that both peer links are on IS2
-	links := getStatus(t).peerLinks()
-	for _, name := range []string{"TESTIN-2", "TESTIN-3"} {
-		if links[name] != "is2" {
-			t.Errorf("status of peer %s: link %q, want \"is2\" (peers: %v)", name, links[name], links)
+	// 6) a plain datagram from a peer whose link is in IS2 mode here is
+	// dropped: the peer may have fallen back to the plain protocol, or
+	// restarted with software without IS2. The helper packet after it must
+	// be the next one received.
+	if _, err := udp.SendDatagram([]byte("SRC>DST,qAR,IGATE:plain datagram on an IS2 link\r\n")); err != nil {
+		t.Fatalf("failed to send a plain datagram: %v", err)
+	}
+	const helper = "SRC>DST,qAR,IGATE:helper after the plain datagram"
+	isclient.TxRx(t, udp, client, helper, helper)
+
+	// the status tells that both peer links are on IS2, and counts the
+	// plain datagram as a rejected frame of the first peer, after the two
+	// frames with a timestamp out of the window. The counters of the
+	// workers reach the status with a delay.
+	const wantRejected = 3
+	peers := make(map[string]map[string]any)
+	deadline := time.Now().Add(isclient.DefaultTimeout)
+	for {
+		for _, p := range getStatus(t).Peers {
+			name, _ := p["username"].(string)
+			peers[name] = p
+		}
+		if rejected, _ := peers["TESTIN-2"]["is2_frames_rejected"].(float64); rejected == wantRejected || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	for name, want := range map[string]float64{"TESTIN-2": wantRejected, "TESTIN-3": 0} {
+		if peers[name]["link"] != "is2" {
+			t.Errorf("status of peer %s: link %v, want \"is2\" (peers: %v)", name, peers[name]["link"], peers)
+		}
+		if got, _ := peers[name]["is2_frames_rejected"].(float64); got != want {
+			t.Errorf("status of peer %s: is2_frames_rejected %v, want %v", name, peers[name]["is2_frames_rejected"], want)
 		}
 	}
 
@@ -390,6 +418,60 @@ func TestIS2UDPPeerHandshake(t *testing.T) {
 	s.Stop()
 }
 
+// The keepalive pings of an IS2 UDP peer link: once the link is up, the
+// server pings the peer in signed frames, starting right away, and reports
+// the round-trip time in the status of the peer. It answers the pings of
+// the peer too.
+func TestIS2UDPPeerPing(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", is2PeerKeys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
+
+	s := harness.Start(t, "is2-basic")
+
+	if err := udp.Negotiate(20 * time.Second); err != nil {
+		t.Fatalf("failed to negotiate the IS2 corepeer link: %v", err)
+	}
+
+	if _, err := udp.AwaitPing(isclient.DefaultTimeout); err != nil {
+		t.Fatalf("no ping request from the server after the upgrade: %v", err)
+	}
+
+	// the reply shows up as the round-trip time in the status of the peer
+	var peer map[string]any
+	deadline := time.Now().Add(isclient.DefaultTimeout)
+	for peer == nil && time.Now().Before(deadline) {
+		for _, p := range getStatus(t).Peers {
+			if p["username"] == "TESTIN-2" && p["rtt_avg"] != nil {
+				peer = p
+			}
+		}
+		if peer == nil {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	if peer == nil {
+		t.Fatal("the status of the peer does not report a ping rtt")
+	}
+	if peer["link"] != "is2" {
+		t.Errorf("peer status: link %v, want is2", peer["link"])
+	}
+	rttAvg, _ := peer["rtt_avg"].(float64)
+	rttMax, _ := peer["rtt_max"].(float64)
+	samples, _ := peer["rtt_samples"].(float64)
+	if rttAvg < 0 || rttMax < rttAvg || rttMax > 1000 || samples != 1 {
+		t.Errorf("peer ping rtt avg %.3f ms max %.3f ms of %v samples is not sane", rttAvg, rttMax, peer["rtt_samples"])
+	}
+
+	if err := udp.Ping(isclient.DefaultTimeout); err != nil {
+		t.Errorf("the server did not answer the ping of the peer: %v", err)
+	}
+
+	s.Stop()
+}
+
 // The forwarding of optional packet fields: RSSI and SNR. Port of
 // t/83is2-optionals.t.
 func TestIS2Optionals(t *testing.T) {
@@ -419,7 +501,7 @@ func TestIS2Optionals(t *testing.T) {
 
 	// a position packet on the plain IS connection, with metadata
 	t.Run("plain with RSSI and SNR", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=42 rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 2")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 2", isclient.Meta{RSSI: &rssi, SNR: &snr}))
@@ -436,13 +518,13 @@ func TestIS2Optionals(t *testing.T) {
 	// A value which is not a number is ignored, with its key, and so is
 	// one with anything after the number; the other key still applies.
 	t.Run("plain with an unparsable RSSI", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=strong rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=strong rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 4")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 4", isclient.Meta{SNR: &snr}))
 	})
 	t.Run("plain with trailing garbage in the SNR", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=42 rx_snr_db=12dB")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=42 rx_snr_db=12dB")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 5")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 5", isclient.Meta{RSSI: &rssi}))
@@ -482,7 +564,7 @@ func TestIS2Optionals(t *testing.T) {
 
 	// a value beyond the range of a float is ignored, not stored as infinity
 	t.Run("plain with an RSSI beyond the float range", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_rssi=1e40 rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_rssi_dbm=1e40 rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 9")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 9", isclient.Meta{SNR: &snr}))

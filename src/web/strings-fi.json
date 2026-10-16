@@ -129,5 +129,15 @@
 	
 	"CERT_DIALOG_TITLE": "{{ username }} autentikoitui sertifikaattia käyttäen.",
 	"CERT_SUBJECT": "Sertifikaatin haltija:",
-	"CERT_ISSUER": "Sertifikaatin myöntäjä:"
+	"CERT_ISSUER": "Sertifikaatin myöntäjä:",
+	
+	"TIMING_DIALOG_TITLE": "{{ username }} yhteyden ajoitus",
+	"TIMING_CONNECTED": "Yhdistetty:",
+	"TIMING_UP": "Yhteys ollut auki:",
+	"TIMING_LAST_IN": "Viimeisin vastaanotto:",
+	"TIMING_AGO": "sitten",
+	"TIMING_RTT": "IS2-pingin RTT:",
+	"TIMING_RTT_AVG": "ms keskimäärin",
+	"TIMING_RTT_MAX": "ms enimmillään",
+	"TIMING_RTT_WINDOW": "{{ samples }} pingiä viimeisen {{ period }} aikana"
 }

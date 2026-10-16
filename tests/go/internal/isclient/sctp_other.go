@@ -4,6 +4,7 @@ package isclient
 
 import (
 	"net"
+	"testing"
 	"time"
 )
 
@@ -41,4 +42,24 @@ func (c *SCTPMsgConn) SetAckDelay(d time.Duration) error {
 // Linux.
 func (c *SCTPMsgConn) ReadMsg(timeout time.Duration) ([]byte, bool, error) {
 	return nil, false, ErrNoSCTP
+}
+
+// ListenFakeUpstreamSCTP is ListenFakeUpstream over SCTP. The SCTP listener
+// is only implemented on Linux.
+func ListenFakeUpstreamSCTP(t *testing.T, addr, call string) *FakeUpstream {
+	t.Helper()
+	t.Fatalf("no SCTP listener: %v", ErrNoSCTP)
+	return nil
+}
+
+// PeerAddrs lists the addresses of the peer of an SCTP connection. The SCTP
+// listener is only implemented on Linux.
+func (p *Peer) PeerAddrs() ([]string, error) {
+	return nil, ErrNoSCTP
+}
+
+// SCTPPeerAddrs lists the addresses of the peer of an SCTP connection. The
+// SCTP client is only implemented on Linux.
+func SCTPPeerAddrs(c net.Conn) ([]string, error) {
+	return nil, ErrNoSCTP
 }

@@ -29,7 +29,7 @@ The keys are named after the fields of the IS2 `ISPacket` message in
 `src/aprsis2.proto`, which defines what they mean and their units.  The
 ones a plaintext client can set:
 
-* `rx_rssi`: the received signal strength indication of the packet at
+* `rx_rssi_dbm`: the received signal strength indication of the packet at
   the receiver, in dBm.  This is what LoRa radios report for a packet,
   and what LoRa APRS firmware logs: a negative number, the closer to
   zero the stronger, from around -30 for a nearby station down to -130
@@ -50,7 +50,7 @@ ones a plaintext client can set:
 
 Keys the server does not know are ignored, so a client may send more
 than a given server understands.  A value the server cannot use is
-ignored together with its key: an empty one, as in `rx_rssi=`, one
+ignored together with its key: an empty one, as in `rx_rssi_dbm=`, one
 which is not a number as a whole, such as `rx_snr_db=8dB`, or one out
 of range, such as a bit rate of zero, a frequency of zero or below, or
 a modem number which is not one of the defined types.  The other pairs
@@ -60,7 +60,7 @@ An example of a session, from the client's point of view, which logs in
 and sends one packet with all the values:
 
     user N0CALL-10 pass 12345 vers myigate 1.0
-    #is2-meta rx_rssi=-97.5 rx_snr_db=8.2 rx_modem=2 rx_bitrate=300 rx_frequency=433775000
+    #is2-meta rx_rssi_dbm=-97.5 rx_snr_db=8.2 rx_modem=2 rx_bitrate=300 rx_frequency=433775000
     OH7LZB-9>APRS,WIDE1-1,qAR,N0CALL-10:!6028.51N/02505.68E>test
 
 Any of the keys may be left out, when the receiver does not know the

@@ -129,5 +129,15 @@
 	
 	"CERT_DIALOG_TITLE": "{{ username }} 使用证书进行了身份验证。",
 	"CERT_SUBJECT": "证书主题：",
-	"CERT_ISSUER": "证书颁发者："
+	"CERT_ISSUER": "证书颁发者：",
+	
+	"TIMING_DIALOG_TITLE": "{{ username }} 连接时间信息",
+	"TIMING_CONNECTED": "连接时间：",
+	"TIMING_UP": "已连接：",
+	"TIMING_LAST_IN": "最后一次收到数据：",
+	"TIMING_AGO": "前",
+	"TIMING_RTT": "IS2 ping 往返时延：",
+	"TIMING_RTT_AVG": "ms 平均",
+	"TIMING_RTT_MAX": "ms 最大",
+	"TIMING_RTT_WINDOW": "最近 {{ period }} 内的 {{ samples }} 次 ping"
 }

@@ -1,0 +1,33 @@
+
+# SCTP uplink multi-homed on an IPv4 and an IPv6 source address
+
+ServerId   TESTING
+PassCode   31421
+MyEmail    email@example.com
+MyAdmin    "Admin, N0CALL"
+
+### Directories #########
+# Data directory (for database files)
+RunDir data
+
+### Intervals #########
+# When no data is received from an upstream server in N seconds, switch to
+# another server
+UpstreamTimeout		90s
+
+# When no data is received from a downstream server in N seconds, disconnect
+ClientTimeout		48h
+
+### TCP listener ##########
+Listen "Full feed"       fullfeed    tcp 0.0.0.0  55152   acl "cfg-aprsc/acl-all.acl"
+
+### SCTP uplink, bound to both loopback addresses
+Uplink fullsctp full sctp 127.0.0.1 54153
+
+UplinkBind 127.0.0.1
+UplinkBind ::1
+
+### Internals ############
+WorkerThreads 3
+FileLimit        10000
+

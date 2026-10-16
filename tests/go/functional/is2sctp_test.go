@@ -274,6 +274,28 @@ func TestIS2SCTPUplink(t *testing.T) {
 		t.Errorf("uplink status: link %v proto %v, want is2 sctp", uplink["link"], uplink["proto"])
 	}
 
+	// the leaf pings the hub as soon as the uplink is up, and the status
+	// reports the round-trip time of the last pings
+	deadline = time.Now().Add(5 * time.Second)
+	for uplink["rtt_avg"] == nil && time.Now().Before(deadline) {
+		time.Sleep(200 * time.Millisecond)
+		if u := leafUplink(httpClient, statusURL); u != nil {
+			uplink = u
+		}
+	}
+	rttAvg, okAvg := uplink["rtt_avg"].(float64)
+	rttMax, okMax := uplink["rtt_max"].(float64)
+	if !okAvg || !okMax {
+		t.Errorf("uplink status has no ping rtt: rtt_avg %v rtt_max %v", uplink["rtt_avg"], uplink["rtt_max"])
+	} else if rttAvg < 0 || rttMax < rttAvg || rttMax > 1000 {
+		t.Errorf("uplink ping rtt avg %.3f ms max %.3f ms is not sane", rttAvg, rttMax)
+	}
+	samples, _ := uplink["rtt_samples"].(float64)
+	period, okPeriod := uplink["rtt_period"].(float64)
+	if samples < 1 || samples > 15 || !okPeriod || period < 0 || period > 60 {
+		t.Errorf("uplink ping rtt window: %v samples over %v s, want 1-15 samples within a minute", uplink["rtt_samples"], uplink["rtt_period"])
+	}
+
 	hubFull := isclient.Connect(t, harness.Addr(t, 55152), "N1HUB")
 	hubIgate := isclient.Connect(t, harness.Addr(t, 55580), "N2HUB", isclient.WithSCTP())
 	leafFull := isclient.Connect(t, harness.Addr(t, 55153), "N1LEAF")

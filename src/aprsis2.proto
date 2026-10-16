@@ -144,10 +144,10 @@ message ISPacket {
 
 	// RSSI in dBm and SNR in dB of the packet at the receiver, as LoRa
 	// radios report them.
-	// When building with protobuf 3.15+, the "optional float rx_rssi"
+	// When building with protobuf 3.15+, the "optional float rx_rssi_dbm"
 	// syntax can be used again, it is compatible with this definition.
-	oneof optional_rx_rssi {
-		float rx_rssi = 21;
+	oneof optional_rx_rssi_dbm {
+		float rx_rssi_dbm = 21;
 	}
 	oneof optional_rx_snr_db {
 		float rx_snr_db = 22;

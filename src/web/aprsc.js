@@ -351,7 +351,17 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			
 			CERT_DIALOG_TITLE: '{{ username }} authenticated using a certificate.',
 			CERT_SUBJECT: 'Certificate subject:',
-			CERT_ISSUER: 'Certificate issuer:'
+			CERT_ISSUER: 'Certificate issuer:',
+			
+			TIMING_DIALOG_TITLE: '{{ username }} connection timing',
+			TIMING_CONNECTED: 'Connected:',
+			TIMING_UP: 'Up for:',
+			TIMING_LAST_IN: 'Last input received:',
+			TIMING_AGO: 'ago',
+			TIMING_RTT: 'IS2 ping round-trip time:',
+			TIMING_RTT_AVG: 'ms average',
+			TIMING_RTT_MAX: 'ms maximum',
+			TIMING_RTT_WINDOW: '{{ samples }} pings over the last {{ period }}'
 			
 		});
 		
@@ -406,13 +416,45 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 		return '';
 	};
 	
-	$scope.pkts_rx_dialog = function (c) {
+	/* The client a dialog shows. The status is replaced on every
+	 * refresh, so the selection is looked up again by id and username
+	 * in the new one, and the dialog follows along. */
+	var select_client = function(c) {
 		$scope.sel_c = c;
+		/* The period of the ping samples is rounded to the nearest minute,
+		 * so that the 4m40s to 5m of a full window reads as 5m. */
+		var period = (c.rtt_period > 60) ? Math.round(c.rtt_period / 60) + 'm' : dur_str(c.rtt_period);
+		$scope.sel_rtt = (c.rtt_samples) ? { 'samples': c.rtt_samples, 'period': period } : null;
+	};
+	
+	var select_client_refresh = function(d) {
+		var old = $scope.sel_c;
+		if (!old)
+			return;
+		var lists = [ d.clients, d.uplinks, d.peers ];
+		for (var l in lists) {
+			for (var i in lists[l]) {
+				var c = lists[l][i];
+				if (c.id == old.id && c.username == old.username) {
+					select_client(c);
+					return;
+				}
+			}
+		}
+	};
+	
+	$scope.pkts_rx_dialog = function (c) {
+		select_client(c);
 		ngDialog.open({ template: 'pkts_rx_dialog', className: 'ngdialog-theme-plain', scope: $scope });
 	};
 	
+	$scope.timing_dialog = function (c) {
+		select_client(c);
+		ngDialog.open({ template: 'timing_dialog', className: 'ngdialog-theme-plain', scope: $scope });
+	};
+	
 	$scope.client_cert_dialog = function (c) {
-		$scope.sel_c = c;
+		select_client(c);
 		ngDialog.open({ template: 'client_cert_dialog', className: 'ngdialog-theme-plain', scope: $scope });
 	};
 	
@@ -517,6 +559,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 			
 			$scope.status_prev = $scope.status;
 			$scope.status = d;
+			select_client_refresh(d);
 			$scope.uierror = null;
 			
 			if (d['status_options'] != options_s) {

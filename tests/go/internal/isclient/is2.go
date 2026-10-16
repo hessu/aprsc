@@ -666,7 +666,7 @@ func NewISPacket(data string, m Meta) *aprsis2.ISPacket {
 		RxModem:      m.Modem,
 	}
 	if m.RSSI != nil {
-		p.OptionalRxRssi = &aprsis2.ISPacket_RxRssi{RxRssi: *m.RSSI}
+		p.OptionalRxRssiDbm = &aprsis2.ISPacket_RxRssiDbm{RxRssiDbm: *m.RSSI}
 	}
 	if m.SNR != nil {
 		p.OptionalRxSnrDb = &aprsis2.ISPacket_RxSnrDb{RxSnrDb: *m.SNR}
@@ -683,8 +683,8 @@ func NewISPacket(data string, m Meta) *aprsis2.ISPacket {
 // MetaOf returns the metadata of an ISPacket.
 func MetaOf(p *aprsis2.ISPacket) Meta {
 	m := Meta{Modem: p.GetRxModem()}
-	if v, ok := p.GetOptionalRxRssi().(*aprsis2.ISPacket_RxRssi); ok {
-		m.RSSI = &v.RxRssi
+	if v, ok := p.GetOptionalRxRssiDbm().(*aprsis2.ISPacket_RxRssiDbm); ok {
+		m.RSSI = &v.RxRssiDbm
 	}
 	if v, ok := p.GetOptionalRxSnrDb().(*aprsis2.ISPacket_RxSnrDb); ok {
 		m.SNR = &v.RxSnrDb

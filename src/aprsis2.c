@@ -735,6 +735,41 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 
 
 /*
+ *	The average and the maximum round-trip time of the last IS2 pings
+ *	of a client, in seconds, over the IS2_PING_WINDOW samples kept,
+ *	and the period the samples cover: the seconds from the oldest
+ *	sample to now. Returns the number of samples the values are from,
+ *	0 when there has been no ping reply yet.
+ */
+
+int is2_ping_rtt_stats(struct client_t *c, double *avg, double *max, time_t *period)
+{
+	double sum = 0.0;
+	double m = 0.0;
+	int i;
+	
+	for (i = 0; i < c->ping_rtt_n; i++) {
+		sum += c->ping_rtt[i];
+		if (c->ping_rtt[i] > m)
+			m = c->ping_rtt[i];
+	}
+	
+	if (c->ping_rtt_n > 0) {
+		*avg = sum / c->ping_rtt_n;
+		/* the oldest sample is the one the next one will overwrite,
+		 * once the ring is full; before that, the first one */
+		i = (c->ping_rtt_n == IS2_PING_WINDOW) ? c->ping_rtt_i : 0;
+		*period = tick - c->ping_rtt_tick[i];
+	} else {
+		*avg = 0.0;
+		*period = 0;
+	}
+	*max = m;
+	
+	return c->ping_rtt_n;
+}
+
+/*
  *	Transmit a ping
  */
 
@@ -825,13 +860,18 @@ static int is2_in_ping(struct worker_t *self, struct client_t *c, Aprsis2__IS2Me
 		struct timeval *tx_tv = (void *)ping->request_data.data;
 		diff = (tv.tv_sec - tx_tv->tv_sec) + ((tv.tv_usec - tx_tv->tv_usec) / 1000000.0);
 #endif
-		if (c->ping_rtt_sum < -0.5) {
-			c->ping_rtt_sum = diff * IS2_PING_AVG_LEN;
-		} else {
-			c->ping_rtt_sum = c->ping_rtt_sum - c->ping_rtt_sum/IS2_PING_AVG_LEN + diff;
-		}
-		hlog(LOG_DEBUG, "%s/%s: IS2: Ping reply received, rtt %.1f ms avg %.1f ms",
-			c->addr_rem, c->username, diff * 1000.0, c->ping_rtt_sum*1000.0/IS2_PING_AVG_LEN);
+		/* keep the sample in the ring of the last ones, for the average and max */
+		c->ping_rtt[c->ping_rtt_i] = diff;
+		c->ping_rtt_tick[c->ping_rtt_i] = tick;
+		c->ping_rtt_i = (c->ping_rtt_i + 1) % IS2_PING_WINDOW;
+		if (c->ping_rtt_n < IS2_PING_WINDOW)
+			c->ping_rtt_n++;
+		
+		double avg, max;
+		time_t period;
+		int n = is2_ping_rtt_stats(c, &avg, &max, &period);
+		hlog(LOG_DEBUG, "%s/%s: IS2: Ping reply received, rtt %.1f ms, avg %.1f ms max %.1f ms of the last %d in %ld s",
+			c->addr_rem, c->username, diff * 1000.0, avg * 1000.0, max * 1000.0, n, (long)period);
 		
 	}
 	

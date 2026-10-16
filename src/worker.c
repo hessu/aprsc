@@ -389,7 +389,6 @@ struct client_t *client_alloc(void)
 	c->obuf_wtime = tick;
 	
 	c->cleanup   = tick + 120;
-	c->ping_rtt_sum = -1.0;
 
 	return c;
 }
@@ -2385,6 +2384,16 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 		cJSON_AddNumberToObject(jc, "is2_frames_rx", c->localaccount.is2_rx_frames);
 		cJSON_AddNumberToObject(jc, "is2_frames_lost", c->localaccount.is2_lost_frames);
 		cJSON_AddNumberToObject(jc, "is2_frames_rejected", c->localaccount.is2_rejected_frames);
+		
+		double rtt_avg, rtt_max;
+		time_t rtt_period;
+		int rtt_samples = is2_ping_rtt_stats(c, &rtt_avg, &rtt_max, &rtt_period);
+		if (rtt_samples > 0) {
+			cJSON_AddNumberToObject(jc, "rtt_avg", rtt_avg * 1000.0);
+			cJSON_AddNumberToObject(jc, "rtt_max", rtt_max * 1000.0);
+			cJSON_AddNumberToObject(jc, "rtt_samples", rtt_samples);
+			cJSON_AddNumberToObject(jc, "rtt_period", rtt_period);
+		}
 	}
 
 #ifdef USE_SSL

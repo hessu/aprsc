@@ -34,6 +34,7 @@ extern int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c);
 extern void is2_obuf_flush_pending(struct worker_t *self);
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
+extern int is2_ping_rtt_stats(struct client_t *c, double *avg, double *max, time_t *period);
 
 /* the in-band upgrade of plaintext client connections */
 #define IS2_UPGRADE_HELLO_PREFIX "#is2 hello"

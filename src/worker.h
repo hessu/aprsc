@@ -323,9 +323,13 @@ struct client_t {
 	time_t next_is2_peer_offer;
 	time_t next_is2_peer_interval;
 	
+#define IS2_PING_WINDOW 15 /* rtt samples kept for the average and max: 5 minutes at the 20 s keepalive interval */
 	unsigned int ping_request_id; /* The req id of the last outgoing IS2 ping */
 	time_t ping_timeout; /* When the last IS2 ping times out */
-	double ping_rtt_sum; /* Weighted rtt average sum, seconds */
+	float  ping_rtt[IS2_PING_WINDOW]; /* The rtt of the last IS2 pings, seconds, a ring */
+	time_t ping_rtt_tick[IS2_PING_WINDOW]; /* When each of the samples was taken, tick */
+	int    ping_rtt_n;  /* Number of samples in the ring, up to IS2_PING_WINDOW */
+	int    ping_rtt_i;  /* The slot of the ring the next sample goes to */
 	
 	struct xpoll_fd_t *xfd; /* poll()/select() structure as defined in xpoll.h */
 	

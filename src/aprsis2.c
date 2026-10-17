@@ -289,6 +289,7 @@ static rwlock_t is2_corepeer_keys_lock = RWL_INITIALIZER;
 
 #ifdef HAVE_OPENSSL_3
 static EVP_MAC *is2_corepeer_mac; /* the HMAC implementation, fetched once */
+static int is2_corepeer_mac_reinit; /* a keyed context can be re-initialised in place: found out at start-up */
 #endif
 
 struct is2_hmac_cache_t {
@@ -340,6 +341,47 @@ static void *is2_corepeer_hmac_ctx_new(struct is2_corepeer_key_t *k)
 	return ctx;
 #endif
 }
+
+#ifdef HAVE_OPENSSL_3
+/*
+ *	Find out whether a keyed EVP_MAC context can be re-initialised in place
+ *	with EVP_MAC_init(ctx, NULL, 0, NULL), to take the next frame without
+ *	a copy. The OpenSSL 3.0 releases before 3.0.3 do not reset the HMAC
+ *	state then, and the second MAC comes out wrong. Test case 2 of RFC 4231
+ *	is computed twice on one context. Called once, with the MAC fetched.
+ */
+
+static int is2_corepeer_hmac_reinit_works(void)
+{
+	static const unsigned char expect[32] = {
+		0x5b, 0xdc, 0xc1, 0x46, 0xbf, 0x60, 0x75, 0x4e, 0x6a, 0x04, 0x24, 0x26, 0x08, 0x95, 0x75, 0xc7,
+		0x5a, 0x00, 0x3f, 0x08, 0x9d, 0x27, 0x39, 0x83, 0x9d, 0xec, 0x58, 0xb9, 0x64, 0xec, 0x38, 0x43
+	};
+	static const char data[] = "what do ya want for nothing?";
+	struct is2_corepeer_key_t k = { (unsigned char *)"Jefe", 4 };
+	unsigned char md[32];
+	size_t outl;
+	EVP_MAC_CTX *ctx;
+	int i, ok = 1;
+
+	ctx = is2_corepeer_hmac_ctx_new(&k);
+	if (!ctx)
+		return 0;
+
+	for (i = 0; i < 2 && ok; i++) {
+		outl = 0;
+		ok = EVP_MAC_init(ctx, NULL, 0, NULL)
+			&& EVP_MAC_update(ctx, (const unsigned char *)data, sizeof(data) - 1)
+			&& EVP_MAC_final(ctx, md, &outl, sizeof(md))
+			&& outl == sizeof(md)
+			&& memcmp(md, expect, sizeof(md)) == 0;
+	}
+
+	EVP_MAC_CTX_free(ctx);
+
+	return ok;
+}
+#endif
 
 /*
  *	Bring the HMAC contexts of a worker up to date with the key table.
@@ -420,17 +462,25 @@ static int is2_corepeer_hmac(struct worker_t *self, unsigned int key_id, const c
 		r = (is2_corepeer_keys[key_id]) ? IS2_HMAC_FAILED : IS2_HMAC_NO_KEY;
 	} else {
 #ifdef HAVE_OPENSSL_3
-		/* a copy of the keyed context takes the data: the key schedule
-		 * is copied, not computed again */
+		/* the keyed context is re-initialised with the key it has, or
+		 * where OpenSSL cannot do that, a copy of it takes the data:
+		 * either way the key schedule is not computed again */
 		size_t outl = 0;
-		EVP_MAC_CTX *c = EVP_MAC_CTX_dup(ctx);
+		EVP_MAC_CTX *c = ctx;
+		if (is2_corepeer_mac_reinit) {
+			if (!EVP_MAC_init(c, NULL, 0, NULL))
+				c = NULL;
+		} else {
+			c = EVP_MAC_CTX_dup(ctx);
+		}
 		if (c) {
 			if (EVP_MAC_update(c, (const unsigned char *)data, len)
 			    && EVP_MAC_final(c, md, &outl, 32)) {
 				*md_len = outl;
 				r = 0;
 			}
-			EVP_MAC_CTX_free(c);
+			if (c != ctx)
+				EVP_MAC_CTX_free(c);
 		}
 #else
 		/* re-initialised with the key it has */
@@ -2671,8 +2721,15 @@ int is2_corepeer_key_setup(void)
 #ifdef HAVE_OPENSSL_3
 	if (!is2_corepeer_mac) {
 		is2_corepeer_mac = EVP_MAC_fetch(NULL, "HMAC", NULL);
-		if (!is2_corepeer_mac)
+		if (!is2_corepeer_mac) {
 			hlog(LOG_ERR, "IS2 UDP: fetching the HMAC implementation from OpenSSL failed");
+		} else {
+			is2_corepeer_mac_reinit = is2_corepeer_hmac_reinit_works();
+			if (is2_corepeer_mac_reinit)
+				hlog(LOG_INFO, "IS2 UDP: HMAC context re-initialised in place for each frame");
+			else
+				hlog(LOG_INFO, "IS2 UDP: HMAC context copied for each frame, this OpenSSL cannot re-initialise it");
+		}
 	}
 #endif
 	memcpy(old_keys, is2_corepeer_keys, sizeof(old_keys));

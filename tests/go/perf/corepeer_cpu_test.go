@@ -9,6 +9,7 @@ package perf
 import (
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 	"sort"
 	"strconv"
@@ -232,6 +233,9 @@ func runScenario(t *testing.T, peer, client string) result {
 	// B first, so that A finds it there when it proposes IS2 peering
 	b := harness.StartText(t, "perf-b", serverConfig("PERFB", bFullFeed, bIgate, bIS2, bStatus, bPeer, "PERFA", aPeer, keys, client == "is2"))
 	a := harness.StartText(t, "perf-a", serverConfig("PERFA", aFullFeed, aIgate, aIS2, aStatus, aPeer, "PERFB", bPeer, keys, false))
+	pin(t, *serverCPUs, a.Pid())
+	pin(t, *serverCPUs, b.Pid())
+	pin(t, *clientCPUs, os.Getpid())
 
 	// the clients: the receiver on B's full feed, the feeder on A's igate port
 	var rx isclient.Receiver

@@ -47,6 +47,45 @@ munin_config() {
 	fi
 }
 
+# List the active aprsc systemd units, instances included
+systemd_units() {
+	systemctl list-units --no-legend --plain --state=active 'aprsc.service' 'aprsc@*.service' 2>/dev/null | awk '{ print $1 }'
+}
+
+# Live upgrade of a running aprsc systemd unit: check the configuration
+# with the new binary first, using the running instance's own command
+# line options, and then ask the instance to exec the new binary with
+# SIGUSR2. Clients stay connected over the upgrade. argv[0] of the
+# running process is not usable for the check: after a live upgrade it
+# is a path within the chroot.
+systemd_liveupgrade() {
+	unit="$1"
+	pid=`systemctl show -p MainPID --value "$unit" 2>/dev/null || true`
+	if [ -z "$pid" ] || [ "$pid" = 0 ] || [ ! -r "/proc/$pid/cmdline" ]; then
+		return 0
+	fi
+	args=`tr '\0' ' ' < "/proc/$pid/cmdline" | cut -d ' ' -f 2-`
+	if ! /opt/aprsc/sbin/aprsc $args -y > /dev/null 2>&1; then
+		echo "Configuration check failed for $unit, not performing live upgrade:" >&2
+		/opt/aprsc/sbin/aprsc $args -y || true
+		return 0
+	fi
+	echo "Performing live upgrade of $unit"
+	systemctl kill --signal=USR2 --kill-who=main "$unit" || true
+	_liveupgraded=1
+}
+
+# Live upgrade of all running aprsc instances
+systemd_liveupgrade_all() {
+	_liveupgraded=0
+	for unit in `systemd_units`; do
+		systemd_liveupgrade "$unit"
+	done
+	if [ "$_liveupgraded" = 1 ]; then
+		echo "Live upgrade triggered - remember to check the logs in /opt/aprsc/logs for any errors!"
+	fi
+}
+
 # main
 
 setup_aprsc_user
@@ -56,7 +95,15 @@ apparmor_config
 munin_config
 
 # Finally, do a start or restart
-if [ -x "/etc/init.d/aprsc" ]; then
+if [ -z "${DPKG_ROOT:-}" ] && [ -d /run/systemd/system ]; then
+	# systemd: the init script is not installed, so handle the
+	# upgrade here. The service is not started or enabled on a fresh
+	# install - the shipped configuration has to be edited first.
+	systemctl --system daemon-reload >/dev/null || true
+	if [ -n "$2" ]; then
+		systemd_liveupgrade_all
+	fi
+elif [ -x "/etc/init.d/aprsc" ]; then
 	# set up links
 	update-rc.d aprsc defaults >/dev/null
 	# start or upgrade

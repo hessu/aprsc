@@ -360,8 +360,9 @@ func (p *IS2Peer) handleControl(msg string) error {
 }
 
 // ReadControl reads datagrams until a handshake datagram of the given type
-// is received, without answering it, and returns it. Data frames and other
-// handshake datagrams are skipped.
+// is received, without answering it, and returns it. Other handshake
+// datagrams are skipped, and data frames are kept for the reads which
+// follow.
 func (p *IS2Peer) ReadControl(typ string, timeout time.Duration) (*PeerControl, error) {
 	end := time.Now().Add(timeout)
 
@@ -371,6 +372,11 @@ func (p *IS2Peer) ReadControl(typ string, timeout time.Duration) (*PeerControl, 
 			return nil, err
 		}
 		if !strings.HasPrefix(string(msg), PeerControlPrefix) {
+			m, err := p.decodeFrame(msg)
+			if err != nil {
+				return nil, err
+			}
+			p.pending = append(p.pending, m)
 			continue
 		}
 		c, err := ParsePeerControl(string(msg))

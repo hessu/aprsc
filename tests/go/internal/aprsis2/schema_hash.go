@@ -3,4 +3,4 @@
 package aprsis2
 
 // SchemaSHA256 is the hash of src/aprsis2.proto the Go code was generated from.
-const SchemaSHA256 = "37feeb4ea65768ef7050a29ab4afc1f8dc0db785b8b096fa184bce1bf79ef0bd"
+const SchemaSHA256 = "ebef93828ef6c797d37b34e5720842cb85e75643980278975e4015b177130db3"

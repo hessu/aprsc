@@ -123,6 +123,31 @@ message IS2KeepalivePing {
 }
 
 //
+//	A Received entry of a packet: a server which received the packet, and
+//	who it received it from. Like the Received headers of an email, every
+//	server appends one when it receives a packet, so a packet carries the
+//	route it took to reach the reader, newest entry last. The list is
+//	limited to the newest 5 entries, so the oldest ones are dropped as a
+//	packet travels on, and the length of a packet is bounded even when it
+//	loops.
+//
+//	The entries are only as trustworthy as the servers which added them:
+//	a client may send a packet with entries already in it. Trust the
+//	entries from the newest backwards, up to the first server you do
+//	not trust.
+//
+
+message IS2Received {
+	string server_id = 1;		// the server which received the packet
+	string username = 2;		// the login of the client, or the ID of the server, it came from
+	VerificationStatus verified = 3; // how that client was verified
+	// The address the packet was received from: 4 bytes for IPv4, 16 for
+	// IPv6. Empty when the server did not record it, or when it has been
+	// removed for privacy before passing the packet to a client.
+	bytes client_addr = 4;
+}
+
+//
 //	APRS-IS packet
 //
 
@@ -141,6 +166,16 @@ message ISPacket {
 	
 	// packet data in traditional APRS-IS format, without CRLF
 	bytes is_packet_data = 2;
+
+	// The servers which have received the packet, in the order they did,
+	// newest last. At most 5 entries, see IS2Received.
+	repeated IS2Received received = 3;
+
+	// When the packet entered the APRS-IS, in milliseconds since the Unix
+	// epoch: set by the first server to receive it, when not already set.
+	// Servers may drop packets whose received_time is too far from their
+	// own clock.
+	uint64 received_time = 4;
 
 	// RSSI in dBm and SNR in dB of the packet at the receiver, as LoRa
 	// radios report them.

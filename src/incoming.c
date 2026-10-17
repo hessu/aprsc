@@ -85,7 +85,9 @@ const char *inerr_labels[] = {
 	"disallow_dx",
 	"disallow_msg_dst",
 	"disallow_igatecall",
-	"inv_crlf"
+	"inv_crlf",
+	"is2_too_old",
+	"is2_too_new"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])
@@ -1027,7 +1029,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 	pb->t = tick;
 	
 	/* classify the packet as coming from an uplink or client */
-	if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+	if (client_is_server_link(c)) {
 		pb->flags |= F_FROM_UPSTR;
 	} else if (c->flags & CLFLAGS_DUPEFEED) {
 		/* we ignore packets from duplicate feeds */
@@ -1173,7 +1175,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
 
-	is2_pbuf_init_packet(pb, is2_packet, &c->is2_input_template);
+	is2_pbuf_init_packet(pb, c, is2_packet, &c->is2_input_template);
 	
 	/* If the packet came in on a filtered port, mark the station as
 	 * heard on this port, so that messages can be routed to it.
@@ -1285,6 +1287,17 @@ int is2_incoming_handler(struct worker_t *self, struct client_t *c, int l4proto,
 		e = INERR_INV_CRLF;
 		goto in_drop;
 	}
+
+#ifdef USE_IS2
+	/* A packet which has been in the network too long, or which comes
+	 * from the future, may be dropped by its received_time stamp.
+	 */
+	if (is2_packet->received_time) {
+		e = is2_received_age_check(c, is2_packet->received_time);
+		if (e < 0)
+			goto in_drop;
+	}
+#endif
 
 	/* parse and process the packet */
 	e = incoming_parse(self, c, (char *)is2_packet->is_packet_data.data, is2_packet->is_packet_data.len, is2_packet);

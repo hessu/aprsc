@@ -126,6 +126,8 @@
 	"ALARM_no_uplink": "Server does not have any uplink connections.",
 	"ALARM_packet_drop_hang": "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",
 	"ALARM_packet_drop_future": "Server has dropped packets due to backward time leaps.",
+	"ALARM_clock_ahead": "Palvelimen kello on {{skew}} sekuntia edellä tämän selaimen kelloa. IS2-paketit pudotetaan, kun palvelinten kellot poikkeavat toisistaan yli 30 sekuntia.",
+	"ALARM_clock_behind": "Palvelimen kello on {{skew}} sekuntia jäljessä tämän selaimen kellosta. IS2-paketit pudotetaan, kun palvelinten kellot poikkeavat toisistaan yli 30 sekuntia.",
 	
 	"CERT_DIALOG_TITLE": "{{ username }} autentikoitui sertifikaattia käyttäen.",
 	"CERT_SUBJECT": "Sertifikaatin haltija:",

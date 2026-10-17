@@ -39,7 +39,7 @@
 
 <div class="row" ng-if="status.alarms" ng-cloak>
  <div class="col-md-12 col-sm-12" ng-repeat="alarm in status.alarms">
- <h4 class="text-danger"><span class="glyphicon glyphicon-exclamation-sign"></span> {{ 'ALARM_' + alarm.err | translate }}</h4>
+ <h4 class="text-danger"><span class="glyphicon glyphicon-exclamation-sign"></span> {{ 'ALARM_' + alarm.err | translate:alarm }}</h4>
  </div>
  </div>
 

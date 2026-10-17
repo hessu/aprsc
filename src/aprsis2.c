@@ -15,6 +15,8 @@
  */
 
 #include <string.h>
+#include <sys/time.h>
+#include <netinet/in.h>
 
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
@@ -1534,6 +1536,244 @@ void is2_corepeer_plain_frame_rejected(struct client_t *c)
 	is2_clientaccount_add_rx(c, c->ai_protocol, 0, 0, 1);
 }
 
+#ifdef USE_IS2
+/*
+ *	The Received entries of packets (doc/IS2RECEIVED.md): the servers which
+ *	have received a packet, and who they got it from. A server appends its
+ *	own entry to the packets it receives, keeping the newest
+ *	IS2_RECEIVED_MAX entries, and the first server to receive a packet
+ *	stamps it with the time.
+ */
+
+#define IS2_RECEIVED_MAX_AGE 30    /* seconds: a packet with an older received_time may be dropped */
+#define IS2_RECEIVED_MAX_FUTURE 30 /* seconds: ... or one this far in the future */
+#define IS2_RECEIVED_AGE_WARN_INTERVAL 60 /* seconds between the warnings about them, per link */
+
+/* counters for the status page, added to by all the workers */
+static long long is2_received_truncated; /* entries dropped from packets which had too many */
+static long long is2_received_invalid;   /* malformed entries dropped */
+static long long is2_received_loops;     /* packets which already had an entry of this server */
+static long long is2_received_too_old;   /* packets with a received_time too far in the past, dropped or not */
+static long long is2_received_too_new;   /* ... in the future */
+
+static void is2_received_count(long long *counter, long long n)
+{
+#ifdef HAVE_SYNC_FETCH_AND_ADD
+	__sync_fetch_and_add(counter, n);
+#else
+	// FIXME: MUTEX !! -- this may or may not need locks..
+	*counter += n;
+#endif
+}
+
+void is2_received_status(cJSON *totals)
+{
+	cJSON_AddNumberToObject(totals, "is2_received_truncated", is2_received_truncated);
+	cJSON_AddNumberToObject(totals, "is2_received_invalid", is2_received_invalid);
+	cJSON_AddNumberToObject(totals, "is2_received_loops", is2_received_loops);
+	cJSON_AddNumberToObject(totals, "is2_received_too_old", is2_received_too_old);
+	cJSON_AddNumberToObject(totals, "is2_received_too_new", is2_received_too_new);
+}
+
+/*
+ *	Milliseconds since the epoch, for the received_time stamp. The time
+ *	thread's 'now' is not precise enough for latency measurements.
+ */
+
+static uint64_t is2_time_ms(void)
+{
+	struct timeval tv;
+
+	gettimeofday(&tv, NULL);
+
+	return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
+/*
+ *	Is this a valid server_id or username of a Received entry: 1 to
+ *	IS2_RECEIVED_ID_LEN printable ASCII characters?
+ */
+
+static int is2_received_id_valid(const char *s)
+{
+	int i;
+
+	if (!s)
+		return 0;
+
+	for (i = 0; s[i]; i++) {
+		if (i >= IS2_RECEIVED_ID_LEN)
+			return 0;
+		if ((unsigned char)s[i] < 0x21 || (unsigned char)s[i] > 0x7e)
+			return 0;
+	}
+
+	return (i > 0);
+}
+
+/*
+ *	Make room for one more entry in a packet which has IS2_RECEIVED_MAX
+ *	of them: drop the oldest.
+ */
+
+static void is2_received_make_room(struct pbuf_t *pb)
+{
+	if (pb->received_n < IS2_RECEIVED_MAX)
+		return;
+
+	memmove(&pb->received[0], &pb->received[1], sizeof(pb->received[0]) * (IS2_RECEIVED_MAX-1));
+	pb->received_n = IS2_RECEIVED_MAX-1;
+	is2_received_count(&is2_received_truncated, 1);
+}
+
+/*
+ *	Copy the valid Received entries of an incoming IS2 packet to the pbuf,
+ *	keeping the newest IS2_RECEIVED_MAX of them, and note if the packet has
+ *	been received by this server before: it has looped.
+ */
+
+static void is2_received_copy_in(struct pbuf_t *pb, struct client_t *c, Aprsis2__ISPacket *in)
+{
+	int i;
+	int invalid = 0;
+	int loop = 0;
+	Aprsis2__IS2Received *r;
+	struct is2_received_t *d;
+
+	for (i = 0; i < in->n_received; i++) {
+		r = in->received[i];
+		if (!r
+		    || !is2_received_id_valid(r->server_id)
+		    || !is2_received_id_valid(r->username)
+		    || r->verified < APRSIS2__VERIFICATION_STATUS__NONE
+		    || r->verified > APRSIS2__VERIFICATION_STATUS__STRONG
+		    || (r->client_addr.len != 0 && r->client_addr.len != 4 && r->client_addr.len != 16)) {
+			invalid++;
+			continue;
+		}
+
+		if (strcasecmp(r->server_id, serverid) == 0)
+			loop++;
+
+		is2_received_make_room(pb);
+		d = &pb->received[pb->received_n++];
+		strcpy(d->server_id, r->server_id); /* lengths validated above */
+		strcpy(d->username, r->username);
+		d->verified = r->verified;
+		d->addr_len = r->client_addr.len;
+		if (d->addr_len)
+			memcpy(d->addr, r->client_addr.data, d->addr_len);
+	}
+
+	if (invalid) {
+		is2_received_count(&is2_received_invalid, invalid);
+		hlog_packet(LOG_DEBUG, pb->data, pb->packet_len - 2, "%s/%s: IS2: dropped %d invalid Received entries of packet: ",
+			c->addr_rem, c->username, invalid);
+	}
+
+	if (loop) {
+		is2_received_count(&is2_received_loops, 1);
+		hlog_packet(LOG_DEBUG, pb->data, pb->packet_len - 2, "%s/%s: IS2: packet has been received by this server before, %d Received entries: ",
+			c->addr_rem, c->username, (int)in->n_received);
+	}
+}
+
+/*
+ *	Append the Received entry of this server to a packet: it was received
+ *	from client c. The address of the client is recorded in it unless
+ *	disabled in the configuration, as on an aggregator which only has
+ *	other servers connected to it.
+ */
+
+static void is2_received_append(struct pbuf_t *pb, struct client_t *c)
+{
+	struct is2_received_t *d;
+	int l;
+
+	is2_received_make_room(pb);
+	d = &pb->received[pb->received_n++];
+
+	/* serverid and the usernames are validated to CALLSIGNLEN_MAX when set */
+	l = strnlen(serverid, IS2_RECEIVED_ID_LEN);
+	memcpy(d->server_id, serverid, l);
+	d->server_id[l] = 0;
+	l = strnlen(c->username, IS2_RECEIVED_ID_LEN);
+	memcpy(d->username, c->username, l);
+	d->username[l] = 0;
+	d->verified = c->validated; /* VALIDATED_* values match the VerificationStatus enum */
+	d->addr_len = 0;
+
+	if (!is2_received_addr)
+		return;
+
+	/* the pseudo-clients of HTTP and UDP uploads have no address */
+	if (c->addr.sa.sa_family == AF_INET) {
+		memcpy(d->addr, &c->addr.si.sin_addr, 4);
+		d->addr_len = 4;
+	} else if (c->addr.sa.sa_family == AF_INET6) {
+		if (IN6_IS_ADDR_V4MAPPED(&c->addr.si6.sin6_addr)) {
+			/* an IPv4 client of a listener bound to :: */
+			memcpy(d->addr, &c->addr.si6.sin6_addr.s6_addr[12], 4);
+			d->addr_len = 4;
+		} else {
+			memcpy(d->addr, &c->addr.si6.sin6_addr, 16);
+			d->addr_len = 16;
+		}
+	}
+}
+
+/*
+ *	Check the received_time of an incoming IS2 packet against our clock.
+ *	A packet which has been in the network for more than
+ *	IS2_RECEIVED_MAX_AGE seconds has looped, or come through a server
+ *	whose clock is off: it is counted, and dropped if IS2ReceivedAgeDrop
+ *	is enabled. Returns 0 to accept the packet, or the INERR_* code to
+ *	drop it with.
+ */
+
+int is2_received_age_check(struct client_t *c, uint64_t received_time)
+{
+	int64_t age;
+	int e;
+
+	/* A stamp beyond the signed range would wrap negative in the
+	 * subtraction below: it is from the far future.
+	 */
+	if (received_time > (uint64_t)INT64_MAX)
+		age = INT64_MIN;
+	else
+		age = (int64_t)now * 1000 - (int64_t)received_time;
+
+	if (age > IS2_RECEIVED_MAX_AGE * 1000) {
+		is2_received_count(&is2_received_too_old, 1);
+		e = INERR_IS2_TOO_OLD;
+	} else if (age < -IS2_RECEIVED_MAX_FUTURE * 1000) {
+		is2_received_count(&is2_received_too_new, 1);
+		e = INERR_IS2_TOO_NEW;
+	} else {
+		return 0;
+	}
+
+	/* A log line per link now and then. When the packet comes from an
+	 * uplink or a peer, the clock of a server is likely off, and that is
+	 * worth a warning. A client may send whatever stamps it likes, and
+	 * only loses its own packets.
+	 */
+	if (tick >= c->is2_received_age_warn) {
+		int level = client_is_server_link(c) ? LOG_WARNING : LOG_INFO;
+		/* negated as unsigned, since -INT64_MIN does not fit */
+		uint64_t mag = (age < 0) ? (uint64_t)0 - (uint64_t)age : (uint64_t)age;
+		c->is2_received_age_warn = tick + IS2_RECEIVED_AGE_WARN_INTERVAL;
+		hlog(level, "%s/%s: IS2: packet received_time is %llu seconds in the %s%s",
+			c->addr_rem, c->username, (unsigned long long)(mag / 1000),
+			(age < 0) ? "future" : "past",
+			(is2_received_age_drop) ? ", dropping such packets" : "");
+	}
+
+	return (is2_received_age_drop) ? e : 0;
+}
+#endif /* USE_IS2 */
+
 /*
  *	Prepare a pbuf to have an IS2 formatted packet, when handling an incoming packet
  */
@@ -1560,7 +1800,7 @@ void is2_pbuf_copy_additional(Aprsis2__ISPacket *dest, Aprsis2__ISPacket *src)
 	}
 }
 
-void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template)
+void is2_pbuf_init_packet(struct pbuf_t *pb, struct client_t *c, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template)
 {
 	aprsis2__ispacket__init(&pb->is2packet);
 	pb->is2packet.type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
@@ -1573,6 +1813,25 @@ void is2_pbuf_init_packet(struct pbuf_t *pb, Aprsis2__ISPacket *is2_packet_in, A
 	} else if (is2_input_template) {
 		is2_pbuf_copy_additional(&pb->is2packet, is2_input_template);
 	}
+
+#ifdef USE_IS2
+	/* The Received entries: the ones the packet came with, and ours.
+	 * The pbuf has them in its own compact form; is2packet.received is
+	 * filled in when the packet is serialized.
+	 */
+	pb->received_n = 0;
+	if (is2_packet_in) {
+		if (is2_packet_in->n_received > 0)
+			is2_received_copy_in(pb, c, is2_packet_in);
+		pb->is2packet.received_time = is2_packet_in->received_time;
+	}
+	if (is2_received)
+		is2_received_append(pb, c);
+
+	/* the first server to receive the packet stamps it with the time */
+	if (pb->is2packet.received_time == 0)
+		pb->is2packet.received_time = is2_time_ms();
+#endif
 }
 
 /*
@@ -1599,26 +1858,65 @@ static int is2_encode_packet_element(char *buf, int buflen, Aprsis2__ISPacket *p
 }
 
 /*
- *	Encode the packet being distributed by the worker, unless the worker's
- *	encoding cache already has it: a packet going to many IS2 clients is
- *	serialized only once per worker. The cache is invalidated by
- *	process_outgoing_single() when it moves to the next packet.
+ *	Are the addresses in the Received entries of packets removed before
+ *	they are sent to this client? They are only passed on to the other
+ *	servers: the uplinks and the peers.
  */
 
-static int is2_worker_encode_packet(struct worker_t *self, struct pbuf_t *pb)
+static int is2_received_redacted(struct client_t *c)
 {
-	if (self->is2_enc_pb == pb)
+	return !client_is_server_link(c);
+}
+
+/*
+ *	Encode the packet being distributed by the worker, unless the worker's
+ *	encoding cache already has it: a packet going to many IS2 clients is
+ *	serialized only once per worker, in each of the variants needed. The
+ *	cache is invalidated by process_outgoing_single() when it moves to the
+ *	next packet.
+ */
+
+static int is2_worker_encode_packet(struct worker_t *self, struct pbuf_t *pb, int variant)
+{
+	if (self->is2_enc_pb[variant] == pb)
 		return 0;
 
-	self->is2_enc_len = is2_encode_packet_element(self->is2_enc, sizeof(self->is2_enc), &pb->is2packet);
-	if (self->is2_enc_len < 0) {
+#ifdef USE_IS2
+	/* The Received entries are serialized from the pbuf's compact copies
+	 * of them: a shallow copy of the packet, with the entries pointing to
+	 * the pbuf, and without the addresses in the redacted variant.
+	 */
+	Aprsis2__ISPacket p = pb->is2packet;
+	Aprsis2__IS2Received rcv[IS2_RECEIVED_MAX];
+	Aprsis2__IS2Received *rcvp[IS2_RECEIVED_MAX];
+	int i;
+
+	for (i = 0; i < pb->received_n; i++) {
+		aprsis2__is2_received__init(&rcv[i]);
+		rcv[i].server_id = pb->received[i].server_id;
+		rcv[i].username = pb->received[i].username;
+		rcv[i].verified = pb->received[i].verified;
+		if (variant == IS2_ENC_FULL && pb->received[i].addr_len) {
+			rcv[i].client_addr.len = pb->received[i].addr_len;
+			rcv[i].client_addr.data = pb->received[i].addr;
+		}
+		rcvp[i] = &rcv[i];
+	}
+	p.n_received = pb->received_n;
+	p.received = rcvp;
+
+	self->is2_enc_len[variant] = is2_encode_packet_element(self->is2_enc[variant], sizeof(self->is2_enc[variant]), &p);
+#else
+	self->is2_enc_len[variant] = is2_encode_packet_element(self->is2_enc[variant], sizeof(self->is2_enc[variant]), &pb->is2packet);
+#endif
+	if (self->is2_enc_len[variant] < 0) {
 		hlog(LOG_ERR, "worker %d: IS2: encoded packet does not fit in %d bytes: %.*s",
-			self->id, (int)sizeof(self->is2_enc), pb->packet_len - 2, pb->data);
-		self->is2_enc_pb = NULL;
+			self->id, (int)sizeof(self->is2_enc[variant]), pb->packet_len - 2, pb->data);
+		self->is2_enc_pb[variant] = NULL;
 		return -1;
 	}
 
-	self->is2_enc_pb = pb;
+	self->is2_enc_pb[variant] = pb;
 
 	return 0;
 }
@@ -1719,14 +2017,17 @@ static int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
 static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 {
 	int ret;
+	int variant = (is2_received_redacted(c)) ? IS2_ENC_REDACTED : IS2_ENC_FULL;
+	int len;
 
-	if (is2_worker_encode_packet(self, pb) < 0)
+	if (is2_worker_encode_packet(self, pb, variant) < 0)
 		return 0; // can not be encoded, drop
+	len = self->is2_enc_len[variant];
 
-	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, self->is2_enc_len);
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, len);
 
 	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS
-	    || c->is2_obuf_total_len + self->is2_enc_len > APRSIS2_OBUF_MAX_LENGTH) {
+	    || c->is2_obuf_total_len + len > APRSIS2_OBUF_MAX_LENGTH) {
 		ret = is2_obuf_flush_client(self, c);
 		if (ret < -2)
 			return ret; // destroyed
@@ -1735,9 +2036,9 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 	/* copy the serialized packet to the client's own buffer - after this,
 	 * the pbuf is not referred to any more
 	 */
-	memcpy(c->is2_obuf + c->is2_obuf_end, self->is2_enc, self->is2_enc_len);
-	c->is2_obuf_end += self->is2_enc_len;
-	c->is2_obuf_total_len += self->is2_enc_len;
+	memcpy(c->is2_obuf + c->is2_obuf_end, self->is2_enc[variant], len);
+	c->is2_obuf_end += len;
+	c->is2_obuf_total_len += len;
 	c->is2_obuf_packets++;
 	self->is2_obuf_pending = 1;
 
@@ -1806,6 +2107,16 @@ int is2_wire_selfcheck(void)
 	p.rx_rssi_dbm = -101.5;
 	p.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
 	p.rx_snr_db = 7.25;
+	Aprsis2__IS2Received rcv = APRSIS2__IS2_RECEIVED__INIT;
+	Aprsis2__IS2Received *rcvp[1] = { &rcv };
+	rcv.server_id = "TESTSRV";
+	rcv.username = "N0CALL-15";
+	rcv.verified = APRSIS2__VERIFICATION_STATUS__STRONG;
+	rcv.client_addr.data = (uint8_t *)"\x7f\x00\x00\x01";
+	rcv.client_addr.len = 4;
+	p.n_received = 1;
+	p.received = rcvp;
+	p.received_time = 1700000000123ULL;
 
 	/* message type and one packet, as flushed to a TCP client */
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;

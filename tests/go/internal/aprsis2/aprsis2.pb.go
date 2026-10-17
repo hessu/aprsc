@@ -297,7 +297,7 @@ func (x ISPacket_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ISPacket_Type.Descriptor instead.
 func (ISPacket_Type) EnumDescriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{4, 0}
+	return file_aprsis2_proto_rawDescGZIP(), []int{5, 0}
 }
 
 // The modem the packet was received with, its bit rate in bit/s and
@@ -351,7 +351,7 @@ func (x ISPacket_ModemType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ISPacket_ModemType.Descriptor instead.
 func (ISPacket_ModemType) EnumDescriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{4, 1}
+	return file_aprsis2_proto_rawDescGZIP(), []int{5, 1}
 }
 
 type IS2Parameter_Type int32
@@ -406,7 +406,7 @@ func (x IS2Parameter_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use IS2Parameter_Type.Descriptor instead.
 func (IS2Parameter_Type) EnumDescriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{5, 0}
+	return file_aprsis2_proto_rawDescGZIP(), []int{6, 0}
 }
 
 type IS2Message_Type int32
@@ -467,7 +467,7 @@ func (x IS2Message_Type) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use IS2Message_Type.Descriptor instead.
 func (IS2Message_Type) EnumDescriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{6, 0}
+	return file_aprsis2_proto_rawDescGZIP(), []int{7, 0}
 }
 
 type IS2ServerSignature struct {
@@ -751,12 +751,91 @@ func (x *IS2KeepalivePing) GetRequestData() []byte {
 	return nil
 }
 
+type IS2Received struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	ServerId string                 `protobuf:"bytes,1,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`                  // the server which received the packet
+	Username string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`                                  // the login of the client, or the ID of the server, it came from
+	Verified VerificationStatus     `protobuf:"varint,3,opt,name=verified,proto3,enum=aprsis2.VerificationStatus" json:"verified,omitempty"` // how that client was verified
+	// The address the packet was received from: 4 bytes for IPv4, 16 for
+	// IPv6. Empty when the server did not record it, or when it has been
+	// removed for privacy before passing the packet to a client.
+	ClientAddr    []byte `protobuf:"bytes,4,opt,name=client_addr,json=clientAddr,proto3" json:"client_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IS2Received) Reset() {
+	*x = IS2Received{}
+	mi := &file_aprsis2_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IS2Received) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IS2Received) ProtoMessage() {}
+
+func (x *IS2Received) ProtoReflect() protoreflect.Message {
+	mi := &file_aprsis2_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IS2Received.ProtoReflect.Descriptor instead.
+func (*IS2Received) Descriptor() ([]byte, []int) {
+	return file_aprsis2_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *IS2Received) GetServerId() string {
+	if x != nil {
+		return x.ServerId
+	}
+	return ""
+}
+
+func (x *IS2Received) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *IS2Received) GetVerified() VerificationStatus {
+	if x != nil {
+		return x.Verified
+	}
+	return VerificationStatus_NONE
+}
+
+func (x *IS2Received) GetClientAddr() []byte {
+	if x != nil {
+		return x.ClientAddr
+	}
+	return nil
+}
+
 type ISPacket struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Identifies which message is filled in.
 	Type ISPacket_Type `protobuf:"varint,1,opt,name=type,proto3,enum=aprsis2.ISPacket_Type" json:"type,omitempty"`
 	// packet data in traditional APRS-IS format, without CRLF
 	IsPacketData []byte `protobuf:"bytes,2,opt,name=is_packet_data,json=isPacketData,proto3" json:"is_packet_data,omitempty"`
+	// The servers which have received the packet, in the order they did,
+	// newest last. At most 5 entries, see IS2Received.
+	Received []*IS2Received `protobuf:"bytes,3,rep,name=received,proto3" json:"received,omitempty"`
+	// When the packet entered the APRS-IS, in milliseconds since the Unix
+	// epoch: set by the first server to receive it, when not already set.
+	// Servers may drop packets whose received_time is too far from their
+	// own clock.
+	ReceivedTime uint64 `protobuf:"varint,4,opt,name=received_time,json=receivedTime,proto3" json:"received_time,omitempty"`
 	// RSSI in dBm and SNR in dB of the packet at the receiver, as LoRa
 	// radios report them.
 	// When building with protobuf 3.15+, the "optional float rx_rssi_dbm"
@@ -785,7 +864,7 @@ type ISPacket struct {
 
 func (x *ISPacket) Reset() {
 	*x = ISPacket{}
-	mi := &file_aprsis2_proto_msgTypes[4]
+	mi := &file_aprsis2_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -797,7 +876,7 @@ func (x *ISPacket) String() string {
 func (*ISPacket) ProtoMessage() {}
 
 func (x *ISPacket) ProtoReflect() protoreflect.Message {
-	mi := &file_aprsis2_proto_msgTypes[4]
+	mi := &file_aprsis2_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -810,7 +889,7 @@ func (x *ISPacket) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ISPacket.ProtoReflect.Descriptor instead.
 func (*ISPacket) Descriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{4}
+	return file_aprsis2_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ISPacket) GetType() ISPacket_Type {
@@ -825,6 +904,20 @@ func (x *ISPacket) GetIsPacketData() []byte {
 		return x.IsPacketData
 	}
 	return nil
+}
+
+func (x *ISPacket) GetReceived() []*IS2Received {
+	if x != nil {
+		return x.Received
+	}
+	return nil
+}
+
+func (x *ISPacket) GetReceivedTime() uint64 {
+	if x != nil {
+		return x.ReceivedTime
+	}
+	return 0
 }
 
 func (x *ISPacket) GetOptionalRxRssiDbm() isISPacket_OptionalRxRssiDbm {
@@ -949,7 +1042,7 @@ type IS2Parameter struct {
 
 func (x *IS2Parameter) Reset() {
 	*x = IS2Parameter{}
-	mi := &file_aprsis2_proto_msgTypes[5]
+	mi := &file_aprsis2_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -961,7 +1054,7 @@ func (x *IS2Parameter) String() string {
 func (*IS2Parameter) ProtoMessage() {}
 
 func (x *IS2Parameter) ProtoReflect() protoreflect.Message {
-	mi := &file_aprsis2_proto_msgTypes[5]
+	mi := &file_aprsis2_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -974,7 +1067,7 @@ func (x *IS2Parameter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IS2Parameter.ProtoReflect.Descriptor instead.
 func (*IS2Parameter) Descriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{5}
+	return file_aprsis2_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *IS2Parameter) GetType() IS2Parameter_Type {
@@ -1017,7 +1110,7 @@ type IS2Message struct {
 
 func (x *IS2Message) Reset() {
 	*x = IS2Message{}
-	mi := &file_aprsis2_proto_msgTypes[6]
+	mi := &file_aprsis2_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1029,7 +1122,7 @@ func (x *IS2Message) String() string {
 func (*IS2Message) ProtoMessage() {}
 
 func (x *IS2Message) ProtoReflect() protoreflect.Message {
-	mi := &file_aprsis2_proto_msgTypes[6]
+	mi := &file_aprsis2_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1042,7 +1135,7 @@ func (x *IS2Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IS2Message.ProtoReflect.Descriptor instead.
 func (*IS2Message) Descriptor() ([]byte, []int) {
-	return file_aprsis2_proto_rawDescGZIP(), []int{6}
+	return file_aprsis2_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *IS2Message) GetType() IS2Message_Type {
@@ -1146,10 +1239,18 @@ const file_aprsis2_proto_rawDesc = "" +
 	"\bPingType\x12\r\n" +
 	"\tUNDEFINED\x10\x00\x12\v\n" +
 	"\aREQUEST\x10\x01\x12\t\n" +
-	"\x05REPLY\x10\x02\"\x8f\x04\n" +
+	"\x05REPLY\x10\x02\"\xa0\x01\n" +
+	"\vIS2Received\x12\x1b\n" +
+	"\tserver_id\x18\x01 \x01(\tR\bserverId\x12\x1a\n" +
+	"\busername\x18\x02 \x01(\tR\busername\x127\n" +
+	"\bverified\x18\x03 \x01(\x0e2\x1b.aprsis2.VerificationStatusR\bverified\x12\x1f\n" +
+	"\vclient_addr\x18\x04 \x01(\fR\n" +
+	"clientAddr\"\xe6\x04\n" +
 	"\bISPacket\x12*\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x16.aprsis2.ISPacket.TypeR\x04type\x12$\n" +
-	"\x0eis_packet_data\x18\x02 \x01(\fR\fisPacketData\x12 \n" +
+	"\x0eis_packet_data\x18\x02 \x01(\fR\fisPacketData\x120\n" +
+	"\breceived\x18\x03 \x03(\v2\x14.aprsis2.IS2ReceivedR\breceived\x12#\n" +
+	"\rreceived_time\x18\x04 \x01(\x04R\freceivedTime\x12 \n" +
 	"\vrx_rssi_dbm\x18\x15 \x01(\x02H\x00R\trxRssiDbm\x12\x1c\n" +
 	"\trx_snr_db\x18\x16 \x01(\x02H\x01R\arxSnrDb\x126\n" +
 	"\brx_modem\x18\x17 \x01(\x0e2\x1b.aprsis2.ISPacket.ModemTypeR\arxModem\x12\x1f\n" +
@@ -1221,7 +1322,7 @@ func file_aprsis2_proto_rawDescGZIP() []byte {
 }
 
 var file_aprsis2_proto_enumTypes = make([]protoimpl.EnumInfo, 8)
-var file_aprsis2_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_aprsis2_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_aprsis2_proto_goTypes = []any{
 	(VerificationStatus)(0),              // 0: aprsis2.VerificationStatus
 	(IS2LoginReply_LoginResult)(0),       // 1: aprsis2.IS2LoginReply.LoginResult
@@ -1235,30 +1336,33 @@ var file_aprsis2_proto_goTypes = []any{
 	(*IS2LoginRequest)(nil),              // 9: aprsis2.IS2LoginRequest
 	(*IS2LoginReply)(nil),                // 10: aprsis2.IS2LoginReply
 	(*IS2KeepalivePing)(nil),             // 11: aprsis2.IS2KeepalivePing
-	(*ISPacket)(nil),                     // 12: aprsis2.ISPacket
-	(*IS2Parameter)(nil),                 // 13: aprsis2.IS2Parameter
-	(*IS2Message)(nil),                   // 14: aprsis2.IS2Message
+	(*IS2Received)(nil),                  // 12: aprsis2.IS2Received
+	(*ISPacket)(nil),                     // 13: aprsis2.ISPacket
+	(*IS2Parameter)(nil),                 // 14: aprsis2.IS2Parameter
+	(*IS2Message)(nil),                   // 15: aprsis2.IS2Message
 }
 var file_aprsis2_proto_depIdxs = []int32{
 	1,  // 0: aprsis2.IS2LoginReply.result:type_name -> aprsis2.IS2LoginReply.LoginResult
 	0,  // 1: aprsis2.IS2LoginReply.verified:type_name -> aprsis2.VerificationStatus
 	2,  // 2: aprsis2.IS2LoginReply.result_code:type_name -> aprsis2.IS2LoginReply.LoginResultReason
 	3,  // 3: aprsis2.IS2KeepalivePing.ping_type:type_name -> aprsis2.IS2KeepalivePing.PingType
-	4,  // 4: aprsis2.ISPacket.type:type_name -> aprsis2.ISPacket.Type
-	5,  // 5: aprsis2.ISPacket.rx_modem:type_name -> aprsis2.ISPacket.ModemType
-	6,  // 6: aprsis2.IS2Parameter.type:type_name -> aprsis2.IS2Parameter.Type
-	7,  // 7: aprsis2.IS2Message.type:type_name -> aprsis2.IS2Message.Type
-	8,  // 8: aprsis2.IS2Message.server_signature:type_name -> aprsis2.IS2ServerSignature
-	9,  // 9: aprsis2.IS2Message.login_request:type_name -> aprsis2.IS2LoginRequest
-	10, // 10: aprsis2.IS2Message.login_reply:type_name -> aprsis2.IS2LoginReply
-	11, // 11: aprsis2.IS2Message.keepalive_ping:type_name -> aprsis2.IS2KeepalivePing
-	12, // 12: aprsis2.IS2Message.is_packet:type_name -> aprsis2.ISPacket
-	13, // 13: aprsis2.IS2Message.parameter:type_name -> aprsis2.IS2Parameter
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	0,  // 4: aprsis2.IS2Received.verified:type_name -> aprsis2.VerificationStatus
+	4,  // 5: aprsis2.ISPacket.type:type_name -> aprsis2.ISPacket.Type
+	12, // 6: aprsis2.ISPacket.received:type_name -> aprsis2.IS2Received
+	5,  // 7: aprsis2.ISPacket.rx_modem:type_name -> aprsis2.ISPacket.ModemType
+	6,  // 8: aprsis2.IS2Parameter.type:type_name -> aprsis2.IS2Parameter.Type
+	7,  // 9: aprsis2.IS2Message.type:type_name -> aprsis2.IS2Message.Type
+	8,  // 10: aprsis2.IS2Message.server_signature:type_name -> aprsis2.IS2ServerSignature
+	9,  // 11: aprsis2.IS2Message.login_request:type_name -> aprsis2.IS2LoginRequest
+	10, // 12: aprsis2.IS2Message.login_reply:type_name -> aprsis2.IS2LoginReply
+	11, // 13: aprsis2.IS2Message.keepalive_ping:type_name -> aprsis2.IS2KeepalivePing
+	13, // 14: aprsis2.IS2Message.is_packet:type_name -> aprsis2.ISPacket
+	14, // 15: aprsis2.IS2Message.parameter:type_name -> aprsis2.IS2Parameter
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_aprsis2_proto_init() }
@@ -1266,7 +1370,7 @@ func file_aprsis2_proto_init() {
 	if File_aprsis2_proto != nil {
 		return
 	}
-	file_aprsis2_proto_msgTypes[4].OneofWrappers = []any{
+	file_aprsis2_proto_msgTypes[5].OneofWrappers = []any{
 		(*ISPacket_RxRssiDbm)(nil),
 		(*ISPacket_RxSnrDb)(nil),
 		(*ISPacket_RxBitrate)(nil),
@@ -1278,7 +1382,7 @@ func file_aprsis2_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_aprsis2_proto_rawDesc), len(file_aprsis2_proto_rawDesc)),
 			NumEnums:      8,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

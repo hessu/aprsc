@@ -533,14 +533,14 @@ func (p *IS2Peer) ReadPackets(timeout time.Duration) ([]string, error) {
 	}
 }
 
-// ReadPacket returns the data of the next packet.
-func (p *IS2Peer) ReadPacket(timeout time.Duration) (string, error) {
+// ReadISPacket returns the next packet with its metadata.
+func (p *IS2Peer) ReadISPacket(timeout time.Duration) (*aprsis2.ISPacket, error) {
 	if len(p.queue) == 0 {
 		end := time.Now().Add(timeout)
 		for len(p.queue) == 0 {
 			m, err := p.readFrame(time.Until(end))
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			if m.GetType() == aprsis2.IS2Message_IS_PACKET {
 				p.queue = m.GetIsPacket()
@@ -550,5 +550,14 @@ func (p *IS2Peer) ReadPacket(timeout time.Duration) (string, error) {
 
 	ip := p.queue[0]
 	p.queue = p.queue[1:]
+	return ip, nil
+}
+
+// ReadPacket returns the data of the next packet.
+func (p *IS2Peer) ReadPacket(timeout time.Duration) (string, error) {
+	ip, err := p.ReadISPacket(timeout)
+	if err != nil {
+		return "", err
+	}
 	return string(ip.GetIsPacketData()), nil
 }

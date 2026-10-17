@@ -32,6 +32,7 @@
 #include "filter.h"
 #include "incoming.h"
 #include "accept.h"
+#include "aprsis2.h"
 #include "cJSON.h"
 #include "counterdata.h"
 #include "client_heard.h"
@@ -447,6 +448,9 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(json_totals, "udp_bytes_tx_rate", cdata_get_last_value("totals.udp_bytes_tx") / CDATA_INTERVAL);
 	cJSON_AddNumberToObject(json_totals, "bytes_rx_rate", (cdata_get_last_value("totals.tcp_bytes_rx") + cdata_get_last_value("totals.udp_bytes_rx")) / CDATA_INTERVAL);
 	cJSON_AddNumberToObject(json_totals, "bytes_tx_rate", (cdata_get_last_value("totals.tcp_bytes_tx") + cdata_get_last_value("totals.udp_bytes_tx")) / CDATA_INTERVAL);
+#ifdef USE_IS2
+	is2_received_status(json_totals);
+#endif
 	
 	cJSON *json_rx_errs = cJSON_CreateStringArray(inerr_labels, INERR_BUCKETS);
 	cJSON_AddItemToObject(root, "rx_errs", json_rx_errs);

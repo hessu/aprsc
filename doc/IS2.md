@@ -223,11 +223,104 @@ reasons:
   language, and well documented:
   https://protobuf.dev/overview/
 
+### Why not a hand-written binary format
+
+A protocol designer is often tempted to write the encoder and decoder
+by hand: a fixed header, some length-prefixed fields, a few integers
+in network byte order.  It looks simple, and the first version is.
+The trouble comes later, and a standard serialization library has
+already solved it:
+
+* **Every field is optional and skippable.**  A hand-written format
+  needs a version number, and a rule for what each version means, as
+  soon as a field is added.  In Protocol Buffers an old decoder skips
+  an unknown field by its wire type, and a new decoder sees a missing
+  field as its default value, so a server can send a field the client
+  does not know yet, and the two can be upgraded in any order.
+* **The decoder is the hard part, and it is written for you.**  A
+  decoder of a binary format receives bytes from the network, and it
+  must check every length against the remaining buffer, every
+  integer for overflow, every string for termination, and reject the
+  frame instead of reading past the end or writing past a buffer.
+  Every one of these checks that is missing is a crash or a security
+  hole in a server which anyone can connect to.  The generated
+  decoder makes these checks for every field of every message, and
+  the library has been fuzzed and audited by many people for many
+  years.  aprsc only has to check what the fields mean.
+* **The second implementation is free.**  The same `.proto` file
+  generates the C code of aprsc and the Go code of the test suite,
+  and could generate a Python, Java or JavaScript client.  With a
+  hand-written format, each of these is written again by hand, from a
+  prose description, and the implementations drift apart on the
+  details the prose does not cover: what the length counts, whether
+  an empty string is encoded, what happens when a field appears
+  twice.  With a schema, the encoding is defined by the compiler, and
+  a client in a new language has working encoders and decoders before
+  the first line of its own code is written.
+* **The format is debuggable.**  `protoc --decode` and the libraries
+  in every language can dump a frame captured from the wire, and
+  Wireshark has a Protocol Buffers dissector which reads a `.proto`
+  file.  A home-made format has none of these until someone writes
+  them.
+The dependency is not forced on anyone.  A small igate, such as a LoRa
+APRS receiver on a microcontroller, which only wants to feed its
+packets with the signal strength it measured, can keep speaking the
+plaintext protocol and send the metadata on a `#is2-meta` comment line
+before each packet, as described in [IS2PLAIN](IS2PLAIN.html); the
+server turns it into the IS2 fields, and servers without IS2 ignore
+the line.  An igate which does want IS2, for the typed login results
+and the framing, has Protocol Buffers implementations for
+microcontrollers too: nanopb generates encoders and decoders in plain
+C with no dynamic memory, in a few kilobytes of code, and runs on the
+ESP32 and ARM Cortex-M boards the LoRa APRS firmwares target.
+
+The place where a hand-written encoder does pay is the hot path, and
+aprsc uses one there: the `IS2Message` around the packets is encoded
+by hand, from the field numbers of the schema, so a packet which goes
+to a hundred clients is serialized once per worker and the wrapper
+is written around the copies.  The field numbers are checked against
+the generated code at start-up, so this encoder cannot disagree with
+the schema either.
+
+### The cost of the encoding
+
 The encoding does not come for free: a receiver has to decode a frame
 before it can see the packet, where a plaintext receiver reads it from
 the line.  aprsc decodes each incoming frame once, in the worker which
-received it, and encodes each outgoing packet once per worker, as
+received it, and encodes each outgoing packet once per worker thread, as
 described below.
+
+The cost is small.  Measured with protobuf-c 1.3.3 and the generated
+code of `aprsis2.proto`, on one core of a 17-year-old Intel Xeon L5520
+at 2.27 GHz (Nehalem, 2009), encoding a 100-byte APRS packet as an
+`ISPacket`:
+
+    packet                                        encoded   encode time
+    no Received entries, with received_time       109 B     0.3 us
+    one Received entry with address               140 B     0.5 us
+    three Received entries with addresses         196 B     1.0 us
+    five Received entries with addresses (max)    240 B     1.7 us
+
+Decoding an `IS2Message` frame, including allocating and freeing the
+decoded structures with `malloc()`:
+
+    frame                                         size      decode time
+    one packet, no Received entries               117 B     0.5 us
+    one packet, three Received entries            205 B     1.9 us
+    ten packets, three Received entries each      2005 B    17 us, 1.7 us per packet
+    fifty packets, three Received entries each    10005 B   110 us, 2.2 us per packet
+
+Finding the end of a plaintext line and copying it costs 0.02 us on
+the same machine, so a packet with three Received entries costs some
+50 times more to encode and 100 times more to decode than to handle
+as a line.  In absolute terms, a full feed of 200 packets per second
+takes 0.2 ms of CPU time per second to encode and 0.4 ms to decode,
+0.06 % of the one core, and the 3000 packets per second of the
+peering test below take under 1 % of a core.  The dupe check, the
+APRS parser, the filters and the system calls cost more, and the
+bytes which IS2 saves on UDP peering buy the encoding back, as the
+measurements below show.  A newer CPU encodes and decodes several
+times faster.
 
 
 Performance: the costs
@@ -270,11 +363,22 @@ cost on their links.
 Each packet buffer in aprsc has a fixed header followed by the packet.
 With IS2, the header holds the Received entries of the packet in a
 compact form, 5 entries of 38 bytes, and the decoded `ISPacket`
-fields.  On a 64-bit build, the header is 448 bytes with IS2 and 248
-bytes without, so a packet buffer, of which the server keeps enough
-for the dupe check window and the slowest client, is about 200 bytes
-larger.  At 200 packets per second and a 30-second window, that is
-some 1.2 MB more.  The entries are stored in this compact form, not as
+fields.  On a 64-bit build, the header alone is 448 bytes with IS2
+and 248 bytes without, so a packet buffer, of which the server keeps
+enough for the dupe check window and the slowest client, is about 200
+bytes larger.  At 200 packets per second and a 30-second window, that
+is some 1.2 MB more.
+
+The status page shows the sizes of the cells, header and packet
+together: the smallest cell, for packets of up to 100 bytes, is 348
+bytes without IS2 and 548 with it.  Earlier releases were leaner
+still: the cell was 244 bytes in aprsc 2.1.21, before any IS2 code,
+and 324 bytes in 2.1.23, which embedded the `ISPacket` structure in
+every build so that the reception metadata of plaintext clients could
+be carried, and the structure has since grown by the Received and
+`received_time` fields.
+
+The entries are stored in this compact form, not as
 Protocol Buffers structures, and serialized only when the packet goes
 out to an IS2 link, so the cost per packet is the fixed size, with no
 allocations.

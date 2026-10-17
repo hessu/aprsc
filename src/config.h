@@ -100,6 +100,10 @@ extern int client_timeout;
 extern int client_login_timeout;
 
 extern int disallow_unverified;		/* don't allow unverified clients to transmit packets */
+#ifdef USE_IS2
+extern int is2_received;		/* append a Received entry to the packets received */
+extern int is2_received_addr;		/* ... with the address of the client the packet came from */
+#endif
 extern int quirks_mode;
 
 extern int verbose;

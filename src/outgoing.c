@@ -42,7 +42,8 @@ static void process_outgoing_single(struct worker_t *self, struct pbuf_t *pb)
 {
 	struct client_t *c, *cnext;
 	struct client_t *origin = pb->origin; /* reduce pointer deferencing in tight loops */
-	self->is2_enc_pb = NULL; /* new packet: invalidate the IS2 encoding cache of the worker */
+	self->is2_enc_pb[IS2_ENC_FULL] = NULL; /* new packet: invalidate the IS2 encoding cache of the worker */
+	self->is2_enc_pb[IS2_ENC_REDACTED] = NULL;
 	
 	/*
 	// debug dump

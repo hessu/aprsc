@@ -129,6 +129,14 @@ int client_timeout        = 48*60*60;	/* after N seconds of no input from a clie
 int client_login_timeout  = 30;		/* after N seconds of no login command from a client, disconnect */
 
 int disallow_unverified   = 1;		/* disallow packets from unverified clients */
+#ifdef USE_IS2
+/* The Received entries of IS2 packets (doc/IS2RECEIVED.md). These are for
+ * aggregators and hubs, and are not documented for the operators of the
+ * other servers: an end system is expected to run with the defaults.
+ */
+int is2_received          = 1;		/* append a Received entry to the packets received */
+int is2_received_addr     = 1;		/* ... with the address of the client the packet came from */
+#endif
 int quirks_mode           = 0;		/* enable quirks mode for all clients by default */
 
 int maxclients = 500;			/* maximum number of clients */
@@ -197,6 +205,10 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "q_protocol_id",	_CFUNC_ do_char,	&q_protocol_id	},
 	{ "disallow_other_q_protocols",_CFUNC_ do_boolean,	&disallow_other_protocol_id	},
 	{ "disallow_unverified",_CFUNC_ do_boolean,	&disallow_unverified	},
+#ifdef USE_IS2
+	{ "is2received",	_CFUNC_ do_boolean,	&is2_received		},
+	{ "is2receivedaddr",	_CFUNC_ do_boolean,	&is2_received_addr	},
+#endif
 	{ "quirks_mode",	_CFUNC_ do_boolean,	&quirks_mode		},
 	{ "fake_version",	_CFUNC_ do_string,	&new_fake_version	},
 	{ "disallowlogincall",	_CFUNC_ do_string_array,	&new_disallow_login_glob	},

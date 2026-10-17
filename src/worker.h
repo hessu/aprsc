@@ -98,6 +98,21 @@ extern pthread_attr_t pthr_attrs;  /* used to setup new threads */
 
 struct client_t; /* forward declarator */
 
+/* IS2: a Received entry of a packet: a server which received the packet,
+ * and who it received it from (the IS2Received message of aprsis2.proto).
+ * A packet carries the newest IS2_RECEIVED_MAX of them.
+ */
+#define IS2_RECEIVED_MAX 5
+#define IS2_RECEIVED_ID_LEN CALLSIGNLEN_MAX /* server_id and username, without the NUL */
+#define IS2_RECEIVED_ADDR_MAX 16 /* IPv6 */
+struct is2_received_t {
+	char server_id[IS2_RECEIVED_ID_LEN+1];
+	char username[IS2_RECEIVED_ID_LEN+1];
+	uint8_t verified; /* VerificationStatus */
+	uint8_t addr_len; /* 0: not recorded, 4: IPv4, 16: IPv6 */
+	uint8_t addr[IS2_RECEIVED_ADDR_MAX];
+};
+
 struct pbuf_t {
 	struct pbuf_t *next;
 	struct client_t *origin;
@@ -145,6 +160,14 @@ struct pbuf_t {
 	char is_free;   /* 1: in global free list, 0: not in global free list */
 
 	Aprsis2__ISPacket is2packet;
+#ifdef USE_IS2
+	/* The Received entries of the packet, oldest first. They are
+	 * serialized from here when the packet is sent to an IS2 link:
+	 * is2packet.received is not set in the pbuf.
+	 */
+	int received_n;
+	struct is2_received_t received[IS2_RECEIVED_MAX];
+#endif
 
 	char data[];	/* contains the whole packet, including CRLF, ready to transmit */
 };
@@ -289,7 +312,9 @@ struct client_udp_t {			/* UDP services can be available at multiple
 
 #define APRSIS2_OBUF_PACKETS 20
 #define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of encoded ISPacket elements in IS2 obuf */
-#define APRSIS2_ENC_MAX (PACKETLEN_MAX + 64) /* max length of a single encoded ISPacket element */
+/* max length of a single encoded ISPacket element: the packet, the rx
+ * metadata, and the Received entries at 56 bytes each */
+#define APRSIS2_ENC_MAX (PACKETLEN_MAX + 64 + IS2_RECEIVED_MAX * 56)
 #define APRSIS2_COREPEER_SEQ_WINDOW 32 /* packet loss monitoring window - allow reordering by N packets */
 
 struct client_t {
@@ -535,12 +560,16 @@ struct worker_t {
 
 	/* IS2: the encoded ISPacket element of the packet currently being
 	 * distributed by process_outgoing_single(), so that a packet going
-	 * to many IS2 clients is serialized only once per worker.
+	 * to many IS2 clients is serialized only once per worker. Two
+	 * variants: with the addresses in the Received entries for the
+	 * links to other servers, and without them for the clients.
 	 * Valid only when is2_enc_pb points to the packet being processed.
 	 */
-	struct pbuf_t *is2_enc_pb;
-	int is2_enc_len;
-	char is2_enc[APRSIS2_ENC_MAX];
+#define IS2_ENC_FULL 0
+#define IS2_ENC_REDACTED 1
+	struct pbuf_t *is2_enc_pb[2];
+	int is2_enc_len[2];
+	char is2_enc[2][APRSIS2_ENC_MAX];
 
 	/* IS2: set when a packet was left in the output buffer of a client or
 	 * a peer in this round, for is2_obuf_flush_pending() to send at the

@@ -1173,7 +1173,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 	/* Filter preprocessing before sending this to dupefilter.. */
 	filter_preprocess_dupefilter(pb);
 
-	is2_pbuf_init_packet(pb, is2_packet, &c->is2_input_template);
+	is2_pbuf_init_packet(pb, c, is2_packet, &c->is2_input_template);
 	
 	/* If the packet came in on a filtered port, mark the station as
 	 * heard on this port, so that messages can be routed to it.

@@ -318,6 +318,11 @@ func (s *Server) Rusage() *syscall.Rusage {
 	return ru
 }
 
+// Pid returns the process id of the server.
+func (s *Server) Pid() int {
+	return s.cmd.Process.Pid
+}
+
 // LogCount returns how many times text appears in the server's log so far.
 func (s *Server) LogCount(text string) int {
 	b, err := os.ReadFile(s.LogFile())

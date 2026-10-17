@@ -66,9 +66,15 @@ which passes them to a second server over a UDP core peer link, plain or
 IS2, to a full feed client of the second server, plaintext or IS2, and
 reports the CPU use of both servers (user and system time, as the `time`
 command shows them, from the resource usage the kernel reports for the
-process) for each of the four combinations. `make perftest
+process) for each of the four combinations. `TestClientCPU` feeds one
+server the same way and has a number of full feed clients (10 by default,
+`-nclients`), all plaintext or all IS2, receive every packet, and reports
+the CPU use of the server for each client type. `make perftest
 PERF_ARGS="-duration 10s -rate 500 -peers is2 -clients tcp"` changes the
-load and the scenarios.
+load and the scenarios, and `-server-cpus 0-3 -client-cpus 4-11` pins the
+servers and the test process to separate cores with `taskset`, so that
+the clients, which take several cores with a thousand of them, do not
+compete with the servers being measured.
 
 ## APRS-IS client tools
 

@@ -590,6 +590,11 @@ struct worker_t {
 	 * end of the round.
 	 */
 	int is2_obuf_pending;
+
+	/* IS2: the worker's HMAC contexts for signing and verifying UDP
+	 * peer frames, keyed with the peer group keys; see aprsis2.c.
+	 */
+	struct is2_hmac_cache_t *is2_hmac;
 };
 
 extern cJSON *worker_shutdown_clients;

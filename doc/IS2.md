@@ -223,11 +223,104 @@ reasons:
   language, and well documented:
   https://protobuf.dev/overview/
 
+### Why not a hand-written binary format
+
+A protocol designer is often tempted to write the encoder and decoder
+by hand: a fixed header, some length-prefixed fields, a few integers
+in network byte order.  It looks simple, and the first version is.
+The trouble comes later, and a standard serialization library has
+already solved it:
+
+* **Every field is optional and skippable.**  A hand-written format
+  needs a version number, and a rule for what each version means, as
+  soon as a field is added.  In Protocol Buffers an old decoder skips
+  an unknown field by its wire type, and a new decoder sees a missing
+  field as its default value, so a server can send a field the client
+  does not know yet, and the two can be upgraded in any order.
+* **The decoder is the hard part, and it is written for you.**  A
+  decoder of a binary format receives bytes from the network, and it
+  must check every length against the remaining buffer, every
+  integer for overflow, every string for termination, and reject the
+  frame instead of reading past the end or writing past a buffer.
+  Every one of these checks that is missing is a crash or a security
+  hole in a server which anyone can connect to.  The generated
+  decoder makes these checks for every field of every message, and
+  the library has been fuzzed and audited by many people for many
+  years.  aprsc only has to check what the fields mean.
+* **The second implementation is free.**  The same `.proto` file
+  generates the C code of aprsc and the Go code of the test suite,
+  and could generate a Python, Java or JavaScript client.  With a
+  hand-written format, each of these is written again by hand, from a
+  prose description, and the implementations drift apart on the
+  details the prose does not cover: what the length counts, whether
+  an empty string is encoded, what happens when a field appears
+  twice.  With a schema, the encoding is defined by the compiler, and
+  a client in a new language has working encoders and decoders before
+  the first line of its own code is written.
+* **The format is debuggable.**  `protoc --decode` and the libraries
+  in every language can dump a frame captured from the wire, and
+  Wireshark has a Protocol Buffers dissector which reads a `.proto`
+  file.  A home-made format has none of these until someone writes
+  them.
+The dependency is not forced on anyone.  A small igate, such as a LoRa
+APRS receiver on a microcontroller, which only wants to feed its
+packets with the signal strength it measured, can keep speaking the
+plaintext protocol and send the metadata on a `#is2-meta` comment line
+before each packet, as described in [IS2PLAIN](IS2PLAIN.html); the
+server turns it into the IS2 fields, and servers without IS2 ignore
+the line.  An igate which does want IS2, for the typed login results
+and the framing, has Protocol Buffers implementations for
+microcontrollers too: nanopb generates encoders and decoders in plain
+C with no dynamic memory, in a few kilobytes of code, and runs on the
+ESP32 and ARM Cortex-M boards the LoRa APRS firmwares target.
+
+The place where a hand-written encoder does pay is the hot path, and
+aprsc uses one there: the `IS2Message` around the packets is encoded
+by hand, from the field numbers of the schema, so a packet which goes
+to a hundred clients is serialized once per worker and the wrapper
+is written around the copies.  The field numbers are checked against
+the generated code at start-up, so this encoder cannot disagree with
+the schema either.
+
+### The cost of the encoding
+
 The encoding does not come for free: a receiver has to decode a frame
 before it can see the packet, where a plaintext receiver reads it from
 the line.  aprsc decodes each incoming frame once, in the worker which
-received it, and encodes each outgoing packet once per worker, as
+received it, and encodes each outgoing packet once per worker thread, as
 described below.
+
+The cost is small.  Measured with protobuf-c 1.3.3 and the generated
+code of `aprsis2.proto`, on one core of a 17-year-old Intel Xeon L5520
+at 2.27 GHz (Nehalem, 2009), encoding a 100-byte APRS packet as an
+`ISPacket`:
+
+    packet                                        encoded   encode time
+    no Received entries, with received_time       109 B     0.3 µs
+    one Received entry with address               140 B     0.5 µs
+    three Received entries with addresses         196 B     1.0 µs
+    five Received entries with addresses (max)    240 B     1.7 µs
+
+Decoding an `IS2Message` frame, including allocating and freeing the
+decoded structures with `malloc()`:
+
+    frame                                         size      decode time
+    one packet, no Received entries               117 B     0.5 µs
+    one packet, three Received entries            205 B     1.9 µs
+    ten packets, three Received entries each      2005 B    17 µs, 1.7 µs per packet
+    fifty packets, three Received entries each    10005 B   110 µs, 2.2 µs per packet
+
+Finding the end of a plaintext line and copying it costs 0.02 µs on
+the same machine, so a packet with three Received entries costs some
+50 times more to encode and 100 times more to decode than to handle
+as a line.  In absolute terms, a full feed of 200 packets per second
+takes 0.2 ms of CPU time per second to encode and 0.4 ms to decode,
+0.06 % of the one core, and the 3000 packets per second of the
+peering test below take under 1 % of a core.  The dupe check, the
+APRS parser, the filters and the system calls cost more, and the
+bytes which IS2 saves on UDP peering buy the encoding back, as the
+measurements below show.  A newer CPU encodes and decodes several
+times faster.
 
 
 Performance: the costs
@@ -270,11 +363,22 @@ cost on their links.
 Each packet buffer in aprsc has a fixed header followed by the packet.
 With IS2, the header holds the Received entries of the packet in a
 compact form, 5 entries of 38 bytes, and the decoded `ISPacket`
-fields.  On a 64-bit build, the header is 448 bytes with IS2 and 248
-bytes without, so a packet buffer, of which the server keeps enough
-for the dupe check window and the slowest client, is about 200 bytes
-larger.  At 200 packets per second and a 30-second window, that is
-some 1.2 MB more.  The entries are stored in this compact form, not as
+fields.  On a 64-bit build, the header alone is 448 bytes with IS2
+and 248 bytes without, so a packet buffer, of which the server keeps
+enough for the dupe check window and the slowest client, is about 200
+bytes larger.  At 200 packets per second and a 30-second window, that
+is some 1.2 MB more.
+
+The status page shows the sizes of the cells, header and packet
+together: the smallest cell, for packets of up to 100 bytes, is 348
+bytes without IS2 and 548 with it.  Earlier releases were leaner
+still: the cell was 244 bytes in aprsc 2.1.21, before any IS2 code,
+and 324 bytes in 2.1.23, which embedded the `ISPacket` structure in
+every build so that the reception metadata of plaintext clients could
+be carried, and the structure has since grown by the Received and
+`received_time` fields.
+
+The entries are stored in this compact form, not as
 Protocol Buffers structures, and serialized only when the packet goes
 out to an IS2 link, so the cost per packet is the fixed size, with no
 allocations.
@@ -297,59 +401,67 @@ the buffers of all the IS2 clients which get it.  The encoding of an
 numbers of the schema, which are checked against the generated code at
 start-up, so no intermediate message structure is built per client.
 The UDP peer frames additionally cost an HMAC-SHA256 computation per
-frame sent and received.
+frame sent and received: on the Xeon L5520 about 3 µs for a frame of
+a single packet and 11 µs for a full frame of 1300 bytes, with the
+contexts keyed once per worker thread and copied for each frame.  The
+one-shot API of OpenSSL, which looks up the algorithm and sets up the
+key on every call, took 8 and 12 µs for the same frames.
 
 
 Performance: the benefits
 ----------------------------
 
-### Fewer datagrams and system calls on UDP peering
+### One write per round instead of one per packet
 
-The plaintext UDP peering sends one datagram per packet, so a hub
-exchanging a full feed with a peer group sends and receives one
-`sendto()` or `recvmsg()` system call, one UDP datagram and one IP
-packet per APRS packet per peer.  At the packet rates of the APRS-IS,
-this is already most of the cost of a core server, and at the rates of
-the Open Glider Network, over 600 packets per second, it is a problem.
+A plaintext server writes each packet to each client separately, and
+sends each packet to each UDP peer as a datagram of its own: one
+system call per packet per client or peer, and on UDP peering one IP
+packet per APRS packet per peer, which at the packet rates of the
+APRS-IS is most of the cost of a core server.  An IS2 server encodes
+each packet once per worker thread, appends the encoded packet to the
+frame being built for each client, and sends the frames at the end
+of the worker's round: one write per client per round, with up to 20
+packets in it.  Under load a round collects several packets, so the
+system calls, and on UDP the datagrams, IP headers and signatures,
+drop by about as many.  The one write per round also means one TLS
+record per round and one SCTP message per round, where the plaintext
+protocol pays per packet.  This is why IS2 is cheaper for the server
+even on TCP, where the kernel would coalesce the small writes but the
+system calls remain.
 
-An IS2 peer link packs the packets of a worker's round into one frame,
-up to 20 packets or 1200 bytes of encoded packets per datagram, and
-sends them with one system call.  Under load a round collects several
-packets, so the number of datagrams, system calls, signatures, and IP
-headers per packet drops by about as many.  The per-datagram costs
-(the 28 bytes of UDP and IP headers, the 38-byte signature, the frame
-head and tail) are spread over the packets in the frame, which also
-pays back part of the bytes the metadata adds.
+Measured on one machine (Xeon L5520 at 2.27 GHz, Linux 5.15, 3 worker
+threads) with the scenarios of the test suite, run with `make
+perftest` in `tests/`.  Every packet got through in every case.
 
-This has been measured with the core peer scenario of the test suite
-(`TestCorepeerCPU`, run with `make perftest` in `tests/`): a client
-feeds unique packets at a steady rate to server A over TCP, A passes
-them to server B over the peer link, and a plaintext client of B
-receives them all.  Both servers ran on one machine (Xeon L5520 at
-2.27 GHz, Linux 5.15, 3 worker threads each), fed for 30 seconds, and
-every packet got through in both cases, with the same latency.  The
-CPU time of server A, which receives the feed and sends it to the
-peer, over the 30 seconds:
+`TestCorepeerCPU`: a client feeds unique packets to server A over TCP,
+A passes them to server B over a UDP peer link, plain or IS2, and a
+plaintext client of B receives them.  The CPU time of server A over
+the 30 seconds of the feed:
 
     rate         plain UDP peering     IS2 peering
     1000 pkt/s   2.3 s, 1.5 s of it sys   2.1 s, 1.3 s of it sys
     3000 pkt/s   4.8 s, 3.4 s of it sys   4.2 s, 2.4 s of it sys
 
-At 3000 packets per second IS2 saved 14 % of the CPU time of the
-sender, and 30 % of its system time, while the user time grew by a
-quarter with the encoding and the signing.  On the receiving server
-the total was the same within a few percent, with a third less system
-time and as much more user time.  The figures of A include reading
-the feed line by line from the TCP client, which is the same in both
-cases and most of the cost, so the saving on the peer link itself is
-larger than the totals show, and grows with the packet rate, as more
-packets share each datagram.
+At 3000 packets per second IS2 saved 14 % of the CPU time and 30 % of
+the system time of the sender.  Most of the total is reading the feed
+from the TCP client, the same in both cases, so the saving on the peer
+link itself is larger.
 
-The same packing applies to IS2 clients and uplinks on TCP, TLS and
-SCTP: the packets of a round go out in one frame with one write.  TCP
-would coalesce small writes by itself, but SCTP charges each message
-separately, as described in [SCTP](SCTP.html), and TLS adds a record
-per write, so one write per round is a real saving there.
+`TestClientCPU`: a client feeds one server, and a number of full feed
+clients, all plaintext or all IS2, receive every packet; the server is
+pinned to four cores and the clients to eight others.  The CPU time of
+the server over 30 seconds, the mean of two runs:
+
+    clients            rate          user     sys       total
+    1000 plaintext     200 pkt/s     7.0 s    31.7 s    38.7 s
+    1000 IS2           200 pkt/s     4.8 s    24.1 s    28.9 s
+    200 plaintext      1000 pkt/s    5.7 s    15.2 s    20.9 s
+    200 IS2            1000 pkt/s    2.6 s    7.0 s     9.6 s
+
+IS2 saved 25 % at 200 packets per second and 54 % at 1000, where a
+round collects five times more packets to share each write.  The
+latency to the clients was also steadier: a 99th percentile of 65 to
+74 ms with IS2, against 0.6 to 1.1 s with plaintext.
 
 ### No scanning for line ends
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -185,7 +186,9 @@ func AddrOn(t *testing.T, host string, base int) string {
 var (
 	portTokenRe = regexp.MustCompile(`\b\d{4,5}\b`)
 	portLineRe  = regexp.MustCompile(`(?i)^[ \t]*(Listen|Uplink|PeerGroup|HTTPStatus|HTTPUpload)\b`)
-	runDirRe    = regexp.MustCompile(`(?im)^([ \t]*RunDir[ \t]+)\S+`)
+	// the one listener option with a number which is not a port
+	maxClientsRe = regexp.MustCompile(`(?i)\bmaxclients[ \t]+\d+`)
+	runDirRe     = regexp.MustCompile(`(?im)^([ \t]*RunDir[ \t]+)\S+`)
 )
 
 // rewriteConfig returns an aprsc configuration with its ports mapped to the
@@ -200,21 +203,30 @@ func (b *portBlock) rewriteConfig(text, runDir string) (string, error) {
 		portLine := continued || portLineRe.MatchString(l)
 		continued = strings.HasSuffix(strings.TrimRight(l, " \t"), `\`)
 
-		var err error
-		lines[n] = portTokenRe.ReplaceAllStringFunc(l, func(tok string) string {
+		skip := maxClientsRe.FindAllStringIndex(l, -1)
+		var out strings.Builder
+		last := 0
+		for _, m := range portTokenRe.FindAllStringIndex(l, -1) {
+			out.WriteString(l[last:m[0]])
+			last = m[1]
+			tok := l[m[0]:m[1]]
+			if slices.ContainsFunc(skip, func(r []int) bool { return m[0] >= r[0] && m[1] <= r[1] }) {
+				out.WriteString(tok)
+				continue
+			}
 			base, _ := strconv.Atoi(tok)
 			p, ok := b.port(base)
 			if !ok {
-				if portLine && err == nil {
-					err = fmt.Errorf("line %d: port %d is not in the harness port table", n+1, base)
+				if portLine {
+					return "", fmt.Errorf("line %d: port %d is not in the harness port table", n+1, base)
 				}
-				return tok
+				out.WriteString(tok)
+				continue
 			}
-			return strconv.Itoa(p)
-		})
-		if err != nil {
-			return "", err
+			out.WriteString(strconv.Itoa(p))
 		}
+		out.WriteString(l[last:])
+		lines[n] = out.String()
 	}
 
 	out := strings.Join(lines, "\n")

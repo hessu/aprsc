@@ -53,6 +53,10 @@ type IS2Peer struct {
 	// told the peer that we do (tx)
 	okRx, okTx bool
 
+	// data frames which arrived during the handshake, returned by the
+	// reads which follow it
+	pending []*aprsis2.IS2Message
+
 	queue []*aprsis2.ISPacket
 }
 
@@ -406,10 +410,15 @@ func (p *IS2Peer) Negotiate(timeout time.Duration) error {
 
 		// Handshake and frame errors while waiting are not fatal. Wait up to
 		// two seconds for the next handshake datagram before repeating the
-		// hello.
+		// hello. One datagram at a time, so that the handshake is seen to
+		// be complete as soon as its last datagram has been handled: the
+		// server starts pinging soon after, and a frame which arrives
+		// before that is kept for the reads which follow.
 		stop := time.Now().Add(2 * time.Second)
 		for !p.Linked() && time.Now().Before(stop) {
-			p.readFrame(time.Until(stop))
+			if m, _ := p.readDatagram(time.Until(stop)); m != nil {
+				p.pending = append(p.pending, m)
+			}
 		}
 	}
 
@@ -419,23 +428,39 @@ func (p *IS2Peer) Negotiate(timeout time.Duration) error {
 // readFrame reads datagrams until a data frame is found, handling handshake
 // datagrams on the way. A datagram which is not a valid frame is an error.
 func (p *IS2Peer) readFrame(timeout time.Duration) (*aprsis2.IS2Message, error) {
+	if len(p.pending) > 0 {
+		m := p.pending[0]
+		p.pending = p.pending[1:]
+		return m, nil
+	}
+
 	end := time.Now().Add(timeout)
 
 	for {
-		msg, err := readDatagramRaw(p.conn, time.Until(end))
+		m, err := p.readDatagram(time.Until(end))
 		if err != nil {
 			return nil, err
 		}
-
-		if strings.HasPrefix(string(msg), PeerControlPrefix) {
-			if err := p.handleControl(strings.TrimRight(string(msg), "\r\n")); err != nil {
-				return nil, err
-			}
-			continue
+		if m != nil {
+			return m, nil
 		}
-
-		return p.decodeFrame(msg)
 	}
+}
+
+// readDatagram reads one datagram. A handshake datagram is handled and
+// returns a nil message; a data frame is decoded and returned. A datagram
+// which is neither is an error.
+func (p *IS2Peer) readDatagram(timeout time.Duration) (*aprsis2.IS2Message, error) {
+	msg, err := readDatagramRaw(p.conn, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.HasPrefix(string(msg), PeerControlPrefix) {
+		return nil, p.handleControl(strings.TrimRight(string(msg), "\r\n"))
+	}
+
+	return p.decodeFrame(msg)
 }
 
 func readDatagramRaw(conn *net.UDPConn, timeout time.Duration) ([]byte, error) {

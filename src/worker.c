@@ -2173,6 +2173,8 @@ void worker_free_buffers(struct worker_t *self)
 {
 	struct pbuf_t *p, *pn;
 	
+	is2_corepeer_hmac_free(self);
+	
 	/* clean up thread-local pbuf pools */
 	for (p = self->pbuf_free_small; p; p = pn) {
 		pn = p->next;

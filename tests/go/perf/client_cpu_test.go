@@ -72,7 +72,8 @@ type clientResult struct {
 	sent     int
 	received int64 // over all the clients
 	fed      time.Duration
-	drain    time.Duration
+	drain    time.Duration // from the end of the feed to the last packet received
+	drained  bool          // every packet was received, so drain is a measurement
 	u        usage
 	lat      latencies
 }
@@ -106,10 +107,10 @@ func TestClientCPU(t *testing.T) {
 	fmt.Fprintf(&b, "%-14s %9s %9s %9s %7s %8s %8s %9s\n", "scenario", "user s", "sys s", "total s", "cpu%", "us/pkt", "drain s", "max RSS MB")
 	for _, r := range results {
 		total := r.u.user + r.u.sys
-		fmt.Fprintf(&b, "%-14s %9.3f %9.3f %9.3f %7.1f %8.0f %8.2f %9.1f\n", r.name,
+		fmt.Fprintf(&b, "%-14s %9.3f %9.3f %9.3f %7.1f %8.0f %8s %9.1f\n", r.name,
 			r.u.user.Seconds(), r.u.sys.Seconds(), total.Seconds(),
 			100*total.Seconds()/r.fed.Seconds(), float64(total.Microseconds())/float64(r.sent),
-			r.drain.Seconds(), float64(r.u.maxRSS)/(1024*1024))
+			drainColumn(r.drain, r.drained), float64(r.u.maxRSS)/(1024*1024))
 	}
 	fmt.Fprintf(&b, "\nLatency from the feeder to the clients, ms:\n")
 	fmt.Fprintf(&b, "%-14s %8s %8s %8s %8s\n", "scenario", "mean", "median", "p99", "max")
@@ -189,10 +190,10 @@ func runClientScenario(t *testing.T, client string) clientResult {
 	}
 
 	// feed at the rate, catching up after any hiccup so that the average
-	// holds
+	// holds; a client which failed ends the feed, since the run is lost
 	interval := time.Second / time.Duration(*rate)
 	start := time.Now()
-	for n := 0; n < total; n++ {
+	for n := 0; n < total && len(errs) == 0; n++ {
 		time.Sleep(time.Until(start.Add(time.Duration(n) * interval)))
 		tx.Send(t, packet(n, epoch))
 	}
@@ -202,10 +203,11 @@ func runClientScenario(t *testing.T, client string) clientResult {
 	// batches, so it trails the feed a little
 	want := int64(total) * int64(len(rxs))
 	deadline := time.Now().Add(10 * time.Second)
-	for received.Load() < want && time.Now().Before(deadline) {
+	for received.Load() < want && len(errs) == 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	drain := time.Since(start) - fed
+	drained := received.Load() == want
 	close(stop)
 	wg.Wait()
 	close(errs)
@@ -216,13 +218,13 @@ func runClientScenario(t *testing.T, client string) clientResult {
 	s.Stop()
 
 	got := received.Load()
-	t.Logf("%s clients: fed %d packets in %.2f s (%.1f/s), the %d clients received %d of %d, the last %.2f s after the feed ended",
-		client, total, fed.Seconds(), float64(total)/fed.Seconds(), len(rxs), got, want, drain.Seconds())
+	t.Logf("%s clients: fed %d packets in %.2f s (%.1f/s), the %d clients received %d of %d, %s",
+		client, total, fed.Seconds(), float64(total)/fed.Seconds(), len(rxs), got, want, drainText(drain, drained))
 	if got != want {
 		t.Errorf("the clients received %d of %d packets", got, want)
 	}
 
-	r := clientResult{sent: total, received: got, fed: fed, drain: drain, u: usageOf(s.Rusage()), lat: summarize(samples)}
+	r := clientResult{sent: total, received: got, fed: fed, drain: drain, drained: drained, u: usageOf(s.Rusage()), lat: summarize(samples)}
 	t.Logf("latency from the feeder to the first client: %s", r.lat)
 	t.Logf("server: %s", r.u.describe(fed, total))
 

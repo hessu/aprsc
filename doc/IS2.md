@@ -262,6 +262,7 @@ already solved it:
   Wireshark has a Protocol Buffers dissector which reads a `.proto`
   file.  A home-made format has none of these until someone writes
   them.
+
 The dependency is not forced on anyone.  A small igate, such as a LoRa
 APRS receiver on a microcontroller, which only wants to feed its
 packets with the signal strength it measured, can keep speaking the
@@ -403,9 +404,11 @@ start-up, so no intermediate message structure is built per client.
 The UDP peer frames additionally cost an HMAC-SHA256 computation per
 frame sent and received: on the Xeon L5520 about 3 µs for a frame of
 a single packet and 11 µs for a full frame of 1300 bytes, with the
-contexts keyed once per worker thread and copied for each frame.  The
-one-shot API of OpenSSL, which looks up the algorithm and sets up the
-key on every call, took 8 and 12 µs for the same frames.
+contexts keyed once per worker thread and re-initialised in place for
+each frame (or copied, on the OpenSSL 3.0 releases before 3.0.3 which
+cannot re-initialise an HMAC context, such as the one in Ubuntu
+22.04).  The one-shot API of OpenSSL, which looks up the algorithm and
+sets up the key on every call, took 8 and 12 µs for the same frames.
 
 
 Performance: the benefits

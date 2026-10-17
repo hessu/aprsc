@@ -369,6 +369,8 @@ static void is2_corepeer_hmac_cache_rebuild(struct worker_t *self)
 		}
 	}
 
+	/* a key whose context could not be set up is tried again on
+	 * its next use, in is2_corepeer_hmac() */
 	hc->generation = is2_corepeer_keys_generation;
 }
 
@@ -408,6 +410,12 @@ static int is2_corepeer_hmac(struct worker_t *self, unsigned int key_id, const c
 		is2_corepeer_hmac_cache_rebuild(self);
 
 	ctx = self->is2_hmac->ctx[key_id];
+	if (!ctx && is2_corepeer_keys[key_id]) {
+		/* the context failed to set up when the table was loaded: try again */
+		ctx = self->is2_hmac->ctx[key_id] = is2_corepeer_hmac_ctx_new(is2_corepeer_keys[key_id]);
+		if (ctx)
+			hlog(LOG_INFO, "worker %d: IS2 UDP: HMAC context for key %d set up on retry", self->id, key_id);
+	}
 	if (!ctx) {
 		r = (is2_corepeer_keys[key_id]) ? IS2_HMAC_FAILED : IS2_HMAC_NO_KEY;
 	} else {

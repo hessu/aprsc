@@ -18,6 +18,7 @@ import (
 // statusJSON is the part of the server's status.json the tests look at.
 type statusJSON struct {
 	Server    map[string]any   `json:"server"`
+	Totals    map[string]any   `json:"totals"`
 	Dupecheck map[string]any   `json:"dupecheck"`
 	Listeners []map[string]any `json:"listeners"`
 	Peers     []map[string]any `json:"peers"`

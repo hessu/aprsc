@@ -28,6 +28,8 @@ Options (defaults from the environment variable in brackets):
                    default is the keys in ssh-agent (ssh-add -L)
   -u USER          build user created in the container [\$USER]
   -p PROFILE       LXD profile                      [default]
+  -G VERSION       Go to install for the test suite, e.g. go1.27.2,
+                   or none                           [latest stable]
 EOF
 	exit 1
 }
@@ -39,8 +41,9 @@ SEARCH="$BUILDER_SEARCH"
 KEYFILES=""
 BUILDUSER="$USER"
 PROFILE="default"
+GOVERSION=""
 
-while getopts "a:g:n:s:k:u:p:h" opt; do
+while getopts "a:g:n:s:k:u:p:G:h" opt; do
 	case "$opt" in
 		a) ADDRESS="$OPTARG" ;;
 		g) GATEWAY="$OPTARG" ;;
@@ -49,6 +52,7 @@ while getopts "a:g:n:s:k:u:p:h" opt; do
 		k) KEYFILES="$KEYFILES $OPTARG" ;;
 		u) BUILDUSER="$OPTARG" ;;
 		p) PROFILE="$OPTARG" ;;
+		G) GOVERSION="$OPTARG" ;;
 		*) usage ;;
 	esac
 done
@@ -76,6 +80,38 @@ SRCDIR=$(cd "$(dirname "$0")/.." && pwd)
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+
+# The test suite in tests/go needs a newer Go than the distributions ship,
+# so the official build from go.dev is installed in /usr/local/go and put
+# on the PATH of login shells. Called once the container is up.
+install_go()
+{
+	[ "$GOVERSION" != "none" ] || return 0
+	if [ -z "$GOVERSION" ]; then
+		GOVERSION=$(curl -sSf 'https://go.dev/VERSION?m=text' | head -n 1)
+		[ -n "$GOVERSION" ] || { echo "$0: cannot find the latest Go version, use -G" >&2; exit 1; }
+	fi
+	case "$(lxc config get "$NAME" image.architecture)" in
+		amd64|x86_64) GOARCH=amd64 ;;
+		arm64|aarch64) GOARCH=arm64 ;;
+		i386|i686) GOARCH=386 ;;
+		*) echo "$0: no Go build known for the architecture of $NAME, use -G none" >&2; exit 1 ;;
+	esac
+	GOTGZ="$GOVERSION.linux-$GOARCH.tar.gz"
+	echo "=== Installing $GOVERSION for linux/$GOARCH in /usr/local/go"
+	curl -sSf -o "$TMP/$GOTGZ" "https://dl.google.com/go/$GOTGZ"
+	echo "$(curl -sSf "https://dl.google.com/go/$GOTGZ.sha256")  $TMP/$GOTGZ" | sha256sum -c --quiet
+	if lxc exec "$NAME" -- test -e /usr/local/go; then
+		echo "$0: /usr/local/go exists in $NAME already" >&2
+		exit 1
+	fi
+	lxc file push -q "$TMP/$GOTGZ" "$NAME/tmp/$GOTGZ"
+	lxc exec "$NAME" -- tar -C /usr/local -xzf "/tmp/$GOTGZ"
+	lxc file delete "$NAME/tmp/$GOTGZ"
+	echo 'export PATH=$PATH:/usr/local/go/bin' > "$TMP/go.sh"
+	lxc file push -q --uid 0 --gid 0 --mode 0644 "$TMP/go.sh" "$NAME/etc/profile.d/go.sh"
+	lxc exec "$NAME" -- /usr/local/go/bin/go version
+}
 
 if [ -n "$KEYFILES" ]; then
 	cat $KEYFILES > "$TMP/keys"
@@ -175,6 +211,8 @@ if [ $rc -ne 0 ]; then
 	echo "  lxc exec $NAME -- cat /var/log/cloud-init-output.log" >&2
 	[ $rc -eq 2 ] || exit 1
 fi
+
+install_go
 
 if [ "$SSHD" = "ssh" ]; then
 	echo "=== Checking aprsc Build-Depends"

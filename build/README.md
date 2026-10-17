@@ -30,13 +30,18 @@ The build host runs LXD. A build container needs:
   container name, so that `ssh build-<platform>` works from the build host,
 - a user with the same name as the one running `build-all`, with the
   build host user's SSH keys authorised,
-- a running SSH server and the packages needed to build aprsc.
+- a running SSH server and the packages needed to build aprsc,
+- Go in `/usr/local/go`, on the PATH of login shells, for running the
+  test suite in `tests/` there; the distributions' own Go packages are
+  too old for it.
 
 ## Creating a build container
 
 `lxd-create-builder.sh` creates one from an image that runs cloud-init on
 first boot, which sets up the address, the user, the packages and the SSH
 server. It picks the package list from the image's OS (Ubuntu or Fedora).
+It then installs the latest stable Go from go.dev, checked against the
+published SHA-256 (`-G go1.27.2` picks a version, `-G none` skips it).
 On Ubuntu it finishes by checking the Build-Depends with
 `dpkg-checkbuilddeps` against `src/debian/control`. It prints the SSH host
 key fingerprints at the end.

@@ -495,6 +495,17 @@ struct client_t {
 	int corepeer_is2_sequence_window_used;
 };
 
+/*
+ *	Is this client a link to another server: an uplink, or a peer?
+ *	Packets from them are classified as coming from upstream, and they
+ *	are trusted with more than the clients are.
+ */
+
+static inline int client_is_server_link(const struct client_t *c)
+{
+	return (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT));
+}
+
 extern struct client_t *client_alloc(void);
 extern void client_free(struct client_t *c);
 extern int set_client_sockopt(struct client_t *c);

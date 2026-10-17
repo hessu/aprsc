@@ -1760,7 +1760,7 @@ int is2_received_age_check(struct client_t *c, uint64_t received_time)
 	 * only loses its own packets.
 	 */
 	if (tick >= c->is2_received_age_warn) {
-		int level = (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) ? LOG_WARNING : LOG_INFO;
+		int level = client_is_server_link(c) ? LOG_WARNING : LOG_INFO;
 		/* negated as unsigned, since -INT64_MIN does not fit */
 		uint64_t mag = (age < 0) ? (uint64_t)0 - (uint64_t)age : (uint64_t)age;
 		c->is2_received_age_warn = tick + IS2_RECEIVED_AGE_WARN_INTERVAL;
@@ -1865,7 +1865,7 @@ static int is2_encode_packet_element(char *buf, int buflen, Aprsis2__ISPacket *p
 
 static int is2_received_redacted(struct client_t *c)
 {
-	return !(c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT));
+	return !client_is_server_link(c);
 }
 
 /*

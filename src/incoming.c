@@ -1029,7 +1029,7 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 	pb->t = tick;
 	
 	/* classify the packet as coming from an uplink or client */
-	if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+	if (client_is_server_link(c)) {
 		pb->flags |= F_FROM_UPSTR;
 	} else if (c->flags & CLFLAGS_DUPEFEED) {
 		/* we ignore packets from duplicate feeds */

@@ -1516,7 +1516,7 @@ static void worker_classify_client(struct worker_t *self, struct client_t *c)
 		//hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified readonly", self->id, c->fd);
 		class_next = self->clients_ro;
 		class_prevp = &self->clients_ro;
-	} else if (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) {
+	} else if (client_is_server_link(c)) {
 		//hlog(LOG_DEBUG, "classify_client(worker %d): client fd %d classified upstream/peer", self->id, c->fd);
 		class_next = self->clients_ups;
 		class_prevp = &self->clients_ups;

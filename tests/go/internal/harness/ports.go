@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -184,49 +183,115 @@ func AddrOn(t *testing.T, host string, base int) string {
 }
 
 var (
-	portTokenRe = regexp.MustCompile(`\b\d{4,5}\b`)
-	portLineRe  = regexp.MustCompile(`(?i)^[ \t]*(Listen|Uplink|PeerGroup|HTTPStatus|HTTPUpload)\b`)
-	// the one listener option with a number which is not a port
-	maxClientsRe = regexp.MustCompile(`(?i)\bmaxclients[ \t]+\d+`)
-	runDirRe     = regexp.MustCompile(`(?im)^([ \t]*RunDir[ \t]+)\S+`)
+	portLineRe = regexp.MustCompile(`(?i)^[ \t]*(Listen|Uplink|PeerGroup|HTTPStatus|HTTPUpload)\b`)
+	runDirRe   = regexp.MustCompile(`(?im)^([ \t]*RunDir[ \t]+)\S+`)
 )
 
+// configArgs returns the start and end offsets of the arguments on a line
+// of an aprsc configuration: blank-separated, with a double-quoted name
+// kept as one argument, the way cfgfile.c splits them. A trailing
+// backslash, which continues the line, is not an argument.
+func configArgs(l string) [][2]int {
+	l = strings.TrimSuffix(strings.TrimRight(l, " \t"), `\`)
+	var args [][2]int
+	i := 0
+	for i < len(l) {
+		for i < len(l) && (l[i] == ' ' || l[i] == '\t') {
+			i++
+		}
+		if i >= len(l) {
+			break
+		}
+		start := i
+		if l[i] == '"' {
+			i++
+			for i < len(l) && l[i] != '"' {
+				i++
+			}
+			if i < len(l) {
+				i++
+			}
+		} else {
+			for i < len(l) && l[i] != ' ' && l[i] != '\t' {
+				i++
+			}
+		}
+		args = append(args, [2]int{start, i})
+	}
+	return args
+}
+
+// portArg says whether argument a of a line with the given keyword is a
+// port, and whether it is a host:port rather than a bare port number:
+//
+//	Listen "name" type proto addr PORT ...
+//	Uplink name type proto host PORT ...
+//	HTTPStatus addr PORT, HTTPUpload addr PORT
+//	PeerGroup name proto host:PORT id host:PORT id host:PORT ...
+func portArg(keyword string, a int) (isPort, hostPort bool) {
+	switch keyword {
+	case "listen", "uplink":
+		return a == 5, false
+	case "httpstatus", "httpupload":
+		return a == 2, false
+	case "peergroup":
+		return a >= 3 && a%2 == 1, true
+	}
+	return false, false
+}
+
 // rewriteConfig returns an aprsc configuration with its ports mapped to the
-// block's and its RunDir pointing at runDir. Every port number on a line
-// which configures a listener, uplink, peer group or HTTP server must be in
-// the port table, so that no server binds a port outside its block.
+// block's and its RunDir pointing at runDir. Only the port arguments of the
+// lines which configure a listener, uplink, peer group or HTTP server are
+// touched, and every one of them must be in the port table, so that no
+// server binds a port outside its block.
 func (b *portBlock) rewriteConfig(text, runDir string) (string, error) {
 	lines := strings.Split(text, "\n")
 
-	continued := false // the previous line ended with a backslash
+	keyword := "" // of the line being continued, when it has ports
+	arg := 0      // arguments of it seen on the previous lines
+	continued := false
 	for n, l := range lines {
-		portLine := continued || portLineRe.MatchString(l)
+		args := configArgs(l)
+		if !continued {
+			keyword, arg = "", 0
+			if m := portLineRe.FindString(l); m != "" {
+				keyword = strings.ToLower(strings.TrimSpace(m))
+			}
+		}
 		continued = strings.HasSuffix(strings.TrimRight(l, " \t"), `\`)
 
-		skip := maxClientsRe.FindAllStringIndex(l, -1)
 		var out strings.Builder
 		last := 0
-		for _, m := range portTokenRe.FindAllStringIndex(l, -1) {
-			out.WriteString(l[last:m[0]])
-			last = m[1]
-			tok := l[m[0]:m[1]]
-			if slices.ContainsFunc(skip, func(r []int) bool { return m[0] >= r[0] && m[1] <= r[1] }) {
-				out.WriteString(tok)
+		for i, span := range args {
+			isPort, hostPort := portArg(keyword, arg+i)
+			if !isPort {
 				continue
 			}
-			base, _ := strconv.Atoi(tok)
+			tok := l[span[0]:span[1]]
+			portStart := span[0]
+			if hostPort {
+				c := strings.LastIndex(tok, ":")
+				if c < 0 {
+					return "", fmt.Errorf("line %d: %q has no port", n+1, tok)
+				}
+				portStart += c + 1
+			}
+			base, err := strconv.Atoi(l[portStart:span[1]])
+			if err != nil {
+				return "", fmt.Errorf("line %d: %q is not a port number", n+1, l[portStart:span[1]])
+			}
 			p, ok := b.port(base)
 			if !ok {
-				if portLine {
-					return "", fmt.Errorf("line %d: port %d is not in the harness port table", n+1, base)
-				}
-				out.WriteString(tok)
-				continue
+				return "", fmt.Errorf("line %d: port %d is not in the harness port table", n+1, base)
 			}
+			out.WriteString(l[last:portStart])
 			out.WriteString(strconv.Itoa(p))
+			last = span[1]
 		}
 		out.WriteString(l[last:])
 		lines[n] = out.String()
+		arg += len(args)
 	}
 
 	out := strings.Join(lines, "\n")

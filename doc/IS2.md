@@ -321,6 +321,30 @@ headers per packet drops by about as many.  The per-datagram costs
 head and tail) are spread over the packets in the frame, which also
 pays back part of the bytes the metadata adds.
 
+This has been measured with the core peer scenario of the test suite
+(`TestCorepeerCPU`, run with `make perftest` in `tests/`): a client
+feeds unique packets at a steady rate to server A over TCP, A passes
+them to server B over the peer link, and a plaintext client of B
+receives them all.  Both servers ran on one machine (Xeon L5520 at
+2.27 GHz, Linux 5.15, 3 worker threads each), fed for 30 seconds, and
+every packet got through in both cases, with the same latency.  The
+CPU time of server A, which receives the feed and sends it to the
+peer, over the 30 seconds:
+
+    rate         plain UDP peering     IS2 peering
+    1000 pkt/s   2.3 s, 1.5 s of it sys   2.1 s, 1.3 s of it sys
+    3000 pkt/s   4.8 s, 3.4 s of it sys   4.2 s, 2.4 s of it sys
+
+At 3000 packets per second IS2 saved 14 % of the CPU time of the
+sender, and 30 % of its system time, while the user time grew by a
+quarter with the encoding and the signing.  On the receiving server
+the total was the same within a few percent, with a third less system
+time and as much more user time.  The figures of A include reading
+the feed line by line from the TCP client, which is the same in both
+cases and most of the cost, so the saving on the peer link itself is
+larger than the totals show, and grows with the packet rate, as more
+packets share each datagram.
+
 The same packing applies to IS2 clients and uplinks on TCP, TLS and
 SCTP: the packets of a round go out in one frame with one write.  TCP
 would coalesce small writes by itself, but SCTP charges each message

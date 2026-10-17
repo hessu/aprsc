@@ -64,6 +64,7 @@ Thread names set with `thread_name_set()` are `aprsc time`, `aprsc accept`,
 | `aprsis2plain.c` | Parses `#is2-meta` key-value metadata lines from plaintext clients into IS2 fields; `doc/IS2PLAIN.md` documents the lines |
 | `doc/IS2PEERING.md` | The UDP peering handshake spec |
 | `doc/IS2UPGRADE.md` | The in-band upgrade of a plaintext client connection to IS2 |
+| `doc/IS2RECEIVED.md` | The Received entries (which servers handled a packet, and from whom) and the `received_time` stamp with its age check |
 
 **Infrastructure and libraries**
 

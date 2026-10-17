@@ -363,6 +363,67 @@ func ConnectIS2(t *testing.T, addr, callsign string, opts ...Option) *IS2 {
 	return c
 }
 
+// AcceptIS2 waits for the server to connect to the fake upstream and log in
+// over IS2, and answers like an IS2 server: the server signature first, then
+// the login reply. The connection is closed when the test finishes. The
+// returned client reads what the server sends up, replying to its pings, and
+// sends packets down to it.
+func (f *FakeUpstream) AcceptIS2(t *testing.T) *IS2 {
+	t.Helper()
+
+	f.ln.SetDeadline(time.Now().Add(acceptTimeout))
+	conn, err := f.ln.Accept()
+	if err != nil {
+		t.Fatalf("server did not connect to the fake IS2 upstream within %v: %v", acceptTimeout, err)
+	}
+
+	c := &IS2{
+		conn:     conn,
+		r:        bufio.NewReaderSize(conn, 70000),
+		wantType: aprsis2.ISPacket_IS_PACKET,
+	}
+	t.Cleanup(func() { c.Close() })
+
+	err = c.SendMessage(&aprsis2.IS2Message{
+		Type: aprsis2.IS2Message_SERVER_SIGNATURE,
+		ServerSignature: &aprsis2.IS2ServerSignature{
+			Username:   f.call,
+			AppName:    "IS2_Fake",
+			AppVersion: "1.00",
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to send the server signature to the upstream connection: %v", err)
+	}
+
+	m, err := c.ReadFrame(time.Second)
+	if err != nil {
+		t.Fatalf("did not receive an IS2 login request from the upstream connection: %v", err)
+	}
+	req := m.GetLoginRequest()
+	if m.GetType() != aprsis2.IS2Message_LOGIN_REQUEST || req == nil {
+		t.Fatalf("expected an IS2 login request from the upstream connection, got %v", m.GetType())
+	}
+	c.Callsign = req.GetUsername()
+
+	verified := aprsis2.VerificationStatus_NONE
+	if req.GetPassword() == fmt.Sprint(passcodeFor(req.GetUsername())) {
+		verified = aprsis2.VerificationStatus_WEAK
+	}
+	err = c.SendMessage(&aprsis2.IS2Message{
+		Type: aprsis2.IS2Message_LOGIN_REPLY,
+		LoginReply: &aprsis2.IS2LoginReply{
+			Result:   aprsis2.IS2LoginReply_OK,
+			Verified: verified,
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to send the login reply to the upstream connection: %v", err)
+	}
+
+	return c
+}
+
 // WaitSignature waits for a SERVER_SIGNATURE frame, which the server sends to
 // a connected client again after a live upgrade.
 func (c *IS2) WaitSignature(timeout time.Duration) error {

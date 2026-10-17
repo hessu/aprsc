@@ -3,6 +3,7 @@ package functional
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -294,6 +295,74 @@ func TestIS2Received(t *testing.T) {
 		expectTotal(t, "is2_received_too_old", 1)
 		expectTotal(t, "is2_received_too_new", 1)
 		s.WaitLog("seconds in the past", 1, 5*time.Second)
+	})
+
+	s.Stop()
+}
+
+// An IS2 uplink is another server: it gets the addresses in the entries,
+// and the packets from it get an entry naming it.
+func TestIS2ReceivedUplink(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	fake := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 10153), "FAKEUP")
+	s := harness.StartText(t, "is2-received-uplink", is2BasicWith(t, func(l string) string {
+		if strings.HasPrefix(l, "Uplink full1 ") {
+			return "Uplink is2up full tcp 127.0.0.1 10153 is2"
+		}
+		return l
+	}))
+	up := fake.AcceptIS2(t)
+	if up.Callsign != "TESTING" {
+		t.Errorf("the server logged in to the uplink as %q, want TESTING", up.Callsign)
+	}
+
+	const client = "N0IS2"
+	rx := isclient.ConnectIS2(t, harness.Addr(t, 56152), "N1RX")
+	tx := isclient.ConnectIS2(t, harness.Addr(t, 56580), client)
+
+	t.Run("to the uplink", func(t *testing.T) {
+		p := isclient.NewISPacket(sentPacket(client, "to the uplink"), isclient.Meta{})
+		p.Received = []*aprsis2.IS2Received{received("S1", "U1", aprsis2.VerificationStatus_STRONG, []byte{10, 0, 0, 1})}
+		p.ReceivedTime = uint64(time.Now().UnixMilli() - 1500)
+		if err := tx.SendISPacket(p); err != nil {
+			t.Fatal(err)
+		}
+
+		got := readISPacket(t, up, passedPacket(client, "to the uplink"))
+		checkReceived(t, "uplink", got, []*aprsis2.IS2Received{
+			received("S1", "U1", aprsis2.VerificationStatus_STRONG, []byte{10, 0, 0, 1}),
+			received("TESTING", client, aprsis2.VerificationStatus_WEAK, loopback),
+		})
+		if got.GetReceivedTime() != p.ReceivedTime {
+			t.Errorf("received_time %d, want %d", got.GetReceivedTime(), p.ReceivedTime)
+		}
+		// the client gets it too, without the addresses
+		got = readISPacket(t, rx, passedPacket(client, "to the uplink"))
+		checkReceived(t, "client", got, []*aprsis2.IS2Received{
+			received("S1", "U1", aprsis2.VerificationStatus_STRONG, nil),
+			received("TESTING", client, aprsis2.VerificationStatus_WEAK, nil),
+		})
+	})
+
+	t.Run("from the uplink", func(t *testing.T) {
+		const packet = "SRC>DST,qAR,IGATE:from the uplink"
+		p := isclient.NewISPacket(packet, isclient.Meta{})
+		p.Received = []*aprsis2.IS2Received{received("FAKEUP", "N0FAR", aprsis2.VerificationStatus_STRONG, []byte{10, 1, 1, 1})}
+		p.ReceivedTime = uint64(time.Now().UnixMilli() - 2500)
+		if err := up.SendISPacket(p); err != nil {
+			t.Fatal(err)
+		}
+
+		got := readISPacket(t, rx, packet)
+		checkReceived(t, "client", got, []*aprsis2.IS2Received{
+			received("FAKEUP", "N0FAR", aprsis2.VerificationStatus_STRONG, nil),
+			received("TESTING", "FAKEUP", aprsis2.VerificationStatus_WEAK, nil),
+		})
+		if got.GetReceivedTime() != p.ReceivedTime {
+			t.Errorf("received_time %d, want %d", got.GetReceivedTime(), p.ReceivedTime)
+		}
 	})
 
 	s.Stop()

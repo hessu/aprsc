@@ -411,65 +411,46 @@ key on every call, took 8 and 12 µs for the same frames.
 Performance: the benefits
 ----------------------------
 
-### Fewer datagrams and system calls on UDP peering
+### One write per round instead of one per packet
 
-The plaintext UDP peering sends one datagram per packet, so a hub
-exchanging a full feed with a peer group sends and receives one
-`sendto()` or `recvmsg()` system call, one UDP datagram and one IP
-packet per APRS packet per peer.  At the packet rates of the APRS-IS,
-this is already most of the cost of a core server, and at the rates of
-the Open Glider Network, over 600 packets per second, it is a problem.
+A plaintext server writes each packet to each client separately, and
+sends each packet to each UDP peer as a datagram of its own: one
+system call per packet per client or peer, and on UDP peering one IP
+packet per APRS packet per peer, which at the packet rates of the
+APRS-IS is most of the cost of a core server.  An IS2 server encodes
+each packet once per worker thread, appends the encoded packet to the
+frame being built for each client, and sends the frames at the end
+of the worker's round: one write per client per round, with up to 20
+packets in it.  Under load a round collects several packets, so the
+system calls, and on UDP the datagrams, IP headers and signatures,
+drop by about as many.  The one write per round also means one TLS
+record per round and one SCTP message per round, where the plaintext
+protocol pays per packet.  This is why IS2 is cheaper for the server
+even on TCP, where the kernel would coalesce the small writes but the
+system calls remain.
 
-An IS2 peer link packs the packets of a worker's round into one frame,
-up to 20 packets or 1200 bytes of encoded packets per datagram, and
-sends them with one system call.  Under load a round collects several
-packets, so the number of datagrams, system calls, signatures, and IP
-headers per packet drops by about as many.  The per-datagram costs
-(the 28 bytes of UDP and IP headers, the 38-byte signature, the frame
-head and tail) are spread over the packets in the frame, which also
-pays back part of the bytes the metadata adds.
+Measured on one machine (Xeon L5520 at 2.27 GHz, Linux 5.15, 3 worker
+threads) with the scenarios of the test suite, run with `make
+perftest` in `tests/`.  Every packet got through in every case.
 
-This has been measured with the core peer scenario of the test suite
-(`TestCorepeerCPU`, run with `make perftest` in `tests/`): a client
-feeds unique packets at a steady rate to server A over TCP, A passes
-them to server B over the peer link, and a plaintext client of B
-receives them all.  Both servers ran on one machine (Xeon L5520 at
-2.27 GHz, Linux 5.15, 3 worker threads each), fed for 30 seconds, and
-every packet got through in both cases, with the same latency.  The
-CPU time of server A, which receives the feed and sends it to the
-peer, over the 30 seconds:
+`TestCorepeerCPU`: a client feeds unique packets to server A over TCP,
+A passes them to server B over a UDP peer link, plain or IS2, and a
+plaintext client of B receives them.  The CPU time of server A over
+the 30 seconds of the feed:
 
     rate         plain UDP peering     IS2 peering
     1000 pkt/s   2.3 s, 1.5 s of it sys   2.1 s, 1.3 s of it sys
     3000 pkt/s   4.8 s, 3.4 s of it sys   4.2 s, 2.4 s of it sys
 
-At 3000 packets per second IS2 saved 14 % of the CPU time of the
-sender, and 30 % of its system time, while the user time grew by a
-quarter with the encoding and the signing.  On the receiving server
-the total was the same within a few percent, with a third less system
-time and as much more user time.  The figures of A include reading
-the feed line by line from the TCP client, which is the same in both
-cases and most of the cost, so the saving on the peer link itself is
-larger than the totals show, and grows with the packet rate, as more
-packets share each datagram.
+At 3000 packets per second IS2 saved 14 % of the CPU time and 30 % of
+the system time of the sender.  Most of the total is reading the feed
+from the TCP client, the same in both cases, so the saving on the peer
+link itself is larger.
 
-The same packing applies to IS2 clients and uplinks on TCP, TLS and
-SCTP: the packets of a round go out in one frame with one write.  TCP
-would coalesce small writes by itself, but SCTP charges each message
-separately, as described in [SCTP](SCTP.html), and TLS adds a record
-per write, so one write per round is a real saving there.
-
-The client side has been measured with the client scenario of the
-test suite (`TestClientCPU`, also run with `make perftest`): a client
-feeds unique packets at a steady rate to one server over TCP, and a
-number of full feed clients, all plaintext or all IS2, receive every
-one of them.  The server ran on the same machine, pinned to four
-cores, with the feeder and the clients on eight others, and was fed
-for 30 seconds in two settings: a thousand clients at 200 packets per
-second, and two hundred clients at 1000 packets per second, 200 000
-deliveries a second either way.  Every packet reached every client in
-all cases.  The CPU time of the server over the 30 seconds, the mean
-of two runs of each, which agreed within 6 %:
+`TestClientCPU`: a client feeds one server, and a number of full feed
+clients, all plaintext or all IS2, receive every packet; the server is
+pinned to four cores and the clients to eight others.  The CPU time of
+the server over 30 seconds, the mean of two runs:
 
     clients            rate          user     sys       total
     1000 plaintext     200 pkt/s     7.0 s    31.7 s    38.7 s
@@ -477,18 +458,10 @@ of two runs of each, which agreed within 6 %:
     200 plaintext      1000 pkt/s    5.7 s    15.2 s    20.9 s
     200 IS2            1000 pkt/s    2.6 s    7.0 s     9.6 s
 
-With a thousand clients at 200 packets per second the IS2 clients
-cost 25 % less: a quarter less system time, as the packets of a round
-go to each client in one write instead of one write per packet, and a
-third less user time, as each packet is encoded once per worker thread
-and the frame is copied to the clients from there.  At 1000 packets
-per second the saving grows to 54 %, with less than half the system
-and user time, because a round of the worker now collects several
-times more packets, and all of them share the one write and the one
-pass over the client.  The latency from the feeder to a client was
-also steadier with IS2: a median of 35 to 39 ms and a 99th percentile
-of 65 to 74 ms, against a median of 38 to 46 ms and a 99th percentile
-of 0.6 to 1.1 s with the plaintext clients.
+IS2 saved 25 % at 200 packets per second and 54 % at 1000, where a
+round collects five times more packets to share each write.  The
+latency to the clients was also steadier: a 99th percentile of 65 to
+74 ms with IS2, against 0.6 to 1.1 s with plaintext.
 
 ### No scanning for line ends
 

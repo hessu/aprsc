@@ -1733,8 +1733,16 @@ static void is2_received_append(struct pbuf_t *pb, struct client_t *c)
 
 int is2_received_age_check(struct client_t *c, uint64_t received_time)
 {
-	int64_t age = (int64_t)now * 1000 - (int64_t)received_time;
+	int64_t age;
 	int e;
+
+	/* A stamp beyond the signed range would wrap negative in the
+	 * subtraction below: it is from the far future.
+	 */
+	if (received_time > (uint64_t)INT64_MAX)
+		age = INT64_MIN;
+	else
+		age = (int64_t)now * 1000 - (int64_t)received_time;
 
 	if (age > IS2_RECEIVED_MAX_AGE * 1000) {
 		is2_received_count(&is2_received_too_old, 1);
@@ -1746,11 +1754,18 @@ int is2_received_age_check(struct client_t *c, uint64_t received_time)
 		return 0;
 	}
 
-	/* a warning per link now and then: the clock of a server is likely off */
+	/* A log line per link now and then. When the packet comes from an
+	 * uplink or a peer, the clock of a server is likely off, and that is
+	 * worth a warning. A client may send whatever stamps it likes, and
+	 * only loses its own packets.
+	 */
 	if (tick >= c->is2_received_age_warn) {
+		int level = (c->state == CSTATE_COREPEER || (c->flags & CLFLAGS_UPLINKPORT)) ? LOG_WARNING : LOG_INFO;
+		/* negated as unsigned, since -INT64_MIN does not fit */
+		uint64_t mag = (age < 0) ? (uint64_t)0 - (uint64_t)age : (uint64_t)age;
 		c->is2_received_age_warn = tick + IS2_RECEIVED_AGE_WARN_INTERVAL;
-		hlog(LOG_WARNING, "%s/%s: IS2: packet received_time is %lld seconds in the %s%s",
-			c->addr_rem, c->username, (long long)((age < 0) ? -age : age) / 1000,
+		hlog(level, "%s/%s: IS2: packet received_time is %llu seconds in the %s%s",
+			c->addr_rem, c->username, (unsigned long long)(mag / 1000),
 			(age < 0) ? "future" : "past",
 			(is2_received_age_drop) ? ", dropping such packets" : "");
 	}

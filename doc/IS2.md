@@ -296,21 +296,21 @@ at 2.27 GHz (Nehalem, 2009), encoding a 100-byte APRS packet as an
 `ISPacket`:
 
     packet                                        encoded   encode time
-    no Received entries, with received_time       109 B     0.3 us
-    one Received entry with address               140 B     0.5 us
-    three Received entries with addresses         196 B     1.0 us
-    five Received entries with addresses (max)    240 B     1.7 us
+    no Received entries, with received_time       109 B     0.3 µs
+    one Received entry with address               140 B     0.5 µs
+    three Received entries with addresses         196 B     1.0 µs
+    five Received entries with addresses (max)    240 B     1.7 µs
 
 Decoding an `IS2Message` frame, including allocating and freeing the
 decoded structures with `malloc()`:
 
     frame                                         size      decode time
-    one packet, no Received entries               117 B     0.5 us
-    one packet, three Received entries            205 B     1.9 us
-    ten packets, three Received entries each      2005 B    17 us, 1.7 us per packet
-    fifty packets, three Received entries each    10005 B   110 us, 2.2 us per packet
+    one packet, no Received entries               117 B     0.5 µs
+    one packet, three Received entries            205 B     1.9 µs
+    ten packets, three Received entries each      2005 B    17 µs, 1.7 µs per packet
+    fifty packets, three Received entries each    10005 B   110 µs, 2.2 µs per packet
 
-Finding the end of a plaintext line and copying it costs 0.02 us on
+Finding the end of a plaintext line and copying it costs 0.02 µs on
 the same machine, so a packet with three Received entries costs some
 50 times more to encode and 100 times more to decode than to handle
 as a line.  In absolute terms, a full feed of 200 packets per second
@@ -401,7 +401,11 @@ the buffers of all the IS2 clients which get it.  The encoding of an
 numbers of the schema, which are checked against the generated code at
 start-up, so no intermediate message structure is built per client.
 The UDP peer frames additionally cost an HMAC-SHA256 computation per
-frame sent and received.
+frame sent and received: on the Xeon L5520 about 3 µs for a frame of
+a single packet and 11 µs for a full frame of 1300 bytes, with the
+contexts keyed once per worker thread and copied for each frame.  The
+one-shot API of OpenSSL, which looks up the algorithm and sets up the
+key on every call, took 8 and 12 µs for the same frames.
 
 
 Performance: the benefits

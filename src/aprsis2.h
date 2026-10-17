@@ -30,6 +30,7 @@ extern void is2_corepeer_plain_frame_rejected(struct client_t *c);
 
 extern void is2_pbuf_init_packet(struct pbuf_t *pb, struct client_t *c, Aprsis2__ISPacket *is2_packet_in, Aprsis2__ISPacket *is2_input_template);
 #ifdef USE_IS2
+extern int is2_received_age_check(struct client_t *c, uint64_t received_time);
 extern void is2_received_status(cJSON *totals);
 #endif
 extern int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);

@@ -136,6 +136,7 @@ int disallow_unverified   = 1;		/* disallow packets from unverified clients */
  */
 int is2_received          = 1;		/* append a Received entry to the packets received */
 int is2_received_addr     = 1;		/* ... with the address of the client the packet came from */
+int is2_received_age_drop = 0;		/* drop IS2 packets with a received_time too far from our clock */
 #endif
 int quirks_mode           = 0;		/* enable quirks mode for all clients by default */
 
@@ -208,6 +209,7 @@ static struct cfgcmd cfg_cmds[] = {
 #ifdef USE_IS2
 	{ "is2received",	_CFUNC_ do_boolean,	&is2_received		},
 	{ "is2receivedaddr",	_CFUNC_ do_boolean,	&is2_received_addr	},
+	{ "is2receivedagedrop",	_CFUNC_ do_boolean,	&is2_received_age_drop	},
 #endif
 	{ "quirks_mode",	_CFUNC_ do_boolean,	&quirks_mode		},
 	{ "fake_version",	_CFUNC_ do_string,	&new_fake_version	},

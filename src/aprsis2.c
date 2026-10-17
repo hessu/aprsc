@@ -15,6 +15,7 @@
  */
 
 #include <string.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 
 #include <openssl/hmac.h>
@@ -1540,13 +1541,20 @@ void is2_corepeer_plain_frame_rejected(struct client_t *c)
  *	The Received entries of packets (doc/IS2RECEIVED.md): the servers which
  *	have received a packet, and who they got it from. A server appends its
  *	own entry to the packets it receives, keeping the newest
- *	IS2_RECEIVED_MAX entries.
+ *	IS2_RECEIVED_MAX entries, and the first server to receive a packet
+ *	stamps it with the time.
  */
+
+#define IS2_RECEIVED_MAX_AGE 30    /* seconds: a packet with an older received_time may be dropped */
+#define IS2_RECEIVED_MAX_FUTURE 30 /* seconds: ... or one this far in the future */
+#define IS2_RECEIVED_AGE_WARN_INTERVAL 60 /* seconds between the warnings about them, per link */
 
 /* counters for the status page, added to by all the workers */
 static long long is2_received_truncated; /* entries dropped from packets which had too many */
 static long long is2_received_invalid;   /* malformed entries dropped */
 static long long is2_received_loops;     /* packets which already had an entry of this server */
+static long long is2_received_too_old;   /* packets with a received_time too far in the past, dropped or not */
+static long long is2_received_too_new;   /* ... in the future */
 
 static void is2_received_count(long long *counter, long long n)
 {
@@ -1563,6 +1571,22 @@ void is2_received_status(cJSON *totals)
 	cJSON_AddNumberToObject(totals, "is2_received_truncated", is2_received_truncated);
 	cJSON_AddNumberToObject(totals, "is2_received_invalid", is2_received_invalid);
 	cJSON_AddNumberToObject(totals, "is2_received_loops", is2_received_loops);
+	cJSON_AddNumberToObject(totals, "is2_received_too_old", is2_received_too_old);
+	cJSON_AddNumberToObject(totals, "is2_received_too_new", is2_received_too_new);
+}
+
+/*
+ *	Milliseconds since the epoch, for the received_time stamp. The time
+ *	thread's 'now' is not precise enough for latency measurements.
+ */
+
+static uint64_t is2_time_ms(void)
+{
+	struct timeval tv;
+
+	gettimeofday(&tv, NULL);
+
+	return (uint64_t)tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
 /*
@@ -1697,6 +1721,42 @@ static void is2_received_append(struct pbuf_t *pb, struct client_t *c)
 		}
 	}
 }
+
+/*
+ *	Check the received_time of an incoming IS2 packet against our clock.
+ *	A packet which has been in the network for more than
+ *	IS2_RECEIVED_MAX_AGE seconds has looped, or come through a server
+ *	whose clock is off: it is counted, and dropped if IS2ReceivedAgeDrop
+ *	is enabled. Returns 0 to accept the packet, or the INERR_* code to
+ *	drop it with.
+ */
+
+int is2_received_age_check(struct client_t *c, uint64_t received_time)
+{
+	int64_t age = (int64_t)now * 1000 - (int64_t)received_time;
+	int e;
+
+	if (age > IS2_RECEIVED_MAX_AGE * 1000) {
+		is2_received_count(&is2_received_too_old, 1);
+		e = INERR_IS2_TOO_OLD;
+	} else if (age < -IS2_RECEIVED_MAX_FUTURE * 1000) {
+		is2_received_count(&is2_received_too_new, 1);
+		e = INERR_IS2_TOO_NEW;
+	} else {
+		return 0;
+	}
+
+	/* a warning per link now and then: the clock of a server is likely off */
+	if (tick >= c->is2_received_age_warn) {
+		c->is2_received_age_warn = tick + IS2_RECEIVED_AGE_WARN_INTERVAL;
+		hlog(LOG_WARNING, "%s/%s: IS2: packet received_time is %lld seconds in the %s%s",
+			c->addr_rem, c->username, (long long)((age < 0) ? -age : age) / 1000,
+			(age < 0) ? "future" : "past",
+			(is2_received_age_drop) ? ", dropping such packets" : "");
+	}
+
+	return (is2_received_age_drop) ? e : 0;
+}
 #endif /* USE_IS2 */
 
 /*
@@ -1745,10 +1805,17 @@ void is2_pbuf_init_packet(struct pbuf_t *pb, struct client_t *c, Aprsis2__ISPack
 	 * filled in when the packet is serialized.
 	 */
 	pb->received_n = 0;
-	if (is2_packet_in && is2_packet_in->n_received > 0)
-		is2_received_copy_in(pb, c, is2_packet_in);
+	if (is2_packet_in) {
+		if (is2_packet_in->n_received > 0)
+			is2_received_copy_in(pb, c, is2_packet_in);
+		pb->is2packet.received_time = is2_packet_in->received_time;
+	}
 	if (is2_received)
 		is2_received_append(pb, c);
+
+	/* the first server to receive the packet stamps it with the time */
+	if (pb->is2packet.received_time == 0)
+		pb->is2packet.received_time = is2_time_ms();
 #endif
 }
 
@@ -2034,6 +2101,7 @@ int is2_wire_selfcheck(void)
 	rcv.client_addr.len = 4;
 	p.n_received = 1;
 	p.received = rcvp;
+	p.received_time = 1700000000123ULL;
 
 	/* message type and one packet, as flushed to a TCP client */
 	Aprsis2__IS2Message m = APRSIS2__IS2_MESSAGE__INIT;

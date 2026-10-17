@@ -171,6 +171,12 @@ message ISPacket {
 	// newest last. At most 5 entries, see IS2Received.
 	repeated IS2Received received = 3;
 
+	// When the packet entered the APRS-IS, in milliseconds since the Unix
+	// epoch: set by the first server to receive it, when not already set.
+	// Servers may drop packets whose received_time is too far from their
+	// own clock.
+	uint64 received_time = 4;
+
 	// RSSI in dBm and SNR in dB of the packet at the receiver, as LoRa
 	// radios report them.
 	// When building with protobuf 3.15+, the "optional float rx_rssi_dbm"

@@ -253,8 +253,10 @@ struct client_heard_t {
 #define INERR_DIS_MSG_DST		-35
 #define INERR_DIS_IGATECALL		-36
 #define INERR_INV_CRLF			-37	/* CR or LF inside the packet (IS2) */
+#define INERR_IS2_TOO_OLD		-38	/* IS2 received_time too far in the past */
+#define INERR_IS2_TOO_NEW		-39	/* IS2 received_time too far in the future */
 
-#define INERR_MIN			-37	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-39	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 
@@ -313,8 +315,8 @@ struct client_udp_t {			/* UDP services can be available at multiple
 #define APRSIS2_OBUF_PACKETS 20
 #define APRSIS2_OBUF_MAX_LENGTH 1200  /* max total length of encoded ISPacket elements in IS2 obuf */
 /* max length of a single encoded ISPacket element: the packet, the rx
- * metadata, and the Received entries at 56 bytes each */
-#define APRSIS2_ENC_MAX (PACKETLEN_MAX + 64 + IS2_RECEIVED_MAX * 56)
+ * metadata, received_time, and the Received entries at 56 bytes each */
+#define APRSIS2_ENC_MAX (PACKETLEN_MAX + 80 + IS2_RECEIVED_MAX * 56)
 #define APRSIS2_COREPEER_SEQ_WINDOW 32 /* packet loss monitoring window - allow reordering by N packets */
 
 struct client_t {
@@ -413,6 +415,7 @@ struct client_t {
 	char  loc_known;    /* have we received a position packet from this client */
 	char  corepeer_is2; /* is the core peer in IS2 mode currently */
 	char  sctp_dry_wait; /* logged in on SCTP, waiting for the peer to acknowledge the login before sending data */
+	time_t is2_received_age_warn; /* tick of the next warning about packets with a received_time far from our clock */
 	
 	/* the current handler function for incoming lines */
 	int	(*handler_line_in) (struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);

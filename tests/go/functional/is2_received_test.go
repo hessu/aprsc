@@ -379,18 +379,25 @@ func TestIS2ReceivedAgeDrop(t *testing.T) {
 	tx := isclient.ConnectIS2(t, harness.Addr(t, 56580), client)
 
 	for _, tc := range []struct {
-		name string
-		age  time.Duration
-		drop bool
+		name  string
+		age   time.Duration
+		stamp uint64 // used instead of age when set
+		drop  bool
 	}{
-		{"old", 60 * time.Second, true},
-		{"new", -60 * time.Second, true},
-		{"recent", 10 * time.Second, false},
-		{"slightly ahead", -10 * time.Second, false},
+		{"old", 60 * time.Second, 0, true},
+		{"new", -60 * time.Second, 0, true},
+		{"recent", 10 * time.Second, 0, false},
+		{"slightly ahead", -10 * time.Second, 0, false},
+		// a stamp beyond the signed 64-bit range is from the far future,
+		// and must not wrap around to look old
+		{"beyond signed range", 0, 1<<63 + 1<<40, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := isclient.NewISPacket(sentPacket(client, "stamped "+tc.name), isclient.Meta{})
-			p.ReceivedTime = uint64(time.Now().Add(-tc.age).UnixMilli())
+			p.ReceivedTime = tc.stamp
+			if p.ReceivedTime == 0 {
+				p.ReceivedTime = uint64(time.Now().Add(-tc.age).UnixMilli())
+			}
 			if err := tx.SendISPacket(p); err != nil {
 				t.Fatal(err)
 			}
@@ -414,7 +421,7 @@ func TestIS2ReceivedAgeDrop(t *testing.T) {
 
 	s.WaitLog("seconds in the past, dropping such packets", 1, 5*time.Second)
 	expectTotal(t, "is2_received_too_old", 1)
-	expectTotal(t, "is2_received_too_new", 1)
+	expectTotal(t, "is2_received_too_new", 2)
 
 	s.Stop()
 }

@@ -262,6 +262,7 @@ already solved it:
   Wireshark has a Protocol Buffers dissector which reads a `.proto`
   file.  A home-made format has none of these until someone writes
   them.
+
 The dependency is not forced on anyone.  A small igate, such as a LoRa
 APRS receiver on a microcontroller, which only wants to feed its
 packets with the signal strength it measured, can keep speaking the

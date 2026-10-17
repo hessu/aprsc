@@ -129,6 +129,8 @@
 	"ALARM_no_uplink": "Server does not have any uplink connections.",
 	"ALARM_packet_drop_hang": "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",
 	"ALARM_packet_drop_future": "Server has dropped packets due to backward time leaps.",
+	"ALARM_clock_ahead": "The clock of the server is {{skew}} seconds ahead of the clock of this browser. IS2 packets are dropped when the clocks of servers differ by more than 30 seconds.",
+	"ALARM_clock_behind": "The clock of the server is {{skew}} seconds behind the clock of this browser. IS2 packets are dropped when the clocks of servers differ by more than 30 seconds.",
 	
 	"CERT_DIALOG_TITLE": "{{ username }} authenticated using a certificate.",
 	"CERT_SUBJECT": "Certificate subject:",

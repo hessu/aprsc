@@ -350,6 +350,8 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			ALARM_no_uplink: "Server does not have any uplink connections.",
 			ALARM_packet_drop_hang: "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",
 			ALARM_packet_drop_future: "Server has dropped packets due to backward time leaps.",
+			ALARM_clock_ahead: "The clock of the server is {{skew}} seconds ahead of the clock of this browser. IS2 packets are dropped when the clocks of servers differ by more than 30 seconds.",
+			ALARM_clock_behind: "The clock of the server is {{skew}} seconds behind the clock of this browser. IS2 packets are dropped when the clocks of servers differ by more than 30 seconds.",
 			
 			CERT_DIALOG_TITLE: '{{ username }} authenticated using a certificate.',
 			CERT_SUBJECT: 'Certificate subject:',
@@ -539,6 +541,31 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 		$scope.options = o;
 	}
 	
+	/* Compare the server's wall clock, time_now in the status, with the
+	 * clock of the browser, and add an alarm to the status if they differ
+	 * by too much: the server drops IS2 packets stamped more than 30
+	 * seconds from its clock, and a server with a clock off by that much
+	 * loses its traffic. The status is cached by the server for a couple
+	 * of seconds, so a few seconds of difference is normal.
+	 */
+	var clock_skew_limit = 10;
+	
+	var clock_skew_check = function(d) {
+		if (!d.server || !d.server.time_now)
+			return;
+		
+		var skew = Math.round(d.server.time_now - Date.now() / 1000);
+		if (Math.abs(skew) <= clock_skew_limit)
+			return;
+		
+		if (!d.alarms)
+			d.alarms = [];
+		d.alarms.push({
+			'err': (skew > 0) ? 'clock_ahead' : 'clock_behind',
+			'skew': Math.abs(skew)
+		});
+	};
+	
 	/* Ajax updates */
 	
 	var full_load = function($scope, $http) {
@@ -550,6 +577,8 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 			console.log('status.json received: ' + r.status);
 			
 			var d = r.data;
+			
+			clock_skew_check(d);
 			
 			if ($scope.status) {
 				d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;

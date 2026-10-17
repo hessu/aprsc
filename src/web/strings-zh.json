@@ -126,6 +126,8 @@
 	"ALARM_no_uplink": "服务器没有任何上行链路连接。",
 	"ALARM_packet_drop_hang": "服务器由于前向时间跳跃或资源不足导致的挂起而丢弃了数据包。",
 	"ALARM_packet_drop_future": "服务器由于后向时间跳跃而丢弃了数据包。",
+	"ALARM_clock_ahead": "服务器的时钟比此浏览器的时钟快 {{skew}} 秒。当服务器之间的时钟相差超过 30 秒时，IS2 数据包将被丢弃。",
+	"ALARM_clock_behind": "服务器的时钟比此浏览器的时钟慢 {{skew}} 秒。当服务器之间的时钟相差超过 30 秒时，IS2 数据包将被丢弃。",
 	
 	"CERT_DIALOG_TITLE": "{{ username }} 使用证书进行了身份验证。",
 	"CERT_SUBJECT": "证书主题：",

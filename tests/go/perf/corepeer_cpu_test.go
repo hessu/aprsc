@@ -102,6 +102,25 @@ type latencies struct {
 	mean, median, p99, max time.Duration
 }
 
+// drainText describes the time from the end of the feed to the last packet
+// received, or that the packets did not all arrive before the wait for
+// them was given up, in which case the time is not a measurement.
+func drainText(drain time.Duration, drained bool) string {
+	if !drained {
+		return fmt.Sprintf("not all of them within %.2f s after the feed ended", drain.Seconds())
+	}
+	return fmt.Sprintf("the last %.2f s after the feed ended", drain.Seconds())
+}
+
+// drainColumn is the drain time for the results table, blank when it is
+// not a measurement.
+func drainColumn(drain time.Duration, drained bool) string {
+	if !drained {
+		return "-"
+	}
+	return fmt.Sprintf("%.2f", drain.Seconds())
+}
+
 func summarize(samples []time.Duration) latencies {
 	if len(samples) == 0 {
 		return latencies{}
@@ -164,6 +183,7 @@ type result struct {
 	sent, received int
 	fed            time.Duration // the length of the feed
 	drain          time.Duration // from the end of the feed to the last packet received
+	drained        bool          // every packet was received, so drain is a measurement
 	a, b           usage
 	lat            latencies
 }
@@ -204,10 +224,10 @@ func TestCorepeerCPU(t *testing.T) {
 			u    usage
 		}{{"A", r.a}, {"B", r.b}} {
 			total := s.u.user + s.u.sys
-			fmt.Fprintf(&b, "%-22s %-6s %9.3f %9.3f %9.3f %7.1f %8.0f %8.2f\n", r.name, s.name,
+			fmt.Fprintf(&b, "%-22s %-6s %9.3f %9.3f %9.3f %7.1f %8.0f %8s\n", r.name, s.name,
 				s.u.user.Seconds(), s.u.sys.Seconds(), total.Seconds(),
 				100*total.Seconds()/r.fed.Seconds(), float64(total.Microseconds())/float64(r.sent),
-				r.drain.Seconds())
+				drainColumn(r.drain, r.drained))
 		}
 	}
 	fmt.Fprintf(&b, "\nLatency from the feeder to the receiver, ms:\n")
@@ -290,10 +310,10 @@ func runScenario(t *testing.T, peer, client string) result {
 	}()
 
 	// feed at the rate, catching up after any hiccup so that the average
-	// holds
+	// holds; a client which failed ends the feed, since the run is lost
 	interval := time.Second / time.Duration(*rate)
 	start := time.Now()
-	for n := 0; n < total; n++ {
+	for n := 0; n < total && len(rxDone) == 0; n++ {
 		time.Sleep(time.Until(start.Add(time.Duration(n) * interval)))
 		tx.Send(t, packet(n, epoch))
 	}
@@ -302,10 +322,11 @@ func runScenario(t *testing.T, peer, client string) result {
 	// Let the last packets through: the servers flush their peer and IS2
 	// client output in batches, so they trail the feed a little.
 	deadline := time.Now().Add(10 * time.Second)
-	for received.Load() < int64(total) && time.Now().Before(deadline) {
+	for received.Load() < int64(total) && len(rxDone) == 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	drain := time.Since(start) - fed
+	drained := received.Load() == int64(total)
 	close(stop)
 	if err := <-rxDone; err != nil {
 		t.Errorf("the receiving client failed: %v", err)
@@ -315,8 +336,8 @@ func runScenario(t *testing.T, peer, client string) result {
 	b.Stop()
 
 	got := int(received.Load())
-	t.Logf("%s peer link, %s client: fed %d packets in %.2f s (%.1f/s), received %d, the last %.2f s after the feed ended",
-		peer, client, total, fed.Seconds(), float64(total)/fed.Seconds(), got, drain.Seconds())
+	t.Logf("%s peer link, %s client: fed %d packets in %.2f s (%.1f/s), received %d, %s",
+		peer, client, total, fed.Seconds(), float64(total)/fed.Seconds(), got, drainText(drain, drained))
 	if got != total {
 		t.Errorf("the client received %d of %d packets", got, total)
 	}
@@ -326,7 +347,7 @@ func runScenario(t *testing.T, peer, client string) result {
 		}
 	}
 
-	r := result{sent: total, received: got, fed: fed, drain: drain, a: usageOf(a.Rusage()), b: usageOf(b.Rusage()), lat: summarize(samples)}
+	r := result{sent: total, received: got, fed: fed, drain: drain, drained: drained, a: usageOf(a.Rusage()), b: usageOf(b.Rusage()), lat: summarize(samples)}
 	t.Logf("latency from the feeder to the receiver: %s", r.lat)
 	t.Logf("server A (feed in, peer out): %s", r.a.describe(fed, total))
 	t.Logf("server B (peer in, client out): %s", r.b.describe(fed, total))

@@ -455,6 +455,37 @@ would coalesce small writes by itself, but SCTP charges each message
 separately, as described in [SCTP](SCTP.html), and TLS adds a record
 per write, so one write per round is a real saving there.
 
+The client side has been measured with the client scenario of the
+test suite (`TestClientCPU`, also run with `make perftest`): a client
+feeds unique packets at a steady rate to one server over TCP, and a
+number of full feed clients, all plaintext or all IS2, receive every
+one of them.  The server ran on the same machine, pinned to four
+cores, with the feeder and the clients on eight others, and was fed
+for 30 seconds in two settings: a thousand clients at 200 packets per
+second, and two hundred clients at 1000 packets per second, 200 000
+deliveries a second either way.  Every packet reached every client in
+all cases.  The CPU time of the server over the 30 seconds, the mean
+of two runs of each, which agreed within 6 %:
+
+    clients            rate          user     sys       total
+    1000 plaintext     200 pkt/s     7.0 s    31.7 s    38.7 s
+    1000 IS2           200 pkt/s     4.8 s    24.1 s    28.9 s
+    200 plaintext      1000 pkt/s    5.7 s    15.2 s    20.9 s
+    200 IS2            1000 pkt/s    2.6 s    7.0 s     9.6 s
+
+With a thousand clients at 200 packets per second the IS2 clients
+cost 25 % less: a quarter less system time, as the packets of a round
+go to each client in one write instead of one write per packet, and a
+third less user time, as each packet is encoded once per worker thread
+and the frame is copied to the clients from there.  At 1000 packets
+per second the saving grows to 54 %, with less than half the system
+and user time, because a round of the worker now collects several
+times more packets, and all of them share the one write and the one
+pass over the client.  The latency from the feeder to a client was
+also steadier with IS2: a median of 35 to 39 ms and a 99th percentile
+of 65 to 74 ms, against a median of 38 to 46 ms and a 99th percentile
+of 0.6 to 1.1 s with the plaintext clients.
+
 ### No scanning for line ends
 
 A receiver reads the length of a frame from its head and reads that

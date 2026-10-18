@@ -126,20 +126,20 @@ func (c *IS2) loginResult(err error) (*IS2, error) {
 // dialIS2 connects to a TCP port, or an SCTP one with WithSCTP, retrying for
 // a few seconds while the port is not open.
 func dialIS2(addr, callsign string, opts []Option) (*IS2, config, error) {
-	cfg := config{passcode: fmt.Sprint(passcodeFor(callsign)), appName: is2AppName}
+	cfg := config{passcode: fmt.Sprint(passcodeFor(callsign)), appName: is2AppName, retry: connectRetry}
 	for _, o := range opts {
 		o(&cfg)
 	}
 
 	var conn net.Conn
 	var err error
-	deadline := time.Now().Add(connectRetry)
+	deadline := time.Now().Add(cfg.retry)
 	for {
 		conn, err = cfg.dialConn(addr, time.Second)
 		if err == nil {
 			break
 		}
-		if errors.Is(err, ErrNoSCTP) || time.Now().After(deadline) {
+		if errors.Is(err, ErrNoSCTP) || !time.Now().Before(deadline) {
 			return nil, cfg, fmt.Errorf("failed to connect to %s: %w", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -318,7 +318,7 @@ func (c *IS2) login(cfg config) error {
 	}
 
 	// the server may send a keepalive ping before the reply
-	m, err = c.readNonPing(is2Timeout)
+	m, err = c.ReadMessage(is2Timeout)
 	if err != nil {
 		c.Close()
 		return fmt.Errorf("no LOGIN_REPLY received: %w", err)
@@ -539,9 +539,9 @@ func (c *IS2) readError(err error) error {
 	return err
 }
 
-// readNonPing reads frames until one that is not a ping request, replying to
+// ReadMessage reads frames until one that is not a ping request, replying to
 // ping requests on the way.
-func (c *IS2) readNonPing(timeout time.Duration) (*aprsis2.IS2Message, error) {
+func (c *IS2) ReadMessage(timeout time.Duration) (*aprsis2.IS2Message, error) {
 	end := time.Now().Add(timeout)
 
 	for {
@@ -573,7 +573,7 @@ func (c *IS2) readNonPing(timeout time.Duration) (*aprsis2.IS2Message, error) {
 
 // ReadISPackets reads the next IS_PACKET frame and returns its packets.
 func (c *IS2) ReadISPackets(timeout time.Duration) ([]*aprsis2.ISPacket, error) {
-	m, err := c.readNonPing(timeout)
+	m, err := c.ReadMessage(timeout)
 	if err != nil {
 		return nil, err
 	}

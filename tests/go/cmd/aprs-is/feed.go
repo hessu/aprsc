@@ -14,7 +14,8 @@ func runFeed(args []string) error {
 			"takes them. The input lines are prefixed with a Unix time and a space or\n"+
 			"tab, as \"aprs-is rx -t\" writes them, and lines without one are skipped,\n"+
 			"unless -raw is given. The lines the server sends are printed to standard\n"+
-			"error.")
+			"error. Only sends to a test server: one on a loopback address, with a\n"+
+			"server id starting with TEST.")
 	call := fs.String("c", fmt.Sprintf("F0FED-%d", rand.IntN(15)), "`callsign` to log in with")
 	raw := fs.Bool("raw", false, "the input lines are packets without a time prefix")
 	batch := fs.Int("batch", 3, "send the packets in batches of this many, one write each")
@@ -24,12 +25,15 @@ func runFeed(args []string) error {
 	a := parseArgs(fs, args, 1, 1)
 	server := a[0]
 
-	c, err := dial(server, *call, "feed", 0, "")
+	c, err := dialTestServer(server, *call, "feed", 0, "")
 	if err != nil {
 		return err
 	}
 	defer c.conn.Close()
 	fmt.Fprintln(os.Stderr, loginLine(*call, "feed", 0, ""))
+	for _, l := range c.preamble {
+		fmt.Fprintf(os.Stderr, "got: %s\n", l)
+	}
 
 	go func() {
 		s := bufio.NewScanner(c.r)

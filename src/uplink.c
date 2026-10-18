@@ -158,12 +158,6 @@ void uplink_close(struct client_t *c, int errnum)
 
 	hlog(LOG_INFO, "%s: Uplink has been closed: %s", c->addr_rem, aprsc_strerror(errnum));
 
-	if ((rc = pthread_mutex_lock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "uplink_close: could not lock uplink_connects: %s", strerror(rc));
-	-- uplink_connects.gauge;
-	if ((rc = pthread_mutex_unlock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "uplink_close: could not unlock uplink_connects: %s", strerror(rc));
-	
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "uplink_close(): could not lock uplink_client_mutex: %s", strerror(rc));
 		return;
@@ -767,29 +761,39 @@ connerr:
 	}
 #endif
 	
-	/* Push it on the first worker, which ever it is..
+	/* Account the connection in the uplink accounter only: an uplink is
+	 * not an inbound connection, and does not count against MaxClients.
+	 * client_close() drops it from the accounter again.
+	 */
+	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
+	port_accounter_add(c->portaccount);
+	
+	/* Push it on the first worker, which ever it is. The worker owns the
+	 * client from here on, and may close and free it at any time, so
+	 * this has to be the last thing done with it.
 	 */
 	
 	if (pass_client_to_worker(worker_threads, c))
 		goto err;
-
-	if ((i = pthread_mutex_lock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "make_uplink: could not lock uplink_connects: %s", strerror(i));
-	++ uplink_connects.gauge;
-	++ uplink_connects.counter;
-	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */
-	if ((i = pthread_mutex_unlock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "make_uplink: could not unlock uplink_connects: %s", strerror(i));
-	
-	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
 	
 	return 0;
 	
 err:
+	if (c->portaccount) /* accounted above, but never handed to a worker */
+		port_accounter_drop(c->portaccount);
 	client_free(c);
-	if (uc)
+	if (uc) {
+		/* uplink_close() walks uplink_clients from a worker thread
+		 * under uplink_client_mutex: unlink under it too. */
+		rc = pthread_mutex_lock(&uplink_client_mutex);
+		if (rc)
+			hlog(LOG_ERR, "make_uplink(): could not lock uplink_client_mutex: %s", strerror(rc));
 		uplink_client_free(uc);
+		if (!rc && (rc = pthread_mutex_unlock(&uplink_client_mutex)))
+			hlog(LOG_ERR, "make_uplink(): could not unlock uplink_client_mutex: %s", strerror(rc));
+	}
 	l->state = UPLINK_ST_NOT_LINKED;
+	l->client_ptr = NULL; /* the client is freed above */
 	if (addr_s)
 		hfree(addr_s);
 	return -1;
@@ -826,19 +830,40 @@ void uplink_thread(void *asdf)
 	
 	uplink_reconfiguring = 1;
 	while (!uplink_shutting_down) {
-		if (uplink_reconfiguring || uplink_config_updated) {
+		if (uplink_reconfiguring || uplink_config_install) {
 			hlog(LOG_INFO, "Uplink thread applying new configuration...");
-			__sync_synchronize();
 			uplink_reconfiguring = 0;
 			close_uplinkers();
 			
+			/* uplink_close() walks uplink_config from a worker thread
+			 * under uplink_client_mutex when an uplink socket closes:
+			 * replace the list under the same mutex, or the worker
+			 * may walk a list being freed. Lock before taking the
+			 * new configuration, so that a failed lock leaves it
+			 * installed for the next round to take.
+			 */
+			if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
+				hlog(LOG_ERR, "uplink_thread: could not lock uplink_client_mutex: %s", strerror(rc));
+				uplink_reconfiguring = 1;
+				poll(NULL, 0, 1000);
+				continue;
+			}
+			
+			/* Take the new configuration with an atomic swap: the
+			 * main thread installs the next one as soon as it sees
+			 * this one gone, and a flag cleared after the take could
+			 * hide that one until the next reload. The pointer
+			 * itself tells when there is a configuration to take.
+			 */
+			struct uplink_config_t *new_config = __sync_lock_test_and_set(&uplink_config_install, NULL);
+			__sync_synchronize();
+			
 			free_uplink_config(&uplink_config);
-			uplink_config = uplink_config_install;
-			uplink_config_install = NULL;
+			uplink_config = new_config;
 			if (uplink_config)
 				uplink_config->prevp = &uplink_config;
-			
-			uplink_config_updated = 0;
+			if ((rc = pthread_mutex_unlock(&uplink_client_mutex)))
+				hlog(LOG_ERR, "uplink_thread: could not unlock uplink_client_mutex: %s", strerror(rc));
 			
 			hlog(LOG_INFO, "Uplink thread configured.");
 		}
@@ -847,7 +872,7 @@ void uplink_thread(void *asdf)
 		if (uplink_shutting_down || uplink_reconfiguring)
 			continue;
 		
-		if (uplink_config_updated) {
+		if (uplink_config_install) {
 			uplink_reconfiguring = 1;
 			continue;
 		}
@@ -910,8 +935,9 @@ void uplink_thread(void *asdf)
 		if (uplink_shutting_down)
 			break;
 
-		/* sleep for 4 seconds between successful rounds */
-		for (rc = 0; (!uplink_shutting_down) && rc < 4000/200; rc++)
+		/* sleep for 4 seconds between successful rounds, unless a new
+		 * configuration arrives */
+		for (rc = 0; (!uplink_shutting_down) && (!uplink_config_install) && rc < 4000/200; rc++)
 			if (poll(NULL, 0, 200) == -1 && errno != EINTR)
 				hlog(LOG_WARNING, "uplink: poll sleep failed: %s", strerror(errno));
 	}
@@ -966,7 +992,27 @@ void uplink_stop(void)
 	while (uplink_clients)
 		uplink_client_free(uplink_clients);
 	
-	free_uplink_config(&uplink_config);
+	/* The thread is restarted when the number of workers changes. It may
+	 * have taken the new uplink configuration already: hand it back for
+	 * the next thread to take, unless a newer one is waiting there.
+	 * The uplink sockets have been shut down and the uplink_clients
+	 * freed above, so the links are not connected any more. The worker
+	 * closing a socket resets its state through uplink_close(), but it
+	 * only finds the link in uplink_config, and the handed-back config
+	 * is not there until the next thread has taken it. Reset the states
+	 * here, or the next thread may think it has a connected uplink.
+	 */
+	if (uplink_config_install) {
+		free_uplink_config(&uplink_config);
+	} else {
+		struct uplink_config_t *l;
+		for (l = uplink_config; (l); l = l->next) {
+			l->state = UPLINK_ST_NOT_LINKED;
+			l->client_ptr = NULL;
+		}
+		uplink_config_install = uplink_config;
+		uplink_config = NULL;
+	}
 	
 	if ((e = pthread_mutex_unlock(&uplink_client_mutex))) {
 		hlog( LOG_ERR, "uplink_stop(): could not unlock uplink_client_mutex: %s", strerror(e) );

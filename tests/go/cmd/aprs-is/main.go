@@ -1,5 +1,5 @@
 // Command aprs-is is a set of APRS-IS client tools for testing and loading a
-// server by hand: receiving, transmitting, copying and replaying traffic, and
+// server by hand: receiving, transmitting and replaying traffic, and
 // simulating many clients at once. It replaces the Perl scripts which were in
 // tools/.
 package main
@@ -17,8 +17,8 @@ type subcommand struct {
 
 var subcommands = map[string]subcommand{
 	"rx":      {runRx, "receive packets and print them"},
+	"is2rx":   {runIS2Rx, "receive packets over IS2 and print them with their metadata"},
 	"xmit":    {runXmit, "send a set of sample packets slowly, printing what comes back"},
-	"copy":    {runCopy, "copy the feed of one server into another"},
 	"feed":    {runFeed, "send packets read from standard input"},
 	"multirx": {runMultiRx, "keep many receiving connections open"},
 	"coresim": {runCoreSim, "simulate the client load of the 2008 APRS-IS core servers"},

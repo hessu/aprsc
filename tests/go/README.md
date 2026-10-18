@@ -84,10 +84,14 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
 
 * `rx`: log in and print what the server sends; `-t` prefixes the lines with
   the Unix time, `-udp` asks for the packets over UDP, `-f` sets a filter.
+* `is2rx`: log in to an IS2 port and print the packets, each preceded by a
+  comment line with its metadata: the time it entered the APRS-IS, the
+  Received entries, and the RSSI, SNR, modem, bit rate and frequency if the
+  igate reported them. `-user` names the callsign, `-passcode` the passcode
+  (`-1` unless given), `-filter` a filter, and `-sctp` connects over SCTP
+  (Linux only). It can be used against a real server.
 * `xmit`: send a few sample packets (or the lines of a file) slowly, and
   print what comes back.
-* `copy`: copy the feed of one server into another, for loading a test
-  server with real traffic.
 * `feed`: send the packets read from standard input as fast as the server
   takes them. The input is in the format `rx -t` writes, so traffic recorded
   with it can be replayed; `-raw` takes plain packets.
@@ -97,9 +101,15 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
   receive. `-map` maps their ports to the ports of the test server.
 * `post`: send packets with an HTTP POST to the position upload port.
 
-`copy`, `multirx` and `coresim` print the number of connections and the
-receive rate every 10 seconds.
+`multirx` and `coresim` print the number of connections and the receive
+rate every 10 seconds.
 
 Run them against a local test server with no uplinks, not against the real
-APRS-IS: `copy` reading from a real server is the exception, and its
-destination must still be a test server.
+APRS-IS; `is2rx` and `rx`, which only receive, are the exception. The
+commands which send packets, `xmit`, `feed` and `post`, refuse any server
+which is not a test server: one on a loopback address (127.0.0.0/8 or
+`::1`) whose server id, read from the login reply, starts with `TEST`, as
+the ids of the test configurations do. `post` reads the id on the APRS-IS
+port given with `-server`, as the upload port does not tell it. To load a
+test server with real traffic, give it a read-only (`ro`) uplink to a real
+server.

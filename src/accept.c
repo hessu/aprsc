@@ -58,7 +58,9 @@ static struct listen_t *listen_list;
 
 int accept_shutting_down;
 int accept_reconfiguring;
-time_t accept_reconfigure_after_tick = 0;
+int accept_reconfigure_generation; /* counts the reconfigurations the main thread has asked of the accept thread: reloads and listener bind retries */
+int accept_config_applied = -1; /* the accept_reconfigure_generation applied by the accept thread, -1 before the first */
+time_t accept_reconfigure_after_tick = 0; /* when the main thread should ask for a retry of a listener which could not be bound, 0 for never */
 
 /* pseudoworker + pseudoclient for incoming UDP packets */
 struct worker_t *udp_worker = NULL;
@@ -370,9 +372,9 @@ static int open_listener(struct listen_config_t *lc)
 	if (i < 0) {
 		hlog(LOG_DEBUG, "... failed");
 		listener_free(l);
-		/* trigger reconfiguration after 30 seconds; probably an IP
-		 * address that we tried to bind was not yet configured and
-		 * it'll appear later in the boot process
+		/* ask the main thread for a reconfiguration after 30 seconds;
+		 * probably an IP address that we tried to bind was not yet
+		 * configured and it'll appear later in the boot process
 		 */
 		accept_reconfigure_after_tick = tick + 30;
 		return -1;
@@ -1606,10 +1608,12 @@ void accept_thread(void *asdf)
 			/* accept liveupgrade clients */
 			if (liveupgrade_status)
 				accept_liveupgrade_accept();
-		} else if (accept_reconfigure_after_tick != 0 && accept_reconfigure_after_tick <= tick) {
-			hlog(LOG_INFO, "Trying to reconfigure listeners due to a previous failure");
-			accept_reconfiguring = 1;
-			accept_reconfigure_after_tick = 0;
+			
+			/* The listener and peer configuration lists have been
+			 * walked: the main thread may now read the next
+			 * configuration, which frees them. */
+			__sync_synchronize();
+			accept_config_applied = accept_reconfigure_generation;
 		}
 		
 		/* check for new connections */

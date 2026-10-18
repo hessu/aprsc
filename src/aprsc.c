@@ -63,6 +63,7 @@ struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 int shutting_down;		// are we shutting down now?
 int reopen_logs;		// should we reopen log files now?
 int reconfiguring;		// should we reconfigure now?
+static int reconfigure_deferred;	// the deferral has been logged
 int fileno_limit = -1;
 int dbdump_at_exit;
 int quit_after_config;
@@ -1132,14 +1133,51 @@ int main(int argc, char **argv)
 		}
 		
 		
+		/* A listener which could not be bound is tried again after a
+		 * while. The accept thread asks for the retry, and the main
+		 * thread starts it, as it starts every reconfiguration of the
+		 * accept thread: the check below then knows that the accept
+		 * thread is walking the listener configuration lists, and a
+		 * reload does not free them meanwhile. */
+		if (accept_reconfigure_after_tick != 0 && accept_reconfigure_after_tick <= tick
+		    && !accept_reconfiguring && accept_config_applied == accept_reconfigure_generation) {
+			hlog(LOG_INFO, "Trying to reconfigure listeners due to a previous failure");
+			accept_reconfigure_after_tick = 0;
+			accept_reconfigure_generation++;
+			__sync_synchronize();
+			accept_reconfiguring = 1;
+		}
+		
 		if (reconfiguring) {
-			reconfiguring = 0;
-			if (read_config()) {
-				hlog(LOG_ERR, "New configuration was not successfully read.");
+			/* The accept and http threads walk the listener, peer
+			 * and http configuration lists when they apply a
+			 * configuration, and read_config() frees those lists.
+			 * The uplink thread takes the new uplink config from
+			 * uplink_config_install, and read_config() discards
+			 * the new one if the previous is still waiting there.
+			 * A reload which comes while the previous one is still
+			 * being applied waits for the next round of this loop. */
+			if (accept_reconfiguring || http_reconfiguring
+			    || accept_config_applied != accept_reconfigure_generation
+			    || http_config_applied != config_generation
+			    || uplink_config_install) {
+				if (!reconfigure_deferred)
+					hlog(LOG_INFO, "Reconfiguration deferred: the previous configuration is still being applied");
+				reconfigure_deferred = 1;
 			} else {
-				hlog(LOG_INFO, "New configuration read successfully. Applying....");
-				accept_reconfiguring = 1;
-				http_reconfiguring = 1;
+				reconfiguring = 0;
+				reconfigure_deferred = 0;
+				__sync_synchronize();
+				if (read_config()) {
+					hlog(LOG_ERR, "New configuration was not successfully read.");
+				} else {
+					hlog(LOG_INFO, "New configuration read successfully. Applying....");
+					config_generation++;
+					accept_reconfigure_generation++;
+					__sync_synchronize();
+					accept_reconfiguring = 1;
+					http_reconfiguring = 1;
+				}
 			}
 		}
 		

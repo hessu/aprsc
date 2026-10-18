@@ -78,7 +78,7 @@ struct sockaddr_in6 uplink_bind_v6;
 socklen_t uplink_bind_v6_len = 0;
 
 struct uplink_config_t *uplink_config_install; /* uplink config waiting to be installed by uplink thread */
-int uplink_config_updated = 0;
+int config_generation; /* counts the configurations read: the http thread reports which one it has applied, the accept thread reports accept_reconfigure_generation */
 struct uplink_config_t *new_uplink_config; /* uplink config being generated from config file */
 
 struct peerip_config_t *peerip_config;
@@ -1737,10 +1737,11 @@ int read_config(void)
 		hlog(LOG_WARNING, "New uplink config discarded - too quick reload, Uplink thread has not reconfigured yet");
 		free_uplink_config(&new_uplink_config);
 	} else {
+		/* the uplink thread takes the config when it sees the pointer:
+		 * the config must be complete in memory before the pointer is */
+		__sync_synchronize();
 		uplink_config_install = new_uplink_config;
 		new_uplink_config = NULL;
-		__sync_synchronize();
-		uplink_config_updated = 1;
 	}
 
 	/* put in the new peergroup packet signing key config */
@@ -1748,7 +1749,6 @@ int read_config(void)
 	prev_peergroup_key_config = peergroup_key_config;
 	peergroup_key_config = new_peergroup_key_config;
 	new_peergroup_key_config = NULL;
-	is2_corepeer_key_setup();
 	peergroup_key_transmit = new_peergroup_key_transmit;
 
 	/* put in the new peergroup config */
@@ -1757,6 +1757,10 @@ int read_config(void)
 	if (peerip_config)
 		peerip_config->prevp = &peerip_config;
 	new_peerip_config = NULL;
+	
+	/* build the key table, and check that the transmit key is defined:
+	 * the check needs the new transmit key id and the new peer groups */
+	is2_corepeer_key_setup();
 	
 	/* put in new http config */
 	free_http_config(&http_config);
@@ -1814,6 +1818,7 @@ void free_config(void)
 		hfree(fake_version);
 	fake_version = NULL;
 	free_listen_config(&listen_config);
+	free_uplink_config(&uplink_config_install);
 	free_peerip_config(&peerip_config);
 	free_peergroup_key_config(&peergroup_key_config);
 	free_peergroup_key_config(&prev_peergroup_key_config);

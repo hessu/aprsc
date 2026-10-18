@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -828,6 +829,80 @@ func TestIS2KeyReload(t *testing.T) {
 	// the server signs its own frames with key 1, which the peer still has
 	const fromClient = "SRC>DST,qAR,IGATE:from client after reload"
 	isclient.TxRx(t, client, udp, fromClient, fromClient)
+
+	s.Stop()
+}
+
+// The warning about a PeerGroupKeyTransmit key which has no PeerGroupKey
+// names the key of the configuration being read, at startup and on a reload.
+// The check used to run before the new transmit key id and peer groups were
+// installed: on a reload it compared the new keys with the previous transmit
+// key, and at startup it said nothing.
+func TestIS2KeyTransmitCheck(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	src, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", "is2-basic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// is2-basic has keys 1, 2 and 3, and transmits with key 1. cfg returns
+	// it with the given transmit key, and without the keys listed.
+	cfg := func(transmit string, without ...string) string {
+		var out []string
+		for _, l := range strings.Split(string(src), "\n") {
+			f := strings.Fields(l)
+			if len(f) > 1 && f[0] == "PeerGroupKey" && slices.Contains(without, f[1]) {
+				continue
+			}
+			if len(f) > 1 && f[0] == "PeerGroupKeyTransmit" {
+				l = "PeerGroupKeyTransmit " + transmit
+			}
+			out = append(out, l)
+		}
+		return strings.Join(out, "\n")
+	}
+	const disabled = "IS2 UDP peering disabled"
+
+	// at startup: a configuration check sees the mismatch
+	check := func(name, text string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), name)
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out, err := harness.CheckConfigFile(t, path)
+		if err != nil {
+			t.Fatalf("configuration %s was rejected: %v\n%s", name, err, out)
+		}
+		return out
+	}
+	if out := check("consistent", cfg("3")); strings.Contains(out, disabled) {
+		t.Errorf("a configuration with a key for PeerGroupKeyTransmit was warned about:\n%s", out)
+	}
+	if out := check("mismatch", cfg("5")); !strings.Contains(out, "PeerGroupKeyTransmit 5 has no PeerGroupKey") {
+		t.Errorf("no warning at startup about a PeerGroupKeyTransmit without a key:\n%s", out)
+	}
+
+	// on reload: switch to key 3 and drop key 1, the previous transmit key
+	s := harness.Start(t, "is2-basic")
+	const readOK = "New configuration read successfully"
+	reload := func(text string) {
+		t.Helper()
+		reloads := s.LogCount(readOK)
+		s.ReplaceConfig(text)
+		s.Signal(syscall.SIGUSR1)
+		s.WaitLog(readOK, reloads+1, 10*time.Second)
+	}
+	reload(cfg("3", "1"))
+	if n := s.LogCount(disabled); n != 0 {
+		t.Errorf("a reload to PeerGroupKeyTransmit 3 with key 3 defined logged %q %d times", disabled, n)
+	}
+	// then drop key 3 as well: a real mismatch, named right
+	reload(cfg("3", "1", "3"))
+	if n := s.LogCount("PeerGroupKeyTransmit 3 has no PeerGroupKey"); n != 1 {
+		t.Errorf("a reload to PeerGroupKeyTransmit 3 without key 3 logged the warning %d times, want 1", n)
+	}
 
 	s.Stop()
 }

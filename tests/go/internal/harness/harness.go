@@ -81,7 +81,7 @@ var products = map[string]*product{
 		args:     []string{"-server", "-jar", "javAPRSSrvr.jar"},
 		cfgDir:   ".",
 		exitCode: 143,
-		logFile:  "javaprssrvr4/err.log.0",
+		logFile:  "javaprssrvr4/err.0.log",
 	},
 }
 
@@ -341,6 +341,34 @@ func (s *Server) WaitLog(text string, n int, timeout time.Duration) {
 	for s.LogCount(text) < n {
 		if time.Now().After(end) {
 			s.t.Fatalf("%q did not appear in the server log %d times within %v", text, n, timeout)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// WaitLogAfter waits until text appears in the server's log after the n-th
+// occurrence of after, and fails the test if it does not within timeout. It
+// tells a line logged after an event from the same line logged before it,
+// where a count taken after the event could already include it.
+func (s *Server) WaitLogAfter(after string, n int, text string, timeout time.Duration) {
+	s.t.Helper()
+
+	end := time.Now().Add(timeout)
+	for {
+		b, _ := os.ReadFile(s.LogFile())
+		rest := b
+		for i := 0; i < n && rest != nil; i++ {
+			if k := bytes.Index(rest, []byte(after)); k < 0 {
+				rest = nil
+			} else {
+				rest = rest[k+len(after):]
+			}
+		}
+		if rest != nil && bytes.Contains(rest, []byte(text)) {
+			return
+		}
+		if time.Now().After(end) {
+			s.t.Fatalf("%q did not appear in the server log after %q number %d within %v", text, after, n, timeout)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

@@ -585,6 +585,7 @@ void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c)
 		is2_corepeer_obuf_flush(self, c);
 	
 	c->corepeer_is2 = 0;
+	c->validated = VALIDATED_WEAK; /* the plain frames are not signed */
 	c->write_packet = &udp_client_write_packet;
 	c->ping_rtt_n = 0;
 	c->ping_rtt_i = 0;
@@ -2664,8 +2665,11 @@ int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, 
 			return -1;
 		}
 
-		/* OK, enable */
+		/* OK, enable. Every frame on the link is now signed with a
+		 * shared key, which verifies the peer as strongly as a
+		 * certificate would, for the Received entries. */
 		c->corepeer_is2 = 1;
+		c->validated = VALIDATED_STRONG;
 		c->write_packet = is2_corepeer_write_packet;
 		c->is2_input_handler = is2_input_handler_corepeer;
 		is2_corepeer_track_reset(c);

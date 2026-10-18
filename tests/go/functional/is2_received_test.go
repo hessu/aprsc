@@ -257,7 +257,8 @@ func TestIS2Received(t *testing.T) {
 		expectTotal(t, "is2_received_loops", 1)
 	})
 
-	// A packet from a peer gets an entry naming the peer.
+	// A packet from a peer gets an entry naming the peer, verified
+	// STRONG: the frames of the IS2 peer link are signed.
 	t.Run("from a peer", func(t *testing.T) {
 		const packet = "SRC>DST,qAR,IGATE:from a peer"
 		p := isclient.NewISPacket(packet, isclient.Meta{})
@@ -272,7 +273,7 @@ func TestIS2Received(t *testing.T) {
 		got := readISPacket(t, rx, packet)
 		checkReceived(t, "client", got, []*aprsis2.IS2Received{
 			received("TESTIN-2", "N0FAR", aprsis2.VerificationStatus_STRONG, nil),
-			received("TESTING", "TESTIN-2", aprsis2.VerificationStatus_WEAK, nil),
+			received("TESTING", "TESTIN-2", aprsis2.VerificationStatus_STRONG, nil),
 		})
 		checkStamp(t, "client", got)
 	})

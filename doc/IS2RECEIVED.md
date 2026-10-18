@@ -35,7 +35,8 @@ entry has:
   `VerificationStatus`: `NONE` for a read-only client, `WEAK` for the
   APRS passcode, `STRONG` for a client certificate or the equivalent.
   A server's uplinks and peers are `WEAK` unless they were verified
-  with a certificate.
+  with a certificate, or the link is an IS2 UDP peer link, whose
+  frames are signed with a shared key (see `IS2PEERING.md`).
 * `client_addr`: the IP address the packet was received from, as 4
   bytes for IPv4 or 16 bytes for IPv6, in network byte order.  An IPv4
   client of a listener bound to an IPv6 address is recorded as the 4

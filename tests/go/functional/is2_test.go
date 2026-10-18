@@ -459,6 +459,10 @@ func TestIS2UDPPeerPing(t *testing.T) {
 	if peer["link"] != "is2" {
 		t.Errorf("peer status: link %v, want is2", peer["link"])
 	}
+	// the signed frames verify the peer as strongly as a certificate
+	if verified, _ := peer["verified"].(float64); verified != float64(aprsis2.VerificationStatus_STRONG) {
+		t.Errorf("peer status: verified %v, want %d (STRONG) on an IS2 link", peer["verified"], aprsis2.VerificationStatus_STRONG)
+	}
 	rttAvg, _ := peer["rtt_avg"].(float64)
 	rttMax, _ := peer["rtt_max"].(float64)
 	samples, _ := peer["rtt_samples"].(float64)

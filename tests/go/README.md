@@ -84,6 +84,12 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
 
 * `rx`: log in and print what the server sends; `-t` prefixes the lines with
   the Unix time, `-udp` asks for the packets over UDP, `-f` sets a filter.
+* `is2rx`: log in to an IS2 port and print the packets, each preceded by a
+  comment line with its metadata: the time it entered the APRS-IS, the
+  Received entries, and the RSSI, SNR, modem, bit rate and frequency if the
+  igate reported them. `-user` names the callsign, `-passcode` the passcode
+  (`-1` unless given), `-filter` a filter, and `-sctp` connects over SCTP
+  (Linux only). It can be used against a real server.
 * `xmit`: send a few sample packets (or the lines of a file) slowly, and
   print what comes back.
 * `copy`: copy the feed of one server into another, for loading a test

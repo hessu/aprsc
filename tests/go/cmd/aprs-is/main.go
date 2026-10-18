@@ -17,6 +17,7 @@ type subcommand struct {
 
 var subcommands = map[string]subcommand{
 	"rx":      {runRx, "receive packets and print them"},
+	"is2rx":   {runIS2Rx, "receive packets over IS2 and print them with their metadata"},
 	"xmit":    {runXmit, "send a set of sample packets slowly, printing what comes back"},
 	"copy":    {runCopy, "copy the feed of one server into another"},
 	"feed":    {runFeed, "send packets read from standard input"},

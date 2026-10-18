@@ -1801,6 +1801,7 @@ static void send_keepalives(struct worker_t *self)
 			 * falls back to the plain protocol when the replies stop.
 			 * The proposal below then goes out on this same pass. */
 			if (c->corepeer_is2) {
+				is2_corepeer_loss_sample(c);
 				if (tick - c->ping_reply_tick > IS2_COREPEER_PING_FAIL) {
 					is2_corepeer_downgrade(self, c);
 				} else if (c->keepalive <= tick || c->keepalive > tick + keepalive_interval) {
@@ -2427,6 +2428,20 @@ static struct cJSON *worker_client_json(struct client_t *c, int liveup_info)
 			cJSON_AddNumberToObject(jc, "rtt_max", rtt_max * 1000.0);
 			cJSON_AddNumberToObject(jc, "rtt_samples", rtt_samples);
 			cJSON_AddNumberToObject(jc, "rtt_period", rtt_period);
+		}
+		
+		/* the frame loss of a UDP peer link: the totals above, and the
+		 * recent figure over the last few minutes */
+		if (c->state == CSTATE_COREPEER) {
+			long long loss_rx, loss_lost;
+			time_t loss_period;
+			cJSON_AddNumberToObject(jc, "is2_frames_dupe", c->corepeer_is2_dupe_frames);
+			cJSON_AddNumberToObject(jc, "is2_frames_late", c->corepeer_is2_late_frames);
+			if (is2_corepeer_loss_stats(c, &loss_rx, &loss_lost, &loss_period) > 0) {
+				cJSON_AddNumberToObject(jc, "is2_frames_rx_recent", loss_rx);
+				cJSON_AddNumberToObject(jc, "is2_frames_lost_recent", loss_lost);
+				cJSON_AddNumberToObject(jc, "is2_frames_recent_period", loss_period);
+			}
 		}
 	}
 

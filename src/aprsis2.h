@@ -41,6 +41,8 @@ extern void is2_obuf_flush_pending(struct worker_t *self);
 
 extern int is2_out_ping(struct worker_t *self, struct client_t *c);
 extern int is2_ping_rtt_stats(struct client_t *c, double *avg, double *max, time_t *period);
+extern void is2_corepeer_loss_sample(struct client_t *c);
+extern int is2_corepeer_loss_stats(struct client_t *c, long long *rx, long long *lost, time_t *period);
 
 /* the IS2 frame delimiters */
 #define STX 0x02

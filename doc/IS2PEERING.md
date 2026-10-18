@@ -173,7 +173,25 @@ the window is dropped by the duplicate packet filter, which remembers
 packets for longer than that.  Peers need to keep their clocks in sync,
 with NTP or similar.
 
-The IS2Message carries a sequence number, which is only used for
-detecting lost frames, and a reordering window of 32 frames is allowed.
+Frame loss
+-----------
+
+Every frame carries a sequence number in the IS2Message, counted up by
+one per frame sent to that peer, pings included.  It is only used for
+detecting lost frames: the receiver keeps the newest sequence number
+received and a window of the 64 frames behind it, and a frame is counted
+as lost when it is still missing by the time the window has moved past
+it, or when nothing newer has arrived for 10 seconds.  So frames
+reordered on the wire within the window are not counted as lost, a burst
+of lost frames of any length is counted in full when the next frame
+after it arrives, and the number may wrap around.  A frame which arrives
+after being counted lost is counted as late, and a frame received twice
+as a duplicate.  A peer which restarts begins the numbering from zero
+again, which the receiver recognises and starts over from.
+
+The counts are shown per peer in the status: the received, lost, late
+and duplicate frames since the server started, and the received and
+lost frames over the last five minutes, from which the status page
+shows the short-term and long-term loss percentages.
 
 

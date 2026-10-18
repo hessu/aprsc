@@ -33,6 +33,18 @@ function timestr(i)
 		+ 'z';
 }
 
+/* The loss percentage of an IS2 peer link: the lost frames out of the
+ * frames sent, which is those received plus the lost ones. An empty
+ * string when nothing has been sent, so that the column stays blank. */
+function loss_pct(lost, rx)
+{
+	var total = (lost || 0) + (rx || 0);
+	if (!total)
+		return '';
+	var pct = lost / total * 100;
+	return pct.toFixed((pct < 10) ? 2 : 1) + '%';
+}
+
 function dur_str(i)
 {
 	var t;
@@ -163,7 +175,7 @@ var cols_uplinks = [
 
 var cols_peers = [
 	'server_id', 'addr', 'since_last_read',
-	'pkts_tx', 'pkts_rx', 'bytes_tx', 'bytes_rx', 'bytes_rates',
+	'pkts_tx', 'pkts_rx', 'is2_loss', 'bytes_tx', 'bytes_rx', 'bytes_rates',
 	'obuf_q'
 	];
 
@@ -298,6 +310,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			TH_since_last_read: 'Last in',
 			TH_software: 'Software',
 			TH_obuf_q: 'OutQ',
+			TH_is2_loss: 'Loss',
 			
 			TH_port: 'Port',
 			TH_verified: 'Verified',
@@ -365,7 +378,11 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			TIMING_RTT: 'IS2 ping round-trip time:',
 			TIMING_RTT_AVG: 'ms average',
 			TIMING_RTT_MAX: 'ms maximum',
-			TIMING_RTT_WINDOW: '{{ samples }} pings over the last {{ period }}'
+			TIMING_RTT_WINDOW: '{{ samples }} pings over the last {{ period }}',
+			TIMING_LOSS: 'IS2 frame loss:',
+			TIMING_LOSS_RECENT: '{{ lost }} of {{ total }} frames ({{ pct }}) over the last {{ period }}',
+			TIMING_LOSS_TOTAL: '{{ lost }} of {{ total }} frames ({{ pct }}) in total',
+			TIMING_LOSS_OTHER: '{{ dupe }} duplicate and {{ late }} late frames'
 			
 		});
 		
@@ -429,7 +446,22 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 		 * so that the 4m40s to 5m of a full window reads as 5m. */
 		var period = (c.rtt_period > 60) ? Math.round(c.rtt_period / 60) + 'm' : dur_str(c.rtt_period);
 		$scope.sel_rtt = (c.rtt_samples) ? { 'samples': c.rtt_samples, 'period': period } : null;
+		/* the frame loss of an IS2 UDP peer link, likewise */
+		if (c.is2_frames_recent_period != null) {
+			var lperiod = (c.is2_frames_recent_period > 60) ? Math.round(c.is2_frames_recent_period / 60) + 'm' : dur_str(c.is2_frames_recent_period);
+			$scope.sel_loss = {
+				'recent': { 'lost': c.is2_frames_lost_recent, 'total': c.is2_frames_rx_recent + c.is2_frames_lost_recent,
+					'pct': loss_pct(c.is2_frames_lost_recent, c.is2_frames_rx_recent), 'period': lperiod },
+				'total': { 'lost': c.is2_frames_lost, 'total': c.is2_frames_rx + c.is2_frames_lost,
+					'pct': loss_pct(c.is2_frames_lost, c.is2_frames_rx) },
+				'other': { 'dupe': c.is2_frames_dupe, 'late': c.is2_frames_late }
+			};
+		} else {
+			$scope.sel_loss = null;
+		}
 	};
+	
+	$scope.loss_pct = loss_pct;
 	
 	var select_client_refresh = function(d) {
 		var old = $scope.sel_c;

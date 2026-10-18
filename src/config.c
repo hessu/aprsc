@@ -1818,6 +1818,7 @@ void free_config(void)
 		hfree(fake_version);
 	fake_version = NULL;
 	free_listen_config(&listen_config);
+	free_uplink_config(&uplink_config_install);
 	free_peerip_config(&peerip_config);
 	free_peergroup_key_config(&peergroup_key_config);
 	free_peergroup_key_config(&prev_peergroup_key_config);

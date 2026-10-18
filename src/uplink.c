@@ -967,7 +967,16 @@ void uplink_stop(void)
 	while (uplink_clients)
 		uplink_client_free(uplink_clients);
 	
-	free_uplink_config(&uplink_config);
+	/* The thread is restarted when the number of workers changes. It may
+	 * have taken the new uplink configuration already: hand it back for
+	 * the next thread to take, unless a newer one is waiting there.
+	 */
+	if (uplink_config_install) {
+		free_uplink_config(&uplink_config);
+	} else {
+		uplink_config_install = uplink_config;
+		uplink_config = NULL;
+	}
 	
 	if ((e = pthread_mutex_unlock(&uplink_client_mutex))) {
 		hlog( LOG_ERR, "uplink_stop(): could not unlock uplink_client_mutex: %s", strerror(e) );

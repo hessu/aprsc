@@ -787,8 +787,16 @@ connerr:
 	
 err:
 	client_free(c);
-	if (uc)
+	if (uc) {
+		/* uplink_close() walks uplink_clients from a worker thread
+		 * under uplink_client_mutex: unlink under it too. */
+		rc = pthread_mutex_lock(&uplink_client_mutex);
+		if (rc)
+			hlog(LOG_ERR, "make_uplink(): could not lock uplink_client_mutex: %s", strerror(rc));
 		uplink_client_free(uc);
+		if (!rc && (rc = pthread_mutex_unlock(&uplink_client_mutex)))
+			hlog(LOG_ERR, "make_uplink(): could not unlock uplink_client_mutex: %s", strerror(rc));
+	}
 	l->state = UPLINK_ST_NOT_LINKED;
 	if (addr_s)
 		hfree(addr_s);

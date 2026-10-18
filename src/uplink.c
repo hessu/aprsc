@@ -793,6 +793,7 @@ err:
 			hlog(LOG_ERR, "make_uplink(): could not unlock uplink_client_mutex: %s", strerror(rc));
 	}
 	l->state = UPLINK_ST_NOT_LINKED;
+	l->client_ptr = NULL; /* the client is freed above */
 	if (addr_s)
 		hfree(addr_s);
 	return -1;

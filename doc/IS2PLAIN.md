@@ -40,7 +40,9 @@ ones a plaintext client can set:
   often negative, down to about -20, and rarely above +10.
 * `rx_modem`: the modem the packet was received with, as the number of
   one of the modem types of the `ModemType` enum in `aprsis2.proto`;
-  `2` is LoRa APRS, for instance.
+  `2` is LoRa APRS, for instance.  Numbers from 0 to 1024 are passed
+  on even when the server does not know the type, so that a type added
+  to the schema reaches the clients without an upgrade of the server.
 * `rx_bitrate`: the bit rate of the transmission in bit/s, as a whole
   number: 1200 or 9600 for packet radio, about 300 for the usual LoRa
   APRS setting.
@@ -53,8 +55,7 @@ than a given server understands.  A value the server cannot use is
 ignored together with its key: an empty one, as in `rx_rssi_dbm=`, one
 which is not a number as a whole, such as `rx_snr_db=8dB`, or one out
 of range, such as a bit rate of zero, a frequency of zero or below, or
-a modem number which is not one of the defined types.  The other pairs
-on the line still apply.
+a modem number above 1024.  The other pairs on the line still apply.
 
 An example of a session, from the client's point of view, which logs in
 and sends one packet with all the values:

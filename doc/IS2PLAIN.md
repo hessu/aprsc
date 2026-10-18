@@ -78,7 +78,7 @@ and sends one packet with all the values:
 
     user N0CALL-10 pass 12345 vers myigate 1.0
     #is2-meta rx_rssi_dbm=-97.5 rx_snr_db=8.2 rx_modem=2 rx_bitrate=300 rx_frequency=433775000
-    OH7LZB-9>APRS,WIDE1-1,qAR,N0CALL-10:!6028.51N/02505.68E>test
+    N0CALL-9>APRS,WIDE1-1,qAR,N0CALL-10:!6028.51N/02505.68E>test
 
 Any of the keys may be left out, when the receiver does not know the
 value.

@@ -105,6 +105,11 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
 rate every 10 seconds.
 
 Run them against a local test server with no uplinks, not against the real
-APRS-IS; `is2rx` and `rx`, which only receive, are the exception. To load a
+APRS-IS; `is2rx` and `rx`, which only receive, are the exception. The
+commands which send packets, `xmit`, `feed` and `post`, refuse any server
+which is not a test server: one on a loopback address (127.0.0.0/8 or
+`::1`) whose server id, read from the login reply, starts with `TEST`, as
+the ids of the test configurations do. `post` reads the id on the APRS-IS
+port given with `-server`, as the upload port does not tell it. To load a
 test server with real traffic, give it a read-only (`ro`) uplink to a real
 server.

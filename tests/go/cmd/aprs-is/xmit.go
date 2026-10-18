@@ -29,7 +29,8 @@ func runXmit(args []string) error {
 		"Sends packets to the server one at a time, and prints the lines it sends\n"+
 			"back prefixed with the Unix time. The packets are read from the file,\n"+
 			"one per line, or are a built-in set of samples. Exits one interval after\n"+
-			"sending the last one.")
+			"sending the last one. Only sends to a test server: one on a loopback\n"+
+			"address, with a server id starting with TEST.")
 	filter := fs.String("f", "", "`filter` to log in with")
 	interval := fs.Duration("i", 5*time.Second, "interval between the packets sent")
 	a := parseArgs(fs, args, 2, 3)
@@ -43,7 +44,7 @@ func runXmit(args []string) error {
 		}
 	}
 
-	c, err := dial(server, call, "xmit", 0, *filter)
+	c, err := dialTestServer(server, call, "xmit", 0, *filter)
 	if err != nil {
 		return err
 	}
@@ -52,6 +53,9 @@ func runXmit(args []string) error {
 
 	out := newOutput()
 	defer out.flush()
+	for _, l := range c.preamble {
+		out.line([]byte(l), true, true)
+	}
 	done := make(chan error, 1)
 	go func() { done <- printLines(c, out, true) }()
 

@@ -1,8 +1,9 @@
 #include <tunables/global>
 
-/opt/aprsc/sbin/aprsc {
+/opt/aprsc/sbin/aprsc flags=(attach_disconnected) {
   #include <abstractions/base>
   #include <abstractions/nameservice>
+  #include <abstractions/consoles>
 
 
   capability setgid,
@@ -24,4 +25,6 @@
 
   /dev/urandom r,
   /opt/aprsc/dev/urandom r,
+  /opt/aprsc/dev/{null,full,zero} rw,
+  /apparmor/.null rw,
 }

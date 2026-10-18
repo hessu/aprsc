@@ -17,7 +17,10 @@ import (
 // out as soon as the first configuration has been read, while the accept and
 // http threads may still be applying it. Reading a configuration frees the
 // listener, peer and http configuration lists those threads walk, so the
-// main thread defers the second read until they have caught up. Both reloads
+// main thread defers the second read until they have caught up. The uplink
+// thread takes its new configuration from where read_config() left it, and
+// a read while the previous one is still waiting there discards the new
+// uplink configuration, so the read is deferred for it too. Both reloads
 // must be read and applied, and the server must keep working.
 func TestReloadBackToBack(t *testing.T) {
 	harness.Parallel(t)
@@ -107,9 +110,13 @@ func TestReloadBackToBack(t *testing.T) {
 		reads += 2
 	}
 
-	// each configuration read was applied by both threads
+	// each configuration read was applied by both threads, and the uplink
+	// thread took each new uplink configuration
 	s.WaitLog(acceptOK, accepts+2*rounds, 10*time.Second)
 	s.WaitLog(httpOK, https+2*rounds, 10*time.Second)
+	if n := s.LogCount("New uplink config discarded"); n != 0 {
+		t.Errorf("the uplink configuration of a reload was discarded %d times", n)
+	}
 	t.Logf("%d reloads, deferred %d times", 2*rounds, s.LogCount("Reconfiguration deferred"))
 
 	close(stop)

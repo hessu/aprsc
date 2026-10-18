@@ -55,6 +55,8 @@ type config struct {
 	// IS2 in-band upgrade with the writes in pieces
 	slowUpgrade bool
 	sctp        bool // connect over SCTP instead of TCP
+	// how long DialIS2 keeps trying while the port is not open
+	retry time.Duration
 }
 
 // ErrNoSCTP is returned by the SCTP dialer when this host can not make SCTP
@@ -63,6 +65,10 @@ var ErrNoSCTP = errors.New("SCTP is not supported on this host")
 
 // WithSCTP makes the client connect over SCTP instead of TCP.
 func WithSCTP() Option { return func(c *config) { c.sctp = true } }
+
+// WithConnectRetry sets how long DialIS2 keeps trying to connect while the
+// port is not open: 8 seconds by default, 0 to try once.
+func WithConnectRetry(d time.Duration) Option { return func(c *config) { c.retry = d } }
 
 // dialConn connects to addr over TCP, or over SCTP if WithSCTP was given.
 func (c config) dialConn(addr string, timeout time.Duration) (net.Conn, error) {

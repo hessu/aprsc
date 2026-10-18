@@ -104,6 +104,15 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
 `multirx` and `coresim` print the number of connections and the receive
 rate every 10 seconds.
 
+`cmd/lossdemo` is a demo peer for looking at the frame loss figures of an
+IS2 UDP peer link on the status page. Start a server built with IS2 from
+`../` with `cfg-aprsc/is2-basic` and the web files in place (`make
+testinstall` in `../../src`), then run `LOSSDEMO=1 go test ./cmd/lossdemo
+-run TestLossDemo -v -timeout 3h` here: it peers as `TESTIN-2`, and streams
+packets with gaps, swaps and repeats in the frame numbering until stopped.
+The status page is at `http://127.0.0.1:55501/`. Without `LOSSDEMO` set,
+the test skips, so the suite is not affected.
+
 Run them against a local test server with no uplinks, not against the real
 APRS-IS; `is2rx` and `rx`, which only receive, are the exception. The
 commands which send packets, `xmit`, `feed` and `post`, refuse any server

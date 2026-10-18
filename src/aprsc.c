@@ -1137,11 +1137,15 @@ int main(int argc, char **argv)
 			/* The accept and http threads walk the listener, peer
 			 * and http configuration lists when they apply a
 			 * configuration, and read_config() frees those lists.
+			 * The uplink thread takes the new uplink config from
+			 * uplink_config_install, and read_config() discards
+			 * the new one if the previous is still waiting there.
 			 * A reload which comes while the previous one is still
 			 * being applied waits for the next round of this loop. */
 			if (accept_reconfiguring || http_reconfiguring
 			    || accept_config_applied != config_generation
-			    || http_config_applied != config_generation) {
+			    || http_config_applied != config_generation
+			    || uplink_config_install) {
 				if (!reconfigure_deferred)
 					hlog(LOG_INFO, "Reconfiguration deferred: the previous configuration is still being applied");
 				reconfigure_deferred = 1;

@@ -910,8 +910,9 @@ void uplink_thread(void *asdf)
 		if (uplink_shutting_down)
 			break;
 
-		/* sleep for 4 seconds between successful rounds */
-		for (rc = 0; (!uplink_shutting_down) && rc < 4000/200; rc++)
+		/* sleep for 4 seconds between successful rounds, unless a new
+		 * configuration arrives */
+		for (rc = 0; (!uplink_shutting_down) && (!uplink_config_updated) && rc < 4000/200; rc++)
 			if (poll(NULL, 0, 200) == -1 && errno != EINTR)
 				hlog(LOG_WARNING, "uplink: poll sleep failed: %s", strerror(errno));
 	}

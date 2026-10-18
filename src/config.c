@@ -78,7 +78,7 @@ struct sockaddr_in6 uplink_bind_v6;
 socklen_t uplink_bind_v6_len = 0;
 
 struct uplink_config_t *uplink_config_install; /* uplink config waiting to be installed by uplink thread */
-int config_generation; /* counts the configurations read: the accept and http threads report which one they have applied */
+int config_generation; /* counts the configurations read: the http thread reports which one it has applied, the accept thread reports accept_reconfigure_generation */
 struct uplink_config_t *new_uplink_config; /* uplink config being generated from config file */
 
 struct peerip_config_t *peerip_config;

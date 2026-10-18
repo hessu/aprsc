@@ -970,10 +970,21 @@ void uplink_stop(void)
 	/* The thread is restarted when the number of workers changes. It may
 	 * have taken the new uplink configuration already: hand it back for
 	 * the next thread to take, unless a newer one is waiting there.
+	 * The uplink sockets have been shut down and the uplink_clients
+	 * freed above, so the links are not connected any more. The worker
+	 * closing a socket resets its state through uplink_close(), but it
+	 * only finds the link in uplink_config, and the handed-back config
+	 * is not there until the next thread has taken it. Reset the states
+	 * here, or the next thread may think it has a connected uplink.
 	 */
 	if (uplink_config_install) {
 		free_uplink_config(&uplink_config);
 	} else {
+		struct uplink_config_t *l;
+		for (l = uplink_config; (l); l = l->next) {
+			l->state = UPLINK_ST_NOT_LINKED;
+			l->client_ptr = NULL;
+		}
 		uplink_config_install = uplink_config;
 		uplink_config = NULL;
 	}

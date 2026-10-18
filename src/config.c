@@ -1748,7 +1748,6 @@ int read_config(void)
 	prev_peergroup_key_config = peergroup_key_config;
 	peergroup_key_config = new_peergroup_key_config;
 	new_peergroup_key_config = NULL;
-	is2_corepeer_key_setup();
 	peergroup_key_transmit = new_peergroup_key_transmit;
 
 	/* put in the new peergroup config */
@@ -1757,6 +1756,10 @@ int read_config(void)
 	if (peerip_config)
 		peerip_config->prevp = &peerip_config;
 	new_peerip_config = NULL;
+	
+	/* build the key table, and check that the transmit key is defined:
+	 * the check needs the new transmit key id and the new peer groups */
+	is2_corepeer_key_setup();
 	
 	/* put in new http config */
 	free_http_config(&http_config);

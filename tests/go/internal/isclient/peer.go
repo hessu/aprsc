@@ -2,6 +2,7 @@ package isclient
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -101,10 +102,59 @@ var loginRe = regexp.MustCompile(`^user\s+(\S+)\s+pass\s+(\d+)`)
 func (f *FakeUpstream) Accept(t *testing.T) *Peer {
 	t.Helper()
 
+	p, err := f.accept(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// AcceptLive is Accept for a server which may connect and then drop the
+// connection on its own, as the server does when its uplink thread is
+// stopped while it is connecting. A connection the server closes before
+// logging in, or within the quiet time after it, is skipped, and the first
+// one which stays open is returned. Lines the server sends meanwhile, such
+// as keepalives, are read and dropped.
+func (f *FakeUpstream) AcceptLive(t *testing.T, quiet time.Duration) *Peer {
+	t.Helper()
+
+	deadline := time.Now().Add(acceptTimeout)
+	for time.Now().Before(deadline) {
+		p, err := f.accept(t)
+		if err != nil {
+			if p == nil {
+				t.Fatal(err)
+			}
+			t.Logf("skipping a connection from the server: %v", err)
+			p.Close()
+			continue
+		}
+		// a connection which the server is closing says so within the
+		// quiet time; one which stays open sends keepalives, or nothing
+		for {
+			_, err := p.ReadLine(quiet)
+			if err == nil {
+				continue
+			}
+			if isTimeout(err) {
+				return p
+			}
+			t.Logf("skipping a connection from the server, closed after login: %v", err)
+			p.Close()
+			break
+		}
+	}
+	t.Fatalf("server did not keep up a connection to the fake upstream within %v", acceptTimeout)
+	return nil
+}
+
+// accept does the work of Accept. When it returns an error with a Peer, the
+// server connected but the login did not complete.
+func (f *FakeUpstream) accept(t *testing.T) (*Peer, error) {
 	f.ln.SetDeadline(time.Now().Add(acceptTimeout))
 	conn, err := f.ln.Accept()
 	if err != nil {
-		t.Fatalf("server did not connect to the fake upstream within %v: %v", acceptTimeout, err)
+		return nil, fmt.Errorf("server did not connect to the fake upstream within %v: %v", acceptTimeout, err)
 	}
 
 	p := &Peer{conn: conn, r: bufio.NewReader(conn)}
@@ -112,17 +162,17 @@ func (f *FakeUpstream) Accept(t *testing.T) *Peer {
 
 	for _, l := range append([]string{"# IS_Fake 1.00"}, f.AfterBanner...) {
 		if err := p.SendLine(l); err != nil {
-			t.Fatalf("failed to send the server banner to the upstream connection: %v", err)
+			return p, fmt.Errorf("failed to send the server banner to the upstream connection: %v", err)
 		}
 	}
 
 	login, err := p.ReadPacket(time.Second)
 	if err != nil {
-		t.Fatalf("did not receive a login from the upstream connection: %v", err)
+		return p, fmt.Errorf("did not receive a login from the upstream connection: %v", err)
 	}
 	m := loginRe.FindStringSubmatch(login)
 	if m == nil {
-		t.Fatalf("login command not understood: %q", login)
+		return p, fmt.Errorf("login command not understood: %q", login)
 	}
 	p.User = m[1]
 
@@ -132,12 +182,17 @@ func (f *FakeUpstream) Accept(t *testing.T) *Peer {
 	}
 	for _, l := range f.BeforeLogresp {
 		if err := p.SendLine(l); err != nil {
-			t.Fatalf("failed to send a comment to the upstream connection: %v", err)
+			return p, fmt.Errorf("failed to send a comment to the upstream connection: %v", err)
 		}
 	}
 	if err := p.SendLine(fmt.Sprintf("# logresp %s %s, server %s", p.User, verified, f.call)); err != nil {
-		t.Fatalf("failed to send logresp to the upstream connection: %v", err)
+		return p, fmt.Errorf("failed to send logresp to the upstream connection: %v", err)
 	}
 
-	return p
+	return p, nil
+}
+
+func isTimeout(err error) bool {
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
 }

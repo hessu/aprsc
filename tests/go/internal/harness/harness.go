@@ -346,6 +346,34 @@ func (s *Server) WaitLog(text string, n int, timeout time.Duration) {
 	}
 }
 
+// WaitLogAfter waits until text appears in the server's log after the n-th
+// occurrence of after, and fails the test if it does not within timeout. It
+// tells a line logged after an event from the same line logged before it,
+// where a count taken after the event could already include it.
+func (s *Server) WaitLogAfter(after string, n int, text string, timeout time.Duration) {
+	s.t.Helper()
+
+	end := time.Now().Add(timeout)
+	for {
+		b, _ := os.ReadFile(s.LogFile())
+		rest := b
+		for i := 0; i < n && rest != nil; i++ {
+			if k := bytes.Index(rest, []byte(after)); k < 0 {
+				rest = nil
+			} else {
+				rest = rest[k+len(after):]
+			}
+		}
+		if rest != nil && bytes.Contains(rest, []byte(text)) {
+			return
+		}
+		if time.Now().After(end) {
+			s.t.Fatalf("%q did not appear in the server log after %q number %d within %v", text, after, n, timeout)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 // productUnderTest returns the product under test, its working directory and
 // its executable, failing the test if the executable is missing.
 func productUnderTest(t *testing.T) (*product, string, string) {

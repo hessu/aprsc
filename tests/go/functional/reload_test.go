@@ -145,9 +145,12 @@ func TestReloadBackToBack(t *testing.T) {
 
 // A reload which changes WorkerThreads makes the accept thread stop and
 // restart the uplink thread. The uplink thread takes a new configuration
-// within 200 ms of the read, so it has usually taken this one before being
-// stopped: uplink_stop() must hand it back for the restarted thread, or the
-// server runs without uplinks until the next reload.
+// within 200 ms of the read, so it has usually taken this one, and often
+// connected the uplink with it, before being stopped: uplink_stop() must
+// hand the configuration back for the restarted thread, with the links
+// marked as not connected, or the server runs without uplinks until the
+// next reload. The restarted thread connects the uplink on its first round,
+// and the uplink must carry packets.
 func TestReloadWorkerCount(t *testing.T) {
 	harness.Parallel(t)
 	harness.RequireAprsc(t)
@@ -160,12 +163,14 @@ func TestReloadWorkerCount(t *testing.T) {
 		t.Fatal("the basic configuration no longer says WorkerThreads 3")
 	}
 
+	fake := isclient.ListenFakeUpstream(t, harness.AddrOn(t, "127.0.0.1", 10153), "FAKEUP")
 	s := harness.Start(t, "basic")
-	// the uplink thread logs this on every 4-second round while the
-	// configured upstream, which is not running, cannot be connected
+	client := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
+	up := fake.Accept(t)
+	isclient.TxRx(t, up, client, "SRC>DST,qAR,IGATE:before the reloads", "SRC>DST,qAR,IGATE:before the reloads")
+
 	const picking = "Uplink: 1 uplinks configured, 0 are connected, need to pick new"
 	const stopped = "Uplink thread has terminated."
-	s.WaitLog(picking, 1, 10*time.Second)
 
 	for i, workers := range []string{"WorkerThreads 4", "WorkerThreads 3"} {
 		reads := s.LogCount("New configuration read successfully")
@@ -173,10 +178,18 @@ func TestReloadWorkerCount(t *testing.T) {
 		s.Signal(syscall.SIGUSR1)
 		s.WaitLog("New configuration read successfully", reads+1, 10*time.Second)
 		s.WaitLog(stopped, i+1, 10*time.Second)
-		// the restarted thread tries the uplink on its first round, and
-		// then on every round: a round seen after the stop is its
-		rounds := s.LogCount(picking)
-		s.WaitLog(picking, rounds+1, 10*time.Second)
+		// the restarted thread tries the uplink on its first round, right
+		// away. With the states of the handed-back links left as they
+		// were, it would find a connected uplink and skip a 4-second
+		// round, or never connect.
+		s.WaitLogAfter(stopped, i+1, picking, 2*time.Second)
+
+		// the server drops the old uplink, and possibly one it connected
+		// with the new configuration just before the thread was stopped;
+		// the one from the restarted thread stays up and carries packets
+		up = fake.AcceptLive(t, 500*time.Millisecond)
+		packet := fmt.Sprintf("SRC>DST,qAR,IGATE:after reload %d", i)
+		isclient.TxRx(t, up, client, packet, packet)
 	}
 
 	s.Stop()

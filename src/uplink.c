@@ -158,12 +158,6 @@ void uplink_close(struct client_t *c, int errnum)
 
 	hlog(LOG_INFO, "%s: Uplink has been closed: %s", c->addr_rem, aprsc_strerror(errnum));
 
-	if ((rc = pthread_mutex_lock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "uplink_close: could not lock uplink_connects: %s", strerror(rc));
-	-- uplink_connects.gauge;
-	if ((rc = pthread_mutex_unlock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "uplink_close: could not unlock uplink_connects: %s", strerror(rc));
-	
 	if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
 		hlog(LOG_ERR, "uplink_close(): could not lock uplink_client_mutex: %s", strerror(rc));
 		return;
@@ -767,15 +761,12 @@ connerr:
 	}
 #endif
 	
-	if ((i = pthread_mutex_lock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "make_uplink: could not lock uplink_connects: %s", strerror(i));
-	++ uplink_connects.gauge;
-	++ uplink_connects.counter;
-	++ uplink_connects.refcount;  /* <-- that does not get decremented at any time..  */
-	if ((i = pthread_mutex_unlock(& uplink_connects.mutex )))
-		hlog(LOG_ERR, "make_uplink: could not unlock uplink_connects: %s", strerror(i));
-	
+	/* Account the connection in the uplink accounter only: an uplink is
+	 * not an inbound connection, and does not count against MaxClients.
+	 * client_close() drops it from the accounter again.
+	 */
 	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
+	port_accounter_add(c->portaccount);
 	
 	/* Push it on the first worker, which ever it is. The worker owns the
 	 * client from here on, and may close and free it at any time, so
@@ -788,15 +779,8 @@ connerr:
 	return 0;
 	
 err:
-	if (c->portaccount) {
-		/* accounted above, but never handed to a worker */
-		if ((i = pthread_mutex_lock(& uplink_connects.mutex )))
-			hlog(LOG_ERR, "make_uplink: could not lock uplink_connects: %s", strerror(i));
-		-- uplink_connects.gauge;
-		-- uplink_connects.refcount;
-		if ((i = pthread_mutex_unlock(& uplink_connects.mutex )))
-			hlog(LOG_ERR, "make_uplink: could not unlock uplink_connects: %s", strerror(i));
-	}
+	if (c->portaccount) /* accounted above, but never handed to a worker */
+		port_accounter_drop(c->portaccount);
 	client_free(c);
 	if (uc) {
 		/* uplink_close() walks uplink_clients from a worker thread

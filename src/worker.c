@@ -134,7 +134,7 @@ static void port_accounter_reject(struct portaccount_t *p)
 	}
 }
 
-static void port_accounter_add(struct portaccount_t *p)
+void port_accounter_add(struct portaccount_t *p)
 {
 	int i;
 	if (!p) return;
@@ -926,13 +926,20 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	/* If this happens to be the uplink, tell the uplink connection
 	 * setup module that the connection has gone away.
 	 */
-	if (c->flags & CLFLAGS_UPLINKPORT && c->state != CSTATE_COREPEER)
+	int is_uplink = (c->flags & CLFLAGS_UPLINKPORT) && c->state != CSTATE_COREPEER;
+	if (is_uplink)
 		uplink_close(c, errnum);
 	
 	if (c->portaccount) {
 		/* If port accounting is done, handle population accounting... */
 		//hlog(LOG_DEBUG, "client_close dropping inbound_connects_account %p", c->portaccount);
-		inbound_connects_account(0, c->portaccount);
+		if (is_uplink)
+			/* An uplink is not an inbound connection: it was never
+			 * counted in inbound_connects, which MaxClients limits,
+			 * so only its own accounter is dropped. */
+			port_accounter_drop(c->portaccount);
+		else
+			inbound_connects_account(0, c->portaccount);
 		c->portaccount = NULL;
 	} else {
 		hlog(LOG_DEBUG, "client_close: has no portaccount");

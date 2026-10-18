@@ -81,7 +81,7 @@ var products = map[string]*product{
 		args:     []string{"-server", "-jar", "javAPRSSrvr.jar"},
 		cfgDir:   ".",
 		exitCode: 143,
-		logFile:  "javaprssrvr4/err.log.0",
+		logFile:  "javaprssrvr4/err.0.log",
 	},
 }
 

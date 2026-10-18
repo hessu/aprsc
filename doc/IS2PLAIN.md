@@ -39,16 +39,32 @@ ones a plaintext client can set:
   in dB.  LoRa decodes packets well below the noise, so the value is
   often negative, down to about -20, and rarely above +10.
 * `rx_modem`: the modem the packet was received with, as the number of
-  one of the modem types of the `ModemType` enum in `aprsis2.proto`;
-  `2` is LoRa APRS, for instance.  Numbers from 0 to 1024 are passed
-  on even when the server does not know the type, so that a type added
-  to the schema reaches the clients without an upgrade of the server.
+  one of the modem types of the `ModemType` enum in `aprsis2.proto`,
+  listed in the table below; `2` is LoRa APRS, for instance.  Numbers
+  from 0 to 1024 are passed on even when the server does not know the
+  type, so that a type added to the schema reaches the clients without
+  an upgrade of the server.
 * `rx_bitrate`: the bit rate of the transmission in bit/s, as a whole
   number: 1200 or 9600 for packet radio, about 300 for the usual LoRa
   APRS setting.
 * `rx_frequency`: the radio frequency the packet was received on, in
   Hz, decimals allowed; `433775000` for the European LoRa APRS channel,
   for instance.
+
+The modem types, as defined in `aprsis2.proto`:
+
+| `rx_modem` | Name              | Modem                                          |
+|-----------:|-------------------|------------------------------------------------|
+|          0 | `MODEM_UNDEFINED` | Not known or not set, the same as no key       |
+|          1 | `MODEM_AX25`      | AX.25 packet radio                             |
+|          2 | `MODEM_LORA_APRS` | LoRa APRS, as sent by LoRa trackers and igates |
+|          3 | `MODEM_FLARM`     | FLARM aircraft collision avoidance beacons     |
+|          4 | `MODEM_DSTAR`     | D-Star DV mode data (D-PRS)                    |
+|          5 | `MODEM_DMR`       | DMR GPS data                                   |
+|          6 | `MODEM_C4FM`      | Yaesu System Fusion                            |
+|          7 | `MODEM_NXDN`      | NXDN digital voice GPS data                    |
+|          8 | `MODEM_P25`       | APCO P25 digital voice GPS data                |
+|          9 | `MODEM_M17`       | M17 digital voice GNSS data                    |
 
 Keys the server does not know are ignored, so a client may send more
 than a given server understands.  A value the server cannot use is

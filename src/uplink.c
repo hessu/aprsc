@@ -831,6 +831,20 @@ void uplink_thread(void *asdf)
 			uplink_reconfiguring = 0;
 			close_uplinkers();
 			
+			/* uplink_close() walks uplink_config from a worker thread
+			 * under uplink_client_mutex when an uplink socket closes:
+			 * replace the list under the same mutex, or the worker
+			 * may walk a list being freed. Lock before taking the
+			 * new configuration, so that a failed lock leaves it
+			 * installed for the next round to take.
+			 */
+			if ((rc = pthread_mutex_lock(&uplink_client_mutex))) {
+				hlog(LOG_ERR, "uplink_thread: could not lock uplink_client_mutex: %s", strerror(rc));
+				uplink_reconfiguring = 1;
+				poll(NULL, 0, 1000);
+				continue;
+			}
+			
 			/* Take the new configuration with an atomic swap: the
 			 * main thread installs the next one as soon as it sees
 			 * this one gone, and a flag cleared after the take could
@@ -839,10 +853,13 @@ void uplink_thread(void *asdf)
 			 */
 			struct uplink_config_t *new_config = __sync_lock_test_and_set(&uplink_config_install, NULL);
 			__sync_synchronize();
+			
 			free_uplink_config(&uplink_config);
 			uplink_config = new_config;
 			if (uplink_config)
 				uplink_config->prevp = &uplink_config;
+			if ((rc = pthread_mutex_unlock(&uplink_client_mutex)))
+				hlog(LOG_ERR, "uplink_thread: could not unlock uplink_client_mutex: %s", strerror(rc));
 			
 			hlog(LOG_INFO, "Uplink thread configured.");
 		}

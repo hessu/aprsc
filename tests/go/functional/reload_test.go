@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -138,6 +139,45 @@ func TestReloadBackToBack(t *testing.T) {
 	isclient.TxRx(t, client, udp, fromClient, fromClient)
 	const fromPeer = "SRC>DST,qAR,IGATE:from the peer after the reloads"
 	isclient.TxRx(t, udp, client, fromPeer, fromPeer)
+
+	s.Stop()
+}
+
+// A reload which changes WorkerThreads makes the accept thread stop and
+// restart the uplink thread. The uplink thread takes a new configuration
+// within 200 ms of the read, so it has usually taken this one before being
+// stopped: uplink_stop() must hand it back for the restarted thread, or the
+// server runs without uplinks until the next reload.
+func TestReloadWorkerCount(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+
+	src, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", "basic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(src), "\nWorkerThreads 3\n") {
+		t.Fatal("the basic configuration no longer says WorkerThreads 3")
+	}
+
+	s := harness.Start(t, "basic")
+	// the uplink thread logs this on every 4-second round while the
+	// configured upstream, which is not running, cannot be connected
+	const picking = "Uplink: 1 uplinks configured, 0 are connected, need to pick new"
+	const stopped = "Uplink thread has terminated."
+	s.WaitLog(picking, 1, 10*time.Second)
+
+	for i, workers := range []string{"WorkerThreads 4", "WorkerThreads 3"} {
+		reads := s.LogCount("New configuration read successfully")
+		s.ReplaceConfig(strings.Replace(string(src), "\nWorkerThreads 3\n", "\n"+workers+"\n", 1))
+		s.Signal(syscall.SIGUSR1)
+		s.WaitLog("New configuration read successfully", reads+1, 10*time.Second)
+		s.WaitLog(stopped, i+1, 10*time.Second)
+		// the restarted thread tries the uplink on its first round, and
+		// then on every round: a round seen after the stop is its
+		rounds := s.LogCount(picking)
+		s.WaitLog(picking, rounds+1, 10*time.Second)
+	}
 
 	s.Stop()
 }

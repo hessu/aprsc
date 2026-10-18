@@ -98,11 +98,12 @@ the ones which take longer.  See [IS2RECEIVED](IS2RECEIVED.html).
 
 A packet can carry how it was heard on the air: the signal strength
 in dBm, the signal-to-noise ratio in dB, the modem type (AX.25, LoRa
-APRS, FLARM), the bit rate and the frequency.  An IS2 igate sets the
-fields directly, and a plaintext igate can set them by sending an
-`#is2-meta` line before the packet, which servers without IS2 ignore
-as a comment.  The values travel with the packet over IS2 links; a
-plaintext link drops them.  See [IS2PLAIN](IS2PLAIN.html).
+APRS, FLARM, D-Star, DMR, C4FM, NXDN, P25, M17), the bit rate and the
+frequency.  An IS2 igate sets the fields directly, and a plaintext
+igate can set them by sending an `#is2-meta` line before the packet,
+which servers without IS2 ignore as a comment.  The values travel with
+the packet over IS2 links; a plaintext link drops them.  See
+[IS2PLAIN](IS2PLAIN.html).
 
 ### Login with machine-readable results
 

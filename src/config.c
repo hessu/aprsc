@@ -78,7 +78,6 @@ struct sockaddr_in6 uplink_bind_v6;
 socklen_t uplink_bind_v6_len = 0;
 
 struct uplink_config_t *uplink_config_install; /* uplink config waiting to be installed by uplink thread */
-int uplink_config_updated = 0;
 int config_generation; /* counts the configurations read: the accept and http threads report which one they have applied */
 struct uplink_config_t *new_uplink_config; /* uplink config being generated from config file */
 
@@ -1738,10 +1737,11 @@ int read_config(void)
 		hlog(LOG_WARNING, "New uplink config discarded - too quick reload, Uplink thread has not reconfigured yet");
 		free_uplink_config(&new_uplink_config);
 	} else {
+		/* the uplink thread takes the config when it sees the pointer:
+		 * the config must be complete in memory before the pointer is */
+		__sync_synchronize();
 		uplink_config_install = new_uplink_config;
 		new_uplink_config = NULL;
-		__sync_synchronize();
-		uplink_config_updated = 1;
 	}
 
 	/* put in the new peergroup packet signing key config */

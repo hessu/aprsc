@@ -826,19 +826,23 @@ void uplink_thread(void *asdf)
 	
 	uplink_reconfiguring = 1;
 	while (!uplink_shutting_down) {
-		if (uplink_reconfiguring || uplink_config_updated) {
+		if (uplink_reconfiguring || uplink_config_install) {
 			hlog(LOG_INFO, "Uplink thread applying new configuration...");
-			__sync_synchronize();
 			uplink_reconfiguring = 0;
 			close_uplinkers();
 			
+			/* Take the new configuration with an atomic swap: the
+			 * main thread installs the next one as soon as it sees
+			 * this one gone, and a flag cleared after the take could
+			 * hide that one until the next reload. The pointer
+			 * itself tells when there is a configuration to take.
+			 */
+			struct uplink_config_t *new_config = __sync_lock_test_and_set(&uplink_config_install, NULL);
+			__sync_synchronize();
 			free_uplink_config(&uplink_config);
-			uplink_config = uplink_config_install;
-			uplink_config_install = NULL;
+			uplink_config = new_config;
 			if (uplink_config)
 				uplink_config->prevp = &uplink_config;
-			
-			uplink_config_updated = 0;
 			
 			hlog(LOG_INFO, "Uplink thread configured.");
 		}
@@ -847,7 +851,7 @@ void uplink_thread(void *asdf)
 		if (uplink_shutting_down || uplink_reconfiguring)
 			continue;
 		
-		if (uplink_config_updated) {
+		if (uplink_config_install) {
 			uplink_reconfiguring = 1;
 			continue;
 		}
@@ -912,7 +916,7 @@ void uplink_thread(void *asdf)
 
 		/* sleep for 4 seconds between successful rounds, unless a new
 		 * configuration arrives */
-		for (rc = 0; (!uplink_shutting_down) && (!uplink_config_updated) && rc < 4000/200; rc++)
+		for (rc = 0; (!uplink_shutting_down) && (!uplink_config_install) && rc < 4000/200; rc++)
 			if (poll(NULL, 0, 200) == -1 && errno != EINTR)
 				hlog(LOG_WARNING, "uplink: poll sleep failed: %s", strerror(errno));
 	}

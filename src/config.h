@@ -227,7 +227,6 @@ extern struct peerip_config_t *peerip_config;
 extern struct peergroup_key_t *peergroup_key_config;
 extern int peergroup_key_transmit;
 extern struct uplink_config_t *uplink_config_install;
-extern int uplink_config_updated;
 extern int config_generation;
 extern int listen_low_ports;
 

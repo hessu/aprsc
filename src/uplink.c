@@ -767,12 +767,6 @@ connerr:
 	}
 #endif
 	
-	/* Push it on the first worker, which ever it is..
-	 */
-	
-	if (pass_client_to_worker(worker_threads, c))
-		goto err;
-
 	if ((i = pthread_mutex_lock(& uplink_connects.mutex )))
 		hlog(LOG_ERR, "make_uplink: could not lock uplink_connects: %s", strerror(i));
 	++ uplink_connects.gauge;
@@ -783,9 +777,26 @@ connerr:
 	
 	c->portaccount = & uplink_connects; /* calculate traffic bytes/packets */
 	
+	/* Push it on the first worker, which ever it is. The worker owns the
+	 * client from here on, and may close and free it at any time, so
+	 * this has to be the last thing done with it.
+	 */
+	
+	if (pass_client_to_worker(worker_threads, c))
+		goto err;
+	
 	return 0;
 	
 err:
+	if (c->portaccount) {
+		/* accounted above, but never handed to a worker */
+		if ((i = pthread_mutex_lock(& uplink_connects.mutex )))
+			hlog(LOG_ERR, "make_uplink: could not lock uplink_connects: %s", strerror(i));
+		-- uplink_connects.gauge;
+		-- uplink_connects.refcount;
+		if ((i = pthread_mutex_unlock(& uplink_connects.mutex )))
+			hlog(LOG_ERR, "make_uplink: could not unlock uplink_connects: %s", strerror(i));
+	}
 	client_free(c);
 	if (uc) {
 		/* uplink_close() walks uplink_clients from a worker thread

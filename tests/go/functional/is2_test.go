@@ -567,10 +567,10 @@ func TestIS2Optionals(t *testing.T) {
 			isclient.Meta{Modem: modem, Bitrate: &bitrate, Frequency: &frequency}))
 	})
 
-	// a modem type not defined, a zero bit rate and a negative frequency
-	// are ignored, the rest of the line still applies
+	// a modem type beyond the range, a zero bit rate and a negative
+	// frequency are ignored, the rest of the line still applies
 	t.Run("plain with invalid modem, bit rate and frequency", func(t *testing.T) {
-		txPlain.Send(t, "#is2-meta rx_modem=99 rx_bitrate=0 rx_frequency=-433775000 rx_snr_db=12")
+		txPlain.Send(t, "#is2-meta rx_modem=1025 rx_bitrate=0 rx_frequency=-433775000 rx_snr_db=12")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 8")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 8", isclient.Meta{SNR: &snr}))
@@ -584,14 +584,22 @@ func TestIS2Optionals(t *testing.T) {
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 9", isclient.Meta{SNR: &snr}))
 	})
 
-	// the modem types are looked up in the enum: the last one defined is
-	// accepted, the undefined one (0) is ignored
+	// the last modem type defined in the enum is accepted, as is one
+	// not in the enum of this build up to the limit of 1024, and the
+	// undefined one (0) is ignored
 	t.Run("plain with the M17 modem", func(t *testing.T) {
 		txPlain.Send(t, "#is2-meta rx_modem=9")
 		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 10")
 		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
 			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 10",
 			isclient.Meta{Modem: aprsis2.ISPacket_MODEM_M17}))
+	})
+	t.Run("plain with an unknown modem at the limit", func(t *testing.T) {
+		txPlain.Send(t, "#is2-meta rx_modem=1024")
+		txPlain.Send(t, msgSrc+">APRS,OH2RDG*,WIDE,"+loginTxPlain+",I:!6028.51N/02505.68E# should pass 10b")
+		isclient.ExpectISPacket(t, rx, isclient.NewISPacket(
+			msgSrc+">APRS,OH2RDG*,WIDE,qAR,"+loginTxPlain+":!6028.51N/02505.68E# should pass 10b",
+			isclient.Meta{Modem: aprsis2.ISPacket_ModemType(1024)}))
 	})
 	t.Run("plain with the undefined modem", func(t *testing.T) {
 		txPlain.Send(t, "#is2-meta rx_modem=0 rx_snr_db=12")

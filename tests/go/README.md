@@ -92,8 +92,6 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
   (Linux only). It can be used against a real server.
 * `xmit`: send a few sample packets (or the lines of a file) slowly, and
   print what comes back.
-* `copy`: copy the feed of one server into another, for loading a test
-  server with real traffic.
 * `feed`: send the packets read from standard input as fast as the server
   takes them. The input is in the format `rx -t` writes, so traffic recorded
   with it can be replayed; `-raw` takes plain packets.
@@ -103,9 +101,10 @@ replaced the Perl scripts that were in `../../tools/`. Build it with `go build
   receive. `-map` maps their ports to the ports of the test server.
 * `post`: send packets with an HTTP POST to the position upload port.
 
-`copy`, `multirx` and `coresim` print the number of connections and the
-receive rate every 10 seconds.
+`multirx` and `coresim` print the number of connections and the receive
+rate every 10 seconds.
 
 Run them against a local test server with no uplinks, not against the real
-APRS-IS: `copy` reading from a real server is the exception, and its
-destination must still be a test server.
+APRS-IS; `is2rx` and `rx`, which only receive, are the exception. To load a
+test server with real traffic, give it a read-only (`ro`) uplink to a real
+server.

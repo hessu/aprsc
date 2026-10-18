@@ -305,10 +305,16 @@ func (ISPacket_Type) EnumDescriptor() ([]byte, []int) {
 type ISPacket_ModemType int32
 
 const (
-	ISPacket_MODEM_UNDEFINED ISPacket_ModemType = 0
+	ISPacket_MODEM_UNDEFINED ISPacket_ModemType = 0 // not known or not set
 	ISPacket_MODEM_AX25      ISPacket_ModemType = 1 // AX.25 packet radio
-	ISPacket_MODEM_LORA_APRS ISPacket_ModemType = 2
-	ISPacket_MODEM_FLARM     ISPacket_ModemType = 3
+	ISPacket_MODEM_LORA_APRS ISPacket_ModemType = 2 // LoRa APRS, as sent by LoRa trackers and igates
+	ISPacket_MODEM_FLARM     ISPacket_ModemType = 3 // FLARM aircraft collision avoidance beacons
+	ISPacket_MODEM_DSTAR     ISPacket_ModemType = 4 // D-Star DV mode data (D-PRS)
+	ISPacket_MODEM_DMR       ISPacket_ModemType = 5 // DMR GPS data
+	ISPacket_MODEM_C4FM      ISPacket_ModemType = 6 // Yaesu System Fusion
+	ISPacket_MODEM_NXDN      ISPacket_ModemType = 7 // NXDN digital voice GPS data
+	ISPacket_MODEM_P25       ISPacket_ModemType = 8 // APCO P25 digital voice GPS data
+	ISPacket_MODEM_M17       ISPacket_ModemType = 9 // M17 digital voice GNSS data
 )
 
 // Enum value maps for ISPacket_ModemType.
@@ -318,12 +324,24 @@ var (
 		1: "MODEM_AX25",
 		2: "MODEM_LORA_APRS",
 		3: "MODEM_FLARM",
+		4: "MODEM_DSTAR",
+		5: "MODEM_DMR",
+		6: "MODEM_C4FM",
+		7: "MODEM_NXDN",
+		8: "MODEM_P25",
+		9: "MODEM_M17",
 	}
 	ISPacket_ModemType_value = map[string]int32{
 		"MODEM_UNDEFINED": 0,
 		"MODEM_AX25":      1,
 		"MODEM_LORA_APRS": 2,
 		"MODEM_FLARM":     3,
+		"MODEM_DSTAR":     4,
+		"MODEM_DMR":       5,
+		"MODEM_C4FM":      6,
+		"MODEM_NXDN":      7,
+		"MODEM_P25":       8,
+		"MODEM_M17":       9,
 	}
 )
 
@@ -1245,7 +1263,7 @@ const file_aprsis2_proto_rawDesc = "" +
 	"\busername\x18\x02 \x01(\tR\busername\x127\n" +
 	"\bverified\x18\x03 \x01(\x0e2\x1b.aprsis2.VerificationStatusR\bverified\x12\x1f\n" +
 	"\vclient_addr\x18\x04 \x01(\fR\n" +
-	"clientAddr\"\xe6\x04\n" +
+	"clientAddr\"\xc5\x05\n" +
 	"\bISPacket\x12*\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x16.aprsis2.ISPacket.TypeR\x04type\x12$\n" +
 	"\x0eis_packet_data\x18\x02 \x01(\fR\fisPacketData\x120\n" +
@@ -1260,13 +1278,21 @@ const file_aprsis2_proto_rawDesc = "" +
 	"\x04Type\x12\r\n" +
 	"\tUNDEFINED\x10\x00\x12\r\n" +
 	"\tIS_PACKET\x10\x02\x12\x17\n" +
-	"\x13IS_PACKET_DUPLICATE\x10\x03\"V\n" +
+	"\x13IS_PACKET_DUPLICATE\x10\x03\"\xb4\x01\n" +
 	"\tModemType\x12\x13\n" +
 	"\x0fMODEM_UNDEFINED\x10\x00\x12\x0e\n" +
 	"\n" +
 	"MODEM_AX25\x10\x01\x12\x13\n" +
 	"\x0fMODEM_LORA_APRS\x10\x02\x12\x0f\n" +
-	"\vMODEM_FLARM\x10\x03B\x16\n" +
+	"\vMODEM_FLARM\x10\x03\x12\x0f\n" +
+	"\vMODEM_DSTAR\x10\x04\x12\r\n" +
+	"\tMODEM_DMR\x10\x05\x12\x0e\n" +
+	"\n" +
+	"MODEM_C4FM\x10\x06\x12\x0e\n" +
+	"\n" +
+	"MODEM_NXDN\x10\a\x12\r\n" +
+	"\tMODEM_P25\x10\b\x12\r\n" +
+	"\tMODEM_M17\x10\tB\x16\n" +
 	"\x14optional_rx_rssi_dbmB\x14\n" +
 	"\x12optional_rx_snr_dbB\x15\n" +
 	"\x13optional_rx_bitrateB\x17\n" +

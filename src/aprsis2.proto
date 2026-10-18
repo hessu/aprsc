@@ -191,10 +191,16 @@ message ISPacket {
 	// The modem the packet was received with, its bit rate in bit/s and
 	// the radio frequency in Hz, as the receiver reports them.
 	enum ModemType {
-		MODEM_UNDEFINED = 0;
+		MODEM_UNDEFINED = 0; // not known or not set
 		MODEM_AX25 = 1;      // AX.25 packet radio
-		MODEM_LORA_APRS = 2;
-		MODEM_FLARM = 3;
+		MODEM_LORA_APRS = 2; // LoRa APRS, as sent by LoRa trackers and igates
+		MODEM_FLARM = 3;     // FLARM aircraft collision avoidance beacons
+		MODEM_DSTAR = 4;     // D-Star DV mode data (D-PRS)
+		MODEM_DMR = 5;       // DMR GPS data
+		MODEM_C4FM = 6;      // Yaesu System Fusion
+		MODEM_NXDN = 7;      // NXDN digital voice GPS data
+		MODEM_P25 = 8;       // APCO P25 digital voice GPS data
+		MODEM_M17 = 9;       // M17 digital voice GNSS data
 	}
 	ModemType rx_modem = 23;
 	oneof optional_rx_bitrate {

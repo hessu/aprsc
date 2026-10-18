@@ -120,12 +120,12 @@ static void is2_plain_metadata_key(void *ctx,
 			c->is2_input_template.optional_rx_snr_db_case = APRSIS2__ISPACKET__OPTIONAL_RX_SNR_DB_RX_SNR_DB;
 		}
 	} else if (key_len == 8 && memcmp(key, "rx_modem", 8) == 0) {
-		/* one of the modem types defined in aprsis2.proto, looked up in
-		 * the generated enum descriptor so that new types need no change
-		 * here; 0 is MODEM_UNDEFINED, which is what an absent key means
+		/* a modem type of aprsis2.proto, passed on as it is so that a
+		 * type newer than this build gets through, within a range which
+		 * keeps the varint small; 0 is MODEM_UNDEFINED, which is what
+		 * an absent key means
 		 */
-		if (is2_kv_int(val, val_len, 1, INT32_MAX, &l)
-		    && protobuf_c_enum_descriptor_get_value(&aprsis2__ispacket__modem_type__descriptor, l))
+		if (is2_kv_int(val, val_len, 0, 1024, &l))
 			c->is2_input_template.rx_modem = l;
 	} else if (key_len == 10 && memcmp(key, "rx_bitrate", 10) == 0) {
 		if (is2_kv_int(val, val_len, 1, UINT32_MAX, &l)) {

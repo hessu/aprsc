@@ -195,10 +195,11 @@ The basic syntax is:
     addresses. The addresses of a list must be specific ones, not
     wildcards.
     
- *  port: the local TCP or UDP port to listen on. Must be larger than 1023.
-    aprsc drops root privileges quickly after startup (if it has them), and
-    cannot bind privileged ports. If you need to support a low port such as
-    23, see [TIPS](TIPS.html): "Providing access on low TCP ports"
+ *  port: the local TCP, SCTP or UDP port to listen on.  Must be larger than
+    1023.  aprsc drops root privileges quickly after startup (if it has
+    them), and cannot bind privileged ports.  If you need to support a low
+    port such as 23, see [TIPS](TIPS.html): "Providing access on low TCP
+    ports".  The same port number can be used on TCP and SCTP.
 
  *  options: one more of:
  

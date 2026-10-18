@@ -103,7 +103,8 @@ Whenever a new aprsc version is available, an upgrade can be performed
 automatically by running the upgrade command.  Your operating system can
 also be configured to upgrade packages automatically, or to instruct you to
 upgrade when upgrades are available. The following upgrade command will also
-restart aprsc for you, if possible.
+perform a live upgrade of a running aprsc for you, keeping the clients
+connected, if possible.
 
     sudo apt-get update && sudo apt-get upgrade
 

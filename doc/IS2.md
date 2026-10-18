@@ -98,11 +98,12 @@ the ones which take longer.  See [IS2RECEIVED](IS2RECEIVED.html).
 
 A packet can carry how it was heard on the air: the signal strength
 in dBm, the signal-to-noise ratio in dB, the modem type (AX.25, LoRa
-APRS, FLARM), the bit rate and the frequency.  An IS2 igate sets the
-fields directly, and a plaintext igate can set them by sending an
-`#is2-meta` line before the packet, which servers without IS2 ignore
-as a comment.  The values travel with the packet over IS2 links; a
-plaintext link drops them.  See [IS2PLAIN](IS2PLAIN.html).
+APRS, FLARM, D-Star, DMR, C4FM, NXDN, P25, M17), the bit rate and the
+frequency.  An IS2 igate sets the fields directly, and a plaintext
+igate can set them by sending an `#is2-meta` line before the packet,
+which servers without IS2 ignore as a comment.  The values travel with
+the packet over IS2 links; a plaintext link drops them.  See
+[IS2PLAIN](IS2PLAIN.html).
 
 ### Login with machine-readable results
 
@@ -296,20 +297,22 @@ code of `aprsis2.proto`, on one core of a 17-year-old Intel Xeon L5520
 at 2.27 GHz (Nehalem, 2009), encoding a 100-byte APRS packet as an
 `ISPacket`:
 
-    packet                                        encoded   encode time
-    no Received entries, with received_time       109 B     0.3 µs
-    one Received entry with address               140 B     0.5 µs
-    three Received entries with addresses         196 B     1.0 µs
-    five Received entries with addresses (max)    240 B     1.7 µs
+| packet                                     | encoded | encode time |
+|--------------------------------------------|--------:|------------:|
+| no Received entries, with received_time    |   109 B |      0.3 µs |
+| one Received entry with address            |   140 B |      0.5 µs |
+| three Received entries with addresses      |   196 B |      1.0 µs |
+| five Received entries with addresses (max) |   240 B |      1.7 µs |
 
 Decoding an `IS2Message` frame, including allocating and freeing the
 decoded structures with `malloc()`:
 
-    frame                                         size      decode time
-    one packet, no Received entries               117 B     0.5 µs
-    one packet, three Received entries            205 B     1.9 µs
-    ten packets, three Received entries each      2005 B    17 µs, 1.7 µs per packet
-    fifty packets, three Received entries each    10005 B   110 µs, 2.2 µs per packet
+| frame                                      |    size | decode time | per packet |
+|--------------------------------------------|--------:|------------:|-----------:|
+| one packet, no Received entries            |   117 B |      0.5 µs |     0.5 µs |
+| one packet, three Received entries         |   205 B |      1.9 µs |     1.9 µs |
+| ten packets, three Received entries each   |  2005 B |       17 µs |     1.7 µs |
+| fifty packets, three Received entries each | 10005 B |      110 µs |     2.2 µs |
 
 Finding the end of a plaintext line and copying it costs 0.02 µs on
 the same machine, so a packet with three Received entries costs some
@@ -441,9 +444,10 @@ A passes them to server B over a UDP peer link, plain or IS2, and a
 plaintext client of B receives them.  The CPU time of server A over
 the 30 seconds of the feed:
 
-    rate         plain UDP peering     IS2 peering
-    1000 pkt/s   2.3 s, 1.5 s of it sys   2.1 s, 1.3 s of it sys
-    3000 pkt/s   4.8 s, 3.4 s of it sys   4.2 s, 2.4 s of it sys
+| rate       | plain UDP peering      | IS2 peering            |
+|-----------:|------------------------|------------------------|
+| 1000 pkt/s | 2.3 s, 1.5 s of it sys | 2.1 s, 1.3 s of it sys |
+| 3000 pkt/s | 4.8 s, 3.4 s of it sys | 4.2 s, 2.4 s of it sys |
 
 At 3000 packets per second IS2 saved 14 % of the CPU time and 30 % of
 the system time of the sender.  Most of the total is reading the feed
@@ -455,11 +459,12 @@ clients, all plaintext or all IS2, receive every packet; the server is
 pinned to four cores and the clients to eight others.  The CPU time of
 the server over 30 seconds, the mean of two runs:
 
-    clients            rate          user     sys       total
-    1000 plaintext     200 pkt/s     7.0 s    31.7 s    38.7 s
-    1000 IS2           200 pkt/s     4.8 s    24.1 s    28.9 s
-    200 plaintext      1000 pkt/s    5.7 s    15.2 s    20.9 s
-    200 IS2            1000 pkt/s    2.6 s    7.0 s     9.6 s
+| clients        |       rate |  user |    sys |  total |
+|----------------|-----------:|------:|-------:|-------:|
+| 1000 plaintext |  200 pkt/s | 7.0 s | 31.7 s | 38.7 s |
+| 1000 IS2       |  200 pkt/s | 4.8 s | 24.1 s | 28.9 s |
+| 200 plaintext  | 1000 pkt/s | 5.7 s | 15.2 s | 20.9 s |
+| 200 IS2        | 1000 pkt/s | 2.6 s |  7.0 s |  9.6 s |
 
 IS2 saved 25 % at 200 packets per second and 54 % at 1000, where a
 round collects five times more packets to share each write.  The

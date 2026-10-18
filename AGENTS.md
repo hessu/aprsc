@@ -13,7 +13,6 @@ in `doc/` remain authoritative; read `doc/CONTRIBUTING.md` and
 src/        All C sources, the autoconf build, packaging, and the web status UI
 tests/      Functional test suite in Go (runs the real binary against fake peers), and the configs it uses
 doc/        Markdown documentation published to he.fi/aprsc (also installed as HTML)
-tools/      Markdown.pl, used for building the HTML docs (the APRS-IS client tools are in tests/go/cmd/aprs-is)
 build/      build-all.go: maintainer tool (Go, own module) that builds packages in LXD containers per distro, in parallel; lxd-create-builder.sh, lxd-import-image.sh and README.md for setting up a container
 .github/    CI workflow: configure, make, make testinstall, make test, on Ubuntu with and without IS2
 ```

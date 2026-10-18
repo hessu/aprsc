@@ -298,11 +298,14 @@ make-rpm: # actually just a reminder of how to do it..
 
 # -------------------------------------------------------------------- #
 
-MARKDOWN=perl ../tools/Markdown.pl
+# GitHub-flavoured CommonMark, so that the published HTML matches the
+# rendering on GitHub; the extensions add tables and automatic links
+MARKDOWN=cmark-gfm --unsafe -e table -e autolink -e strikethrough
 WEBDOCS=/data/www/hes/html/aprsc
 DOCS=README.md INSTALLING.md BUILDING.md CONFIGURATION.md DEBUGGING.md \
 	HOME.md CONTRIBUTING.md MONITORING.md TIPS.md WINDOWS.md \
-	TRANSLATING.md
+	TRANSLATING.md IS2.md IS2PLAIN.md IS2PEERING.md IS2UPGRADE.md \
+	IS2RECEIVED.md
 DESTDOCS=$(addprefix $(WEBDOCS)/,$(addsuffix .html,$(basename $(DOCS))))
 SRCDOCS=$(addprefix ../doc/,$(DOCS))
 install-webdoc: $(DESTDOCS)

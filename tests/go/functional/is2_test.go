@@ -529,9 +529,9 @@ func peerCounters(t *testing.T, name string, want, atLeast map[string]float64, t
 // The frame loss tracking of an IS2 UDP peer link: lost frames are
 // counted from the gaps in the sequence numbers, reordered frames within
 // the window are not loss, duplicates and late frames are counted apart,
-// the numbering may wrap around and restart, and a gap on a quiet link is
-// counted after the timeout. The status reports the totals and the recent
-// figures.
+// the numbering may wrap around and restart, a run of late frames is not a
+// restart, and a gap on a quiet link is counted after the timeout. The
+// status reports the totals and the recent figures.
 func TestIS2UDPPeerLoss(t *testing.T) {
 	harness.Parallel(t)
 	harness.RequireIS2(t)
@@ -549,7 +549,8 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 	rx := isclient.ConnectIS2(t, harness.Addr(t, 56152), "N1RX")
 
 	const name = "TESTIN-2"
-	const window = 64
+	const window = 64    // IS2_COREPEER_SEQ_WINDOW
+	const restartRun = 4 // IS2_COREPEER_SEQ_RESTART_RUN
 	var (
 		sent     int     // frames sent by the test, in addition to the ping replies
 		lost     float64 // the counts the status should show
@@ -591,11 +592,15 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		}
 		sent++
 	}
-	// expect waits for the status to show the counts expected so far: the
-	// frames sent by the test have been received, and the ping replies on
-	// top of them.
+	// expect answers the pings of the server, so that it keeps the link
+	// on IS2, and waits for the status to show the counts expected so
+	// far: the frames sent by the test have been received, and the ping
+	// replies on top of them.
 	expect := func(t *testing.T) map[string]any {
 		t.Helper()
+		if err := udp.AnswerPings(50 * time.Millisecond); err != nil {
+			t.Fatalf("failed to answer the pings of the server: %v", err)
+		}
 		return peerCounters(t, name,
 			map[string]float64{"is2_frames_lost": lost, "is2_frames_dupe": dupe, "is2_frames_late": late},
 			map[string]float64{"is2_frames_rx": float64(sent)},
@@ -607,6 +612,15 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		if udp.Sequence() >= 0xffffffff-3 || udp.Sequence() < 6 {
 			t.Fatalf("the numbering did not wrap around as expected, next is %d", udp.Sequence())
 		}
+		expect(t)
+	})
+
+	t.Run("restarted numbering while the old one is within the window", func(t *testing.T) {
+		// the first frames from 0 read as duplicates of the frames just
+		// after the wrap, until a run of them shows the restart; they
+		// are then not counted as duplicates
+		udp.SetSequence(0)
+		send(t, 2*restartRun)
 		expect(t)
 	})
 
@@ -648,6 +662,22 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		expect(t)
 	})
 
+	t.Run("run of late frames is not a restart", func(t *testing.T) {
+		// a block of frames held up on the wire arrives in sequence far
+		// behind the newest one: late, and the next frame in order is
+		// not a jump with loss
+		udp.SetSequence(udp.Sequence() + 2*restartRun)
+		send(t, window+2)
+		lost += 2 * restartRun
+		expect(t)
+		for i := 0; i < 2*restartRun; i++ {
+			sendSeq(t, udp.Sequence()-window-2-2*restartRun+uint32(i))
+		}
+		late += 2 * restartRun
+		send(t, 1)
+		expect(t)
+	})
+
 	t.Run("burst longer than the window", func(t *testing.T) {
 		udp.SetSequence(udp.Sequence() + 500)
 		send(t, 1)
@@ -657,6 +687,15 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		expect(t)
 		send(t, window)
 		lost += window - 1
+		expect(t)
+	})
+
+	t.Run("restarted numbering with its first frames missed", func(t *testing.T) {
+		// the frames arrive far behind the old numbering and read as late
+		// until a window of them in sequence shows the restart; they are
+		// then not counted as late, and the frames after them are in order
+		udp.SetSequence(100)
+		send(t, window+2)
 		expect(t)
 	})
 
@@ -681,6 +720,10 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		period, ok := p["is2_frames_recent_period"].(float64)
 		if !ok || period < 0 || period > 300 {
 			t.Errorf("is2_frames_recent_period is %v, want 0 to 300", p["is2_frames_recent_period"])
+		}
+		// the pings of the server have been answered on the way
+		if samples, _ := p["rtt_samples"].(float64); samples < 1 {
+			t.Errorf("rtt_samples is %v, want at least 1: the pings of the server were not answered", p["rtt_samples"])
 		}
 	})
 

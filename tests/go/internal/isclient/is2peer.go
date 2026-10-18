@@ -180,6 +180,30 @@ func (p *IS2Peer) replyPing(ping *aprsis2.IS2KeepalivePing) error {
 	})
 }
 
+// AnswerPings reads the frames which have arrived from the server,
+// replying to the keepalive ping requests among them and dropping the rest,
+// until the socket has been quiet for the timeout. For a test which sends to
+// the server without reading what it sends back: the server falls back from
+// IS2 when its pings go unanswered for five minutes.
+func (p *IS2Peer) AnswerPings(timeout time.Duration) error {
+	for {
+		m, err := p.readFrame(timeout)
+		if err != nil {
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				return nil
+			}
+			return err
+		}
+		ping := m.GetKeepalivePing()
+		if m.GetType() == aprsis2.IS2Message_KEEPALIVE_PING && ping.GetPingType() == aprsis2.IS2KeepalivePing_REQUEST {
+			if err := p.replyPing(ping); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 // AwaitPing reads frames until a keepalive ping request from the server,
 // replies to it, and returns the frame it came in. Other frames are dropped.
 func (p *IS2Peer) AwaitPing(timeout time.Duration) (*aprsis2.IS2Message, error) {

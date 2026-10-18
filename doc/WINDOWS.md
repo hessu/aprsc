@@ -47,20 +47,20 @@ directory][downloads].
 Extract it
 -------------
 
-Extract the contents of the zip file to C:\aprsc\.  You should end up with
+Extract the contents of the zip file to `C:\aprsc\`.  You should end up with
 a small set of .cmd files to start up and shutdown aprsc, a couple of .exe
-files and a number of .dll files in C:\aprsc\, and a few subdirectories.
-\aprsc\web\ contains the status display web content served by aprsc's
-internal HTTP server, \aprsc\logs\ will contain log files, \aprsc\data\ is
+files and a number of .dll files in `C:\aprsc\`, and a few subdirectories.
+`\aprsc\web\` contains the status display web content served by aprsc's
+internal HTTP server, `\aprsc\logs\` will contain log files, `\aprsc\data\` is
 empty at first but might contain aprsc's data files at some point.
-\aprsc\doc\ contains copies of aprsc documentation.
+`\aprsc\doc\` contains copies of aprsc documentation.
 
 
 Configure it
 ---------------
 
 Before starting aprsc edit the configuration file, which can be found in
-c:\aprsc\aprsc.conf.  Please see the [CONFIGURATION](CONFIGURATION.html)
+`c:\aprsc\aprsc.conf`.  Please see the [CONFIGURATION](CONFIGURATION.html)
 document for instructions.
 
 
@@ -113,7 +113,7 @@ Services tool.
 Check the log file
 ---------------------
 
-aprsc writes a log file to C:\aprsc\logs\aprsc.log.  Be sure to check it for
+aprsc writes a log file to `C:\aprsc\logs\aprsc.log`.  Be sure to check it for
 any ERRORs and WARNINGs after installation *and* after every upgrade.
 
 

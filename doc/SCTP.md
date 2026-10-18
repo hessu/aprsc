@@ -146,11 +146,12 @@ each queued message in a buffer of its own, and charges the send buffer of
 the socket with the size of that buffer and its bookkeeping, not just the
 data.  On Linux 5.15, each queued message was charged like this:
 
-    message size    charged per message    data share
-    100 bytes       ~990 bytes             10 %
-    600 bytes       ~1500 bytes            40 %
-    1400 bytes      ~2500 bytes            56 %
-    4000 bytes      8192 bytes             49 %
+| message size | charged per message | data share |
+|-------------:|--------------------:|-----------:|
+|    100 bytes |          ~990 bytes |       10 % |
+|    600 bytes |         ~1500 bytes |       40 % |
+|   1400 bytes |         ~2500 bytes |       56 % |
+|   4000 bytes |          8192 bytes |       49 % |
 
 A full feed of 200 packets per second of some 100 bytes each, one packet
 per message, would use about 200 kB of kernel memory per second of data

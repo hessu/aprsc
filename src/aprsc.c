@@ -63,6 +63,7 @@ struct itimerval itv; // Linux profiling timer does not pass over to pthreads..
 int shutting_down;		// are we shutting down now?
 int reopen_logs;		// should we reopen log files now?
 int reconfiguring;		// should we reconfigure now?
+static int reconfigure_deferred;	// the deferral has been logged
 int fileno_limit = -1;
 int dbdump_at_exit;
 int quit_after_config;
@@ -1133,13 +1134,30 @@ int main(int argc, char **argv)
 		
 		
 		if (reconfiguring) {
-			reconfiguring = 0;
-			if (read_config()) {
-				hlog(LOG_ERR, "New configuration was not successfully read.");
+			/* The accept and http threads walk the listener, peer
+			 * and http configuration lists when they apply a
+			 * configuration, and read_config() frees those lists.
+			 * A reload which comes while the previous one is still
+			 * being applied waits for the next round of this loop. */
+			if (accept_reconfiguring || http_reconfiguring
+			    || accept_config_applied != config_generation
+			    || http_config_applied != config_generation) {
+				if (!reconfigure_deferred)
+					hlog(LOG_INFO, "Reconfiguration deferred: the previous configuration is still being applied");
+				reconfigure_deferred = 1;
 			} else {
-				hlog(LOG_INFO, "New configuration read successfully. Applying....");
-				accept_reconfiguring = 1;
-				http_reconfiguring = 1;
+				reconfiguring = 0;
+				reconfigure_deferred = 0;
+				__sync_synchronize();
+				if (read_config()) {
+					hlog(LOG_ERR, "New configuration was not successfully read.");
+				} else {
+					hlog(LOG_INFO, "New configuration read successfully. Applying....");
+					config_generation++;
+					__sync_synchronize();
+					accept_reconfiguring = 1;
+					http_reconfiguring = 1;
+				}
 			}
 		}
 		

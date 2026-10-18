@@ -17,6 +17,7 @@ extern struct worker_t *http_worker;
 
 extern int http_reconfiguring;
 extern int http_shutting_down;
+extern int http_config_applied;
 
 extern int loginpost_split(char *post, int len, char **login_string, char **packet);
 extern int pseudoclient_push_packet(struct worker_t *worker, struct client_t *pseudoclient, const char *username, char *packet, int packet_len);

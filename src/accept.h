@@ -50,6 +50,7 @@ struct listen_t {
 
 extern int accept_reconfiguring;
 extern int accept_shutting_down;
+extern int accept_config_applied;
 
 extern struct worker_t *udp_worker;
 

@@ -228,6 +228,7 @@ extern struct peergroup_key_t *peergroup_key_config;
 extern int peergroup_key_transmit;
 extern struct uplink_config_t *uplink_config_install;
 extern int uplink_config_updated;
+extern int config_generation;
 extern int listen_low_ports;
 
 extern struct sockaddr_in uplink_bind_v4;		/* address to bind when connecting out */

@@ -79,6 +79,7 @@ socklen_t uplink_bind_v6_len = 0;
 
 struct uplink_config_t *uplink_config_install; /* uplink config waiting to be installed by uplink thread */
 int uplink_config_updated = 0;
+int config_generation; /* counts the configurations read: the accept and http threads report which one they have applied */
 struct uplink_config_t *new_uplink_config; /* uplink config being generated from config file */
 
 struct peerip_config_t *peerip_config;

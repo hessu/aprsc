@@ -58,6 +58,7 @@ static struct listen_t *listen_list;
 
 int accept_shutting_down;
 int accept_reconfiguring;
+int accept_config_applied = -1; /* the config_generation applied by the accept thread, -1 before the first */
 time_t accept_reconfigure_after_tick = 0;
 
 /* pseudoworker + pseudoclient for incoming UDP packets */
@@ -1606,6 +1607,12 @@ void accept_thread(void *asdf)
 			/* accept liveupgrade clients */
 			if (liveupgrade_status)
 				accept_liveupgrade_accept();
+			
+			/* The listener and peer configuration lists have been
+			 * walked: the main thread may now read the next
+			 * configuration, which frees them. */
+			__sync_synchronize();
+			accept_config_applied = config_generation;
 		} else if (accept_reconfigure_after_tick != 0 && accept_reconfigure_after_tick <= tick) {
 			hlog(LOG_INFO, "Trying to reconfigure listeners due to a previous failure");
 			accept_reconfiguring = 1;

@@ -62,6 +62,7 @@ const char *compr_type_strings[] = {
 
 int http_shutting_down;
 int http_reconfiguring;
+int http_config_applied = -1; /* the config_generation applied by the http thread, -1 before the first */
 
 unsigned long http_requests = 0;
 
@@ -1007,6 +1008,11 @@ void http_thread(void *asdf)
 			}
 			
 			hlog(LOG_INFO, "HTTP thread ready.");
+			
+			/* the http configuration list has been walked: the main
+			 * thread may now read the next configuration */
+			__sync_synchronize();
+			http_config_applied = config_generation;
 		}
 		
 		event_base_dispatch(libbase);

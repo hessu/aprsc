@@ -186,8 +186,8 @@
   <td class='link' ng-click='timing_dialog(c)'>{{ c.since_last_read | duration }}</td>
   <td>{{ c.pkts_tx }}</td>
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
-  <td class='link' ng-click='timing_dialog(c)' ng-show="c.is2_frames_recent_period != null">{{ loss_pct(c.is2_frames_lost_recent, c.is2_frames_rx_recent) }} / {{ loss_pct(c.is2_frames_lost, c.is2_frames_rx) }}</td>
-  <td ng-show="c.is2_frames_recent_period == null"></td>
+  <td class='link' ng-click='timing_dialog(c)' ng-show="c.is2_loss != null">{{ loss_pct(c.is2_frames_lost_recent, c.is2_frames_rx_recent) }} / {{ loss_pct(c.is2_frames_lost, c.is2_frames_rx) }}</td>
+  <td ng-show="c.is2_loss == null"></td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.peers_id[c.id].bytes_tx) / status.tick_dif | ratestr }}

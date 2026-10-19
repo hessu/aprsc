@@ -33,16 +33,40 @@ function timestr(i)
 		+ 'z';
 }
 
-/* The loss percentage of an IS2 peer link: the lost frames out of the
- * frames sent, which is those received plus the lost ones. An empty
- * string when nothing has been sent, so that the column stays blank. */
-function loss_pct(lost, rx)
+/* The loss of an IS2 peer link: the lost frames out of the frames sent,
+ * which is those received plus the lost ones. null when nothing has been
+ * sent. */
+function loss_ratio(lost, rx)
 {
 	var total = (lost || 0) + (rx || 0);
 	if (!total)
+		return null;
+	return lost / total;
+}
+
+/* The same as a percentage, an empty string when nothing has been sent,
+ * so that the column stays blank. */
+function loss_pct(lost, rx)
+{
+	var r = loss_ratio(lost, rx);
+	if (r == null)
 		return '';
-	var pct = lost / total * 100;
+	var pct = r * 100;
 	return pct.toFixed((pct < 10) ? 2 : 1) + '%';
+}
+
+/* The Loss column of the peers table sorts by is2_loss: the recent loss
+ * of the link as a ratio, null until frames have been received or lost
+ * over the recent period, which keeps the column blank until then. */
+function peers_loss(peers)
+{
+	if (!peers)
+		return;
+	for (var i = 0; i < peers.length; i++) {
+		var c = peers[i];
+		c.is2_loss = (c.is2_frames_recent_period != null)
+			? loss_ratio(c.is2_frames_lost_recent, c.is2_frames_rx_recent) : null;
+	}
 }
 
 function dur_str(i)
@@ -447,7 +471,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 		var period = (c.rtt_period > 60) ? Math.round(c.rtt_period / 60) + 'm' : dur_str(c.rtt_period);
 		$scope.sel_rtt = (c.rtt_samples) ? { 'samples': c.rtt_samples, 'period': period } : null;
 		/* the frame loss of an IS2 UDP peer link, likewise */
-		if (c.is2_frames_recent_period != null) {
+		if (c.is2_loss != null) {
 			var lperiod = (c.is2_frames_recent_period > 60) ? Math.round(c.is2_frames_recent_period / 60) + 'm' : dur_str(c.is2_frames_recent_period);
 			$scope.sel_loss = {
 				'recent': { 'lost': c.is2_frames_lost_recent, 'total': c.is2_frames_rx_recent + c.is2_frames_lost_recent,
@@ -611,6 +635,7 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 			var d = r.data;
 			
 			clock_skew_check(d);
+			peers_loss(d.peers);
 			
 			if ($scope.status) {
 				d.tick_dif = d.server.tick_now - $scope.status.server.tick_now;

@@ -32,28 +32,32 @@ func TestLossDemo(t *testing.T) {
 	for {
 		n++
 		line := fmt.Sprintf("N0CALL-%d>APRS,TCPIP*,qAR,TESTIN-2:>demo packet %d", n%15, n)
+		sent := false
 		switch {
 		case n%97 == 0:
 			udp.SetSequence(udp.Sequence() + 1) // one frame lost
 		case n%500 == 0:
 			udp.SetSequence(udp.Sequence() + 120) // a burst longer than the window
 		case n%131 == 0:
-			seq := udp.Sequence() // two frames swapped
+			seq := udp.Sequence() // two frames swapped: the next one goes first
 			udp.SendMessageSeq(isclient.PacketMessage(line+" (reordered)"), seq+1)
 			udp.SetSequence(seq + 2)
-			udp.SendMessageSeq(isclient.PacketMessage(line), seq)
-			continue
+			if err := udp.SendMessageSeq(isclient.PacketMessage(line), seq); err != nil {
+				t.Fatalf("send failed: %v", err)
+			}
+			sent = true
 		case n%211 == 0:
 			udp.SendMessageSeq(isclient.PacketMessage(line+" (dupe)"), udp.Sequence()-1)
 		}
-		if err := udp.SendLine(line); err != nil {
-			t.Fatalf("send failed: %v", err)
-		}
-		// drain the socket and answer the pings
-		for {
-			if _, err := udp.ReadPackets(20 * time.Millisecond); err != nil {
-				break
+		if !sent {
+			if err := udp.SendLine(line); err != nil {
+				t.Fatalf("send failed: %v", err)
 			}
+		}
+		// drain the socket and answer the pings, so that the server keeps
+		// the link on IS2
+		if err := udp.AnswerPings(20 * time.Millisecond); err != nil {
+			t.Fatalf("read failed: %v", err)
 		}
 		time.Sleep(180 * time.Millisecond)
 	}

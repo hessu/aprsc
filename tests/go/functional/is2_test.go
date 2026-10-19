@@ -530,8 +530,9 @@ func peerCounters(t *testing.T, name string, want, atLeast map[string]float64, t
 // counted from the gaps in the sequence numbers, reordered frames within
 // the window are not loss, duplicates and late frames are counted apart,
 // the numbering may wrap around and restart, a run of late frames is not a
-// restart, and a gap on a quiet link is counted after the timeout. The
-// status reports the totals and the recent figures.
+// restart, and a gap on a quiet link is counted after the timeout, with the
+// frames late if they arrive after all. The status reports the totals and
+// the recent figures.
 func TestIS2UDPPeerLoss(t *testing.T) {
 	harness.Parallel(t)
 	harness.RequireIS2(t)
@@ -690,16 +691,40 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		expect(t)
 	})
 
+	t.Run("restarted numbering", func(t *testing.T) {
+		// the frames from 0 arrive far behind the old numbering and read
+		// as late until a few of them in sequence show the restart; they
+		// are then not counted as late
+		udp.SetSequence(0)
+		send(t, 2*restartRun)
+		expect(t)
+	})
+
+	t.Run("late frame from just after the wrap is not a restart", func(t *testing.T) {
+		// a frame numbered close to 0, far behind the newest one, is late
+		// like any other on its own, and the next frame in order is not a
+		// jump with loss
+		udp.SetSequence(udp.Sequence() + 1)
+		send(t, window+2)
+		lost++
+		sendSeq(t, udp.Sequence()-window-3) // the gap frame, numbered below the window
+		late++
+		send(t, 1)
+		expect(t)
+	})
+
 	t.Run("restarted numbering with its first frames missed", func(t *testing.T) {
 		// the frames arrive far behind the old numbering and read as late
 		// until a window of them in sequence shows the restart; they are
 		// then not counted as late, and the frames after them are in order
-		udp.SetSequence(100)
+		udp.SetSequence(0x90000000)
 		send(t, window+2)
 		expect(t)
 	})
 
-	t.Run("restarted numbering", func(t *testing.T) {
+	t.Run("restarted numbering after the old one passed the half-way point", func(t *testing.T) {
+		// 0 is now ahead of the newest frame in the wrap-around order: a
+		// jump of two billion frames, which is not loss but a restart
 		udp.SetSequence(0)
 		send(t, 5)
 		expect(t)
@@ -732,6 +757,16 @@ func TestIS2UDPPeerLoss(t *testing.T) {
 		send(t, 1)
 		lost += 2
 		peerCounters(t, name, map[string]float64{"is2_frames_lost": lost, "is2_frames_late": late}, nil, 20*time.Second)
+	})
+
+	t.Run("frames counted lost by the timeout are late when they arrive", func(t *testing.T) {
+		// still within the window, so they would read as duplicates if
+		// the timeout had not been remembered
+		sendSeq(t, udp.Sequence()-3)
+		sendSeq(t, udp.Sequence()-2)
+		late += 2
+		send(t, 1)
+		expect(t)
 	})
 
 	s.Stop()

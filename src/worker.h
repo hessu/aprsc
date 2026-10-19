@@ -321,7 +321,7 @@ struct client_udp_t {			/* UDP services can be available at multiple
 /* Frame loss tracking of an IS2 UDP peer link, see is2_corepeer_seq_monitor() */
 #define IS2_COREPEER_SEQ_WINDOW 64 /* frames: a frame still missing this many frames behind the newest one is lost ... */
 #define IS2_COREPEER_SEQ_TIMEOUT 10 /* seconds: ... or when nothing newer has arrived for this long */
-#define IS2_COREPEER_SEQ_RESTART_RUN 4 /* frames in sequence from near zero, duplicates of the window: the peer restarted its numbering */
+#define IS2_COREPEER_SEQ_RESTART_RUN 4 /* frames in sequence from near zero, duplicates of the window or far behind it: the peer restarted its numbering */
 #define IS2_COREPEER_SEQ_RESTART_FAR IS2_COREPEER_SEQ_WINDOW /* frames in sequence far behind the newest: a restart whose first frames were missed */
 #define IS2_COREPEER_LOSS_SAMPLES 5 /* one-minute snapshots of the frame counters kept for the short-term loss figure */
 
@@ -506,10 +506,12 @@ struct client_t {
 	/* frame loss tracking of the frames received from the peer */
 	uint32_t corepeer_is2_seq_highest;  /* the newest sequence number received, in wrap-around order */
 	uint64_t corepeer_is2_seq_mask;     /* bit i set: the frame highest-i has been received, or is no longer waited for */
+	uint64_t corepeer_is2_seq_lost_mask; /* bit i set: the frame highest-i was counted lost by the timeout, and is late if it arrives */
 	time_t   corepeer_is2_seq_tick;     /* when highest last moved */
 	char     corepeer_is2_seq_started;  /* highest is valid: a frame has arrived since the link came up */
 	int      corepeer_is2_seq_behind_run; /* frames in sequence behind highest, duplicates or far behind: from a restarted peer */
-	uint32_t corepeer_is2_seq_behind_last; /* the last frame of that run */
+	uint32_t corepeer_is2_seq_behind_first; /* the first and the last frame of that run */
+	uint32_t corepeer_is2_seq_behind_last;
 	long long corepeer_is2_dupe_frames; /* frames received twice */
 	long long corepeer_is2_late_frames; /* frames which arrived after being counted lost */
 	

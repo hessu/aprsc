@@ -1301,17 +1301,20 @@ int is2_input_handler(struct worker_t *self, struct client_t *c, Aprsis2__IS2Mes
  *	is counted as lost. So frames reordered on the wire within the window
  *	are not loss, a burst of any length is counted in full when the frame
  *	after it arrives, and the sequence number may wrap around: the
- *	comparisons are made on the 32-bit difference.
+ *	comparisons are made on the 32-bit difference. A second bitmap
+ *	remembers the frames the timeout counted lost, so that one arriving
+ *	after all is told apart from a duplicate.
  *
  *	A frame with a sequence number already seen in the window is a
- *	duplicate. One arriving from behind the window has already been
- *	counted lost, and is counted late too.
+ *	duplicate. One which has been counted lost, by the timeout or by
+ *	arriving from behind the window, is counted late.
  *
  *	A peer which restarts numbers its frames from 0 again, and the
- *	tracking starts over from there. The restart shows as a frame far
- *	behind the window numbered close to 0, or, when the old numbering has
- *	not moved past the window yet, as a run of frames in sequence from
- *	close to 0 which read as duplicates. When the first frames of the new
+ *	tracking starts over from there. The restart shows as a run of frames
+ *	in sequence from close to 0 which read as duplicates (the old
+ *	numbering has not moved past the window yet) or as late (it has), or
+ *	as a jump forward past the wrap-around landing close to 0 (it had
+ *	passed the half-way point). When the first frames of the new
  *	numbering were missed, the restart is recognised from a run of a
  *	window's worth of frames in sequence far behind the old numbering:
  *	a block of frames delayed on the wire is not that long. The frames
@@ -1336,6 +1339,7 @@ static void is2_corepeer_seq_start(struct client_t *c, uint32_t seq)
 	c->corepeer_is2_seq_highest = seq;
 	/* the frames before the first one are not waited for */
 	c->corepeer_is2_seq_mask = ~(uint64_t)0;
+	c->corepeer_is2_seq_lost_mask = 0;
 	c->corepeer_is2_seq_tick = tick;
 	c->corepeer_is2_seq_behind_run = 0;
 }
@@ -1350,18 +1354,29 @@ static void is2_corepeer_seq_restart(struct client_t *c, uint32_t seq)
 /*
  *	A frame behind the newest one which follows the previous such frame
  *	in sequence, within a window of it, extends the run of them; any
- *	other starts a new run. Returns the length of the run.
+ *	other starts a new run. Returns the length of the run: a restarted
+ *	numbering shows as a run, of IS2_COREPEER_SEQ_RESTART_RUN frames
+ *	when it began close to 0, or of IS2_COREPEER_SEQ_RESTART_FAR frames
+ *	when its first frames were missed.
  */
 
 static inline int is2_corepeer_seq_behind(struct client_t *c, uint32_t seq)
 {
 	if (c->corepeer_is2_seq_behind_run > 0
-	    && (uint32_t)(seq - c->corepeer_is2_seq_behind_last) - 1 < IS2_COREPEER_SEQ_WINDOW)
+	    && (uint32_t)(seq - c->corepeer_is2_seq_behind_last) - 1 < IS2_COREPEER_SEQ_WINDOW) {
 		c->corepeer_is2_seq_behind_run++;
-	else
+	} else {
 		c->corepeer_is2_seq_behind_run = 1;
+		c->corepeer_is2_seq_behind_first = seq;
+	}
 	c->corepeer_is2_seq_behind_last = seq;
 	return c->corepeer_is2_seq_behind_run;
+}
+
+static inline int is2_corepeer_seq_behind_restarted(struct client_t *c, int run)
+{
+	return run >= ((c->corepeer_is2_seq_behind_first < IS2_COREPEER_SEQ_WINDOW)
+		? IS2_COREPEER_SEQ_RESTART_RUN : IS2_COREPEER_SEQ_RESTART_FAR);
 }
 
 static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client_t *c, uint32_t seq)
@@ -1377,14 +1392,25 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 		/* Newer than anything so far: the window moves on by d. The
 		 * frames it leaves behind which never arrived are lost: the
 		 * clear bits shifted out, and the frames between the old and
-		 * the new window when the jump is longer than the window. */
+		 * the new window when the jump is longer than the window. A
+		 * jump past the wrap-around landing close to 0 is the peer
+		 * restarting its numbering after the old one had passed the
+		 * half-way point; a burst of loss straddling the wrap-around
+		 * and ending within the first window of numbers would read the
+		 * same, and is far less likely. */
 		int lost;
 		if (d >= IS2_COREPEER_SEQ_WINDOW) {
+			if (seq < IS2_COREPEER_SEQ_WINDOW) {
+				is2_corepeer_seq_restart(c, seq);
+				return;
+			}
 			lost = d - popcount64(c->corepeer_is2_seq_mask);
 			c->corepeer_is2_seq_mask = 1;
+			c->corepeer_is2_seq_lost_mask = 0;
 		} else {
 			lost = d - popcount64(c->corepeer_is2_seq_mask >> (IS2_COREPEER_SEQ_WINDOW - d));
 			c->corepeer_is2_seq_mask = (c->corepeer_is2_seq_mask << d) | 1;
+			c->corepeer_is2_seq_lost_mask <<= d;
 		}
 		c->corepeer_is2_seq_highest = seq;
 		c->corepeer_is2_seq_tick = tick;
@@ -1410,15 +1436,22 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 			c->corepeer_is2_seq_behind_run = 0;
 			return;
 		}
-		/* A duplicate of an older frame; a frame later than the
-		 * timeout has had its bit set by the timeout, and reads as a
-		 * duplicate. A run of them in sequence from close to 0 is the
-		 * peer restarting its numbering while the old one is still
-		 * within the window, and the frames of the run were not
-		 * duplicates. */
+		if (c->corepeer_is2_seq_lost_mask & bit) {
+			/* counted lost by the timeout, and arrives after all */
+			c->corepeer_is2_seq_lost_mask &= ~bit;
+			c->corepeer_is2_seq_behind_run = 0;
+			c->corepeer_is2_late_frames++;
+			hlog(LOG_DEBUG, "%s/%s: IS2 UDP: frame %u arrived %d frames late, after being counted lost by the timeout",
+				c->addr_rem, c->username, (unsigned)seq, -d);
+			return;
+		}
+		/* A duplicate of an older frame. A run of them in sequence
+		 * from close to 0 is the peer restarting its numbering while
+		 * the old one is still within the window, and the frames of
+		 * the run were not duplicates. */
 		if (seq < IS2_COREPEER_SEQ_WINDOW) {
 			int run = is2_corepeer_seq_behind(c, seq);
-			if (run >= IS2_COREPEER_SEQ_RESTART_RUN) {
+			if (is2_corepeer_seq_behind_restarted(c, run)) {
 				c->corepeer_is2_dupe_frames -= run - 1;
 				is2_corepeer_seq_restart(c, seq);
 				return;
@@ -1430,18 +1463,16 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 		return;
 	}
 	
-	/* Far behind the window: the peer has restarted its numbering from
-	 * 0, or the frame is late, after being counted lost. A late block
-	 * of frames held up on the wire arrives as a run of late frames in
-	 * sequence; a run of them a whole window long is the numbering of
-	 * a restarted peer whose first frames were missed, and the frames
-	 * of the run were not late. */
-	if (seq < IS2_COREPEER_SEQ_WINDOW) {
-		is2_corepeer_seq_restart(c, seq);
-		return;
-	}
+	/* Far behind the window: the frame is late, after being counted
+	 * lost, unless the peer has restarted its numbering. A restart
+	 * shows as a few frames in sequence from close to 0; one frame is
+	 * not enough, as a frame from just after the wrap-around may be
+	 * late like any other. A late block of frames held up on the wire
+	 * arrives as a run of late frames in sequence too; a run of them a
+	 * whole window long is the numbering of a restarted peer whose
+	 * first frames were missed. The frames of the run were not late. */
 	int run = is2_corepeer_seq_behind(c, seq);
-	if (run >= IS2_COREPEER_SEQ_RESTART_FAR) {
+	if (is2_corepeer_seq_behind_restarted(c, run)) {
 		c->corepeer_is2_late_frames -= run - 1;
 		is2_corepeer_seq_restart(c, seq);
 		return;
@@ -1467,6 +1498,7 @@ void is2_corepeer_loss_sample(struct client_t *c)
 	    && tick - c->corepeer_is2_seq_tick > IS2_COREPEER_SEQ_TIMEOUT
 	    && ~c->corepeer_is2_seq_mask) {
 		int lost = IS2_COREPEER_SEQ_WINDOW - popcount64(c->corepeer_is2_seq_mask);
+		c->corepeer_is2_seq_lost_mask |= ~c->corepeer_is2_seq_mask;
 		c->corepeer_is2_seq_mask = ~(uint64_t)0;
 		hlog(LOG_DEBUG, "%s/%s: IS2 UDP: %d frame%s lost before frame %u, nothing newer in %d s",
 			c->addr_rem, c->username, lost, (lost == 1) ? "" : "s",

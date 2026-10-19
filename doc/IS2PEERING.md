@@ -187,10 +187,10 @@ of lost frames of any length is counted in full when the next frame
 after it arrives, and the number may wrap around.  A frame which arrives
 after being counted lost is counted as late, and a frame received twice
 as a duplicate.  A peer which restarts begins the numbering from zero
-again, which the receiver recognises and starts over from; when the
-first frames of the new numbering were missed, the restart is recognised
-once a window's worth of frames in sequence have arrived far behind the
-old numbering.
+again, which the receiver recognises from a few frames in sequence from
+zero and starts over from; when the first frames of the new numbering
+were missed, the restart is recognised once a window's worth of frames
+in sequence have arrived far behind the old numbering.
 
 The counts are shown per peer in the status: the received, lost, late
 and duplicate frames since the server started, and the received and

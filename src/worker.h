@@ -317,7 +317,19 @@ struct client_udp_t {			/* UDP services can be available at multiple
 /* max length of a single encoded ISPacket element: the packet, the rx
  * metadata, received_time, and the Received entries at 56 bytes each */
 #define APRSIS2_ENC_MAX (PACKETLEN_MAX + 80 + IS2_RECEIVED_MAX * 56)
-#define APRSIS2_COREPEER_SEQ_WINDOW 32 /* packet loss monitoring window - allow reordering by N packets */
+
+/* Frame loss tracking of an IS2 UDP peer link, see is2_corepeer_seq_monitor() */
+#define IS2_COREPEER_SEQ_WINDOW 64 /* frames: a frame still missing this many frames behind the newest one is lost ... */
+#define IS2_COREPEER_SEQ_TIMEOUT 10 /* seconds: ... or when nothing newer has arrived for this long */
+#define IS2_COREPEER_SEQ_RESTART_RUN 4 /* frames in sequence from near zero, duplicates of the window or far behind it: the peer restarted its numbering */
+#define IS2_COREPEER_SEQ_RESTART_FAR IS2_COREPEER_SEQ_WINDOW /* frames in sequence far behind the newest: a restart whose first frames were missed */
+#define IS2_COREPEER_LOSS_SAMPLES 5 /* one-minute snapshots of the frame counters kept for the short-term loss figure */
+
+struct is2_loss_sample_t {
+	long long rx;   /* is2_rx_frames of the link at the time */
+	long long lost; /* is2_lost_frames */
+	time_t tick;
+};
 
 struct client_t {
 	struct client_t *next;
@@ -489,10 +501,25 @@ struct client_t {
 	Aprsis2__ISPacket is2_input_template; /* IS2 plaintext #is2-meta metadata holding buffer */
 
 	char *corepeer_is2_challenge;	/* IS2 handshake random token */
-	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number */
-	int corepeer_is2_sequence_window[APRSIS2_COREPEER_SEQ_WINDOW];
-	int corepeer_is2_sequence_window_pos;
-	int corepeer_is2_sequence_window_used;
+	uint32_t corepeer_is2_sequence;	/* IS2 UDP peer sequence number of the next frame sent */
+	
+	/* frame loss tracking of the frames received from the peer */
+	uint32_t corepeer_is2_seq_highest;  /* the newest sequence number received, in wrap-around order */
+	uint64_t corepeer_is2_seq_mask;     /* bit i set: the frame highest-i has been received, or is no longer waited for */
+	uint64_t corepeer_is2_seq_lost_mask; /* bit i set: the frame highest-i was counted lost by the timeout, and is late if it arrives */
+	time_t   corepeer_is2_seq_tick;     /* when highest last moved */
+	char     corepeer_is2_seq_started;  /* highest is valid: a frame has arrived since the link came up */
+	int      corepeer_is2_seq_behind_run; /* frames in sequence behind highest, duplicates or far behind: from a restarted peer */
+	uint32_t corepeer_is2_seq_behind_first; /* the first and the last frame of that run */
+	uint32_t corepeer_is2_seq_behind_last;
+	long long corepeer_is2_dupe_frames; /* frames received twice */
+	long long corepeer_is2_late_frames; /* frames which arrived after being counted lost */
+	
+	/* snapshots of the frame counters, one per minute, a ring: the short-term loss */
+	struct is2_loss_sample_t corepeer_is2_loss[IS2_COREPEER_LOSS_SAMPLES];
+	int    corepeer_is2_loss_n; /* snapshots in the ring, up to IS2_COREPEER_LOSS_SAMPLES */
+	int    corepeer_is2_loss_i; /* the slot the next snapshot goes to */
+	time_t corepeer_is2_loss_next; /* when the next snapshot is due */
 };
 
 /*

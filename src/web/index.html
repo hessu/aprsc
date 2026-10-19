@@ -186,6 +186,8 @@
   <td class='link' ng-click='timing_dialog(c)'>{{ c.since_last_read | duration }}</td>
   <td>{{ c.pkts_tx }}</td>
   <td ng-class='pkts_rx_class(c)' ng-click='pkts_rx_dialog(c)'>{{ c.pkts_rx }}/{{ c.pkts_dup }}/{{ c.pkts_ign }}</td>
+  <td class='link' ng-click='timing_dialog(c)' ng-show="c.is2_loss != null">{{ loss_pct(c.is2_frames_lost_recent, c.is2_frames_rx_recent) }} / {{ loss_pct(c.is2_frames_lost, c.is2_frames_rx) }}</td>
+  <td ng-show="c.is2_loss == null"></td>
   <td>{{ c.bytes_tx }}</td>
   <td>{{ c.bytes_rx }}</td>
   <td><span ng-show='status.tick_dif'>{{ (c.bytes_tx - status_prev.peers_id[c.id].bytes_tx) / status.tick_dif | ratestr }}
@@ -287,6 +289,12 @@
 	{{ sel_c.rtt_avg | number:1 }} {{ 'TIMING_RTT_AVG' | translate }}<br>
 	{{ sel_c.rtt_max | number:1 }} {{ 'TIMING_RTT_MAX' | translate }}<br>
 	{{ 'TIMING_RTT_WINDOW' | translate:sel_rtt }}
+	</p>
+	<p ng-show="sel_loss">
+	<strong>{{ 'TIMING_LOSS' | translate }}</strong><br>
+	{{ 'TIMING_LOSS_RECENT' | translate:sel_loss.recent }}<br>
+	{{ 'TIMING_LOSS_TOTAL' | translate:sel_loss.total }}<br>
+	{{ 'TIMING_LOSS_OTHER' | translate:sel_loss.other }}
 	</p>
 </script>
 

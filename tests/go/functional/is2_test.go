@@ -459,6 +459,10 @@ func TestIS2UDPPeerPing(t *testing.T) {
 	if peer["link"] != "is2" {
 		t.Errorf("peer status: link %v, want is2", peer["link"])
 	}
+	// the signed frames verify the peer as strongly as a certificate
+	if verified, _ := peer["verified"].(float64); verified != float64(aprsis2.VerificationStatus_STRONG) {
+		t.Errorf("peer status: verified %v, want %d (STRONG) on an IS2 link", peer["verified"], aprsis2.VerificationStatus_STRONG)
+	}
 	rttAvg, _ := peer["rtt_avg"].(float64)
 	rttMax, _ := peer["rtt_max"].(float64)
 	samples, _ := peer["rtt_samples"].(float64)
@@ -469,6 +473,301 @@ func TestIS2UDPPeerPing(t *testing.T) {
 	if err := udp.Ping(isclient.DefaultTimeout); err != nil {
 		t.Errorf("the server did not answer the ping of the peer: %v", err)
 	}
+
+	s.Stop()
+}
+
+// peerCounters reads the status of a peer until the frame counters it
+// names reach the values wanted, exactly or at least, or the deadline
+// passes; the counters of the workers reach the status with a delay. It
+// returns the status of the peer, and fails the test if the counters did
+// not get there.
+func peerCounters(t *testing.T, name string, want, atLeast map[string]float64, timeout time.Duration) map[string]any {
+	t.Helper()
+
+	check := func(peer map[string]any, report bool) bool {
+		ok := peer != nil
+		for k, v := range want {
+			if got, _ := peer[k].(float64); got != v {
+				ok = false
+				if report {
+					t.Errorf("status of peer %s: %s is %v, want %v", name, k, peer[k], v)
+				}
+			}
+		}
+		for k, v := range atLeast {
+			if got, _ := peer[k].(float64); got < v {
+				ok = false
+				if report {
+					t.Errorf("status of peer %s: %s is %v, want at least %v", name, k, peer[k], v)
+				}
+			}
+		}
+		return ok
+	}
+
+	var peer map[string]any
+	deadline := time.Now().Add(timeout)
+	for {
+		peer = nil
+		for _, p := range getStatus(t).Peers {
+			if p["username"] == name {
+				peer = p
+			}
+		}
+		if check(peer, false) {
+			return peer
+		}
+		if time.Now().After(deadline) {
+			check(peer, true)
+			return peer
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// The frame loss tracking of an IS2 UDP peer link: lost frames are
+// counted from the gaps in the sequence numbers, reordered frames within
+// the window are not loss, duplicates and late frames are counted apart,
+// the numbering may wrap around and restart, a run of late frames is not a
+// restart, and a gap on a quiet link is counted after the timeout, with the
+// frames late if they arrive after all. The status reports the totals and
+// the recent figures.
+func TestIS2UDPPeerLoss(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+
+	udp := isclient.ListenIS2Peer(t, harness.AddrOn(t, "127.0.0.1", 16405), "TESTIN-2", is2PeerKeys, 2)
+	udp.SetDestination(t, harness.AddrOn(t, "127.0.0.1", 16404))
+	// number the frames from just below the wrap-around, so that the first
+	// frames of the link take the numbering through it
+	udp.SetSequence(0xffffffff - 3)
+
+	s := harness.Start(t, "is2-basic")
+	if err := udp.Negotiate(20 * time.Second); err != nil {
+		t.Fatalf("failed to negotiate the IS2 corepeer link: %v", err)
+	}
+	rx := isclient.ConnectIS2(t, harness.Addr(t, 56152), "N1RX")
+
+	const name = "TESTIN-2"
+	const window = 64    // IS2_COREPEER_SEQ_WINDOW
+	const restartRun = 4 // IS2_COREPEER_SEQ_RESTART_RUN
+	var (
+		sent     int     // frames sent by the test, in addition to the ping replies
+		lost     float64 // the counts the status should show
+		dupe     float64
+		late     float64
+		packetNo int
+	)
+	// send sends n packets in n frames, each with the next sequence
+	// number, and waits for the last one to come out to the client.
+	send := func(t *testing.T, n int) {
+		t.Helper()
+		var last string
+		for i := 0; i < n; i++ {
+			packetNo++
+			last = fmt.Sprintf("SRC>DST,qAR,IGATE:loss test %d", packetNo)
+			if err := udp.SendLine(last); err != nil {
+				t.Fatalf("failed to send from the peer: %v", err)
+			}
+			sent++
+		}
+		// all of them come out to the client, the last one last
+		for {
+			got, err := rx.ReadPacket(isclient.DefaultTimeout)
+			if err != nil {
+				t.Fatalf("did not receive %q from the peer: %v", last, err)
+			}
+			if got == last {
+				break
+			}
+		}
+	}
+	// sendSeq sends one packet in a frame with the given sequence number,
+	// without moving the counter.
+	sendSeq := func(t *testing.T, seq uint32) {
+		t.Helper()
+		packetNo++
+		if err := udp.SendMessageSeq(isclient.PacketMessage(fmt.Sprintf("SRC>DST,qAR,IGATE:loss test %d", packetNo)), seq); err != nil {
+			t.Fatalf("failed to send frame %d from the peer: %v", seq, err)
+		}
+		sent++
+	}
+	// expect answers the pings of the server, so that it keeps the link
+	// on IS2, and waits for the status to show the counts expected so
+	// far: the frames sent by the test have been received, and the ping
+	// replies on top of them.
+	expect := func(t *testing.T) map[string]any {
+		t.Helper()
+		if err := udp.AnswerPings(50 * time.Millisecond); err != nil {
+			t.Fatalf("failed to answer the pings of the server: %v", err)
+		}
+		return peerCounters(t, name,
+			map[string]float64{"is2_frames_lost": lost, "is2_frames_dupe": dupe, "is2_frames_late": late},
+			map[string]float64{"is2_frames_rx": float64(sent)},
+			isclient.DefaultTimeout)
+	}
+
+	t.Run("in order through the wrap", func(t *testing.T) {
+		send(t, 10)
+		if udp.Sequence() >= 0xffffffff-3 || udp.Sequence() < 6 {
+			t.Fatalf("the numbering did not wrap around as expected, next is %d", udp.Sequence())
+		}
+		expect(t)
+	})
+
+	t.Run("restarted numbering while the old one is within the window", func(t *testing.T) {
+		// the first frames from 0 read as duplicates of the frames just
+		// after the wrap, until a run of them shows the restart; they
+		// are then not counted as duplicates
+		udp.SetSequence(0)
+		send(t, 2*restartRun)
+		expect(t)
+	})
+
+	t.Run("gap counted when the window passes", func(t *testing.T) {
+		udp.SetSequence(udp.Sequence() + 3)
+		send(t, window-10)
+		// the gap is still within the window
+		expect(t)
+		send(t, 10)
+		lost += 3
+		expect(t)
+	})
+
+	t.Run("reordering is not loss", func(t *testing.T) {
+		seq := udp.Sequence()
+		sendSeq(t, seq+2)
+		sendSeq(t, seq+1)
+		sendSeq(t, seq)
+		udp.SetSequence(seq + 3)
+		send(t, window+2)
+		expect(t)
+	})
+
+	t.Run("duplicates", func(t *testing.T) {
+		sendSeq(t, udp.Sequence()-1) // the newest frame again
+		sendSeq(t, udp.Sequence()-5) // an older one, within the window
+		dupe += 2
+		send(t, 1)
+		expect(t)
+	})
+
+	t.Run("late frame from behind the window", func(t *testing.T) {
+		udp.SetSequence(udp.Sequence() + 1)
+		send(t, window+2) // the gap goes out of the window: lost
+		lost++
+		sendSeq(t, udp.Sequence()-window-3) // and then it arrives
+		late++
+		send(t, 1)
+		expect(t)
+	})
+
+	t.Run("run of late frames is not a restart", func(t *testing.T) {
+		// a block of frames held up on the wire arrives in sequence far
+		// behind the newest one: late, and the next frame in order is
+		// not a jump with loss
+		udp.SetSequence(udp.Sequence() + 2*restartRun)
+		send(t, window+2)
+		lost += 2 * restartRun
+		expect(t)
+		for i := 0; i < 2*restartRun; i++ {
+			sendSeq(t, udp.Sequence()-window-2-2*restartRun+uint32(i))
+		}
+		late += 2 * restartRun
+		send(t, 1)
+		expect(t)
+	})
+
+	t.Run("burst longer than the window", func(t *testing.T) {
+		udp.SetSequence(udp.Sequence() + 500)
+		send(t, 1)
+		// the frames before the window are lost at once, the rest of the
+		// burst when the window has passed
+		lost += 500 - (window - 1)
+		expect(t)
+		send(t, window)
+		lost += window - 1
+		expect(t)
+	})
+
+	t.Run("restarted numbering", func(t *testing.T) {
+		// the frames from 0 arrive far behind the old numbering and read
+		// as late until a few of them in sequence show the restart; they
+		// are then not counted as late
+		udp.SetSequence(0)
+		send(t, 2*restartRun)
+		expect(t)
+	})
+
+	t.Run("late frame from just after the wrap is not a restart", func(t *testing.T) {
+		// a frame numbered close to 0, far behind the newest one, is late
+		// like any other on its own, and the next frame in order is not a
+		// jump with loss
+		udp.SetSequence(udp.Sequence() + 1)
+		send(t, window+2)
+		lost++
+		sendSeq(t, udp.Sequence()-window-3) // the gap frame, numbered below the window
+		late++
+		send(t, 1)
+		expect(t)
+	})
+
+	t.Run("restarted numbering with its first frames missed", func(t *testing.T) {
+		// the frames arrive far behind the old numbering and read as late
+		// until a window of them in sequence shows the restart; they are
+		// then not counted as late, and the frames after them are in order
+		udp.SetSequence(0x90000000)
+		send(t, window+2)
+		expect(t)
+	})
+
+	t.Run("restarted numbering after the old one passed the half-way point", func(t *testing.T) {
+		// 0 is now ahead of the newest frame in the wrap-around order: a
+		// jump of two billion frames, which is not loss but a restart
+		udp.SetSequence(0)
+		send(t, 5)
+		expect(t)
+	})
+
+	t.Run("recent and total figures", func(t *testing.T) {
+		p := expect(t)
+		total, _ := p["is2_frames_lost"].(float64)
+		recent, _ := p["is2_frames_lost_recent"].(float64)
+		if recent != total {
+			t.Errorf("is2_frames_lost_recent is %v, want %v: the link came up less than five minutes ago", recent, total)
+		}
+		rxTotal, _ := p["is2_frames_rx"].(float64)
+		rxRecent, _ := p["is2_frames_rx_recent"].(float64)
+		if rxRecent != rxTotal {
+			t.Errorf("is2_frames_rx_recent is %v, want %v", rxRecent, rxTotal)
+		}
+		period, ok := p["is2_frames_recent_period"].(float64)
+		if !ok || period < 0 || period > 300 {
+			t.Errorf("is2_frames_recent_period is %v, want 0 to 300", p["is2_frames_recent_period"])
+		}
+		// the pings of the server have been answered on the way
+		if samples, _ := p["rtt_samples"].(float64); samples < 1 {
+			t.Errorf("rtt_samples is %v, want at least 1: the pings of the server were not answered", p["rtt_samples"])
+		}
+	})
+
+	t.Run("gap on a quiet link counted after the timeout", func(t *testing.T) {
+		udp.SetSequence(udp.Sequence() + 2)
+		send(t, 1)
+		lost += 2
+		peerCounters(t, name, map[string]float64{"is2_frames_lost": lost, "is2_frames_late": late}, nil, 20*time.Second)
+	})
+
+	t.Run("frames counted lost by the timeout are late when they arrive", func(t *testing.T) {
+		// still within the window, so they would read as duplicates if
+		// the timeout had not been remembered
+		sendSeq(t, udp.Sequence()-3)
+		sendSeq(t, udp.Sequence()-2)
+		late += 2
+		send(t, 1)
+		expect(t)
+	})
 
 	s.Stop()
 }

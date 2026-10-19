@@ -53,6 +53,9 @@ type IS2Peer struct {
 	// told the peer that we do (tx)
 	okRx, okTx bool
 
+	// seq is the sequence number of the next frame sent, see SetSequence.
+	seq uint32
+
 	// data frames which arrived during the handshake, returned by the
 	// reads which follow it
 	pending []*aprsis2.IS2Message
@@ -122,13 +125,47 @@ func (p *IS2Peer) SendFrameSigned(frame []byte, at time.Time) error {
 	return err
 }
 
-// SendMessage sends a message in a signed frame.
+// SetSequence sets the sequence number the next frame is sent with. The
+// frames are numbered consecutively from 0 by default, as a server numbers
+// them; a test sets the number to make a gap, a wrap-around or a restart.
+func (p *IS2Peer) SetSequence(seq uint32) {
+	p.seq = seq
+}
+
+// Sequence returns the sequence number the next frame will be sent with.
+func (p *IS2Peer) Sequence() uint32 {
+	return p.seq
+}
+
+// SendMessage sends a message in a signed frame, with the next sequence
+// number.
 func (p *IS2Peer) SendMessage(m *aprsis2.IS2Message) error {
+	seq := p.seq
+	p.seq++
+	return p.SendMessageSeq(m, seq)
+}
+
+// SendMessageSeq sends a message in a signed frame with the given sequence
+// number, leaving the sequence counter alone: for a frame out of order, a
+// duplicate or a late one.
+func (p *IS2Peer) SendMessageSeq(m *aprsis2.IS2Message, seq uint32) error {
+	m.Sequence = seq
 	b, err := proto.Marshal(m)
 	if err != nil {
 		return err
 	}
 	return p.SendFrameSigned(FrameWrap(b), time.Now())
+}
+
+// PacketMessage returns an IS_PACKET message carrying one packet line.
+func PacketMessage(line string) *aprsis2.IS2Message {
+	return &aprsis2.IS2Message{
+		Type: aprsis2.IS2Message_IS_PACKET,
+		IsPacket: []*aprsis2.ISPacket{{
+			Type:         aprsis2.ISPacket_IS_PACKET,
+			IsPacketData: []byte(line),
+		}},
+	}
 }
 
 // replyPing answers a keepalive ping request.
@@ -141,6 +178,30 @@ func (p *IS2Peer) replyPing(ping *aprsis2.IS2KeepalivePing) error {
 			RequestData: ping.GetRequestData(),
 		},
 	})
+}
+
+// AnswerPings reads the frames which have arrived from the server,
+// replying to the keepalive ping requests among them and dropping the rest,
+// until the socket has been quiet for the timeout. For a test which sends to
+// the server without reading what it sends back: the server falls back from
+// IS2 when its pings go unanswered for five minutes.
+func (p *IS2Peer) AnswerPings(timeout time.Duration) error {
+	for {
+		m, err := p.readFrame(timeout)
+		if err != nil {
+			var ne net.Error
+			if errors.As(err, &ne) && ne.Timeout() {
+				return nil
+			}
+			return err
+		}
+		ping := m.GetKeepalivePing()
+		if m.GetType() == aprsis2.IS2Message_KEEPALIVE_PING && ping.GetPingType() == aprsis2.IS2KeepalivePing_REQUEST {
+			if err := p.replyPing(ping); err != nil {
+				return err
+			}
+		}
+	}
 }
 
 // AwaitPing reads frames until a keepalive ping request from the server,
@@ -199,15 +260,23 @@ func (p *IS2Peer) Ping(timeout time.Duration) error {
 	}
 }
 
-// SendLine sends one packet in a signed frame.
+// SendLine sends one packet in a signed frame, with the next sequence
+// number.
 func (p *IS2Peer) SendLine(line string) error {
-	return p.SendFrameSigned(FrameWrap(MarshalPackets(line)), time.Now())
+	return p.SendMessage(PacketMessage(line))
 }
 
-// SignedPacketFrame returns a signed IS_PACKET frame with a given timestamp,
-// without sending it.
+// SignedPacketFrame returns a signed IS_PACKET frame with a given timestamp
+// and the next sequence number, without sending it.
 func (p *IS2Peer) SignedPacketFrame(line string, at time.Time) []byte {
-	return p.Sign(FrameWrap(MarshalPackets(line)), at)
+	m := PacketMessage(line)
+	m.Sequence = p.seq
+	p.seq++
+	b, err := proto.Marshal(m)
+	if err != nil {
+		panic(err) // a message built from valid parts always marshals
+	}
+	return p.Sign(FrameWrap(b), at)
 }
 
 // PeerHelloToken is the token of the hellos sent by Negotiate.

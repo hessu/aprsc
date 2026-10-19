@@ -77,6 +77,7 @@
 	"TH_since_last_read": "Last in",
 	"TH_software": "Ohjelmisto",
 	"TH_obuf_q": "OutQ",
+	"TH_is2_loss": "Hävikki",
 	
 	"TH_port": "Portti",
 	"TH_verified": "Verified",
@@ -141,5 +142,9 @@
 	"TIMING_RTT": "IS2-pingin RTT:",
 	"TIMING_RTT_AVG": "ms keskimäärin",
 	"TIMING_RTT_MAX": "ms enimmillään",
-	"TIMING_RTT_WINDOW": "{{ samples }} pingiä viimeisen {{ period }} aikana"
+	"TIMING_RTT_WINDOW": "{{ samples }} pingiä viimeisen {{ period }} aikana",
+	"TIMING_LOSS": "IS2-kehyshävikki:",
+	"TIMING_LOSS_RECENT": "{{ lost }} / {{ total }} kehystä ({{ pct }}) viimeisen {{ period }} aikana",
+	"TIMING_LOSS_TOTAL": "{{ lost }} / {{ total }} kehystä ({{ pct }}) yhteensä",
+	"TIMING_LOSS_OTHER": "{{ dupe }} kahdennettua ja {{ late }} myöhästynyttä kehystä"
 }

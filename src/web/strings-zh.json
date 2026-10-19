@@ -77,6 +77,7 @@
 	"TH_since_last_read": "最后输入",
 	"TH_software": "软件",
 	"TH_obuf_q": "输出队列",
+	"TH_is2_loss": "丢帧",
 	
 	"TH_port": "端口",
 	"TH_verified": "已验证",
@@ -141,5 +142,9 @@
 	"TIMING_RTT": "IS2 ping 往返时延：",
 	"TIMING_RTT_AVG": "ms 平均",
 	"TIMING_RTT_MAX": "ms 最大",
-	"TIMING_RTT_WINDOW": "最近 {{ period }} 内的 {{ samples }} 次 ping"
+	"TIMING_RTT_WINDOW": "最近 {{ period }} 内的 {{ samples }} 次 ping",
+	"TIMING_LOSS": "IS2 帧丢失：",
+	"TIMING_LOSS_RECENT": "最近 {{ period }} 内 {{ total }} 帧中丢失 {{ lost }} 帧（{{ pct }}）",
+	"TIMING_LOSS_TOTAL": "总计 {{ total }} 帧中丢失 {{ lost }} 帧（{{ pct }}）",
+	"TIMING_LOSS_OTHER": "{{ dupe }} 个重复帧，{{ late }} 个迟到帧"
 }

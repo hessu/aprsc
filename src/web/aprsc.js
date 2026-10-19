@@ -603,11 +603,21 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 	 * seconds from its clock, and a server with a clock off by that much
 	 * loses its traffic. The status is cached by the server for a couple
 	 * of seconds, so a few seconds of difference is normal.
+	 *
+	 * The comparison is only valid for a status fetched just now. When the
+	 * browser was suspended while a fetch was in flight, the response is
+	 * handled after the resume, with a clock which has moved on by hours
+	 * while the time_now in the response has not. Such a late response is
+	 * not compared.
 	 */
 	var clock_skew_limit = 10;
+	var clock_skew_fetch_limit = 20000; /* ms, less than the fetch timeout */
 	
-	var clock_skew_check = function(d) {
+	var clock_skew_check = function(d, started) {
 		if (!d.server || !d.server.time_now)
+			return;
+		
+		if (Date.now() - started > clock_skew_fetch_limit)
 			return;
 		
 		var skew = Math.round(d.server.time_now - Date.now() / 1000);
@@ -629,12 +639,14 @@ app.controller('aprscc', [ '$scope', '$http', 'graphs', 'ngDialog', '$sce', func
 			'timeout': 35000
 		};
 		
+		var started = Date.now();
+		
 		$http({ method: 'GET', url: '/status.json', config: config}).then(function successCallback(r) {
 			console.log('status.json received: ' + r.status);
 			
 			var d = r.data;
 			
-			clock_skew_check(d);
+			clock_skew_check(d, started);
 			peers_loss(d.peers);
 			
 			if ($scope.status) {

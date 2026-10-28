@@ -1324,8 +1324,7 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-static-libevent=path
                           link against static libevent.a [default=do not]
-  --enable-is2            enable the work in progress IS2 protocol
-                          [default=disabled]
+  --disable-is2           do not build the work in progress IS2 protocol
   --disable-hardening     do not build with compiler and linker hardening
                           flags
 
@@ -3689,7 +3688,7 @@ if test ${enable_is2+y}
 then :
   enableval=$enable_is2; enable_is2=$enableval
 else case e in #(
-  e) enable_is2=no ;;
+  e) enable_is2=yes ;;
 esac
 fi
 

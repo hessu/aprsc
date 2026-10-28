@@ -223,9 +223,9 @@ func CheckConfigFile(t *testing.T, path string) (string, error) {
 	return string(out), err
 }
 
-// hasIS2 tells whether this build of aprsc has IS2 enabled (./configure
-// --enable-is2): without it the server rejects the IS2 keywords in the
-// configuration. A plain configuration that does not parse either is a test
+// hasIS2 tells whether this build of aprsc has IS2 enabled (the default,
+// unless configured with --disable-is2): without it the server rejects the IS2
+// keywords in the configuration. A plain configuration that does not parse either is a test
 // environment problem, not a missing feature.
 func hasIS2(t *testing.T) bool {
 	t.Helper()
@@ -245,7 +245,7 @@ func RequireIS2(t *testing.T) {
 
 	RequireAprsc(t)
 	if !hasIS2(t) {
-		t.Skip("this aprsc build has no IS2 support (./configure --enable-is2)")
+		t.Skip("this aprsc build has no IS2 support (./configure --disable-is2)")
 	}
 }
 

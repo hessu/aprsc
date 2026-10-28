@@ -15,7 +15,7 @@ configure: configure-stamp
 configure-stamp:
 	dh_testdir
 	# Add here commands to configure the package.
-	./configure --enable-is2 --sbindir=/usr/sbin --sysconfdir=/etc \
+	./configure --sbindir=/usr/sbin --sysconfdir=/etc \
 		--localstatedir=/var --mandir=/usr/share/man \
 		CC="gcc" \
 		CFLAGS="${CFLAGS}" \

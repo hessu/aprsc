@@ -39,10 +39,10 @@ configurations use, and a port added to a configuration must be added there.
 
 ## IS2
 
-IS2 is not compiled into aprsc by default. The IS2 tests (`TestIS2*`,
-`TestDupeClientIS2`) are skipped unless the binary under test was built with
-`./configure --enable-is2`; `TestIS2Disabled` runs only on a binary built
-without it. The IS2 client uses Go types generated from `../../src/aprsis2.proto`
+IS2 is compiled into aprsc by default. The IS2 tests (`TestIS2*`,
+`TestDupeClientIS2`) are skipped if the binary under test was built with
+`./configure --disable-is2`; `TestIS2Disabled` runs only on a binary built
+that way. The IS2 client uses Go types generated from `../../src/aprsis2.proto`
 (`internal/aprsis2`). After a schema change, regenerate them with
 `go generate ./internal/aprsis2` (needs `protoc` and `protoc-gen-go`);
 `TestGeneratedIsCurrent` fails if that was forgotten.

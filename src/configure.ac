@@ -53,12 +53,12 @@ AC_ARG_ENABLE([static-libevent],
 	[static_libevent=$enableval],
 	[])
 
-dnl IS2 is work in progress, disabled unless asked for
+dnl IS2 is work in progress, but enabled by default
 AC_ARG_ENABLE([is2],
-	[AS_HELP_STRING([--enable-is2],
-	[enable the work in progress IS2 protocol @<:@default=disabled@:>@])],
+	[AS_HELP_STRING([--disable-is2],
+	[do not build the work in progress IS2 protocol])],
 	[enable_is2=$enableval],
-	[enable_is2=no])
+	[enable_is2=yes])
 AS_IF([test "x$enable_is2" = "xyes"],
 	[AC_DEFINE([USE_IS2], [1], [Enable the IS2 Protocol Buffers protocol])])
 

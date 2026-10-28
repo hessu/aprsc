@@ -144,10 +144,11 @@ are fetched on first use. Subtests can be run with
 `go test -run 'TestDupecheck/long_dupe'` in `tests/go/`, once
 `make tls-testcert` has been done in `tests/`; see `tests/go/README.md`.
 
-IS2 is compiled out unless aprsc was configured with `--enable-is2`. The IS2
-tests (`TestIS2*`, `TestDupeClientIS2`, `TestLiveUpgrade`) skip themselves on
-a build without it, and `TestIS2Disabled` does the opposite. Run them with
-`APRSC_BIN=/path/to/aprsc make test`. The Go IS2 types are generated from
+IS2 is compiled in by default and left out when aprsc was configured with
+`--disable-is2`. The IS2 tests (`TestIS2*`, `TestDupeClientIS2`,
+`TestLiveUpgrade`) skip themselves on a build without it, and
+`TestIS2Disabled` does the opposite. Run the suite against another binary
+with `APRSC_BIN=/path/to/aprsc make test`. The Go IS2 types are generated from
 `src/aprsis2.proto`: after changing the schema, run
 `go generate ./internal/aprsis2` in `tests/go/` (needs `protoc` and
 `protoc-gen-go`) and commit the result; `TestGeneratedIsCurrent` fails

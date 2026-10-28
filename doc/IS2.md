@@ -10,7 +10,7 @@ client sees the same packets on either.  What IS2 adds is a place for
 information which the plaintext protocol has no room for, and a
 link-level framing with sequence numbers and signatures.
 
-aprsc implements IS2 when built with `./configure --enable-is2`.  This
+aprsc implements IS2 unless built with `./configure --disable-is2`.  This
 document gives an overview of the protocol, its benefits and its costs;
 the details are in the documents it refers to, and the message
 definitions in `src/aprsis2.proto`.

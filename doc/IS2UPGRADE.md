@@ -85,10 +85,11 @@ port, the whole exchange is inside TLS.
 Where the upgrade is offered
 -------------------------------
 
-A server built with IS2 support (`./configure --enable-is2`) offers the
-upgrade on its plaintext client ports over TCP, TLS and SCTP, of all
-the port types (fullfeed, igate, clientonly, dupefeed). The upgraded
-connection works like one on the corresponding IS2 port type.
+A server built with IS2 support (the default, unless configured with
+`--disable-is2`) offers the upgrade on its plaintext client ports over
+TCP, TLS and SCTP, of all the port types (fullfeed, igate, clientonly,
+dupefeed). The upgraded connection works like one on the corresponding
+IS2 port type.
 
 The upgrade is not offered, and the hello is ignored:
 

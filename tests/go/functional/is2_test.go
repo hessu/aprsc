@@ -18,9 +18,9 @@ import (
 	"github.com/hessu/aprsc/tests/go/internal/isclient"
 )
 
-// The IS2 tests need an aprsc built with IS2 enabled, which is not the
-// default: ./configure --enable-is2, and APRSC_BIN pointing at the binary if
-// it is not src/aprsc. Without it they are skipped.
+// The IS2 tests need an aprsc built with IS2 enabled, which is the default
+// (./configure --disable-is2 leaves it out), and APRSC_BIN pointing at the
+// binary if it is not src/aprsc. Without IS2 they are skipped.
 
 // Simple IS2 login, and a ping. Port of t/80is2-login.t.
 func TestIS2Login(t *testing.T) {

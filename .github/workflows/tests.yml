@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     # The two variants run in parallel: one built with the work in progress
-    # IS2 protocol, and one without, which is the default. The IS2 tests run
+    # IS2 protocol, which is the default, and one without. The IS2 tests run
     # against the IS2 variant and skip themselves on the other; TestIS2Disabled
     # does the opposite. TestSCTP runs because libsctp-dev is installed.
     name: build (${{ matrix.variant }})
@@ -20,9 +20,9 @@ jobs:
         variant: [ is2, no-is2 ]
         include:
           - variant: is2
-            configure_flags: --enable-is2
-          - variant: no-is2
             configure_flags: ""
+          - variant: no-is2
+            configure_flags: --disable-is2
     runs-on: ${{ matrix.os }}
 
     steps:

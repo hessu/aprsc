@@ -112,11 +112,11 @@ on the connection the client logged in on, whether TCP, TLS or SCTP.
 They are not accepted on full feed or dupe feed ports, over UDP (the
 UDP submit port), or in HTTP uploads.
 
-The server accepts them when it has been built with IS2 support
-(`./configure --enable-is2`).  Without it, and on other APRS-IS server
-software, the line is a comment like any other, which servers ignore,
-so a client may send the metadata lines regardless of what it is
-connected to.
+The server accepts them when it has been built with IS2 support, which
+is the default (`./configure --disable-is2` leaves it out).  Without it,
+and on other APRS-IS server software, the line is a comment like any
+other, which servers ignore, so a client may send the metadata lines
+regardless of what it is connected to.
 
 
 What happens to the metadata

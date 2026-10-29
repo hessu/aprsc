@@ -22,7 +22,8 @@ can be used on:
   is2dupefeed):
 
         Listen "Full feed SCTP"     fullfeed    sctp ::0  10152
-        Listen "IS2 Full feed SCTP" is2fullfeed sctp ::0  20152
+        Listen "IS2 Full feed SCTP" is2fullfeed sctp ::0  10153
+        Listen "IS2 Igate SCTP"     is2igate    sctp ::0  14581
         Listen "SCTP on 2 addresses" fullfeed   sctp 192.0.2.1,2001:db8::1 30152
 
   A TCP and an SCTP listener can use the same port number.
@@ -30,7 +31,7 @@ can be used on:
 * Uplinks, plaintext or IS2:
 
         Uplink core1 full sctp core1.example.com 10152
-        Uplink core2 full sctp core2.example.com 20152 is2
+        Uplink core2 full sctp core2.example.com 10153 is2
 
 The UDP peer links of a `PeerGroup` are not available over SCTP: the
 configuration parser accepts `sctp` there, but the peer link code handles

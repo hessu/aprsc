@@ -193,7 +193,7 @@ IS2 is framed the same way on SCTP as on TCP:
 A frame is at most 4096 bytes.  Each SCTP message carries one or more
 complete frames, and each IS_PACKET frame carries many APRS-IS packets:
 the server collects the packets of a round of its worker thread, up to
-1200 bytes of them, in one frame.
+20 packets or 1200 bytes of them, in one frame.
 
 On SCTP, the frame may look redundant, since a message boundary could
 mark the end of an IS2Message.  It is kept, because:
@@ -266,9 +266,10 @@ packets.
 Delivery order
 -----------------
 
-aprsc sends its SCTP messages unordered (`SCTP_UNORDERED` in the default
-send parameters of the socket) once the login is done, and turns off
-the delay of small messages (`SCTP_NODELAY`).  An unordered message is
+aprsc turns off the delay of small messages (`SCTP_NODELAY`) when a
+connection is set up, and sends its SCTP messages unordered
+(`SCTP_UNORDERED` in the default send parameters of the socket) once the
+login is done.  An unordered message is
 handed to the receiver as soon as it arrives, without waiting for the
 messages sent before it.  On a path without losses the messages arrive
 in the order they were sent, but a message which has to be retransmitted
@@ -302,8 +303,10 @@ Receiving
 The server reads each message with one `recvmsg()`, into the input buffer
 of the client (8 kB by default), and processes the lines or frames in it.
 A message has to fit in that buffer, so a sender keeps its messages
-below 8 kB.  The server's own messages fit in the output buffer of the
-same size.
+below 8 kB.  A larger message is read in parts, each handled as a
+message of its own, and the line or frame which spans the boundary is
+lost; the connection is not closed.  The server's own messages fit in
+the output buffer of the same size.
 
 The server also receives the SCTP notifications of the association, and
 logs them: the association coming up or being lost, the peer shutting
@@ -323,9 +326,18 @@ like the IS2 connections over TCP.
 Tests
 --------
 
-`TestSCTP` in `tests/go/functional/sctp_test.go` passes a load of packets
-through a plaintext uplink over SCTP between two servers.  The tests in
-`is2sctp_test.go` cover IS2 ports over SCTP, the in-band upgrade on
-plaintext SCTP ports, a load of IS2 frames over SCTP, and an IS2 uplink
-over SCTP.  They need a Linux host which can make SCTP connections, and
+The tests in `tests/go/functional/sctp_test.go` cover the plaintext
+protocol over SCTP: `TestSCTP` passes a load of packets through an
+uplink over SCTP between two servers, `TestSCTPDeliveryOrder` checks
+that the login handshake is sent in order and the packets after it
+unordered, `TestSCTPDataAfterLoginAck` that the server does not send a
+packet before the client has acknowledged the handshake,
+`TestSCTPUplinkMultihoming` and `TestSCTPListenMultihoming` that an
+uplink with two `UplinkBind` addresses and a listener with a list of
+addresses are multi-homed on them, and `TestSCTPListenAddressListRejected`
+that a list of addresses is refused on a TCP listener and with a wildcard
+in it.  The tests in `is2sctp_test.go` cover IS2 ports over SCTP, the
+in-band upgrade on plaintext SCTP ports, a load of IS2 frames over SCTP,
+an IS2 uplink over SCTP, and the delivery order of the upgrade and the
+IS2 login.  They need a Linux host which can make SCTP connections, and
 are skipped otherwise.

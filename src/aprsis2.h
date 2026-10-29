@@ -64,6 +64,7 @@ extern void is2_corepeer_downgrade(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_control_in(struct worker_t *self, struct client_t *c, char *p, int len);
 
 extern int is2_corepeer_key_setup(void);
+extern void is2_corepeer_hmac_log(void);
 extern int is2_corepeer_enabled(void);
 extern int is2_wire_selfcheck(void);
 

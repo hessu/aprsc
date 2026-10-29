@@ -2910,6 +2910,27 @@ static void is2_corepeer_key_free(struct is2_corepeer_key_t *k)
 }
 
 /*
+ *	Log how the UDP peer HMAC context is reused for each frame, found
+ *	out when the keys were first set up. Called from main() once the
+ *	start-up is through and stderr has been closed, since the
+ *	configuration is read with log output forced to stderr as well, and
+ *	a normal start-up should not print informative lines on the console.
+ */
+
+void is2_corepeer_hmac_log(void)
+{
+#ifdef HAVE_OPENSSL_3
+	if (!is2_corepeer_mac)
+		return;
+
+	if (is2_corepeer_mac_reinit)
+		hlog(LOG_INFO, "IS2 UDP: HMAC context re-initialised in place for each frame");
+	else
+		hlog(LOG_INFO, "IS2 UDP: HMAC context copied for each frame, this OpenSSL cannot re-initialise it");
+#endif
+}
+
+/*
  *	Build the peer key table from the configuration and replace the
  *	previous one. Called from the main thread at startup and on reload;
  *	keys removed from the configuration are no longer accepted.
@@ -2943,10 +2964,6 @@ int is2_corepeer_key_setup(void)
 			hlog(LOG_ERR, "IS2 UDP: fetching the HMAC implementation from OpenSSL failed");
 		} else {
 			is2_corepeer_mac_reinit = is2_corepeer_hmac_reinit_works();
-			if (is2_corepeer_mac_reinit)
-				hlog(LOG_INFO, "IS2 UDP: HMAC context re-initialised in place for each frame");
-			else
-				hlog(LOG_INFO, "IS2 UDP: HMAC context copied for each frame, this OpenSSL cannot re-initialise it");
 		}
 	}
 #endif

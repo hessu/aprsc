@@ -1063,6 +1063,10 @@ int main(int argc, char **argv)
 	if (have_low_ports)
 		hlog(LOG_INFO, "POSIX capabilities available: can bind low ports"); 
 	
+#ifdef USE_IS2
+	is2_corepeer_hmac_log();
+#endif
+	
 	hlog(LOG_INFO, "After configuration FileLimit is %d, MaxClients is %d, xpoll using %s",
 		fileno_limit, maxclients, xpoll_implementation);
 	

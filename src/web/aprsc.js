@@ -411,7 +411,11 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 		});
 		
 		$translateProvider.useUrlLoader("/strings");
-		$translateProvider.useSanitizeValueStrategy('escape');
+		/* The translations are only shown through {{ }} text bindings,
+		 * which Angular escapes, so the 'escape' strategy escaped them
+		 * twice and a ">" in a string showed up as "&gt;". Escape only
+		 * the parameters interpolated into the strings. */
+		$translateProvider.useSanitizeValueStrategy('escapeParameters');
 		$translateProvider.preferredLanguage('en');
 		$translateProvider.registerAvailableLanguageKeys(lang_list, lang_map).determinePreferredLanguage();
 	}).

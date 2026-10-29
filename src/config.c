@@ -140,7 +140,7 @@ int is2_received_age_drop = 0;		/* drop IS2 packets with a received_time too far
 #endif
 int quirks_mode           = 0;		/* enable quirks mode for all clients by default */
 
-int maxclients = 500;			/* maximum number of clients */
+int maxclients = 1000;			/* maximum number of clients */
 
 /* These two are not currently used. The fixed defines are in worker.h,
  * OBUF_SIZE and IBUF_SIZE.
@@ -1169,7 +1169,7 @@ int do_listen(struct listen_config_t **lq, int argc, char **argv)
 	struct addrinfo req, *ai;
 	/* default parameters for a listener */
 	int clflags = CLFLAGS_INPORT;
-	int clients_max = 200;
+	int clients_max = 500;
 	char *proto;
 
 	memset(&req, 0, sizeof(req));

@@ -129,9 +129,11 @@ Configuration file options in aprsc.conf
     If logging to a file (-o file), this option enables built-in log rotation.
     "LogRotate 10 5" keeps 5 old files of 10 megabytes each.
 
- *  MaxClients 500
+ *  MaxClients 1000
 
     Maximum clients logged in to the server (not counting peers or uplinks).
+    Defaults to 1000. Each listener also has a limit of its own, 500 unless
+    set with the maxclients option of the Listen directive.
     File descriptor limit must always be slightly larger than MaxClients
     (FileLimit >= MaxClients + 50 is a good figure), so that Uplink
     connections and access to local files work even when MaxClients is
@@ -207,7 +209,7 @@ The basic syntax is:
       If you wish to specify multiple filters, put them in the same "string",
       separated by spaces. The filter option only works with the igate port
       type.
-    - maxclients 100 - limit clients connected on this port (defaults to 200)
+    - maxclients 100 - limit clients connected on this port (defaults to 500)
     - acl etc/client.acl - match client addresses against ACL
     - hidden - don't show the port in the status page
     - noIS2upgrade - don't offer the in-band upgrade to the IS2 protocol

@@ -220,8 +220,8 @@ the same address, port and address family (IPv4/IPv6).
 Example of normal server ports for Linux, supporting both TCP and UDP,
 IPv4 and IPv6:
 
-    Listen "Full feed"                fullfeed  tcp ::  10152 hidden
-    Listen ""                         fullfeed  udp ::  10152 hidden
+    Listen "Full feed"                fullfeed  tcp ::  10152
+    Listen ""                         fullfeed  udp ::  10152
 
     Listen "Client-Defined Filters"   igate     tcp ::  14580
     Listen ""                         igate     udp ::  14580

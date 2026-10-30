@@ -123,6 +123,10 @@
 	"RXERR_disallow_srccall": "不允许的源呼号（N0CALL 等）",
 	"RXERR_disallow_dx": "DX 集群数据包",
 	"RXERR_disallow_msg_dst": "不允许的消息接收者（javaMSG、JAVATITLE、USERLIST...）",
+	"RXERR_disallow_igatecall": "不允许的 igate 呼号（DisallowIgateCall）",
+	"RXERR_inv_crlf": "数据包包含 CR 或 LF 字符",
+	"RXERR_is2_too_old": "IS2 数据包接收时间过久（received_time 在过去）",
+	"RXERR_is2_too_new": "来自未来的 IS2 数据包（received_time 超前于本机时钟）",
 	
 	"ALARM_no_uplink": "服务器没有任何上行链路连接。",
 	"ALARM_packet_drop_hang": "服务器由于前向时间跳跃或资源不足导致的挂起而丢弃了数据包。",

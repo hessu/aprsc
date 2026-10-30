@@ -380,6 +380,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			RXERR_disallow_srccall: 'Disallowed source callsign (N0CALL or such)',
 			RXERR_disallow_dx: 'DX cluster packet',
 			RXERR_disallow_msg_dst: 'Disallowed message recipient (javaMSG, JAVATITLE, USERLIST...)',
+			RXERR_disallow_igatecall: 'Disallowed igate callsign (DisallowIgateCall)',
 			RXERR_inv_crlf: 'Packet contains a CR or LF character',
 			RXERR_is2_too_old: 'IS2 packet received too long ago (received_time in the past)',
 			RXERR_is2_too_new: 'IS2 packet from the future (received_time ahead of our clock)',

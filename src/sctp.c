@@ -242,7 +242,11 @@ void sctp_dry_wait_expire(struct worker_t *self, struct client_t *c)
 
 int sctp_bindx_add(int fd, const struct sockaddr *sa, socklen_t len)
 {
+#ifdef __FreeBSD__
+	return sctp_bindx(fd, (struct sockaddr *)sa, 1, SCTP_BINDX_ADD_ADDR);
+#else
 	return setsockopt(fd, IPPROTO_SCTP, SCTP_SOCKOPT_BINDX_ADD, (const char *)sa, len);
+#endif
 }
 
 /*
@@ -433,7 +437,11 @@ static int sctp_rx_notification(struct worker_t *self, struct client_t *c, struc
 	case SCTP_ADAPTATION_INDICATION:
 		hlog(LOG_DEBUG, "%s/%s: SCTP adaptation indication", c->addr_rem, c->username);
 		return 0;
+#ifdef __FreeBSD__
+	case SCTP_AUTHENTICATION_EVENT:
+#else
 	case SCTP_AUTHENTICATION_INDICATION:
+#endif
 		hlog(LOG_DEBUG, "%s/%s: SCTP authentication indication", c->addr_rem, c->username);
 		return 0;
 	case SCTP_SENDER_DRY_EVENT:

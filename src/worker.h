@@ -214,7 +214,12 @@ struct client_heard_t {
 
 #define WBUF_ADJUSTER 0   /* Client WBUF adjustment can be usefull -- but code is infant.. */
 
-/* error codes for incoming packet drop reasons */
+/* error codes for incoming packet drop reasons
+ *
+ * When adding one, also update INERR_MIN below, add the label to
+ * inerr_labels[] in incoming.c, and add the RXERR_<label> description
+ * strings to web/aprsc.js and every web/strings-*.json file.
+ */
 #define INERR_UNKNOWN			0
 #define INERR_NO_COLON			-1	/* no : in packet */
 #define INERR_NO_DST			-2	/* no > in packet to mark beginning of dstcall */

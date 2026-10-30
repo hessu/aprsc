@@ -44,8 +44,9 @@
 #include "aprsis2.h"
 #include "aprsis2plain.h"
 
-/* When adding labels here, remember to add the description strings in
- * web/aprsc.js rx_err_strings, and worker.h constants
+/* When adding labels here, remember to add the INERR_ constant in worker.h
+ * (and update INERR_MIN), and the RXERR_<label> description strings in
+ * web/aprsc.js and every web/strings-*.json file.
  */
 const char *inerr_labels[] = {
 	"unknown",

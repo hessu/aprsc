@@ -261,7 +261,8 @@ func RequireNoIS2(t *testing.T) {
 
 // writeConfig writes an aprsc configuration to the server's configuration
 // file, with the ports mapped to the test's and RunDir pointing at the
-// server's run directory.
+// server's run directory. The file is replaced in one step, so that a
+// server reloading it while a test writes it never reads a partial one.
 func (s *Server) writeConfig(text string) {
 	s.t.Helper()
 
@@ -269,8 +270,12 @@ func (s *Server) writeConfig(text string) {
 	if err != nil {
 		s.t.Fatalf("configuration %s: %v", filepath.Base(s.cfgFile), err)
 	}
-	if err := os.WriteFile(s.cfgFile, []byte(out), 0o644); err != nil {
+	tmp := s.cfgFile + ".tmp"
+	if err := os.WriteFile(tmp, []byte(out), 0o644); err != nil {
 		s.t.Fatalf("cannot write the configuration file: %v", err)
+	}
+	if err := os.Rename(tmp, s.cfgFile); err != nil {
+		s.t.Fatalf("cannot replace the configuration file: %v", err)
 	}
 }
 

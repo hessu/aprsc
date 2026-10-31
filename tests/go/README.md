@@ -76,6 +76,22 @@ servers and the test process to separate cores with `taskset`, so that
 the clients, which take several cores with a thousand of them, do not
 compete with the servers being measured.
 
+`TestClientReload` is a stress scenario rather than a measurement: the
+plaintext client load of `TestClientCPU`, with the configuration reloaded
+by SIGUSR1 at irregular intervals during the feed, from a few
+milliseconds to a few seconds apart and half of them with a changed
+configuration file. The server also has an uplink to a fake upstream,
+which feeds packets down it and is reconnected on every reload, and
+igate clients come and go all the time, some asking for packets over
+UDP, some with filters, some with a bad passcode or login, half of them
+leaving with a reset. Every packet of the feed must still reach every
+full feed client, and a probe after the last reload must reach every
+client too, which a stopped worker thread would fail. The schedule comes
+from a seed the test logs; `-reload-seed` repeats one. The load of the
+field reports is `go test -tags perf -v -run TestClientReload ./perf/
+-args -nclients 1000 -rate 200`, and `-duration 30m` makes it last
+longer.
+
 ## APRS-IS client tools
 
 `cmd/aprs-is` is a command for testing and loading a server by hand, which

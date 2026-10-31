@@ -123,12 +123,25 @@ func TestClientCPU(t *testing.T) {
 
 func runClientScenario(t *testing.T, client string) clientResult {
 	t.Helper()
+	return runClientLoad(t, client, clientServerConfig(client == "is2"), nil)
+}
+
+// runClientLoad runs the client scenario: a server with the configuration
+// cfg, the full feed clients and the feeder. Only the packets of the feed,
+// whose source calls start with PT, are counted: a scenario may send other
+// traffic through the server, which the clients read and drop. When during
+// is given, it runs in a goroutine of its own from the start of the feed
+// until the clients have drained, and must return when stop is closed; after
+// it, a probe packet must still reach every client. The scenarios which
+// disturb the server while it carries the load use it.
+func runClientLoad(t *testing.T, client, cfg string, during func(s *harness.Server, stop <-chan struct{})) clientResult {
+	t.Helper()
 
 	if client != "tcp" && client != "is2" {
 		t.Fatalf("unknown client type %q", client)
 	}
 
-	s := harness.StartText(t, "perf-a", clientServerConfig(client == "is2"))
+	s := harness.StartText(t, "perf-a", cfg)
 	pin(t, *serverCPUs, s.Pid())
 	pin(t, *clientCPUs, os.Getpid())
 
@@ -149,8 +162,16 @@ func runClientScenario(t *testing.T, client string) clientResult {
 	probe := "PT0>APRS,qAR," + feedLogin + ":>perf probe"
 	tx.Send(t, probe)
 	for i, rx := range rxs {
-		if line, err := rx.ReadPacket(isclient.DefaultTimeout); err != nil || line != probe {
-			t.Fatalf("client %d did not get the probe packet: %q, %v", i+1, line, err)
+		// other traffic of the scenario may come before the probe
+		deadline := time.Now().Add(isclient.DefaultTimeout)
+		for {
+			line, err := rx.ReadPacket(time.Until(deadline))
+			if err != nil {
+				t.Fatalf("client %d did not get the probe packet: %v", i+1, err)
+			}
+			if line == probe {
+				break
+			}
 		}
 	}
 
@@ -168,7 +189,17 @@ func runClientScenario(t *testing.T, client string) clientResult {
 		go func(i int, rx isclient.Receiver) {
 			defer wg.Done()
 			for {
+				// a scenario with other traffic keeps the reads from
+				// timing out, so look at stop before each read too
+				select {
+				case <-stop:
+					return
+				default:
+				}
 				if line, err := rx.ReadPacket(time.Second); err == nil {
+					if !strings.HasPrefix(line, "PT") {
+						continue // not from the feed
+					}
 					if i == 0 {
 						if sent, ok := sentAt(line); ok {
 							samples = append(samples, time.Since(epoch)-sent)
@@ -187,6 +218,16 @@ func runClientScenario(t *testing.T, client string) clientResult {
 				}
 			}
 		}(i, rx)
+	}
+
+	// the disturbance, if the scenario has one, runs alongside the feed
+	var hook sync.WaitGroup
+	if during != nil {
+		hook.Add(1)
+		go func() {
+			defer hook.Done()
+			during(s, stop)
+		}()
 	}
 
 	// feed at the rate, catching up after any hiccup so that the average
@@ -213,6 +254,40 @@ func runClientScenario(t *testing.T, client string) clientResult {
 	close(errs)
 	for err := range errs {
 		t.Errorf("a receiving client failed: %v", err)
+	}
+
+	if during != nil {
+		hook.Wait()
+		// the server must still carry a packet to every client; the
+		// clients read it at the same time, so that a server which
+		// has lost a worker is reported in seconds rather than in a
+		// thousand timeouts
+		probe := "PT0>APRS,qAR," + feedLogin + ":>perf probe after the load"
+		tx.Send(t, probe)
+		var missed atomic.Int64
+		var pw sync.WaitGroup
+		for _, rx := range rxs {
+			pw.Add(1)
+			go func(rx isclient.Receiver) {
+				defer pw.Done()
+				deadline := time.Now().Add(3 * time.Second)
+				for {
+					line, err := rx.ReadPacket(time.Until(deadline))
+					if err != nil {
+						missed.Add(1)
+						return
+					}
+					if line == probe {
+						return
+					}
+					// other traffic of the scenario, keep reading
+				}
+			}(rx)
+		}
+		pw.Wait()
+		if n := missed.Load(); n != 0 {
+			t.Errorf("%d of %d clients did not get the probe packet after the load", n, len(rxs))
+		}
 	}
 
 	s.Stop()

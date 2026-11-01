@@ -260,3 +260,47 @@ func TestReloadRemovedUDPListener(t *testing.T) {
 
 	s.Stop()
 }
+
+// A reload which stops at an error in the configuration file, and the
+// next one, with the error fixed. The failed read used to leave what it had
+// parsed before the error, and the next read added to it: a Listen line
+// with a new port was there twice, and the port was bound twice, and a value
+// set only by the failed file was applied by the next one.
+func TestReloadAfterFailedRead(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+
+	src, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", "basic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const extra = "Listen \"Extra\" fullfeed tcp 0.0.0.0 56152\n"
+
+	s := harness.Start(t, "basic")
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-1")
+
+	// the error is after the new listener and the fake version
+	s.ReplaceConfig(string(src) + "fake_version stale-1.0\n" + extra + "NoSuchDirective here\n")
+	s.Signal(syscall.SIGUSR1)
+	s.WaitLog("New configuration was not successfully read", 1, 10*time.Second)
+
+	s.ReplaceConfig(string(src) + extra)
+	s.Signal(syscall.SIGUSR1)
+	s.WaitLog("New configuration read successfully", 1, 10*time.Second)
+	s.WaitLog("Accept thread ready", 2, 10*time.Second)
+
+	bound := fmt.Sprintf("Binding listening TCP socket: 0.0.0.0:%d", harness.Port(t, 56152))
+	if n := s.LogCount(bound); n != 1 {
+		t.Errorf("%d log lines %q, want 1", n, bound)
+	}
+
+	rx := isclient.Connect(t, harness.Addr(t, 56152), "N5CAL-2")
+	isclient.TxRx(t, tx, rx, "SRC>DST,qAR,N5CAL-1:after the reloads", "SRC>DST,qAR,N5CAL-1:after the reloads")
+
+	lines := isclient.PreLogin(t, harness.Addr(t, 55152), "user N5CAL-3 pass -1 vers aprsc-gotest 1.0")
+	if len(lines) == 0 || strings.Contains(lines[0], "stale-1.0") {
+		t.Errorf("server banner after the reloads: %q, want one without the fake version of the failed read", lines)
+	}
+
+	s.Stop()
+}

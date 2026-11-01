@@ -1517,6 +1517,45 @@ static int test_directory(const char *path)
 }
 
 /*
+ *	Discard the configuration a previous read left staged. A read which
+ *	stops at an error in the file leaves what it parsed before the
+ *	error. The next read would add its Listen, Uplink, PeerGroup and
+ *	other entries to those lists, and the values set by the failed file
+ *	would apply if the next file does not set them. A Listen line with a
+ *	new port would be listed twice, with different ids, and both would
+ *	be bound, as the listening sockets are opened with SO_REUSEPORT.
+ */
+
+static void discard_new_config(void)
+{
+	int i;
+	char **strings[] = { &new_rundir, &new_serverid, &new_passcode,
+		&new_myemail, &new_myadmin, &new_fake_version,
+		&new_http_bind, &new_http_bind_upload,
+		&new_http_status_options, NULL };
+	char ***arrays[] = { &new_disallow_srccall_glob,
+		&new_disallow_login_glob, &new_disallow_igate_glob, NULL };
+	
+	free_listen_config(&listen_config_new);
+	free_uplink_config(&new_uplink_config);
+	free_peerip_config(&new_peerip_config);
+	free_peergroup_key_config(&new_peergroup_key_config);
+	new_peergroup_key_transmit = 0;
+	free_http_config(&new_http_config);
+	
+	for (i = 0; (strings[i]); i++) {
+		hfree(*strings[i]);
+		*strings[i] = NULL;
+	}
+	
+	for (i = 0; (arrays[i]); i++) {
+		if (*arrays[i])
+			free_string_array(*arrays[i]);
+		*arrays[i] = NULL;
+	}
+}
+
+/*
  *	Read configuration files, should add checks for this program's
  *	specific needs and obvious misconfigurations!
  */
@@ -1525,6 +1564,9 @@ int read_config(void)
 {
 	int failed = 0;
 	char *s;
+	
+	/* start from nothing, whatever a failed read left */
+	discard_new_config();
 	
 	if (read_cfgfile(cfgfile, cfg_cmds))
 		return -1;

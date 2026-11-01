@@ -88,6 +88,10 @@ static void listener_free(struct listen_t *l)
 	if (l->udp) {
 		l->fd = -1;
 
+		/* Clients on the TCP port of the same number hold the UDP
+		 * socket, and it stays open until they go. New clients must
+		 * not get a UDP feed from a listener which is gone. */
+		client_udp_unlist(l->udp);
 		client_udp_free(l->udp);
 	}
 
@@ -273,7 +277,7 @@ static int open_udp_listener(struct listen_t *l, const struct addrinfo *ai)
 
 	c = client_udp_alloc((l->corepeer) ? &udppeers : &udpclients, fd, l->portnum);
 	c->af = ai->ai_family;
-	c->portaccount = l->portaccount;
+	client_udp_set_portaccount(c, l->portaccount);
 
 	if (1) {
 		int len, arg;

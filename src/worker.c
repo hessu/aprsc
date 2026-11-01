@@ -188,6 +188,49 @@ void port_accounter_drop(struct portaccount_t *p)
 }
 
 /*
+ *	Take and release a reference to a port accounter which is not a
+ *	connection: a UDP socket keeps the accounter of its listener, as
+ *	the socket can outlive the listener.
+ */
+
+static void port_accounter_ref(struct portaccount_t *p)
+{
+	int i;
+	if (!p) return;
+
+	if ((i = pthread_mutex_lock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_ref: could not lock portaccount: %s", strerror(i));
+		return;
+	}
+
+	++ p->refcount;
+
+	if ((i = pthread_mutex_unlock(&p->mutex)))
+		hlog(LOG_ERR, "port_accounter_ref: could not unlock portaccount: %s", strerror(i));
+}
+
+static void port_accounter_unref(struct portaccount_t *p)
+{
+	int i, r;
+	if (!p) return;
+
+	if ((i = pthread_mutex_lock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_unref: could not lock portaccount: %s", strerror(i));
+		return;
+	}
+
+	r = -- p->refcount;
+
+	if ((i = pthread_mutex_unlock(&p->mutex))) {
+		hlog(LOG_ERR, "port_accounter_unref: could not unlock portaccount: %s", strerror(i));
+		return;
+	}
+
+	if (r == 0)
+		hfree(p);
+}
+
+/*
  *	Global and port specific port usage counters
  */
 
@@ -232,9 +275,45 @@ void inbound_connects_account(const int add, struct portaccount_t *p)
 
 /* object alloc/free */
 
+/* take a UDP socket out of its list, called with udpclient_mutex held */
+static void client_udp_unchain(struct client_udp_t *u)
+{
+	if (!u->prevp)
+		return;
+
+	if (u->next)
+		u->next->prevp = u->prevp;
+	*u->prevp = u->next;
+	u->next = NULL;
+	u->prevp = NULL;
+}
+
+/*
+ *	A UDP socket whose listener is removed: the clients which hold it
+ *	keep it until they go, but new clients must not find it.
+ */
+
+void client_udp_unlist(struct client_udp_t *u)
+{
+	int i;
+
+	if (!u) return;
+
+	if ((i = pthread_mutex_lock(& udpclient_mutex ))) {
+		hlog(LOG_ERR, "client_udp_unlist: could not lock udpclient_mutex: %s", strerror(i));
+		return;
+	}
+
+	client_udp_unchain(u);
+
+	if ((i = pthread_mutex_unlock(& udpclient_mutex )))
+		hlog(LOG_ERR, "client_udp_unlist: could not unlock udpclient_mutex: %s", strerror(i));
+}
+
 void client_udp_free(struct client_udp_t *u)
 {
 	int i;
+	struct portaccount_t *pa = NULL;
 
 	if (!u) return;
 
@@ -251,17 +330,26 @@ void client_udp_free(struct client_udp_t *u)
 	if ( u->refcount   == 0 ) {
 		hlog(LOG_DEBUG, "client_udp_free %p port %d FREEING", u, u->portnum);
 		/* Unchain, and destroy.. */
-		if (u->next)
-			u->next->prevp = u->prevp;
-		*u->prevp = u->next;
+		client_udp_unchain(u);
 
 		close(u->fd);
 
+		pa = u->portaccount;
 		hfree(u);
 	}
 
 	if ((i = pthread_mutex_unlock(& udpclient_mutex )))
 		hlog(LOG_ERR, "client_udp_free: could not unlock udpclient_mutex: %s", strerror(i));
+
+	/* the socket's reference to its listener's port accounter */
+	port_accounter_unref(pa);
+}
+
+/* set the port accounter of a UDP socket, which keeps a reference to it */
+void client_udp_set_portaccount(struct client_udp_t *u, struct portaccount_t *p)
+{
+	port_accounter_ref(p);
+	u->portaccount = p;
 }
 
 struct client_udp_t *client_udp_find(struct client_udp_t *root, const int af, const int portnum)
@@ -307,6 +395,7 @@ struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int po
 	c->fd         = fd;
 	c->refcount   = 1; /* One reference already on creation */
 	c->portnum    = portnum;
+	c->portaccount = NULL;
 
 	/* Add this to special list of UDP sockets */
 	c->next  = *root;

@@ -662,6 +662,8 @@ extern int obuf_writes_threshold;
 extern struct client_udp_t *udpclients;
 extern struct client_udp_t *udppeers;
 extern void client_udp_free(struct client_udp_t *u);
+extern void client_udp_unlist(struct client_udp_t *u);
+extern void client_udp_set_portaccount(struct client_udp_t *u, struct portaccount_t *p);
 extern struct client_udp_t *client_udp_alloc(struct client_udp_t **root, int fd, int portnum);
 extern struct client_udp_t *client_udp_find(struct client_udp_t *root, int af, int portnum);
 extern int udp_client_write(struct worker_t *self, struct client_t *c, char *p, int len);

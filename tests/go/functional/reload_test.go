@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -190,6 +191,65 @@ func TestReloadWorkerCount(t *testing.T) {
 		up = fake.AcceptLive(t, 500*time.Millisecond)
 		packet := fmt.Sprintf("SRC>DST,qAR,IGATE:after reload %d", i)
 		isclient.TxRx(t, up, client, packet, packet)
+	}
+
+	s.Stop()
+}
+
+// A UDP listener removed by a reload while TCP clients are connected on the
+// same port. Every TCP client holds a reference to the UDP socket of its
+// port, so the socket outlives its listener. A client which then logs in on
+// that port asking for a UDP feed must get its login reply without a UDP
+// feed, and the worker must keep running. The removed listener's port
+// accounter used to be freed while the UDP socket still pointed to it, new
+// clients still found the socket, and a worker locked the accounter's mutex
+// in freed memory when a client asked for UDP, and hung there (T2CSNGRAD,
+// 2026-10-31).
+func TestReloadRemovedUDPListener(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+
+	src, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", "basic"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const udpListener = "Listen \"Full feed with, UDP\"   fullfeed    udp ::0      55152\n"
+	if !strings.Contains(string(src), udpListener) {
+		t.Fatalf("the basic configuration has no line %q", udpListener)
+	}
+
+	// Without the peer groups: a reload closes their listeners and opens
+	// them again, and the new port accounters would reuse the freed one.
+	cfg := regexp.MustCompile(`(?m)^PeerGroup .*\\\n(?:\t.*\\\n)*\t.*\n`).ReplaceAllString(string(src), "")
+	if strings.Contains(cfg, "PeerGroup") {
+		t.Fatalf("could not remove the PeerGroup lines of the basic configuration")
+	}
+
+	s := harness.StartText(t, "basic", cfg)
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-1")
+	// a TCP client on the port keeps the UDP socket referenced
+	holder := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+
+	s.ReplaceConfig(strings.Replace(cfg, udpListener, "", 1))
+	s.Signal(syscall.SIGUSR1)
+	s.WaitLog("Accept thread ready", 2, 10*time.Second)
+
+	// enough logins to land on every worker
+	for i := 0; i < 6; i++ {
+		call := fmt.Sprintf("N5CAL-%d", 10+i)
+		login := fmt.Sprintf("user %s pass %s vers aprsc-gotest 1.0 UDP %d", call, isclient.Passcode(call), harness.Port(t, 51342))
+		reply, accepted := isclient.LoginReply(t, harness.Addr(t, 55152), login)
+		if !accepted {
+			t.Fatalf("login %d with a UDP port after the UDP listener was removed: reply %q, want a logresp", i, reply)
+		}
+		packet := fmt.Sprintf("SRC>DST,qAR,N5CAL-1:after the reload %d", i)
+		isclient.TxRx(t, tx, holder, packet, packet)
+	}
+
+	// the clients had no UDP feed: they are closed as TCP ones
+	s.WaitLog("(N5CAL-15) closed", 1, 5*time.Second)
+	if n := s.LogCount("Client TCP+UDP"); n != 0 {
+		t.Errorf("%d clients got a UDP feed from the removed UDP listener", n)
 	}
 
 	s.Stop()

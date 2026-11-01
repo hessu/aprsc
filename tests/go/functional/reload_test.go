@@ -233,6 +233,12 @@ func TestReloadRemovedUDPListener(t *testing.T) {
 	s.ReplaceConfig(strings.Replace(cfg, udpListener, "", 1))
 	s.Signal(syscall.SIGUSR1)
 	s.WaitLog("Accept thread ready", 2, 10*time.Second)
+	// the log names the protocol, which tells the UDP listener from the
+	// TCP one on the same address and port
+	removed := fmt.Sprintf("(udp [::]:%d) no longer in configuration", harness.Port(t, 55152))
+	if n := s.LogCount(removed); n != 1 {
+		t.Errorf("%d log lines %q, want 1", n, removed)
+	}
 
 	// enough logins to land on every worker
 	for i := 0; i < 6; i++ {

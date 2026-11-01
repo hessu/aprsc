@@ -121,6 +121,18 @@ static void listener_free(struct listen_t *l)
 }
 
 /*
+ *	Protocol of a listener, as in the configuration
+ */
+
+static const char *listener_proto_str(struct listen_t *l)
+{
+	if (l->ai_protocol == IPPROTO_SCTP)
+		return "sctp";
+	
+	return (l->udp) ? "udp" : "tcp";
+}
+
+/*
  *	Copy / duplicate filters from listener config to an actual listener
  *	Free old filters if any are set.
  */
@@ -571,8 +583,8 @@ static int close_removed_listeners(void)
 		
 		struct listen_config_t *lc = find_listen_config_id(listen_config, l->id);
 		if (!lc) {
-			hlog(LOG_INFO, "Listener %d (%s) no longer in configuration, closing port...",
-				l->id, l->addr_s);
+			hlog(LOG_INFO, "Listener %d (%s %s) no longer in configuration, closing port...",
+				l->id, listener_proto_str(l), l->addr_s);
 			listener_free(l);
 			closed++;
 		}
@@ -1697,10 +1709,7 @@ int accept_listener_status(cJSON *listeners, cJSON *totals)
 		cJSON_AddNumberToObject(jl, "fd", l->fd);
 		cJSON_AddNumberToObject(jl, "id", l->id);
 		cJSON_AddStringToObject(jl, "name", l->name);
-		if (l->ai_protocol == IPPROTO_SCTP)
-			cJSON_AddStringToObject(jl, "proto", "sctp");
-		else
-			cJSON_AddStringToObject(jl, "proto", (l->udp) ? "udp" : "tcp");
+		cJSON_AddStringToObject(jl, "proto", listener_proto_str(l));
 		cJSON_AddBoolToObject(jl, "is2", (l->client_flags & CLFLAGS_IS2) ? 1 : 0);
 		/* plaintext port on which the clients can upgrade to IS2 in-band;
 		 * not offered at all in quirks mode or with a fake version */

@@ -238,11 +238,13 @@ static int login_client_validate_cert(struct worker_t *self, struct client_t *c)
 	else
 		rc = client_printf(self, c, "# Client certificate authentication failed: %s\r\n", ssl_strerror(ssl_res));
 		
-	c->failed_cmds = 10; /* bail out right away for a HTTP client */
-	
+	/* If the write failed, the client has already been closed and freed;
+	 * do not touch it any more, just propagate the error code. */
 	if (rc < 0)
 		return rc;
 	
+	c->failed_cmds = 10; /* bail out right away for a HTTP client */
+
 	return 0;
 }
 #endif
@@ -343,7 +345,8 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 #ifdef USE_SSL
 	if (c->ssl_con && c->ssl_con->validate) {
 		ssl_validated = login_client_validate_cert(self, c);
-		if (ssl_validated == -1) {
+		if (ssl_validated < 0) {
+			/* client already closed/freed inside the validator */
 			rc = ssl_validated;
 			goto failed_login;
 		}

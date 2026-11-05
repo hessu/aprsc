@@ -4,6 +4,7 @@ package isclient
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -54,7 +55,8 @@ type config struct {
 	hello    string // IS2 in-band upgrade
 	// IS2 in-band upgrade with the writes in pieces
 	slowUpgrade bool
-	sctp        bool // connect over SCTP instead of TCP
+	sctp        bool        // connect over SCTP instead of TCP
+	tlsConfig   *tls.Config // connect over TLS, with this configuration
 	// how long DialIS2 keeps trying while the port is not open
 	retry time.Duration
 }
@@ -65,6 +67,11 @@ var ErrNoSCTP = errors.New("SCTP is not supported on this host")
 
 // WithSCTP makes the client connect over SCTP instead of TCP.
 func WithSCTP() Option { return func(c *config) { c.sctp = true } }
+
+// WithTLS makes the client connect over TLS with the given configuration.
+// The test CA is not trusted by default, so the configuration usually has
+// InsecureSkipVerify set.
+func WithTLS(c *tls.Config) Option { return func(cfg *config) { cfg.tlsConfig = c } }
 
 // WithConnectRetry sets how long DialIS2 keeps trying to connect while the
 // port is not open: 8 seconds by default, 0 to try once.
@@ -140,6 +147,7 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 	if cfg.sctp {
 		o.Dialer = func(_, addr string) (net.Conn, error) { return DialSCTP(addr, time.Second) }
 	}
+	o.TLS = cfg.tlsConfig
 
 	conn := dial(t, addr, o)
 
@@ -174,18 +182,24 @@ func dial(t *testing.T, addr string, o fap.ConnOptions) *fap.Conn {
 	}
 }
 
-var loginRejectRe = regexp.MustCompile(`(?i)^#\s.*(not allowed|invalid)`)
+var loginRejectRe = regexp.MustCompile(`(?i)^#\s.*(not allowed|invalid|not accepted|authentication failed)`)
 
 // LoginReply connects to addr, sends the login line as it is, and returns the
 // server's reply to it: the "# logresp" line if the login was accepted, or the
 // comment line rejecting it. As in the Perl client, a rejection is a line
-// saying "not allowed" or "invalid"; the server closing the connection, or
-// staying silent for DefaultTimeout, counts as a rejection too, with an empty
-// reply. The connection is closed before returning.
-func LoginReply(t *testing.T, addr, login string) (reply string, accepted bool) {
+// saying "not allowed" or "invalid", or a client certificate being refused;
+// the server closing the connection, or staying silent for DefaultTimeout,
+// counts as a rejection too, with an empty reply. The connection is closed
+// before returning. The options are those of Connect; WithTLS is the useful
+// one.
+func LoginReply(t *testing.T, addr, login string, opts ...Option) (reply string, accepted bool) {
 	t.Helper()
 
-	conn := dial(t, addr, fap.ConnOptions{})
+	var cfg config
+	for _, o := range opts {
+		o(&cfg)
+	}
+	conn := dial(t, addr, fap.ConnOptions{TLS: cfg.tlsConfig})
 	defer conn.Close()
 
 	if err := conn.SendLine(login); err != nil {

@@ -99,6 +99,31 @@ func TestHTTPStatus(t *testing.T) {
 		})
 	}
 
+	// statusCode fetches a URL and returns the HTTP status code.
+	statusCode := func(t *testing.T, url string) int {
+		t.Helper()
+
+		res, err := client.Get(url)
+		if err != nil {
+			t.Fatalf("GET %s failed: %v", url, err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+
+	// The translated strings of the web UI are served by language. A
+	// request without a lang parameter, or with an unknown language, gets
+	// a 404.
+	t.Run("strings", func(t *testing.T) {
+		getJSON(t, base+"/strings?lang=en", false, "APRSC_STATUS_TITLE")
+		for _, q := range []string{"?lang=xx", "?x=1", "?", ""} {
+			if code := statusCode(t, base+"/strings"+q); code != 404 {
+				t.Errorf("GET /strings%s returned %d, want 404", q, code)
+			}
+		}
+		getJSON(t, base+"/status.json", false, "server")
+	})
+
 	// the IS2 capability flags are there, and none of the listeners of
 	// this configuration accept IS2 clients
 	j := getStatus(t)

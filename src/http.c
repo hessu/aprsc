@@ -686,7 +686,7 @@ static void http_strings(struct evhttp_request *r, const char *uri)
 		//hlog(LOG_DEBUG, "lang: %s, checking against %d languages", lang, http_language_count);
 		
 		int i;
-		for (i = 0; i < http_language_count; i++) {
+		for (i = 0; lang && i < http_language_count; i++) {
 			if (strcasecmp(lang, http_language_files[i]->name) == 0) {
 				hlog(LOG_DEBUG, "http strings query: %s: %s", lang, http_language_files[i]->filename);
 				evhttp_clear_headers(&args);

@@ -961,8 +961,16 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 			if (*p == '*') {
 				wildcard = 1;
 				++p;
-				if (wildok != MatchWild)
+				if (wildok != MatchWild) {
+					/* The filter is rejected: free the array
+					 * allocated for it, unless it is an extended
+					 * one which the previous filter keeps. */
+					if (!extend) {
+						hfree(refbuf);
+						f0->h.refcallsigns = NULL;
+					}
 					return -1;
+				}
 				continue;
 			}
 			if (i < CALLSIGNLEN_MAX) {

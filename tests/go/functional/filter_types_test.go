@@ -36,6 +36,15 @@ func TestFilterPrefixBuddyObject(t *testing.T) {
 				"N0TES>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should drop prefix filter",
 				"G0TES-2>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should pass prefix filter"),
 		})
+
+		// A wildcard is not allowed in a prefix filter, so the filter
+		// is rejected and the buddy filter before it is all there is.
+		rx.SetFilter(t, "b/G0TES p/OH*")
+		isclient.RunSteps(t, tx, rx, []isclient.Step{
+			drop("wildcard prefix rejected",
+				"OH0TES>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should drop rejected prefix filter",
+				"G0TES>APRS,OH2RDG*,WIDE,qAR,"+login+pos+" should pass buddy filter"),
+		})
 	})
 
 	t.Run("buddy filter", func(t *testing.T) {

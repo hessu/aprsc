@@ -24,6 +24,7 @@
 #include <event2/event.h>  
 #include <event2/http.h>  
 #include <event2/buffer.h>
+#include <event2/bufferevent.h>
 #include <event2/keyvalq_struct.h>
 
 #if 0
@@ -65,6 +66,30 @@ int http_reconfiguring;
 int http_config_applied = -1; /* the config_generation applied by the http thread, -1 before the first */
 
 unsigned long http_requests = 0;
+unsigned long http_connections = 0;		/* connections accepted */
+unsigned long http_connections_rejected = 0;	/* ... and closed right away for being over the limit */
+int http_clients = 0;				/* connections open now */
+int http_clients_max = 0;			/* the limit in effect */
+
+/*
+ *	Per-connection context. libevent 2.1 has no hook on the accept of an
+ *	HTTP server connection which would give the connection itself: the
+ *	bufferevent callback runs before the connection is created, and the
+ *	first request callback only when a request has been read, which an
+ *	idle connection never sends. So the connection is picked up on the
+ *	next round of the event loop, from the callback argument the server
+ *	has set on the bufferevent by then, which is the connection the
+ *	bufferevent belongs to. A close callback on the connection then
+ *	counts it out.
+ */
+struct http_conn_t {
+	struct bufferevent *bev;
+	struct event *attach_ev;	/* the timer which picks up the connection */
+	struct http_conn_t *next;	/* on the list of connections waiting for it */
+	struct http_conn_t **prevp;
+};
+
+static struct http_conn_t *http_conn_attaching = NULL;
 
 struct http_static_t {
 	char	*name;
@@ -786,6 +811,134 @@ static void http_timer(evutil_socket_t fd, short events, void *arg)
 	event_add(ev_timer, &http_timer_tv);
 }
 
+/*
+ *	The connection has been closed, or it is being rejected and closed.
+ */
+
+static void http_conn_closed(struct evhttp_connection *evcon, void *arg)
+{
+	struct http_conn_t *hc = arg;
+	
+	hfree(hc);
+	http_clients--;
+}
+
+static void http_conn_attach_done(struct http_conn_t *hc)
+{
+	event_free(hc->attach_ev);
+	hc->attach_ev = NULL;
+	
+	*hc->prevp = hc->next;
+	if (hc->next)
+		hc->next->prevp = hc->prevp;
+}
+
+/*
+ *	Pick up a connection accepted on the previous round of the event
+ *	loop, and if it is over the limit, close it. The server has by now
+ *	set its callbacks on the bufferevent, with the connection as their
+ *	argument. This runs at a higher priority than the I/O callbacks, so
+ *	that the connection can not be closed and freed by one of them first.
+ */
+
+static void http_conn_attach(evutil_socket_t fd, short events, void *arg)
+{
+	struct http_conn_t *hc = arg;
+	struct evhttp_connection *evcon = NULL;
+	bufferevent_data_cb readcb = NULL;
+	
+	http_conn_attach_done(hc);
+	
+	bufferevent_getcb(hc->bev, &readcb, NULL, NULL, (void **)&evcon);
+	if (!readcb || !evcon || evhttp_connection_get_bufferevent(evcon) != hc->bev) {
+		hlog(LOG_ERR, "http: a new connection is not set up by the server as expected, not counting it");
+		hfree(hc);
+		http_clients--;
+		return;
+	}
+	
+	evhttp_connection_set_closecb(evcon, http_conn_closed, hc);
+	
+	if (http_clients > http_clients_max) {
+		static time_t rejected_logged = 0;
+		
+		http_connections_rejected++;
+		if (tick - rejected_logged > 60) {
+			rejected_logged = tick;
+			hlog(LOG_WARNING, "http: %d connections open, over the limit of %d: closing new connections (%lu closed so far)",
+				http_clients, http_clients_max, http_connections_rejected);
+		}
+		
+		/* closes the socket, and calls http_conn_closed */
+		evhttp_connection_free(evcon);
+	}
+}
+
+/*
+ *	A connection has been accepted on an HTTP server: give it its
+ *	bufferevent, count it, and have it picked up on the next round.
+ *	Returning NULL would make the server use a bufferevent of its own, so
+ *	an allocation failure leaves the connection uncounted.
+ */
+
+static struct bufferevent *http_conn_new(struct event_base *base, void *arg)
+{
+	struct timeval now_tv = { 0, 0 };
+	struct bufferevent *bev;
+	struct http_conn_t *hc;
+	
+	bev = bufferevent_socket_new(base, -1, 0);
+	if (!bev) {
+		hlog(LOG_ERR, "http: bufferevent_socket_new failed for a new connection");
+		return NULL;
+	}
+	
+	hc = hmalloc(sizeof(*hc));
+	memset(hc, 0, sizeof(*hc));
+	hc->bev = bev;
+	
+	hc->attach_ev = evtimer_new(base, http_conn_attach, hc);
+	event_priority_set(hc->attach_ev, 0);
+	evtimer_add(hc->attach_ev, &now_tv);
+	
+	hc->next = http_conn_attaching;
+	hc->prevp = &http_conn_attaching;
+	if (hc->next)
+		hc->next->prevp = &hc->next;
+	http_conn_attaching = hc;
+	
+	http_connections++;
+	http_clients++;
+	
+	return bev;
+}
+
+/*
+ *	The connection limit: as configured, or by default what is left of
+ *	the file descriptors above MaxClients.
+ */
+
+static int http_clients_limit(void)
+{
+	int l, m;
+	
+	if (http_maxclients > 0)
+		return http_maxclients;
+	
+	/* what is left above MaxClients and 200 spare descriptors, but at
+	 * least a tenth of the descriptors, or 100, whichever is smaller */
+	l = fileno_limit - maxclients - 200;
+	m = fileno_limit / 10;
+	if (m > 100)
+		m = 100;
+	if (l < m)
+		l = m;
+	if (l < 1)
+		l = 1;
+	
+	return l;
+}
+
 static void http_srvr_defaults(struct evhttp *srvr)
 {
 	// limit what the clients can do a bit
@@ -794,7 +947,8 @@ static void http_srvr_defaults(struct evhttp *srvr)
 	evhttp_set_max_body_size(srvr, 10*1024);
 	evhttp_set_max_headers_size(srvr, 10*1024);
 	
-	// TODO: How to limit the amount of concurrent HTTP connections?
+	// count the connections, and limit them
+	evhttp_set_bevcb(srvr, http_conn_new, NULL);
 }
 
 static void http_server_free(void)
@@ -813,6 +967,15 @@ static void http_server_free(void)
 	if (srvr_upload) {
 		evhttp_free(srvr_upload);
 		srvr_upload = NULL;
+	}
+	
+	/* connections accepted on the last round, not picked up yet: the
+	 * servers have closed them */
+	while (http_conn_attaching) {
+		struct http_conn_t *hc = http_conn_attaching;
+		http_conn_attach_done(hc);
+		hfree(hc);
+		http_clients--;
 	}
 	
 	if (libbase) {
@@ -963,6 +1126,11 @@ void http_thread(void *asdf)
 			
 			// shut down existing instance
 			http_server_free();
+			if (http_clients)
+				hlog(LOG_ERR, "http: %d connections still counted after the servers were freed", http_clients);
+			
+			http_clients_max = http_clients_limit();
+			hlog(LOG_INFO, "HTTP connection limit %d%s", http_clients_max, (http_maxclients > 0) ? "" : " (default)");
 			
 			lang_scan();
 			
@@ -972,6 +1140,8 @@ void http_thread(void *asdf)
 #else
                         libbase = event_init(); // libevent 1.x
 #endif
+			// two priorities: 0 for picking up new connections, 1 for the rest
+			event_base_priority_init(libbase, 2);
 			
 			// timer for the whole libevent, to catch shutdown signal
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);

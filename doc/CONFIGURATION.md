@@ -309,6 +309,16 @@ multiple addresses or ports:
     HTTPUpload ::1 8080
     HTTPUpload f00d::beef:bac0:ca1f 8080
 
+The number of simultaneous HTTP connections, on all HTTP ports together, is
+limited, so that a flood of idle HTTP connections can not use up the file
+descriptors of the server and lock out APRS-IS clients. A connection over
+the limit is accepted and closed right away. The default limit is what is
+left of FileLimit above MaxClients and 200 spare descriptors, but at least
+a tenth of FileLimit or 100, whichever of those is smaller. It can be set
+with the HTTPMaxClients directive:
+
+    HTTPMaxClients 100
+
 
 ### HTTP status page ###
 

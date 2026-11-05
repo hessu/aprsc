@@ -36,6 +36,7 @@
 #include "cJSON.h"
 #include "counterdata.h"
 #include "client_heard.h"
+#include "http.h"
 
 time_t startup_tick, startup_time;
 
@@ -392,6 +393,14 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(dupecheck, "dupes_dropped", dupecheck_dupecount);
 	cJSON_AddNumberToObject(dupecheck, "uniques_out", dupecheck_outcount);
 	cJSON_AddItemToObject(root, "dupecheck", dupecheck);
+	
+	cJSON *http = cJSON_CreateObject();
+	cJSON_AddNumberToObject(http, "clients", http_clients);
+	cJSON_AddNumberToObject(http, "clients_max", http_clients_max);
+	cJSON_AddNumberToObject(http, "connections", http_connections);
+	cJSON_AddNumberToObject(http, "connections_rejected", http_connections_rejected);
+	cJSON_AddNumberToObject(http, "requests", http_requests);
+	cJSON_AddItemToObject(root, "http", http);
 	
 	cJSON *dupe_vars = cJSON_CreateObject();
 	cJSON_AddNumberToObject(dupe_vars, "exact", dupecheck_dupetypes[0]);

@@ -141,6 +141,7 @@ int is2_received_age_drop = 0;		/* drop IS2 packets with a received_time too far
 int quirks_mode           = 0;		/* enable quirks mode for all clients by default */
 
 int maxclients = 1000;			/* maximum number of clients */
+int http_maxclients = 0;		/* maximum number of HTTP connections, 0 for the default */
 
 /* These two are not currently used. The fixed defines are in worker.h,
  * OBUF_SIZE and IBUF_SIZE.
@@ -195,6 +196,7 @@ static struct cfgcmd cfg_cmds[] = {
 	{ "httpstatus",		_CFUNC_ do_httpstatus,	&new_http_bind		},
 	{ "httpupload",		_CFUNC_ do_httpupload,	&new_http_bind_upload	},
 	{ "httpstatusoptions",	_CFUNC_ do_string,	&new_http_status_options	},
+	{ "httpmaxclients",	_CFUNC_ do_int,		&http_maxclients	},
 	{ "listen",		_CFUNC_ do_listen,	&listen_config_new	},
 	{ "uplinkbind",		_CFUNC_ do_uplinkbind,	NULL			},
 	{ "uplink",		_CFUNC_ do_uplink,	&new_uplink_config	},
@@ -1759,6 +1761,11 @@ int read_config(void)
 	} else if (workers_configured > 32) {
 		hlog(LOG_WARNING, "Configured more than 32 worker threads. Using 32.");
 		workers_configured = 32;
+	}
+	
+	if (http_maxclients < 0) {
+		hlog(LOG_WARNING, "Configured HTTPMaxClients %d is negative. Using the default.", http_maxclients);
+		http_maxclients = 0;
 	}
 	
 	if (!listen_config_new) {

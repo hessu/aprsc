@@ -19,6 +19,12 @@ extern int http_reconfiguring;
 extern int http_shutting_down;
 extern int http_config_applied;
 
+extern unsigned long http_requests;
+extern unsigned long http_connections;
+extern unsigned long http_connections_rejected;
+extern int http_clients;
+extern int http_clients_max;
+
 extern int loginpost_split(char *post, int len, char **login_string, char **packet);
 extern int pseudoclient_push_packet(struct worker_t *worker, struct client_t *pseudoclient, const char *username, char *packet, int packet_len);
 

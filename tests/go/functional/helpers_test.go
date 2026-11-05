@@ -1,8 +1,26 @@
 package functional
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/hessu/aprsc/tests/go/internal/harness"
 	"github.com/hessu/aprsc/tests/go/internal/isclient"
 )
+
+// configWith returns the text of the named configuration in cfg-aprsc with
+// the extra lines appended, for a server started with harness.StartText.
+func configWith(t *testing.T, name string, extra ...string) string {
+	t.Helper()
+
+	src, err := os.ReadFile(filepath.Join(harness.TestsDir(), "cfg-aprsc", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(src) + strings.Join(extra, "\n") + "\n"
+}
 
 // pass is a step where the packet must come out of the receiver as want.
 func pass(name, send, want string) isclient.Step {

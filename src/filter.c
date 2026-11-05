@@ -1558,6 +1558,24 @@ void filter_free(struct filter_t *f)
 
 	for ( ; f ; f = fnext ) {
 		fnext = f->h.next;
+		/* Free the callsign-set array for the filter types that
+		 * allocate one (b, d, e, g, o, p, u). For the other types the
+		 * union holds an inline value, not a pointer, so must not be
+		 * freed. */
+		switch (f->h.type) {
+		case 'b': case 'B':
+		case 'd': case 'D':
+		case 'e': case 'E':
+		case 'g': case 'G':
+		case 'o': case 'O':
+		case 'p': case 'P':
+		case 'u': case 'U':
+			if (f->h.refcallsigns)
+				hfree(f->h.refcallsigns);
+			break;
+		default:
+			break;
+		}
 		/* If not pointer to internal string, free it.. */
 #ifndef _FOR_VALGRIND_
 		if (f->h.text != f->textbuf)

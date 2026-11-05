@@ -68,6 +68,25 @@ func TestFilterCommand(t *testing.T) {
 		})
 	})
 
+	// A callsign-set filter (b/, p/, and the like) keeps its callsigns in
+	// an array of its own, which goes with the filter when the chain is
+	// replaced. Replace such chains a number of times, with a second
+	// segment of a type extending the first, and check that the last one
+	// is the one in effect.
+	t.Run("replacing callsign-set filters", func(t *testing.T) {
+		for i := 0; i < 20; i++ {
+			rx.SetFilter(t, "b/OH1SRC/OH2SRC b/OH3SRC p/K/W")
+		}
+		rx.SetFilter(t, "p/N b/OH2SRC b/OH4SRC")
+		isclient.RunSteps(t, tx, rx, []isclient.Step{
+			drop("old buddy dropped", "OH1SRC>APRS,qAR,"+login+":>should drop9",
+				"OH2SRC>APRS,qAR,"+login+":>should pass9"),
+			drop("old prefix dropped", "K2SRC>APRS,qAR,"+login+":>should drop10",
+				"OH4SRC>APRS,qAR,"+login+":>should pass10"),
+			passSame("new prefix passes", "N2SRC>APRS,qAR,"+login+":>should pass11"),
+		})
+	})
+
 	// The server acknowledges a message to SERVER, and replies to it.
 	ackRe := func(id string) *regexp.Regexp {
 		return regexp.MustCompile(`^SERVER>[^,]+,TCPIP\*,qAZ,TESTING::N5CAL-2  :ack` + id + `$`)

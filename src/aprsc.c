@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <grp.h>
 #include <time.h>
 #include <sys/time.h>
 #ifdef __linux__ /* Very Linux-specific code.. */
@@ -363,6 +364,22 @@ static void find_uid(const char *uid_s)
 	
 	if (pwbufp == NULL) {
 		fprintf(stderr, "aprsc: getpwnam(%s) failed, can not set UID: user not found\n", uid_s);
+		exit(1);
+	}
+}
+
+/* Set the supplementary groups to those of the target user, dropping the
+ * ones of root, which setuid() does not touch. Done right after the user
+ * lookup, before the chroot, while the group database can still be read.
+ * Needs root, and root is the only case where there is anything to drop.
+ */
+static void set_groups(void)
+{
+	if (getuid() != 0 && geteuid() != 0)
+		return;
+	
+	if (initgroups(pwbuf.pw_name, pwbuf.pw_gid)) {
+		fprintf(stderr, "aprsc: Failed to set supplementary groups of user %s: %s\n", pwbuf.pw_name, strerror(errno));
 		exit(1);
 	}
 }
@@ -916,9 +933,11 @@ int main(int argc, char **argv)
 	/* command line */
 	parse_cmdline(argc, argv);
 	
-	/* if setuid is needed, find the user UID */
-	if (setuid_s)
+	/* if setuid is needed, find the user UID and set its groups */
+	if (setuid_s) {
 		find_uid(setuid_s);
+		set_groups();
+	}
 	
 	/* fork a daemon */
 	if (fork_a_daemon) {

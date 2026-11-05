@@ -652,7 +652,8 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	int ret = -1;
 	X509 *cert;
 	X509_NAME *sname, *iname;
-	char *subject, *issuer;
+	char *subject = NULL;
+	char *issuer = NULL;
 	char *subj_cn = NULL;
 	char *subj_call = NULL;
 	int nid, idx;
@@ -722,22 +723,27 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	
 	/* find issuer */
 	iname = X509_get_issuer_name(cert);
-	issuer = iname ? X509_NAME_oneline(iname, NULL, 0) : "(none)";
+	if (iname)
+		issuer = X509_NAME_oneline(iname, NULL, 0);
 	
 	ret = 0;
 	hlog(LOG_INFO, "%s/%s: Peer validated using TLS certificate: subject '%s' callsign '%s' CN '%s' issuer '%s'",
-		c->addr_rem, c->username, subject, subj_call, (subj_cn) ? subj_cn : "(none)", issuer);
+		c->addr_rem, c->username, subject, subj_call, (subj_cn) ? subj_cn : "(none)", (issuer) ? issuer : "(none)");
 	
 	/* store copies of cert subject and issuer */
 	strncpy(c->cert_subject, subject, sizeof(c->cert_subject));
 	c->cert_subject[sizeof(c->cert_subject)-1] = 0;
-	strncpy(c->cert_issuer, issuer, sizeof(c->cert_issuer));
+	strncpy(c->cert_issuer, (issuer) ? issuer : "(none)", sizeof(c->cert_issuer));
 	c->cert_issuer[sizeof(c->cert_issuer)-1] = 0;
 	
 fail:	
 	/* free up whatever we allocated */
 	X509_free(cert);
 	
+	if (subject)
+		OPENSSL_free(subject);
+	if (issuer)
+		OPENSSL_free(issuer);
 	if (subj_call)
 		OPENSSL_free(subj_call);
 	if (subj_cn)

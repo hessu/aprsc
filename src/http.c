@@ -25,6 +25,7 @@
 #include <event2/http.h>  
 #include <event2/buffer.h>
 #include <event2/bufferevent.h>
+#include <event2/listener.h>
 #include <event2/keyvalq_struct.h>
 
 #if 0
@@ -90,6 +91,16 @@ struct http_conn_t {
 };
 
 static struct http_conn_t *http_conn_attaching = NULL;
+
+/* the listeners of the HTTP servers, for pausing them all when accept()
+ * runs out of file descriptors */
+struct http_listener_t {
+	struct evconnlistener *listener;
+	struct http_listener_t *next;
+};
+
+static struct http_listener_t *http_listeners = NULL;
+static struct event *ev_listener_resume = NULL;
 
 struct http_static_t {
 	char	*name;
@@ -939,6 +950,54 @@ static int http_clients_limit(void)
 	return l;
 }
 
+/*
+ *	Resume the listeners paused by an accept() failure a second ago
+ */
+
+static void http_listener_resume(evutil_socket_t fd, short events, void *arg)
+{
+	struct http_listener_t *l;
+	
+	hlog(LOG_DEBUG, "http: resuming the HTTP listeners");
+	for (l = http_listeners; (l); l = l->next)
+		evconnlistener_enable(l->listener);
+}
+
+/*
+ *	accept() failed on an HTTP listener. The listener's read event is
+ *	level-triggered, so when the process is out of file descriptors,
+ *	the failure would repeat on every round of the event loop, spinning
+ *	the thread. Pause the listeners for a second instead; the connections
+ *	wait in the kernel's backlog meanwhile.
+ */
+
+static void http_listener_error(struct evconnlistener *lev, void *arg)
+{
+	static time_t error_logged = 0;
+	int err = EVUTIL_SOCKET_ERROR();
+	struct timeval resume_tv = { 1, 0 };
+	struct http_listener_t *l;
+	
+	if (err != EMFILE && err != ENFILE) {
+		if (tick - error_logged > 60) {
+			error_logged = tick;
+			hlog(LOG_ERR, "http: accept() failed: %s", strerror(err));
+		}
+		return;
+	}
+	
+	if (tick - error_logged > 60) {
+		error_logged = tick;
+		hlog(LOG_ERR, "http: accept() failed: %s - pausing the HTTP listeners for a second", strerror(err));
+	}
+	
+	for (l = http_listeners; (l); l = l->next)
+		evconnlistener_disable(l->listener);
+	
+	if (!evtimer_pending(ev_listener_resume, NULL))
+		evtimer_add(ev_listener_resume, &resume_tv);
+}
+
 static void http_srvr_defaults(struct evhttp *srvr)
 {
 	// limit what the clients can do a bit
@@ -967,6 +1026,18 @@ static void http_server_free(void)
 	if (srvr_upload) {
 		evhttp_free(srvr_upload);
 		srvr_upload = NULL;
+	}
+	
+	/* the listeners went with the servers */
+	while (http_listeners) {
+		struct http_listener_t *l = http_listeners;
+		http_listeners = l->next;
+		hfree(l);
+	}
+	
+	if (ev_listener_resume) {
+		event_free(ev_listener_resume);
+		ev_listener_resume = NULL;
 	}
 	
 	/* connections accepted on the last round, not picked up yet: the
@@ -1147,6 +1218,9 @@ void http_thread(void *asdf)
 			ev_timer = event_new(libbase, -1, EV_TIMEOUT, http_timer, NULL);
 			event_add(ev_timer, &http_timer_tv);
 			
+			// timer for resuming the listeners after an accept() failure
+			ev_listener_resume = evtimer_new(libbase, http_listener_resume, NULL);
+			
 			for (lc = http_config; (lc); lc = lc->next) {
 				hlog(LOG_INFO, "Binding HTTP %s socket %s:%d", lc->upload_port ? "upload" : "status", lc->host, lc->port);
 				
@@ -1174,7 +1248,14 @@ void http_thread(void *asdf)
 				if (!handle) {
 					hlog(LOG_ERR, "Failed to bind HTTP socket %s:%d: %s", lc->host, lc->port, strerror(errno));
 					// TODO: should exit?
+					continue;
 				}
+				
+				struct http_listener_t *l = hmalloc(sizeof(*l));
+				l->listener = evhttp_bound_socket_get_listener(handle);
+				l->next = http_listeners;
+				http_listeners = l;
+				evconnlistener_set_error_cb(l->listener, http_listener_error);
 			}
 			
 			hlog(LOG_INFO, "HTTP thread ready.");

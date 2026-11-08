@@ -57,6 +57,9 @@ type config struct {
 	slowUpgrade bool
 	sctp        bool        // connect over SCTP instead of TCP
 	tlsConfig   *tls.Config // connect over TLS, with this configuration
+	// open the connection with this instead of net.Dial; it must do TLS
+	// itself if the test needs it
+	dialer func(addr string) (net.Conn, error)
 	// how long DialIS2 keeps trying while the port is not open
 	retry time.Duration
 }
@@ -72,6 +75,13 @@ func WithSCTP() Option { return func(c *config) { c.sctp = true } }
 // The test CA is not trusted by default, so the configuration usually has
 // InsecureSkipVerify set.
 func WithTLS(c *tls.Config) Option { return func(cfg *config) { cfg.tlsConfig = c } }
+
+// WithDialer makes the client open its connection with d instead of net.Dial,
+// for tests which need a hand on the underlying connection. WithTLS and
+// WithSCTP are not applied to it: d has to do the TLS handshake itself.
+func WithDialer(d func(addr string) (net.Conn, error)) Option {
+	return func(c *config) { c.dialer = d }
+}
 
 // WithConnectRetry sets how long DialIS2 keeps trying to connect while the
 // port is not open: 8 seconds by default, 0 to try once.
@@ -146,6 +156,9 @@ func Connect(t *testing.T, addr, callsign string, opts ...Option) *Plain {
 	}
 	if cfg.sctp {
 		o.Dialer = func(_, addr string) (net.Conn, error) { return DialSCTP(addr, time.Second) }
+	}
+	if cfg.dialer != nil {
+		o.Dialer = func(_, addr string) (net.Conn, error) { return cfg.dialer(addr) }
 	}
 	o.TLS = cfg.tlsConfig
 

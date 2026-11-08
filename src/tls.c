@@ -865,17 +865,34 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	
 	//hlog(LOG_DEBUG, "ssl_readable fd %d", c->fd);
 	
-	ssl_clear_error();
-	
-	r = SSL_read(c->ssl_con->connection, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
-	
-	if (r > 0) {
+	/* OpenSSL reads ahead from the socket, so a single read may pick up
+	 * several TLS records (a client sending a burst of packets, one
+	 * record each, which arrive in one TCP segment), but SSL_read()
+	 * returns the contents of one record at most. Keep reading as long
+	 * as OpenSSL has buffered data: the socket is empty by then, so
+	 * poll() would not report it as readable again until the client
+	 * sends something more, and the rest of the burst would wait in
+	 * OpenSSL's buffer until then. The same goes for the rest of a
+	 * record which did not fit in the input buffer.
+	 */
+	do {
+		ssl_clear_error();
+		
+		r = SSL_read(c->ssl_con->connection, c->ibuf + c->ibuf_end, c->ibuf_size - c->ibuf_end - 1);
+		
+		if (r <= 0)
+			break;
+		
 		/* we got some data... process */
 		//hlog(LOG_DEBUG, "SSL_read fd %d returned %d bytes of data", c->fd, r);
 		
-		/* TODO: whatever the client_readable does */
-		return client_postread(self, c, r);
-	}
+		/* NOTE: this can close and free the client, returning -1 */
+		if (client_postread(self, c, r) < 0)
+			return -1;
+	} while (SSL_has_pending(c->ssl_con->connection));
+	
+	if (r > 0)
+		return 0;
 	
 	sslerr = SSL_get_error(c->ssl_con->connection, r);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;

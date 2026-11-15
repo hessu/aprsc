@@ -417,23 +417,23 @@ sets up the key on every call, took 8 and 12 µs for the same frames.
 Performance: the benefits
 ----------------------------
 
-### One write per round instead of one per packet
+### One datagram per round instead of one per packet
 
-A plaintext server writes each packet to each client separately, and
-sends each packet to each UDP peer as a datagram of its own: one
-system call per packet per client or peer, and on UDP peering one IP
-packet per APRS packet per peer, which at the packet rates of the
-APRS-IS is most of the cost of a core server.  An IS2 server encodes
-each packet once per worker thread, appends the encoded packet to the
-frame being built for each client, and sends the frames at the end
-of the worker's round: one write per client per round, with up to 20
-packets in it.  Under load a round collects several packets, so the
-system calls, and on UDP the datagrams, IP headers and signatures,
-drop by about as many.  The one write per round also means one TLS
-record per round and one SCTP message per round, where the plaintext
-protocol pays per packet.  This is why IS2 is cheaper for the server
-even on TCP, where the kernel would coalesce the small writes but the
-system calls remain.
+A plaintext server sends each packet to each UDP peer as a datagram of
+its own: one system call and one IP packet per APRS packet per peer,
+which at the packet rates of the APRS-IS is a large part of the cost
+of a core server.  An IS2 server encodes each packet once per worker
+thread, appends the encoded packet to the frame being built for each
+peer, and sends the frames at the end of the worker's round: one
+datagram per peer per round, with up to 20 packets in it.  Under load
+a round collects several packets, so the system calls, datagrams, IP
+headers and signatures drop by about as many.
+
+On the connections of clients and uplinks the protocols are even.
+aprsc collects what a round of the worker produces for a client in
+the output buffer of the client and writes it at the end of the round,
+with one system call, in one TLS record or, at high rates, one SCTP
+message, whether the buffer holds plaintext lines or IS2 frames.
 
 Measured on one machine (Xeon L5520 at 2.27 GHz, Linux 5.15, 3 worker
 threads) with the scenarios of the test suite, run with `make
@@ -461,15 +461,14 @@ the server over 30 seconds, the mean of two runs:
 
 | clients        |       rate |  user |    sys |  total |
 |----------------|-----------:|------:|-------:|-------:|
-| 1000 plaintext |  200 pkt/s | 7.0 s | 31.7 s | 38.7 s |
-| 1000 IS2       |  200 pkt/s | 4.8 s | 24.1 s | 28.9 s |
-| 200 plaintext  | 1000 pkt/s | 5.7 s | 15.2 s | 20.9 s |
-| 200 IS2        | 1000 pkt/s | 2.6 s |  7.0 s |  9.6 s |
+| 1000 plaintext |  200 pkt/s | 2.7 s | 12.9 s | 15.6 s |
+| 1000 IS2       |  200 pkt/s | 3.2 s | 12.7 s | 15.9 s |
+| 200 plaintext  | 1000 pkt/s | 2.3 s |  3.5 s |  5.8 s |
+| 200 IS2        | 1000 pkt/s | 2.1 s |  3.7 s |  5.9 s |
 
-IS2 saved 25 % at 200 packets per second and 54 % at 1000, where a
-round collects five times more packets to share each write.  The
-latency to the clients was also steadier: a 99th percentile of 65 to
-74 ms with IS2, against 0.6 to 1.1 s with plaintext.
+The two cost the same: the time goes to the one write per client per
+round, and the encoding of IS2 does not show.  The latency to the
+clients was the same too, with a 99th percentile of 62 to 65 ms.
 
 ### No scanning for line ends
 

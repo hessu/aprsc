@@ -2396,7 +2396,12 @@ int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c)
 	return ret;
 }
 
-static int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
+/*
+ *	Flush the IS2 output buffer of a client or an UDP peer.
+ *	Returns a value < -2 if the client was destroyed.
+ */
+
+int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
 {
 	if (c->state == CSTATE_COREPEER)
 		return is2_corepeer_obuf_flush(self, c);
@@ -2408,7 +2413,7 @@ static int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
  *	Append a packet to the IS2 output buffer of a client. The buffer is
  *	flushed first if the packet would not fit in it; otherwise the packet
  *	waits there for the rest of this round's packets, and the worker
- *	flushes the buffer at the end of the round (is2_obuf_flush_pending).
+ *	flushes the buffer at the end of the round (worker_flush_pending).
  *	Returns a value < -2 if the client was destroyed.
  */
 
@@ -2438,34 +2443,9 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 	c->is2_obuf_end += len;
 	c->is2_obuf_total_len += len;
 	c->is2_obuf_packets++;
-	self->is2_obuf_pending = 1;
+	client_flush_pending_add(self, c);
 
 	return 0;
-}
-
-/*
- *	Flush the IS2 output buffers which were left with packets in this
- *	round of the worker, so that the packets which came in the round go
- *	out together in a frame, without waiting for the buffer to fill up or
- *	for the keepalive round, which flushes them as a last resort. The
- *	plaintext clients' buffers go out at the end of the round as well,
- *	when their sockets poll writable.
- */
-
-void is2_obuf_flush_pending(struct worker_t *self)
-{
-	struct client_t *c, *cnext;
-
-	if (!self->is2_obuf_pending)
-		return;
-	self->is2_obuf_pending = 0;
-
-	for (c = self->clients; (c); c = cnext) {
-		// the flush may destroy the client
-		cnext = c->next;
-		if (c->is2_obuf_packets)
-			is2_obuf_flush_client(self, c);
-	}
 }
 
 /*

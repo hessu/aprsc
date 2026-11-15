@@ -398,6 +398,12 @@ struct client_t {
 	int   obuf_start;     /* where data in buffer starts */
 	int   obuf_end;       /* where data in buffer ends */
 	int   obuf_flushsize; /* how much data in buf before forced write() at adding ? */
+	int   obuf_blocked;   /* TCP: the socket did not take all of obuf, waiting for it to poll writable */
+	int   closing;        /* client_close() is at work on the client */
+	/* linkage in worker_t.flush_pending: the clients with output to
+	 * send at the end of the worker's round */
+	struct client_t *flush_pending_next;
+	struct client_t **flush_pending_prevp;
 	int   obuf_writes;    /* how many times (since last check) the socket has been written ? */
 	int   obuf_wtime;     /* when was last write? */
 #if WBUF_ADJUSTER
@@ -624,11 +630,12 @@ struct worker_t {
 	int is2_enc_len[2];
 	char is2_enc[2][APRSIS2_ENC_MAX];
 
-	/* IS2: set when a packet was left in the output buffer of a client or
-	 * a peer in this round, for is2_obuf_flush_pending() to send at the
-	 * end of the round.
+	/* The clients and peers which were left with data in their output
+	 * buffer (obuf), or with packets in the IS2 frame being built
+	 * (is2_obuf), in this round, for worker_flush_pending() to send at the
+	 * end of the round. Linked through client_t.flush_pending_next.
 	 */
-	int is2_obuf_pending;
+	struct client_t *flush_pending;
 
 	/* IS2: the worker's HMAC contexts for signing and verifying UDP
 	 * peer frames, keyed with the peer group keys; see aprsis2.c.
@@ -653,6 +660,8 @@ extern int client_printf(struct worker_t *self, struct client_t *c, const char *
 extern int client_write(struct worker_t *self, struct client_t *c, char *p, int len);
 extern int client_bad_filter_notify(struct worker_t *self, struct client_t *c, const char *filt);
 extern void client_close(struct worker_t *self, struct client_t *c, int errnum);
+extern void client_flush_pending_add(struct worker_t *self, struct client_t *c);
+extern void client_flush_pending_remove(struct client_t *c);
 extern void client_init(void);
 
 extern struct worker_t *worker_threads;

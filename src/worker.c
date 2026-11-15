@@ -487,6 +487,8 @@ void client_free(struct client_t *c)
 {
 	//hlog(LOG_DEBUG, "client_free %p: fd %d name %s addr_loc %s udpclient %p", c, c->fd, c->username, c->addr_loc, c->udpclient);
 	
+	client_flush_pending_remove(c);
+	
 	if (c->fd >= 0)	 close(c->fd);
 #ifndef FIXED_IOBUFS
 	if (c->ibuf)     hfree(c->ibuf);
@@ -922,6 +924,21 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 {
 	int pe;
 	
+	/* the last flush below may fail and close the client */
+	if (c->closing)
+		return;
+	c->closing = 1;
+	
+	/* When the server closes the connection, send what this round of the
+	 * worker left in the output buffer first: usually the line which tells
+	 * the client why it is being disconnected.
+	 */
+	if (c->flush_pending_prevp) {
+		client_flush_pending_remove(c);
+		if (errnum < 0 && c->fd >= 0 && c->obuf_end > c->obuf_start && c->handler_client_writable)
+			c->handler_client_writable(self, c);
+	}
+	
 	// TODO: log validation status, ssl status, ssl cert info, tcp/sctp
 	
 	hlog( LOG_INFO, "%s %s %s (%s) closed after %ld s: %s, tx/rx %lld/%lld bytes %lld/%lld pkts, dropped %lld, fd %d, worker %d%s%s%s%s",
@@ -1137,8 +1154,6 @@ int client_buffer_outgoing_data(struct worker_t *self, struct client_t *c, char 
 #ifdef USE_SSL
 static int ssl_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
 {
-	c->obuf_writes++;
-	
 	if (len > 0)
 		clientaccount_add_tx( c, c->ai_protocol, len, 0);
 	
@@ -1148,26 +1163,130 @@ static int ssl_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start)))
 		return ssl_write(self, c);
 	
-	/* tell the poller that we have outgoing data */
-	xpoll_outgoing(&self->xp, c->xfd, 1);
+	/* just buffer: the data of a round goes out in one TLS record at
+	 * the end of the round
+	 */
+	if (c->obuf_end > c->obuf_start)
+		client_flush_pending_add(self, c);
 	
-	/* just buffer */
 	return len;
 }
 #endif
 
-static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
+/*
+ *	The clients with output waiting for the end of the worker's round
+ *	are kept in a list, so that worker_flush_pending() only goes through
+ *	the clients which it has something to send to: on a server of many
+ *	filtered clients most get nothing on most rounds.
+ */
+
+void client_flush_pending_add(struct worker_t *self, struct client_t *c)
+{
+	if (c->flush_pending_prevp)
+		return; /* already there */
+	
+	c->flush_pending_next = self->flush_pending;
+	if (c->flush_pending_next)
+		c->flush_pending_next->flush_pending_prevp = &c->flush_pending_next;
+	c->flush_pending_prevp = &self->flush_pending;
+	self->flush_pending = c;
+}
+
+void client_flush_pending_remove(struct client_t *c)
+{
+	if (!c->flush_pending_prevp)
+		return; /* not there */
+	
+	if (c->flush_pending_next)
+		c->flush_pending_next->flush_pending_prevp = c->flush_pending_prevp;
+	*c->flush_pending_prevp = c->flush_pending_next;
+	c->flush_pending_next = NULL;
+	c->flush_pending_prevp = NULL;
+}
+
+/*
+ *	Write the contents of the output buffer to a TCP socket. If the
+ *	socket does not take it all, the rest is written when the socket
+ *	polls writable again.
+ *
+ *	Returns 0 when something or everything was written, -1 if the socket
+ *	would block, and a value < -2 if the client was destroyed.
+ */
+
+static int tcp_client_flush(struct worker_t *self, struct client_t *c)
 {
 	int i, e;
 	
-	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
+	client_flush_pending_remove(c);
 	
-	/* Count the number of writes towards this client,  the keepalive
-	   manager monitors this counter to determine if the socket should be
-	   kept in BUFFERED mode, or written immediately every time.
-	   Buffer flushing is done every KEEPALIVE_POLL_FREQ (2) seconds.
-	*/
-	c->obuf_writes++;
+	if (c->obuf_start < c->obuf_end) {
+	write_retry:;
+		i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
+		if (i < 0) {
+			e = errno;
+			if (e == EINTR)
+				goto write_retry;
+			if (e == EAGAIN || e == EWOULDBLOCK) {
+				/* Kernel's transmit buffer is full (per-socket or some more global resource).
+				 * This happens even with small amounts of data in real world:
+				 * aprsc INFO: Client xx.yy.zz.ff:22823 (XXXXX) closed after 1 s:
+				 *    Resource temporarily unavailable, tx/rx 735/51 bytes 8/0 pkts,
+				 *    dropped 0, fd 59, worker 1 app aprx ver 2.00
+				 */
+				hlog(LOG_DEBUG, "client_write(%s) would block; %s", c->addr_rem, strerror(e));
+				c->obuf_blocked = 1;
+				xpoll_outgoing(&self->xp, c->xfd, 1);
+				return -1;
+			}
+			if (e == EPIPE) {
+				/* Remote socket closed.. */
+				hlog(LOG_DEBUG, "client_write(%s) fails EPIPE; disconnecting; %s", c->addr_rem, strerror(e));
+				// WARNING: This also destroys the client object!
+				client_close(self, c, e);
+				return -9;
+			}
+			hlog(LOG_DEBUG, "client_write(%s) fails; disconnecting; %s", c->addr_rem, strerror(e));
+			client_close(self, c, e);
+			return -11;
+		}
+		
+		//hlog(LOG_DEBUG, "client_write(%s) wrote %d", c->addr_rem, i);
+		if (i > 0) {
+			c->obuf_start += i;
+			c->obuf_wtime = tick;
+		}
+	}
+	
+	/* All done ? */
+	if (c->obuf_start >= c->obuf_end) {
+		//hlog(LOG_DEBUG, "client_write(%s) obuf empty", c->addr_rem);
+		c->obuf_start = 0;
+		c->obuf_end   = 0;
+		if (c->obuf_blocked) {
+			c->obuf_blocked = 0;
+			xpoll_outgoing(&self->xp, c->xfd, 0);
+		}
+		return 0;
+	}
+	
+	/* tell the poller that we have outgoing data */
+	c->obuf_blocked = 1;
+	xpoll_outgoing(&self->xp, c->xfd, 1);
+	
+	return 0;
+}
+
+/*
+ *	Put data in the output buffer of a TCP client. It is written to the
+ *	socket at the end of the worker's round, so that everything a round
+ *	produces for a client goes out with a single system call. If the
+ *	buffer fills up over the flush size before that, or the caller asks
+ *	for a flush with len=0, it is written right away.
+ */
+
+static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, int len)
+{
+	//hlog(LOG_DEBUG, "client_write: %*s\n", len, p);
 	
 	if (len > 0) {
 		/* Here, we only increment the bytes counter. Packets counter
@@ -1180,59 +1299,35 @@ static int tcp_client_write(struct worker_t *self, struct client_t *c, char *p, 
 	if (client_buffer_outgoing_data(self, c, p, len) == -12)
 		return -12;
 	
-	/* Is it over the flush size ? */
-	if (c->obuf_end > c->obuf_flushsize || ((len == 0) && (c->obuf_end > c->obuf_start))) {
-		/* TODO: move this code to client_try_write and call it */
-		
-		/*if (c->obuf_end > c->obuf_flushsize)
-		 *	hlog(LOG_DEBUG, "flushing fd %d since obuf_end %d > %d", c->fd, c->obuf_end, c->obuf_flushsize);
-		 */
-	write_retry_2:;
-		i = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
-		e = errno;
-		if (i < 0 && e == EINTR)
-			goto write_retry_2;
-		if (i < 0 && e == EPIPE) {
-			/* Remote socket closed.. */
-			hlog(LOG_DEBUG, "client_write(%s) fails/2 EPIPE; disconnecting; %s", c->addr_rem, strerror(e));
-			// WARNING: This also destroys the client object!
-			client_close(self, c, e);
-			return -9;
-		}
-		if (i < 0 && (e == EAGAIN || e == EWOULDBLOCK)) {
-			/* Kernel's transmit buffer is full (per-socket or some more global resource).
-			 * This happens even with small amounts of data in real world:
-			 * aprsc INFO: Client xx.yy.zz.ff:22823 (XXXXX) closed after 1 s:
-			 *    Resource temporarily unavailable, tx/rx 735/51 bytes 8/0 pkts,
-			 *    dropped 0, fd 59, worker 1 app aprx ver 2.00
-			 */
-			hlog(LOG_DEBUG, "client_write(%s) fails/2c; %s", c->addr_rem, strerror(e));
-			return -1;
-		}
-		if (i < 0 && len != 0) {
-			hlog(LOG_DEBUG, "client_write(%s) fails/2d; disconnecting; %s", c->addr_rem, strerror(e));
-			client_close(self, c, e);
-			return -11;
-		}
-		if (i > 0) {
-			//hlog(LOG_DEBUG, "client_write(%s) wrote %d", c->addr_rem, i);
-			c->obuf_start += i;
-			c->obuf_wtime = tick;
-		}
-	}
+	if (c->obuf_end == c->obuf_start)
+		return len; /* nothing to write */
 	
-	/* All done ? */
-	if (c->obuf_start >= c->obuf_end) {
-		//hlog(LOG_DEBUG, "client_write(%s) obuf empty", c->addr_rem);
-		c->obuf_start = 0;
-		c->obuf_end   = 0;
+	if (len == 0) {
+		/* a flush was asked for */
+		int r = tcp_client_flush(self, c);
+		if (r < -2)
+			return r;
 		return len;
 	}
-
-	/* tell the poller that we have outgoing data */
-	xpoll_outgoing(&self->xp, c->xfd, 1);
 	
-	return len; 
+	/* The socket is full: the data waits in the buffer until it polls
+	 * writable, there is no use trying before that.
+	 */
+	if (c->obuf_blocked)
+		return len;
+	
+	/* Is it over the flush size ? */
+	if (c->obuf_end > c->obuf_flushsize) {
+		int r = tcp_client_flush(self, c);
+		if (r < -2)
+			return r;
+		return len;
+	}
+	
+	/* flush at the end of the round */
+	client_flush_pending_add(self, c);
+	
+	return len;
 }
 
 static int aprsis_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
@@ -1535,28 +1630,8 @@ static int handle_client_readable(struct worker_t *self, struct client_t *c)
 
 static int handle_client_writable(struct worker_t *self, struct client_t *c)
 {
-	int r;
-	
-	/* TODO: call client_try_write */
-	r = write(c->fd, c->obuf + c->obuf_start, c->obuf_end - c->obuf_start);
-	if (r < 0) {
-		if (errno == EINTR || errno == EAGAIN) {
-			hlog(LOG_DEBUG, "writable: Would block fd %d (%s): %s", c->fd, c->addr_rem, strerror(errno));
-			return 0;
-		}
-		
-		hlog(LOG_DEBUG, "writable: Error from socket fd %d (%s): %s", c->fd, c->addr_rem, strerror(errno));
-		client_close(self, c, errno);
+	if (tcp_client_flush(self, c) < -2)
 		return -1;
-	}
-	
-	c->obuf_start += r;
-	//hlog(LOG_DEBUG, "writable: %d bytes to socket fd %d (%s) - %d in obuf", r, c->fd, c->addr_rem, c->obuf_end - c->obuf_start);
-	
-	if (c->obuf_start == c->obuf_end) {
-		xpoll_outgoing(&self->xp, c->xfd, 0);
-		c->obuf_start = c->obuf_end = 0;
-	}
 	
 	return 0;
 }
@@ -1576,6 +1651,7 @@ static int handle_client_event(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 			//hlog(LOG_DEBUG, "client writable: nothing to write on fd %d (%s)", c->fd, c->addr_rem);
 			xpoll_outgoing(&self->xp, c->xfd, 0);
 			c->obuf_start = c->obuf_end = 0;
+			c->obuf_blocked = 0;
 		} else {
 			if (c->handler_client_writable(self, c) < 0)
 				return 0;
@@ -1795,12 +1871,14 @@ static void collect_new_clients(struct worker_t *self)
 			c->handler_client_readable = &ssl_readable;
 			c->handler_client_writable = &ssl_writable;
 			c->write = &ssl_client_write;
+			c->obuf_flushsize = c->obuf_size / 2;
 		} else
 #endif
 		{
 			c->handler_client_readable = &handle_client_readable;
 			c->handler_client_writable = &handle_client_writable;
 			c->write = &tcp_client_write;
+			c->obuf_flushsize = c->obuf_size / 2;
 		}
 		
 		if (c->flags & CLFLAGS_IS2) {
@@ -1839,6 +1917,43 @@ static void collect_new_clients(struct worker_t *self)
 	      self->id, i, self->xp.pollfd_used - n, self->client_count );
 }
 
+
+/*
+ *	Send the output which was left waiting in this round of the worker,
+ *	so that the packets which came in the round go out to each client
+ *	together: in one frame to an IS2 client or peer, and with one system
+ *	call (one TLS record, one SCTP message) to a client on a socket of
+ *	its own. Only the clients which have something waiting are gone
+ *	through. A client whose socket is full is not here: it is written to
+ *	when the socket polls writable.
+ */
+
+static void worker_flush_pending(struct worker_t *self)
+{
+	struct client_t *c;
+	
+	/* Take the clients off the list one by one: a flush may destroy
+	 * the client, or other clients, which unlinks them.
+	 */
+	while ((c = self->flush_pending)) {
+		client_flush_pending_remove(c);
+		
+#ifdef USE_IS2
+		if (c->is2_obuf_packets) {
+			/* Close the frame and pass it on: an UDP peer gets it as
+			 * a datagram, and for the others it goes to the output
+			 * buffer, which puts the client back on the list for
+			 * the buffer to be flushed below.
+			 */
+			is2_obuf_flush_client(self, c);
+			continue;
+		}
+#endif
+		
+		if (c->obuf_end > c->obuf_start && c->handler_client_writable)
+			c->handler_client_writable(self, c);
+	}
+}
 
 /* 
  *	Send keepalives to client sockets, run this once a second
@@ -2002,11 +2117,18 @@ static void send_keepalives(struct worker_t *self)
 			continue;
 		}
 		
-		/* Adjust buffering, try not to jump back and forth between buffered and unbuffered.
-		 * Please note that the we always flush the buffer at the end of a round if the
-		 * client socket is writable (OS buffer not full), so we don't really wait for
-		 * obuf_flushsize to be reached. Buffering will just make a couple of packets sent
-		 * go in the same write().
+		/* TCP and TLS clients are always buffered: their output is flushed at the
+		 * end of every round of the worker, so that what a round produces for a client
+		 * goes out in one write(), and obuf_flushsize is only reached within a round.
+		 */
+		if (c->ai_protocol != IPPROTO_SCTP)
+			continue;
+		
+		/* SCTP: every write is a message, so only buffer at high rates.
+		 * Adjust buffering, try not to jump back and forth between buffered and unbuffered.
+		 * Please note that the we always flush the buffer at the end of a round,
+		 * so we don't really wait for obuf_flushsize to be reached. Buffering will just
+		 * make a couple of packets sent go in the same message.
 		 */
 		if (c->obuf_writes > obuf_writes_threshold) {
 			// Lots and lots of writes, switch to buffering...
@@ -2067,10 +2189,8 @@ void worker_thread(struct worker_t *self)
 		/* if we have new stuff in the global packet buffer, process it */
 		if (*self->pbuf_global_prevp || *self->pbuf_global_dupe_prevp)
 			process_outgoing(self);
-#ifdef USE_IS2
-		/* the IS2 clients and peers get this round's packets in a frame */
-		is2_obuf_flush_pending(self);
-#endif
+		/* send what the round left in the output buffers of the clients */
+		worker_flush_pending(self);
 
 		t2 = tick;
 

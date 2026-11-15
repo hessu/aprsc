@@ -765,6 +765,9 @@ int ssl_write(struct worker_t *self, struct client_t *c)
 	
 	to_write = c->obuf_end - c->obuf_start;
 	
+	/* this is the flush the client may have been waiting for */
+	client_flush_pending_remove(c);
+	
 	//hlog(LOG_DEBUG, "ssl_write fd %d of %d bytes", c->fd, to_write);
 	ssl_clear_error();
 	

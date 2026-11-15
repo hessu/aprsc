@@ -243,6 +243,10 @@ int xpoll_remove(struct xpoll_t *xp, struct xpoll_fd_t *xfd)
 void xpoll_outgoing(struct xpoll_t *xp, struct xpoll_fd_t *xfd, int have_outgoing)
 {
 #ifdef XP_USE_EPOLL
+	/* callers ask for the state they need without knowing the current
+	 * one: skip the system call when nothing changes */
+	if (((xfd->ev.events & EPOLLOUT) != 0) == (have_outgoing != 0))
+		return;
 	if (have_outgoing) {
 		xfd->ev.events |= EPOLLOUT;
 	} else {

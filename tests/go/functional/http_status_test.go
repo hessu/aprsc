@@ -146,8 +146,8 @@ func TestHTTPStatus(t *testing.T) {
 	// default.
 	t.Run("memory", func(t *testing.T) {
 		limits := map[string]float64{
-			"pbuf_small_blocks_max":   192,
-			"pbuf_medium_blocks_max":  128,
+			"pbuf_small_blocks_max":   160,
+			"pbuf_medium_blocks_max":  160,
 			"pbuf_large_blocks_max":   64,
 			"dupecheck_blocks_max":    128,
 			"historydb_blocks_max":    64,

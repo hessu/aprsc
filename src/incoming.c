@@ -117,17 +117,19 @@ cellarena_t *pbuf_cells_large;
 int pbuf_cells_kb = 2048; /* 2M bunches is faster for system than 16M ! */
 
 /* Block limits of the three pbuf arenas. The arenas never shrink, so these
- * bound the memory a packet flood can take: 192 + 128 + 64 blocks of 2 MB is
+ * bound the memory a packet flood can take: 160 + 160 + 64 blocks of 2 MB is
  * 768 MB, and with the 256 MB dupecheck arena the traffic-related memory
  * is capped at 1 GB. With the 20-second pbuf_global_expiration the small
- * arena holds about 35k packets per second, the medium one 20k and the
- * large one 7k before packets are dropped as INERR_OUT_OF_PBUFS. The split
- * follows the mix seen on a production server: about 65% small, 35%
- * medium and 1-2% large, with extra room for the large ones since floods
- * of maximum-length packets are the likely case.
+ * arena holds about 30k packets per second, the medium one 27k and the
+ * large one 7k before packets are dropped as INERR_OUT_OF_PBUFS. APRS
+ * traffic is about 65% small packets and 35% medium, OGN traffic almost
+ * entirely medium, so small and medium get equal shares, and either kind
+ * of server runs out of dupecheck records before it runs out of pbufs.
+ * The large class gets more room than its share since floods of
+ * maximum-length packets are the likely case.
  */
-#define PBUF_CELLBLOCKS_SMALL	192	/* 384 MB */
-#define PBUF_CELLBLOCKS_MEDIUM	128	/* 256 MB */
+#define PBUF_CELLBLOCKS_SMALL	160	/* 320 MB */
+#define PBUF_CELLBLOCKS_MEDIUM	160	/* 320 MB */
 #define PBUF_CELLBLOCKS_LARGE	 64	/* 128 MB */
 
 /*

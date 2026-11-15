@@ -99,6 +99,18 @@ func qcClientOnlyPhase1(login, proto, wrong string) []isclient.Step {
 		b.pass("(5) other q construct passed intact",
 			"SRCCALL>DST,DIGI1*,qAF,"+login+":testing (5)",
 			"SRCCALL>DST,DIGI1*,qAF,"+login+":testing (5)"),
+
+		// All packets with q constructs: if ,qAC, is the q construct and
+		// the full path before the q construct is not TCPIP*, the packet
+		// is dropped. On a client-only port this is checked before the
+		// qAC is replaced with qAO, as javAPRSSrvr 4.3.4 does.
+		b.pass("(6) qAC after TCPIP* becomes qAO",
+			"SRCCALL>DST,TCPIP*,qAC,OTHER:testing (6)",
+			"SRCCALL>DST,TCPIP*,qAO,OTHER:testing (6)"),
+		b.drop("(7) qAC after a digi path",
+			"SRCCALL>DST,WIDE1-1,qAC,OTHER:testing (7)"),
+		b.drop("(8) qAC with no path",
+			"SRCCALL>DST,qAC,OTHER:testing (8)"),
 	}
 }
 
@@ -138,6 +150,15 @@ func qcFullFeedPhase2(login, second, proto string) []isclient.Step {
 		// If ,SERVERLOGIN is found after the q construct, drop.
 		b.drop("server login after q construct",
 			"SRCCALL>DST,DIGI1*,qAR,"+serverCall+":testing (,SERVERLOGIN)"),
+		// If ,qAC, is the q construct and the full path before the q
+		// construct is not TCPIP*, drop.
+		b.pass("qAC after TCPIP* passed intact",
+			"SRCCALL>DST,TCPIP*,qAC,OTHER:testing (qAC TCPIP)",
+			"SRCCALL>DST,TCPIP*,qAC,OTHER:testing (qAC TCPIP)"),
+		b.drop("qAC after a digi path",
+			"SRCCALL>DST,WIDE1-1,qAC,OTHER:testing (qAC digi)"),
+		b.drop("qAC with no path",
+			"SRCCALL>DST,qAC,OTHER:testing (qAC no path)"),
 		// If a callsign-SSID is found twice in the q construct, drop.
 		b.drop("call twice in q construct",
 			"SRCCALL>DST,DIGI1*,qAI,FOOBAR,ASDF,ASDF,BARFOO:testing (dup call)"),
@@ -268,6 +289,24 @@ func TestQConstrVerified(t *testing.T) {
 			b.pass("(5) other q construct passed intact",
 				"SRCCALL>DST,DIGI1*,qAF,"+login+":testing (5)",
 				"SRCCALL>DST,DIGI1*,qAF,"+login+":testing (5)"),
+
+			// All packets with q constructs: if ,qAC, is the q construct
+			// and the full path before the q construct is not TCPIP*,
+			// the packet is dropped. Only exactly TCPIP* passes;
+			// javAPRSSrvr 4.3.4 drops all of these too.
+			b.pass("(6) qAC after TCPIP* passed intact",
+				"SRCCALL>DST,TCPIP*,qAC,OTHER:testing (6)",
+				"SRCCALL>DST,TCPIP*,qAC,OTHER:testing (6)"),
+			b.drop("(7) qAC after a digi path",
+				"SRCCALL>DST,WIDE1-1,qAC,OTHER:testing (7)"),
+			b.drop("(8) qAC with no path",
+				"SRCCALL>DST,qAC,OTHER:testing (8)"),
+			b.drop("(9) qAC after a digi path and TCPIP*",
+				"SRCCALL>DST,WIDE1-1,TCPIP*,qAC,OTHER:testing (9)"),
+			b.drop("(10) qAC after TCPXX*",
+				"SRCCALL>DST,TCPXX*,qAC,OTHER:testing (10)"),
+			b.drop("(11) qAC after a used path element",
+				"SRCCALL>DST,JAVA*,qAC,OTHER:testing (11)"),
 		})
 	})
 

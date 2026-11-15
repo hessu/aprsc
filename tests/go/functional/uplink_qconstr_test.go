@@ -41,6 +41,14 @@ func TestQConstrUplink(t *testing.T) {
 			pass("qAI from uplink",
 				"SRC>DST,DIGI1,DIGI2*,qAI,FOOBA,BLAA:testing qAI (1)",
 				"SRC>DST,DIGI1,DIGI2*,qAI,FOOBA,BLAA,"+upstreamCall+","+serverCall+":testing qAI (1)"),
+			// A qAC with a path other than TCPIP* before it is dropped
+			// from an uplink too.
+			pass("qAC after TCPIP* from uplink",
+				"SRC>DST,TCPIP*,qAC,OTHER:testing qAC (1)",
+				"SRC>DST,TCPIP*,qAC,OTHER:testing qAC (1)"),
+			drop("qAC after a digi path from uplink",
+				"SRC>DST,WIDE1-1,qAC,OTHER:testing qAC (2)",
+				"SRC2>DST,TCPIP*,qAC,OTHER:dummy"),
 		})
 	})
 

@@ -260,8 +260,9 @@ struct client_heard_t {
 #define INERR_INV_CRLF			-37	/* CR or LF inside the packet (IS2) */
 #define INERR_IS2_TOO_OLD		-38	/* IS2 received_time too far in the past */
 #define INERR_IS2_TOO_NEW		-39	/* IS2 received_time too far in the future */
+#define INERR_Q_QAC_PATH_NOT_TCPIP	-40	/* qAC with a path other than TCPIP* before it */
 
-#define INERR_MIN			-39	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
+#define INERR_MIN			-40	/* MINIMUM VALUE FOR INERR, GROW WHEN NEEDED! */
 /* WHEN ADDING STUFF HERE, REMEMBER TO UPDATE inerr_labels IN incoming.c. Thanks! */
 #define INERR_BUCKETS			(INERR_MIN*-1 + 1)
 

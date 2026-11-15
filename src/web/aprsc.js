@@ -384,6 +384,7 @@ var app = angular.module('aprsc', [ 'pascalprecht.translate', 'graph', 'ngDialog
 			RXERR_inv_crlf: 'Packet contains a CR or LF character',
 			RXERR_is2_too_old: 'IS2 packet received too long ago (received_time in the past)',
 			RXERR_is2_too_new: 'IS2 packet from the future (received_time ahead of our clock)',
+			RXERR_q_qac_path_not_tcpip: 'Path before qAC is not TCPIP*',
 			
 			ALARM_no_uplink: "Server does not have any uplink connections.",
 			ALARM_packet_drop_hang: "Server has dropped packets due to forward time leaps or hangs caused by resource starvation.",

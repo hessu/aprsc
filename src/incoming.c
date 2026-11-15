@@ -88,7 +88,8 @@ const char *inerr_labels[] = {
 	"disallow_igatecall",
 	"inv_crlf",
 	"is2_too_old",
-	"is2_too_new"
+	"is2_too_new",
+	"q_qac_path_not_tcpip"
 };
 
 #define incoming_strerror(i) ((i <= 0 && i >= INERR_MIN) ? inerr_labels[i * -1] : inerr_labels[0])

@@ -49,6 +49,23 @@ int check_invalid_q_callsign(const char *call, int len)
 }
 
 /*
+ *	Check the path before an existing qAC: the full path before the q
+ *	construct must be TCPIP*, which is the only path a server puts there
+ *	when it generates a qAC. Anything else was written by something which
+ *	is not a compliant server, typically an igate marking packets it heard
+ *	on RF with qAC instead of qAR. javAPRSSrvr drops these too.
+ */
+
+static int q_check_qac_path(const char *via_start, const char *q_start)
+{
+	if (q_start - via_start == 7 && memcmp(via_start, ",TCPIP*", 7) == 0)
+		return 0;
+	
+	hlog(LOG_DEBUG, "q: dropping due to qAC with a path other than TCPIP* before it");
+	return INERR_Q_QAC_PATH_NOT_TCPIP; /* drop the packet */
+}
+
+/*
  *	q_dropcheck contains the last big block of the Q construct algorithm
  *	(All packets with q constructs...) and does rejection and duplicate
  *	dropping.
@@ -90,6 +107,23 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 		/* qAZ is for packets from client to server, to prevent redistribution */
 		hlog(LOG_DEBUG, "q: dropping due q_type %c%c", q_proto, q_type);
 		return INERR_Q_QAZ; /* drop the packet */
+	}
+	
+	/*
+	 * if ,qAC, is the q construct and the full path before the q construct is not TCPIP*:
+	 * {
+	 *	Dump to the packet to the reject log
+	 *	Quit processing the packet
+	 * }
+	 *
+	 * (q_start is set when the qAC came in the packet; the constructs
+	 * generated here never reach this point as qAC)
+	 */
+	
+	if (q_type == 'C' && q_start) {
+		int rc = q_check_qac_path(via_start, q_start);
+		if (rc)
+			return rc;
 	}
 	
 	/*
@@ -478,6 +512,12 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 					*(q_start + 3) = q_type = 'O';
 					// fprintf(stderr, "\treplaced qAS with qAO\n");
 				} else if (q_type == 'C') {
+					/* the qAC path check of "All packets with q constructs"
+					 * is done before the replacement, as javAPRSSrvr does
+					 */
+					int rc = q_check_qac_path(via_start, q_start);
+					if (rc)
+						return rc;
 					// FIXME: should also check callsignssid to servercall & login
 					/* Replace qAC with qAO */
 					*(q_start + 3) = q_type = 'O';

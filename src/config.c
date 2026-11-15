@@ -121,8 +121,14 @@ int heard_list_storetime   =     3*60*60; /* how long to store "client X has hea
 int courtesy_list_storetime   =    30*60; /* how long to store "client X has been given MSG from station Y" information,
                                            * to support courtesy position transmission after text message routing */
 
-int pbuf_global_expiration       = 60;  /* 1 minute */ /* 10 sec for load testing */
-int pbuf_global_dupe_expiration  = 60;  /* 1 minute */ /* 10 sec for load testing */
+/* How long packets stay in the global queues after dupecheck. Workers
+ * drop anything older than 5 s as a hang, so retention beyond that is
+ * only a safety margin for the lock-free purger, which runs every 10 s.
+ * Memory use under a flood scales with this: about 570 B per packet
+ * per second of retention.
+ */
+int pbuf_global_expiration       = 20;
+int pbuf_global_dupe_expiration  = 20;
 
 int upstream_timeout      = 30;		/* after N seconds of no input from an upstream, disconnect */
 int client_timeout        = 48*60*60;	/* after N seconds of no input from a client, disconnect */

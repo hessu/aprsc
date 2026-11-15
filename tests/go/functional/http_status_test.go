@@ -168,6 +168,13 @@ func TestHTTPStatus(t *testing.T) {
 		if total != 1<<30 {
 			t.Errorf("the traffic arenas may grow to %v bytes, want 1 GiB", total)
 		}
+
+		// the position cache keeps entries for the configured time, 24 h
+		// by default, while it has room; TestHistoryDBFlood in perf/
+		// fills it
+		if got, _ := j.Historydb["storetime"].(float64); got != 24*60*60 {
+			t.Errorf("historydb storetime is %v, want %v", j.Historydb["storetime"], 24*60*60)
+		}
 	})
 
 	s.Stop()

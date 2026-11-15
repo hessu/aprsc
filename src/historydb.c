@@ -38,6 +38,15 @@ rwlock_t historydb_rwlock;
 #define HISTORYDB_HASH_MODULO 32768 /* fold bits: 15 / 30 */
 struct history_cell_t *historydb_hash[HISTORYDB_HASH_MODULO];
 
+/* When the arena is close to full, entries expire after
+ * HISTORYDB_FLOOD_STORETIME instead of lastposition_storetime, so that the
+ * cache recovers faster from a flood of random callsigns. The mode begins
+ * at 90% of the arena's capacity and ends at 80%.
+ */
+#define HISTORYDB_FLOOD_STORETIME 3600
+static long historydb_cells_max;	/* capacity of the arena, 0 when not limited */
+static int  historydb_flood;		/* 1: the short storetime is in effect */
+
 /* monitor counters and gauges */
 long historydb_inserts;
 long historydb_lookups;
@@ -75,7 +84,46 @@ void historydb_init(void)
 				    CELLMALLOC_POLICY_FIFO,
 				    2048 /* 2 MB */,
 				    0 /* minfree */, 64 /* blocks, 128 MB */ );
+
+	struct cellstatus_t cellst;
+	cellstatus(historydb_cells, &cellst);
+	historydb_cells_max = (long)(cellst.block_size / cellst.cellsize_aligned) * cellst.blocks_max;
 #endif
+}
+
+/*
+ *	The storetime in effect: lastposition_storetime, or the shorter
+ *	HISTORYDB_FLOOD_STORETIME when the arena is close to full.
+ */
+
+int historydb_storetime(void)
+{
+	if (historydb_flood && lastposition_storetime > HISTORYDB_FLOOD_STORETIME)
+		return HISTORYDB_FLOOD_STORETIME;
+	return lastposition_storetime;
+}
+
+/*
+ *	Switch the short storetime on when the arena is close to full, and
+ *	off when it has drained. Called after inserts from the dupecheck
+ *	thread, and from the periodic cleanup in the main thread; the flag
+ *	is a plain int and a race between the two only repeats a log line.
+ */
+
+static void historydb_flood_check(void)
+{
+	if (!historydb_cells_max)
+		return;
+
+	if (!historydb_flood && historydb_cellgauge >= historydb_cells_max / 10 * 9) {
+		historydb_flood = 1;
+		hlog(LOG_WARNING, "historydb: %ld of %ld entries in use, expiring entries after %d s instead of %d s",
+			historydb_cellgauge, historydb_cells_max, historydb_storetime(), lastposition_storetime);
+	} else if (historydb_flood && historydb_cellgauge <= historydb_cells_max / 10 * 8) {
+		historydb_flood = 0;
+		hlog(LOG_INFO, "historydb: %ld of %ld entries in use, expiring entries after %d s again",
+			historydb_cellgauge, historydb_cells_max, historydb_storetime());
+	}
 }
 
 /* Called only under WR-LOCK */
@@ -156,7 +204,7 @@ static int historydb_load_entry(char *s)
 	struct history_cell_t *cp;
 	int keylen;
 	uint32_t h1, h2, i;
-	time_t expirytime   = tick - lastposition_storetime;
+	time_t expirytime   = tick - historydb_storetime();
 	
 	j = cJSON_Parse(s);
 	if (!j) {
@@ -234,7 +282,7 @@ int historydb_dump(FILE *fp)
 	/* Dump the historydb out on text format */
 	int i;
 	struct history_cell_t *hp;
-	time_t expirytime   = tick - lastposition_storetime;
+	time_t expirytime   = tick - historydb_storetime();
 	int ret = 0;
 
 	/* multiple locks ? one for each bucket, or for a subset of buckets ? */
@@ -291,7 +339,7 @@ int historydb_insert(struct pbuf_t *pb)
 	int isdead = 0, keylen;
 	struct history_cell_t **hp, *cp, *cp1;
 
-	time_t expirytime   = tick - lastposition_storetime;
+	time_t expirytime   = tick - historydb_storetime();
 
 	char keybuf[CALLSIGNLEN_MAX+2];
 	char *s;
@@ -400,6 +448,7 @@ int historydb_insert(struct pbuf_t *pb)
 			rwl_wrunlock(&historydb_rwlock);
 			return 1;
 		}
+		historydb_flood_check();
 		cp->next = NULL;
 		memcpy(cp->key, keybuf, keylen);
 		cp->key[keylen] = 0; /* zero terminate */
@@ -431,7 +480,7 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	struct history_cell_t *cp;
 
 	// validity is 5 minutes shorter than expiration time..
-	time_t validitytime   = tick - lastposition_storetime + 5*60;
+	time_t validitytime   = tick - historydb_storetime() + 5*60;
 
 	++historydb_lookups;
 
@@ -484,7 +533,7 @@ void historydb_cleanup(void)
 	long cleaned = 0;
 
 	// validity is 5 minutes shorter than expiration time..
-	time_t expirytime   = tick - lastposition_storetime;
+	time_t expirytime   = tick - historydb_storetime();
 
 
 	for (i = 0; i < HISTORYDB_HASH_MODULO; ++i) {
@@ -512,6 +561,7 @@ void historydb_cleanup(void)
 	}
 	
 	historydb_cleanup_cleaned = cleaned;
+	historydb_flood_check();
 	
 	// hlog( LOG_DEBUG, "historydb_cleanup() removed %d entries, count now %ld",
 	//       cleaned, historydb_cellgauge );

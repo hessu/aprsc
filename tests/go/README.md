@@ -92,6 +92,16 @@ field reports is `go test -tags perf -v -run TestClientReload ./perf/
 -args -nclients 1000 -rate 200`, and `-duration 30m` makes it last
 longer.
 
+`TestHistoryDBFlood` is a check too heavy for the suite: it feeds a server
+position packets from unique stations until the position cache
+(historydb) is 90% full, about 2.4M entries, and checks that the server
+then shortens the time it keeps the entries from 24 h to 1 h, so that the
+cache recovers from a flood of random callsigns, and still passes a probe
+packet. The server grows to about 600 MB and the feed takes a couple of
+minutes at the default `-flood-rate 20000` packets/s, which is paced so
+that the dupecheck arena, which also takes an entry per packet for 30 to
+40 s, does not fill before the cache does.
+
 ## APRS-IS client tools
 
 `cmd/aprs-is` is a command for testing and loading a server by hand, which

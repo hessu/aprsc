@@ -387,6 +387,7 @@ char *status_json_string(int no_cache, int periodical)
 	cJSON_AddNumberToObject(historydb, "keymatches", historydb_keymatches);
 	cJSON_AddNumberToObject(historydb, "noposcount", historydb_noposcount);
 	cJSON_AddNumberToObject(historydb, "cleaned", historydb_cleanup_cleaned);
+	cJSON_AddNumberToObject(historydb, "storetime", historydb_storetime());
 	cJSON_AddItemToObject(root, "historydb", historydb);
 	
 	cJSON *dupecheck = cJSON_CreateObject();

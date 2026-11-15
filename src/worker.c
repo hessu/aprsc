@@ -442,8 +442,8 @@ void client_init(void)
 				  sizeof(struct client_t),
 				  __alignof__(struct client_t), CELLMALLOC_POLICY_FIFO,
 				  4096 /* 4 MB at the time */, 0 /* minfree */ );
-	/* 4 MB arena size -> about 100 clients per single arena
-	   .. with 40 arenas -> 4000 clients max. */
+	/* 4 MB arena size -> about 220 clients per single arena
+	   .. with 200 arenas -> about 44000 clients max. */
 #endif
 }
 

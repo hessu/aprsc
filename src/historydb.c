@@ -63,12 +63,18 @@ void historydb_init(void)
 	//       sizeof(pthread_mutex_t), sizeof(rwlock_t));
 
 #ifndef _FOR_VALGRIND_
+	/* One cell per station, object or item with a position, kept for
+	 * lastposition_storetime (24 h). A production Tier2 server holds
+	 * about 70k entries in 4 MB; the whole APRS-IS sees a few hundred
+	 * thousand stations a day. 64 blocks is 128 MB, or 2.4M entries,
+	 * which bounds what a flood of random callsigns can take.
+	 */
 	historydb_cells = cellinit( "historydb",
 				    sizeof(struct history_cell_t),
 				    __alignof__(struct history_cell_t), 
 				    CELLMALLOC_POLICY_FIFO,
 				    2048 /* 2 MB */,
-				    0 /* minfree */, 0 /* default block limit */ );
+				    0 /* minfree */, 64 /* blocks, 128 MB */ );
 #endif
 }
 

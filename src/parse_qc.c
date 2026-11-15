@@ -575,9 +575,12 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			return q_dropcheck(c, pdata, new_q, new_q_size, via_start, new_q_len, q_proto, q_type, q_start, q_replace, *path_end);
 		}
 		
-		/* At this point we have packets which do not have Q constructs, and
-		 * are either (from validated clients && originated by client)
-		 * or (from unvalidated client && not originated by the client)
+		/* At this point we have packets which do not have Q constructs and
+		 * were not originated by the client: either from a validated client
+		 * on a port which is not client-only, or from an unvalidated
+		 * client. The "FROMCALL matches the login" case of the algorithm
+		 * below was handled above by replacing the path with
+		 * TCPIP*,qAC,SERVERLOGIN.
 		 */
 		 
 		/*
@@ -625,13 +628,6 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				/* Undefined by the algorithm - there was no VIACALL */
 				return INERR_Q_I_NO_VIACALL;
 			}
-		} else if (originated_by_client) {
-			/* FROMCALL matches the login */
-			/* Add TCPIP* in the end of the path only if it's not there already */
-			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
-				return snprintf(new_q, new_q_size, ",qAC,%s", serverid);
-			else
-				return snprintf(new_q, new_q_size, ",TCPIP*,qAC,%s", serverid);
 		} else {
 			/* Append ,qAS,login */
 			new_q_len = snprintf(new_q, new_q_size, ",q%cS,%s", q_protocol_id, c->username);

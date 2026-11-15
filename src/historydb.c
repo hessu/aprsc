@@ -35,7 +35,7 @@ cellarena_t *historydb_cells;
 
 rwlock_t historydb_rwlock;
 
-#define HISTORYDB_HASH_MODULO 8192 /* fold bits: 13 / 26 */
+#define HISTORYDB_HASH_MODULO 32768 /* fold bits: 15 / 30 */
 struct history_cell_t *historydb_hash[HISTORYDB_HASH_MODULO];
 
 /* monitor counters and gauges */
@@ -201,7 +201,7 @@ static int historydb_load_entry(char *s)
 	
 	/* calculate hash */
 	h1 = keyhash(key->valuestring, keylen, 0);
-	h2 = h1 ^ (h1 >> 13) ^ (h1 >> 26); /* fold hash bits.. */
+	h2 = h1 ^ (h1 >> 15) ^ (h1 >> 30); /* fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
 
 	memcpy(cp->key, key->valuestring, keylen);
@@ -343,7 +343,7 @@ int historydb_insert(struct pbuf_t *pb)
 	++historydb_inserts;
 
 	h1 = keyhash(keybuf, keylen, 0);
-	h2 = h1 ^ (h1 >> 13) ^ (h1 >> 26); /* fold hash bits.. */
+	h2 = h1 ^ (h1 >> 15) ^ (h1 >> 30); /* fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
 
 	cp = cp1 = NULL;
@@ -436,7 +436,7 @@ int historydb_lookup(const char *keybuf, const int keylen, struct history_cell_t
 	++historydb_lookups;
 
 	h1 = keyhash(keybuf, keylen, 0);
-	h2 = h1 ^ (h1 >> 13) ^ (h1 >> 26); /* fold hash bits.. */
+	h2 = h1 ^ (h1 >> 15) ^ (h1 >> 30); /* fold hash bits.. */
 	i = h2 % HISTORYDB_HASH_MODULO;
 
 	cp = historydb_hash[i];

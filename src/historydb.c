@@ -140,12 +140,18 @@ static void historydb_free(struct history_cell_t *p)
 /* Called only under WR-LOCK */
 static struct history_cell_t *historydb_alloc(void)
 {
-	++historydb_cellgauge;
+	struct history_cell_t *p;
 #ifndef _FOR_VALGRIND_
-	return cellmalloc( historydb_cells );
+	p = cellmalloc( historydb_cells );
 #else
-	return hmalloc(sizeof(struct history_cell_t));
+	p = hmalloc(sizeof(struct history_cell_t));
 #endif
+	/* count only the cells we got: the gauge drives the flood mode,
+	 * and failed allocations of a full arena must not inflate it
+	 */
+	if (p)
+		++historydb_cellgauge;
+	return p;
 }
 
 /*

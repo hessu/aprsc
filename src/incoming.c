@@ -116,6 +116,20 @@ cellarena_t *pbuf_cells_large;
 
 int pbuf_cells_kb = 2048; /* 2M bunches is faster for system than 16M ! */
 
+/* Block limits of the three pbuf arenas. The arenas never shrink, so these
+ * bound the memory a packet flood can take: 192 + 128 + 64 blocks of 2 MB is
+ * 768 MB, and with the 256 MB dupecheck arena the traffic-related memory
+ * is capped at 1 GB. With the 20-second pbuf_global_expiration the small
+ * arena holds about 35k packets per second, the medium one 20k and the
+ * large one 7k before packets are dropped as INERR_OUT_OF_PBUFS. The split
+ * follows the mix seen on a production server: about 65% small, 35%
+ * medium and 1-2% large, with extra room for the large ones since floods
+ * of maximum-length packets are the likely case.
+ */
+#define PBUF_CELLBLOCKS_SMALL	192	/* 384 MB */
+#define PBUF_CELLBLOCKS_MEDIUM	128	/* 256 MB */
+#define PBUF_CELLBLOCKS_LARGE	 64	/* 128 MB */
+
 /*
  *	Get a buffer for a packet
  *
@@ -129,15 +143,18 @@ void pbuf_init(void)
 	pbuf_cells_small  = cellinit( "pbuf small",
 				      sizeof(struct pbuf_t) + PACKETLEN_MAX_SMALL,
 				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */ );
+				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */,
+				      PBUF_CELLBLOCKS_SMALL );
 	pbuf_cells_medium = cellinit( "pbuf medium",
 				      sizeof(struct pbuf_t) + PACKETLEN_MAX_MEDIUM,
 				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */ );
+				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */,
+				      PBUF_CELLBLOCKS_MEDIUM );
 	pbuf_cells_large  = cellinit( "pbuf large",
 				      sizeof(struct pbuf_t) + PACKETLEN_MAX_LARGE,
 				      __alignof__(struct pbuf_t), CELLMALLOC_POLICY_FIFO,
-				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */ );
+				      pbuf_cells_kb /* n kB at the time */, 0 /* minfree */,
+				      PBUF_CELLBLOCKS_LARGE );
 #endif
 }
 

@@ -68,7 +68,7 @@ void historydb_init(void)
 				    __alignof__(struct history_cell_t), 
 				    CELLMALLOC_POLICY_FIFO,
 				    2048 /* 2 MB */,
-				    0 /* minfree */ );
+				    0 /* minfree */, 0 /* default block limit */ );
 #endif
 }
 

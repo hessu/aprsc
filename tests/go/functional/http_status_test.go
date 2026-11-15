@@ -139,6 +139,36 @@ func TestHTTPStatus(t *testing.T) {
 		}
 	}
 
+	// Each cellmalloc arena reports its own block limit. The pbuf and
+	// dupecheck arenas have limits of their own, which together bound the
+	// traffic-related memory to 1 GB under a packet flood; the others have
+	// the default.
+	t.Run("memory", func(t *testing.T) {
+		limits := map[string]float64{
+			"pbuf_small_blocks_max":   192,
+			"pbuf_medium_blocks_max":  128,
+			"pbuf_large_blocks_max":   64,
+			"dupecheck_blocks_max":    128,
+			"historydb_blocks_max":    200,
+			"client_heard_blocks_max": 200,
+		}
+		for k, want := range limits {
+			if got, _ := j.Memory[k].(float64); got != want {
+				t.Errorf("memory %s is %v, want %v", k, j.Memory[k], want)
+			}
+		}
+
+		var total float64
+		for _, a := range []string{"pbuf_small", "pbuf_medium", "pbuf_large", "dupecheck"} {
+			blocks, _ := j.Memory[a+"_blocks_max"].(float64)
+			size, _ := j.Memory[a+"_block_size"].(float64)
+			total += blocks * size
+		}
+		if total != 1<<30 {
+			t.Errorf("the traffic arenas may grow to %v bytes, want 1 GiB", total)
+		}
+	})
+
 	s.Stop()
 }
 

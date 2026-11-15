@@ -441,7 +441,8 @@ void client_init(void)
 	client_cells  = cellinit( "clients",
 				  sizeof(struct client_t),
 				  __alignof__(struct client_t), CELLMALLOC_POLICY_FIFO,
-				  4096 /* 4 MB at the time */, 0 /* minfree */ );
+				  4096 /* 4 MB at the time */, 0 /* minfree */,
+				  0 /* default block limit */ );
 	/* 4 MB arena size -> about 220 clients per single arena
 	   .. with 200 arenas -> about 44000 clients max. */
 #endif

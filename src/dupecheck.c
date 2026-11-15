@@ -210,6 +210,17 @@ static void global_pbuf_purger(const int all, int pbuf_lag, int pbuf_dupe_lag)
  *	The cellmalloc does not need internal MUTEX, it is being used in single thread..
  */
 
+/* The dupecheck arena is capped at 256 MB: with the pbuf arenas it bounds
+ * the traffic-related memory to 1 GB under a packet flood, see pbuf_init().
+ * That is about 1M records. A production server holds about 1.4 records
+ * per unique packet, the mangled variants included, so for the 30-second
+ * dupefilter_storetime this is about 24k unique packets per second. When
+ * the arena is full, dupecheck() fails and the packet is treated as a
+ * duplicate.
+ */
+#define DUPECHECK_CELLS_KB	2048
+#define DUPECHECK_CELLBLOCKS	128	/* 256 MB */
+
 void dupecheck_init(void)
 {
 #ifndef _FOR_VALGRIND_
@@ -217,8 +228,8 @@ void dupecheck_init(void)
 				    sizeof(struct dupe_record_t),
 				    __alignof__(struct dupe_record_t),
 				    CELLMALLOC_POLICY_LIFO | CELLMALLOC_POLICY_NOMUTEX,
-				    2048 /* 2 MB at the time */,
-				    0 /* minfree */);
+				    DUPECHECK_CELLS_KB /* 2 MB at the time */,
+				    0 /* minfree */, DUPECHECK_CELLBLOCKS);
 #endif
 
 #ifdef USE_EVENTFD

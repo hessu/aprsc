@@ -20,6 +20,7 @@ type statusJSON struct {
 	Server    map[string]any   `json:"server"`
 	Totals    map[string]any   `json:"totals"`
 	Dupecheck map[string]any   `json:"dupecheck"`
+	Memory    map[string]any   `json:"memory"`
 	Listeners []map[string]any `json:"listeners"`
 	Peers     []map[string]any `json:"peers"`
 	Clients   []map[string]any `json:"clients"`

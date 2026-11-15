@@ -47,8 +47,8 @@ struct cellarena_t {
 	int	 createsize;
 
 	int	 cellblocks_count;
-#define CELLBLOCKS_MAX 200 /* track client cell allocator limit! */
-	char	*cellblocks[CELLBLOCKS_MAX];	/* ref as 'char pointer' for pointer arithmetics... */
+	int	 cellblocks_max;	/* per-arena block limit */
+	char	**cellblocks;		/* ref as 'char pointer' for pointer arithmetics... */
 };
 
 #define CELLHEAD_DEBUG 0
@@ -72,7 +72,7 @@ int new_cellblock(cellarena_t *ca)
 	char *cb;
 
 	// If we already have allocated the maximum amount of blocks, do not even try.
-	if (ca->cellblocks_count >= CELLBLOCKS_MAX) return -1;
+	if (ca->cellblocks_count >= ca->cellblocks_max) return -1;
 
 #ifdef MEMDEBUG /* External backing-store files, unique ones for each cellblock,
 		   which at Linux names memory blocks in  /proc/nnn/smaps "file"
@@ -139,7 +139,7 @@ int new_cellblock(cellarena_t *ca)
  */
 
 
-cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree )
+cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree, const int maxblocks )
 {
 	cellarena_t *ca = hmalloc(sizeof(*ca));
 	int n;
@@ -169,8 +169,12 @@ cellarena_t *cellinit( const char *arenaname, const int cellsize, const int alig
 
 	ca->createsize = createkb * 1024;
 
+	ca->cellblocks_max = (maxblocks > 0) ? maxblocks : CELLBLOCKS_DEFAULT;
+	ca->cellblocks = hmalloc(ca->cellblocks_max * sizeof(*ca->cellblocks));
+
 	n = ca->createsize / ca->increment;
-	hlog( LOG_DEBUG, "cellinit: %-12s block size %4d kB, cells/block: %d, %s", arenaname, createkb, n, ca->use_mutex ? "mutex" : "no mutex" );
+	hlog( LOG_DEBUG, "cellinit: %-12s block size %4d kB, cells/block: %d, max %d blocks (%d MB), %s", arenaname, createkb, n,
+	      ca->cellblocks_max, (int)(((long)ca->cellblocks_max * ca->createsize) / (1024*1024)), ca->use_mutex ? "mutex" : "no mutex" );
 
 	pthread_mutex_init(&ca->mutex, NULL);
 
@@ -424,7 +428,7 @@ void  cellstatus(cellarena_t *cellarena, struct cellstatus_t *status)
 	status->freecount = cellarena->freecount;
 	status->cellcount = (cellarena->createsize / cellarena->increment) * cellarena->cellblocks_count;
 	status->blocks = cellarena->cellblocks_count;
-	status->blocks_max = CELLBLOCKS_MAX;
+	status->blocks_max = cellarena->cellblocks_max;
 	status->block_size = cellarena->createsize;
 	/* and this:
 	if (ca->use_mutex)

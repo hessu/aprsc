@@ -296,7 +296,8 @@ void client_heard_init(void)
 				  sizeof(struct client_heard_t),
 				  __alignof__(struct client_heard_t),
 				  CELLMALLOC_POLICY_FIFO,
-				  512 /* 512 KB at the time */, 0 /* minfree */ );
+				  512 /* 512 KB at the time */, 0 /* minfree */,
+				  0 /* default block limit */ );
 	/* 512 KB arena size -> about 18k entries per single arena */
 #endif
 }

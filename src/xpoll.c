@@ -46,7 +46,7 @@ void xpoll_init(void) {
 				  __alignof__(struct xpoll_fd_t),
 				  CELLMALLOC_POLICY_FIFO,
 				  128 /* 128 kB */,
-				  0 /* minfree */ );
+				  0 /* minfree */, 0 /* default block limit */ );
 #endif
 }
 

@@ -269,7 +269,7 @@ void filter_init(void)
 				 CELLMALLOC_POLICY_LIFO,
 				 512 /* 512 kB at the time,
 					should be enough forever.. */,
-				 0 /* minfree */ );
+				 0 /* minfree */, 0 /* default block limit */ );
 
 	/* printf("filter: sizeof=%d alignof=%d\n",
 	   sizeof(struct filter_t),__alignof__(struct filter_t)); */
@@ -281,7 +281,7 @@ void filter_init(void)
 					   __alignof__(struct filter_entrycall_t),
 					   CELLMALLOC_POLICY_FIFO,
 					   32 /* 32 kB at the time */,
-					   0 /* minfree */ );
+					   0 /* minfree */, 0 /* default block limit */ );
 
 	/* Under 1 thousand.. */
 
@@ -290,7 +290,7 @@ void filter_init(void)
 				    __alignof__(struct filter_wx_t),
 				    CELLMALLOC_POLICY_FIFO,
 				    32 /* 32 kB at the time */,
-				    0 /* minfree */ );
+				    0 /* minfree */, 0 /* default block limit */ );
 #endif
 }
 

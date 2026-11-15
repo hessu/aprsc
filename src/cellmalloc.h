@@ -30,7 +30,13 @@ struct cellstatus_t {
 
 typedef struct cellarena_t cellarena_t;
 
-extern cellarena_t *cellinit(const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree);
+/* Each arena grows by mmap()ing blocks of createkb kilobytes, up to
+ * maxblocks of them; the blocks are never released. 0 selects the default
+ * limit of CELLBLOCKS_DEFAULT. The arena is full when allocations fail.
+ */
+#define CELLBLOCKS_DEFAULT 200
+
+extern cellarena_t *cellinit(const char *arenaname, const int cellsize, const int alignment, const int policy, const int createkb, const int minfree, const int maxblocks);
 
 #define CELLMALLOC_POLICY_FIFO    0
 #define CELLMALLOC_POLICY_LIFO    1

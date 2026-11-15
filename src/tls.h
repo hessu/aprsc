@@ -43,6 +43,7 @@ struct ssl_connection_t {
 	unsigned	buffer:1;
 	unsigned	no_wait_shutdown:1;
 	unsigned	no_send_shutdown:1;
+	unsigned	read_pending:1;	/* ssl_readable left data buffered in OpenSSL */
 	
 	unsigned	validate;
 	int		ssl_err_code;
@@ -87,6 +88,7 @@ extern int ssl_validate_peer_cert_phase2(struct client_t *c);
 extern int ssl_write(struct worker_t *self, struct client_t *c);
 extern int ssl_writable(struct worker_t *self, struct client_t *c);
 extern int ssl_readable(struct worker_t *self, struct client_t *c);
+extern void ssl_read_pending(struct worker_t *self);
 
 
 #else

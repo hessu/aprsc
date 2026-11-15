@@ -91,28 +91,36 @@ func TestTLSRecordBurst(t *testing.T) {
 	}
 	tx := isclient.Connect(t, harness.Addr(t, 55154), "N5CAL", isclient.WithPasscode("-1"), isclient.WithDialer(dialer))
 
-	const n = 16
-	var sent []string
-	for i := 0; i < n; i++ {
-		sent = append(sent, fmt.Sprintf("N5CAL>APRS,TCPIP*,qAC,TESTING:>burst packet %d", i))
-	}
+	// The server reads a limited number of records per client at a time,
+	// SSL_READ_ROUNDS (64), so that a fast client can not keep a worker
+	// to itself. The larger burst is a few times that and still fits in
+	// OpenSSL's read buffer, so the socket is empty after the first read
+	// and the server has to come back for the rest on its own.
+	for _, n := range []int{16, 200} {
+		t.Run(fmt.Sprintf("%d records", n), func(t *testing.T) {
+			var sent []string
+			for i := 0; i < n; i++ {
+				sent = append(sent, fmt.Sprintf("N5CAL>APRS,TCPIP*,qAC,TESTING:>burst of %d packet %d", n, i))
+			}
 
-	// Each SendLine is one TLS record; Release sends them in one write.
-	hc.Hold()
-	for _, p := range sent {
-		tx.Send(t, p)
-	}
-	if err := hc.Release(); err != nil {
-		t.Fatalf("failed to send the burst: %v", err)
-	}
+			// Each SendLine is one TLS record; Release sends them in one write.
+			hc.Hold()
+			for _, p := range sent {
+				tx.Send(t, p)
+			}
+			if err := hc.Release(); err != nil {
+				t.Fatalf("failed to send the burst: %v", err)
+			}
 
-	for i, want := range sent {
-		got, err := rx.ReadPacket(3 * time.Second)
-		if err != nil {
-			t.Fatalf("received %d of %d packets of the burst, then: %v", i, n, err)
-		}
-		if got != want {
-			t.Fatalf("packet %d: got %q, want %q", i, got, want)
-		}
+			for i, want := range sent {
+				got, err := rx.ReadPacket(3 * time.Second)
+				if err != nil {
+					t.Fatalf("received %d of %d packets of the burst, then: %v", i, n, err)
+				}
+				if got != want {
+					t.Fatalf("packet %d: got %q, want %q", i, got, want)
+				}
+			}
+		})
 	}
 }

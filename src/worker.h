@@ -605,6 +605,12 @@ struct worker_t {
 	 */
 	unsigned int internal_packet_drops;
 
+	/* TLS: set when ssl_readable() ran out of read rounds on a client
+	 * with data left in OpenSSL's buffer, for ssl_read_pending() to go
+	 * on reading on the next round.
+	 */
+	int tls_read_pending;
+
 	/* IS2: the encoded ISPacket element of the packet currently being
 	 * distributed by process_outgoing_single(), so that a packet going
 	 * to many IS2 clients is serialized only once per worker. Two

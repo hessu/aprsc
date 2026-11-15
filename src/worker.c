@@ -2076,7 +2076,13 @@ void worker_thread(struct worker_t *self)
 
 		// TODO: calculate different delay based on outgoing lag ?
 		/* poll for incoming traffic */
-		xpoll(&self->xp, 30); // was 200, but gave too big latency
+#ifdef USE_SSL
+		/* do not wait if TLS clients have data left to read in OpenSSL's buffers */
+		xpoll(&self->xp, self->tls_read_pending ? 0 : 30); // was 200, but gave too big latency
+		ssl_read_pending(self);
+#else
+		xpoll(&self->xp, 30);
+#endif
 		
 		/* if we have stuff in the local queue, try to flush it and make
 		 * it available to the dupecheck thread

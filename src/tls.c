@@ -858,10 +858,22 @@ int ssl_writable(struct worker_t *self, struct client_t *c)
 	return ssl_write(self, c);
 }
 
+/* How many times ssl_readable() calls SSL_read() for one client before
+ * it lets the worker go on with its other clients. A client sending
+ * faster than its packets are processed keeps OpenSSL's buffer filled,
+ * and would hold the worker in the read loop for as long as it does.
+ * Small records of a packet each are the usual case, so this is in the
+ * range of what a plaintext client gets to pass in with one read.
+ */
+#define SSL_READ_ROUNDS 64
+
 int ssl_readable(struct worker_t *self, struct client_t *c)
 {
 	int r;
 	int sslerr, err;
+	int rounds = 0;
+	
+	c->ssl_con->read_pending = 0;
 	
 	//hlog(LOG_DEBUG, "ssl_readable fd %d", c->fd);
 	
@@ -889,10 +901,21 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 		/* NOTE: this can close and free the client, returning -1 */
 		if (client_postread(self, c, r) < 0)
 			return -1;
-	} while (SSL_has_pending(c->ssl_con->connection));
+		
+		if (!SSL_has_pending(c->ssl_con->connection))
+			return 0;
+	} while (++rounds < SSL_READ_ROUNDS);
 	
-	if (r > 0)
+	if (r > 0) {
+		/* Out of rounds with data still buffered in OpenSSL. The
+		 * socket may well be empty, so poll() can not be relied on
+		 * to get us back here: ask the worker to call again on its
+		 * next round.
+		 */
+		c->ssl_con->read_pending = 1;
+		self->tls_read_pending = 1;
 		return 0;
+	}
 	
 	sslerr = SSL_get_error(c->ssl_con->connection, r);
 	err = (sslerr == SSL_ERROR_SYSCALL) ? errno : 0;
@@ -934,6 +957,28 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	
 	client_close(self, c, err);
 	return -1;
+}
+
+/*
+ *	Go on reading from the clients which ran out of read rounds in
+ *	ssl_readable() with data left in OpenSSL's buffer. Called by the
+ *	worker on every round, after polling.
+ */
+
+void ssl_read_pending(struct worker_t *self)
+{
+	struct client_t *c, *cnext;
+	
+	if (!self->tls_read_pending)
+		return;
+	self->tls_read_pending = 0;
+	
+	for (c = self->clients; (c); c = cnext) {
+		// the read may destroy the client
+		cnext = c->next;
+		if (c->ssl_con && c->ssl_con->read_pending)
+			ssl_readable(self, c);
+	}
 }
 
 

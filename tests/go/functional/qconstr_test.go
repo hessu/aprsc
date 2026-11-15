@@ -53,6 +53,15 @@ func qcClientOnlyPhase1(login, proto, wrong string) []isclient.Step {
 		b.pass("tcpip-path-replace5",
 			login+">DST,WIDE2-2,qAR,"+login+":tcpip-path-replace5",
 			login+">DST,TCPIP*,qAC,TESTING:tcpip-path-replace5"),
+		// A qAI from the client itself is traced on other ports, but a
+		// client-only port replaces the path like for any other packet
+		// from the client. javAPRSSrvr 4.3.4 does the same.
+		b.pass("tcpip-path-replace6",
+			login+">DST,qAI,FOO:tcpip-path-replace6",
+			login+">DST,TCPIP*,qAC,TESTING:tcpip-path-replace6"),
+		b.pass("tcpip-path-replace7",
+			login+">DST,WIDE1-1,qAI,FOO:tcpip-path-replace7",
+			login+">DST,TCPIP*,qAC,TESTING:tcpip-path-replace7"),
 
 		// Not in the algorithm, but done in javap/javap4/aprsc: packets
 		// having a different protocol than the configured one in the q

@@ -341,8 +341,15 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	
 	/* If the packet's srccall == login,
 	 * put in a TCPIP* path element and append Q construct 
+	 *
+	 * A qAI from the client itself is left in place for path tracing,
+	 * except on a client-only port, which does not trace: there the path
+	 * is replaced like for any other packet originated by the client,
+	 * as javAPRSSrvr does.
 	 */
-	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT && q_type != 'I' && !(c->flags & CLFLAGS_UDPSUBMIT)) {
+	if (c->validated && originated_by_client && c->flags & CLFLAGS_INPORT
+	    && (q_type != 'I' || (c->flags & CLFLAGS_CLIENTONLY))
+	    && !(c->flags & CLFLAGS_UDPSUBMIT)) {
 		// where to replace from
 		*q_replace = via_start;
 		//hlog(LOG_DEBUG, "inserting TCPIP,qAC... starting at %s", *q_replace);
@@ -421,14 +428,6 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 				*path_end = via_start;
 				return snprintf(new_q, new_q_size, ",TCPXX*,q%cX,%s", q_protocol_id, serverid);
 			}
-		}
-		
-		if (c->validated && (c->flags & CLFLAGS_CLIENTONLY) && originated_by_client) {
-			if (q_start)
-				*path_end = q_start;
-			else
-				*path_end = via_start;
-			return snprintf(new_q, new_q_size, ",q%cC,%s", q_protocol_id, serverid);
 		}
 		
 		/* OLD:

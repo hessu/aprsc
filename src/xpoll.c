@@ -64,7 +64,7 @@ struct xpoll_t *xpoll_initialize(struct xpoll_t *xp, void *tp, int (*handler) (s
 		return NULL;
 	}
 	
-	if (fcntl(xp->epollfd, F_SETFL, FD_CLOEXEC) == -1) {
+	if (fcntl(xp->epollfd, F_SETFD, FD_CLOEXEC) == -1) {
 		hlog(LOG_ERR, "xpoll: fnctl FD_CLOEXEC on epollfd failed: %s", strerror(errno));
 	}
 #else

@@ -929,15 +929,16 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 		return;
 	c->closing = 1;
 	
-	/* When the server closes the connection, send what this round of the
-	 * worker left in the output buffer first: usually the line which tells
-	 * the client why it is being disconnected.
+	/* When the server closes the connection, try to send what is left in
+	 * the output buffer first: usually the line which tells the client why
+	 * it is being disconnected. This is tried for a client which was
+	 * waiting for its socket to poll writable, too: the socket may have
+	 * drained since. The write does not block, so what the socket does
+	 * not take now is lost.
 	 */
-	if (c->flush_pending_prevp) {
-		client_flush_pending_remove(c);
-		if (errnum < 0 && c->fd >= 0 && c->obuf_end > c->obuf_start && c->handler_client_writable)
-			c->handler_client_writable(self, c);
-	}
+	client_flush_pending_remove(c);
+	if (errnum < 0 && c->fd >= 0 && c->obuf_end > c->obuf_start && c->handler_client_writable)
+		c->handler_client_writable(self, c);
 	
 	// TODO: log validation status, ssl status, ssl cert info, tcp/sctp
 	

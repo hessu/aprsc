@@ -983,8 +983,9 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	if (c->xfd) {
 		//hlog(LOG_DEBUG, "client_close: xpoll_remove %p fd %d", c->xfd, c->xfd->fd);
 		xpoll_remove(&self->xp, c->xfd);
+		c->xfd = NULL;
 	}
-	
+
 	/* close */
 	if (c->fd >= 0) {
 		close(c->fd);
@@ -1010,6 +1011,8 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 	 */
 	if ((pe = pthread_mutex_lock(&self->clients_mutex)) && pe != EDEADLK) {
 		hlog(LOG_ERR, "client_close(worker %d): could not lock clients_mutex: %s", self->id, strerror(pe));
+		/* the client stays on the list: let a later close try again */
+		c->closing = 0;
 		return;
 	}
 	if (pe == EDEADLK) {

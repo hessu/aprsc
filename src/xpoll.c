@@ -131,6 +131,15 @@ struct xpoll_fd_t *xpoll_add(struct xpoll_t *xp, int fd, void *p)
 	xfd->ev.data.ptr = xfd;
 	if (epoll_ctl(xp->epollfd, EPOLL_CTL_ADD, fd, &xfd->ev) == -1) {
 		hlog(LOG_ERR, "xpoll: epoll_ctl EPOL_CTL_ADD %d failed: %s", fd, strerror(errno));
+		/* take it off the list, where it is the first one */
+		xp->fds = xfd->next;
+		if (xfd->next)
+			xfd->next->prevp = &xp->fds;
+#ifndef _FOR_VALGRIND_
+		cellfree( xpoll_fd_pool, xfd );
+#else
+		hfree(xfd);
+#endif
 		return NULL;
 	}
 #else

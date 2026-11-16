@@ -437,11 +437,7 @@ static int sctp_rx_notification(struct worker_t *self, struct client_t *c, struc
 	case SCTP_ADAPTATION_INDICATION:
 		hlog(LOG_DEBUG, "%s/%s: SCTP adaptation indication", c->addr_rem, c->username);
 		return 0;
-#ifdef __FreeBSD__
 	case SCTP_AUTHENTICATION_EVENT:
-#else
-	case SCTP_AUTHENTICATION_INDICATION:
-#endif
 		hlog(LOG_DEBUG, "%s/%s: SCTP authentication indication", c->addr_rem, c->username);
 		return 0;
 	case SCTP_SENDER_DRY_EVENT:

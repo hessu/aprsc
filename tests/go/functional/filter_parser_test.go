@@ -182,6 +182,12 @@ func TestFilterParserRejects(t *testing.T) {
 		// a filter with no type letter at all
 		{"empty negative filter", "p/OH - b/N0CALL", "p/OH b/N0CALL"},
 		{"unknown type", "p/OH x/1/2 -x/1", "p/OH"},
+		// sscanf() takes these for numbers
+		{"NaN distance", "r/60/25/nan m/nan p/OH f/N0CALL/nan t/p/N0CALL/nan", "p/OH"},
+		{"infinite distance", "r/60/25/inf m/infinity p/OH f/N0CALL/inf t/p/N0CALL/inf", "p/OH"},
+		{"NaN coordinates", "r/nan/25/10 r/60/nan/10 p/OH a/nan/20/50/30", "p/OH"},
+		{"too small a distance", "r/60/25/0.05 m/0 p/OH m/-5", "p/OH"},
+		{"valid range filters", "r/60/25/10 m/0.5 f/N0CALL/20 t/p/N0CALL/30", "r/60/25/10 m/0.5 f/N0CALL/20 t/p/N0CALL/30"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c.SetFilter(t, tc.filter)

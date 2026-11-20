@@ -1116,6 +1116,16 @@ static int filter_parse_one_s(struct client_t *c, const char *filt0, struct filt
 }
 
 
+/*
+ *	The radius of a range filter: 0.1 km at minimum. sscanf() parses
+ *	"nan" and "inf" as floats too, and a NaN is not smaller than 0.1.
+ */
+
+static int filter_dist_ok(float dist)
+{
+	return isfinite(dist) && dist >= 0.1;
+}
+
 int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 {
 	struct filter_t *f, f0;
@@ -1268,7 +1278,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/*  f/call/dist         Friend's range filter  */
 
 		i = sscanf(filt+1, "/%9[^/]/%f", f0.h.refcallsign.callsign, &f0.h.f_dist);
-		if (i != 2 || f0.h.f_dist < 0.1) {
+		if (i != 2 || !filter_dist_ok(f0.h.f_dist)) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
@@ -1303,7 +1313,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/*  m/dist            My range filter  */
 
 		i = sscanf(filt+1, "/%f", &f0.h.f_dist);
-		if (i != 1 || f0.h.f_dist < 0.1) {
+		if (i != 1 || !filter_dist_ok(f0.h.f_dist)) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
@@ -1405,7 +1415,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		i = sscanf(filt+1, "/%f/%f/%f",
 			 &f0.h.f_latN, &f0.h.f_lonE, &f0.h.f_dist);
-		if (i != 3 || f0.h.f_dist < 0.1) {
+		if (i != 3 || !filter_dist_ok(f0.h.f_dist)) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
@@ -1499,7 +1509,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		}
 		if (*s == '/' && s[1] != 0) { /* second format */
 			i = sscanf(s, "/%9[^/]/%f%c", f0.h.refcallsign.callsign, &f0.h.f_dist, &dummyc);
-			if ( i != 2 || f0.h.f_dist < 0.1 || /* 0.1 km minimum radius */
+			if ( i != 2 || !filter_dist_ok(f0.h.f_dist) ||
 			     strlen(f0.h.refcallsign.callsign) < CALLSIGNLEN_MIN ) {
 				hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 				return -1;

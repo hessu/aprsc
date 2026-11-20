@@ -1590,7 +1590,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	f = hmalloc(sizeof(*f) + strlen(filt0));
 	*f = f0; /* store pre-parsed values */
 	f->h.text = f->textbuf;
-	strcpy(f->textbuf, filt); /* and copy of filter text */
+	strcpy(f->textbuf, filt0); /* and copy of filter text */
 #endif
 	rwl_wrlock(&filter_cellgauge_rwlock);
 	++ filter_cellgauge;

@@ -428,7 +428,8 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			}
 			/* Append ,qAU,SERVERLOGIN */
 			/* Add TCPIP* in the end of the path only if it's not there already */
-			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
+			/* path_end may have been moved back to the q construct above */
+			if (*path_end - via_start >= 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
 				return snprintf(new_q, new_q_size, ",q%cU,%s", q_protocol_id, serverid);
 			else
 				return snprintf(new_q, new_q_size, ",TCPIP*,q%cU,%s", q_protocol_id, serverid);

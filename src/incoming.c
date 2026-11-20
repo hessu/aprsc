@@ -1156,6 +1156,14 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 			goto free_pb_ret;
 		}
 		
+		/* A packet submitted over UDP or HTTP comes in with a
+		 * pseudoclient, which has no connection to reply on.
+		 */
+		if (!c->write) {
+			hlog(LOG_DEBUG, "message to SERVER from %.*s without a connection to reply on, dropping", pb->srcname_len, pb->srcname);
+			goto free_pb_ret;
+		}
+		
 		rc = incoming_server_message(self, c, pb);
 		goto free_pb_ret;
 	}

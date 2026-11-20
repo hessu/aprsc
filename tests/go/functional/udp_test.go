@@ -208,6 +208,63 @@ func TestHTTPUpload(t *testing.T) {
 	s.Stop()
 }
 
+// A message to SERVER submitted over UDP or HTTP has no connection to reply
+// on: it is dropped, and the server goes on.
+func TestSubmitServerMessage(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
+
+	const header = "user TEST pass 29939 vers submittester 1.0\r\n"
+
+	usock, err := net.Dial("udp", harness.AddrOn(t, "127.0.0.1", 55080))
+	if err != nil {
+		t.Fatalf("failed to set up an UDP client socket: %v", err)
+	}
+	defer usock.Close()
+
+	udp := func(t *testing.T, packet string) {
+		t.Helper()
+		if _, err := usock.Write([]byte(header + packet)); err != nil {
+			t.Fatalf("failed to send a datagram: %v", err)
+		}
+	}
+	post := func(t *testing.T, packet string) {
+		t.Helper()
+		res, err := http.Post("http://"+harness.AddrOn(t, "127.0.0.1", 55080)+"/",
+			"application/octet-stream", strings.NewReader(header+packet+"\r\n"))
+		if err != nil {
+			t.Fatalf("HTTP POST packet upload failed: %v", err)
+		}
+		res.Body.Close()
+	}
+
+	for _, tc := range []struct {
+		name string
+		send func(t *testing.T, packet string)
+		q    string
+	}{
+		{"UDP", udp, "qAU"},
+		{"HTTP", post, "qAC"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, msg := range []string{"filter?", "filter p/OH", "filter?{ab1", "hello"} {
+				tc.send(t, "TEST>APRS,TCPIP*::SERVER   :"+msg)
+			}
+			tc.send(t, "TEST>APRS,TCPIP*:>after server messages "+tc.name)
+			want := "TEST>APRS,TCPIP*," + tc.q + ",TESTING:>after server messages " + tc.name
+			got, err := rx.ReadPacket(isclient.DefaultTimeout)
+			if err != nil || got != want {
+				t.Errorf("got %q (%v), want %q", got, err, want)
+			}
+		})
+	}
+
+	s.Stop()
+}
+
 // UDP submit: packets sent in a datagram to the UDP submit port are accepted
 // with a valid login and rejected without. Port of t/63udp-submit.t.
 func TestUDPSubmit(t *testing.T) {

@@ -28,6 +28,51 @@ func TestUDPClient(t *testing.T) {
 	s.Stop()
 }
 
+// A login line asking for the UDP feed several times is counted as one
+// client of the UDP listener, and the count goes away when the client does.
+func TestUDPClientRepeatedPort(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	// udpClients polls the status until the UDP listener has the wanted
+	// number of clients, since the status is cached for a second or two,
+	// and returns the number it had last.
+	udpClients := func(want int) int {
+		t.Helper()
+		deadline := time.Now().Add(6 * time.Second)
+		for {
+			got := -1
+			for _, l := range getStatus(t).Listeners {
+				if l["name"] == "Full feed with, UDP" {
+					n, _ := l["clients"].(float64)
+					got = int(n)
+				}
+			}
+			if got == want || time.Now().After(deadline) {
+				return got
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	port := harness.Port(t, 51342)
+	c := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2",
+		isclient.WithVers(fmt.Sprintf("aprsc-gotest 1.0 udp %d udp %d UDP %d", port, port, port)))
+
+	if got := udpClients(1); got != 1 {
+		t.Errorf("UDP listener has %d clients with one logged in, want 1", got)
+	}
+
+	c.Close()
+
+	if got := udpClients(0); got != 0 {
+		t.Errorf("UDP listener has %d clients after the client closed, want 0", got)
+	}
+
+	s.Stop()
+}
+
 // UDP core peers. While at it, check that the basic loop prevention rules
 // work.
 //

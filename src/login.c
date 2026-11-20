@@ -203,6 +203,10 @@ int login_setup_udp_feed(struct client_t *c, int port)
 	if (!c->udpclient)
 		return -1;
 	
+	/* A login line can ask for UDP several times: account the client on
+	 * the UDP listener only once, as closing it drops it once. */
+	int accounted = (c->udp_port != 0);
+	
 	c->udp_port = port;
 	c->udpaddr = c->addr;
 	if (c->udpaddr.sa.sa_family == AF_INET) {
@@ -213,7 +217,8 @@ int login_setup_udp_feed(struct client_t *c, int port)
 		c->udpaddrlen = sizeof(c->udpaddr.si6);
 	}
 	
-	inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
+	if (!accounted)
+		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
 	
 	return 0;
 }

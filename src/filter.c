@@ -1006,16 +1006,18 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		char *s;
 		ff->h.numnames     = refcount;
 		i = strlen(ff->h.text) + strlen(filt0)+2;
-		if (i <= FILT_TEXTBUFSIZE) {
-			/* Fits in our built-in buffer block - like previous..
-			** Append on existing buffer
+		if (ff->h.text == ff->textbuf && i <= FILT_TEXTBUFSIZE) {
+			/* The text is in our built-in buffer block, and
+			** still fits there - append on existing buffer
 			*/
 			s = ff->textbuf + strlen(ff->textbuf);
 			sprintf(s, " %s", filt0);
 		} else {
-			/* It does not fit anymore.. */
+			/* It does not fit anymore, or the text has already
+			** moved out of the built-in buffer. The length above
+			** is that of h.text, so that is what must be copied. */
 			s = hmalloc(i); /* alloc a new one */
-			sprintf(s, "%s %s", ff->textbuf, filt0); /* .. and catenate. */
+			sprintf(s, "%s %s", ff->h.text, filt0); /* .. and catenate. */
 			p = ff->h.text;
 			if (ff->h.text != ff->textbuf) /* possibly free old */
 				hfree((void*)p);

@@ -1117,6 +1117,31 @@ static int filter_parse_one_s(struct client_t *c, const char *filt0, struct filt
 
 
 /*
+ *	Free the callsign-set array for the filter types that allocate one
+ *	(b, d, e, g, o, p, u). For the other types the union holds an inline
+ *	value, not a pointer, so must not be freed.
+ */
+
+static void filter_free_callsignset(struct filter_t *f)
+{
+	switch (f->h.type) {
+	case 'b': case 'B':
+	case 'd': case 'D':
+	case 'e': case 'E':
+	case 'g': case 'G':
+	case 'o': case 'O':
+	case 'p': case 'P':
+	case 'u': case 'U':
+		if (f->h.refcallsigns)
+			hfree(f->h.refcallsigns);
+		f->h.refcallsigns = NULL;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
  *	The radius of a range filter: 0.1 km at minimum. sscanf() parses
  *	"nan" and "inf" as floats too, and a NaN is not smaller than 0.1.
  */
@@ -1541,13 +1566,18 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		break;
 	}
 
-	if (!c) return 0; /* Just a verification scan, not actual fill in parse */
+	if (!c) {
+		/* Just a verification scan, not actual fill in parse */
+		filter_free_callsignset(&f0);
+		return 0;
+	}
 	
 	/* OK, pre-parsing produced accepted result */
 #ifndef _FOR_VALGRIND_
 	f = cellmalloc(filter_cells);
 	if (!f) {
 		hlog(LOG_ERR, "filter_parse: cellmalloc failed");
+		filter_free_callsignset(&f0);
 		return -1;
 	}
 	*f = f0; /* store pre-parsed values */
@@ -1585,24 +1615,7 @@ void filter_free(struct filter_t *f)
 
 	for ( ; f ; f = fnext ) {
 		fnext = f->h.next;
-		/* Free the callsign-set array for the filter types that
-		 * allocate one (b, d, e, g, o, p, u). For the other types the
-		 * union holds an inline value, not a pointer, so must not be
-		 * freed. */
-		switch (f->h.type) {
-		case 'b': case 'B':
-		case 'd': case 'D':
-		case 'e': case 'E':
-		case 'g': case 'G':
-		case 'o': case 'O':
-		case 'p': case 'P':
-		case 'u': case 'U':
-			if (f->h.refcallsigns)
-				hfree(f->h.refcallsigns);
-			break;
-		default:
-			break;
-		}
+		filter_free_callsignset(f);
 		/* If not pointer to internal string, free it.. */
 #ifndef _FOR_VALGRIND_
 		if (f->h.text != f->textbuf)

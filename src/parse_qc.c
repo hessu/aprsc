@@ -691,8 +691,11 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	
 	/* If we haven't generated a new Q construct, return a pointer to the existing one */
 	if (!new_q_len) {
-		if (q_start == NULL)
-			hlog(LOG_ERR, "q: Did not find or generate a Q construct (from client %s fd %d): %s", c->username, c->fd, pdata);
+		if (q_start == NULL) {
+			/* the packet is not NUL-terminated: log the header */
+			hlog_packet(LOG_ERR, pdata, pathlen, "q: Did not find or generate a Q construct (from client %s fd %d): ", c->username, c->fd);
+			return INERR_Q_BUG;
+		}
 		*new_q_start = q_start + 1;
 	}
 	

@@ -1267,7 +1267,7 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 			 * the filter commands so that a key or value containing
 			 * "filter" is not taken for one
 			 */
-			if (memcmp(s, "#is2-meta ", 10) == 0) {
+			if (len >= 10 && memcmp(s, "#is2-meta ", 10) == 0) {
 				return is2_plain_metadata(self, c, s+10, len-10);
 			}
 #endif

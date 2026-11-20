@@ -1103,7 +1103,8 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 		/* If this ever happened, it'd be bad: we didn't find an
 		 * existing Q construct and we didn't pick one to insert.
 		 */
-		hlog(LOG_INFO, "%s/%s: q construct bug: did not find a good construct or produce a new one for:\n%s\n", c->addr_rem, c->username, s);
+		/* the packet is not NUL-terminated */
+		hlog_packet(LOG_INFO, s, len, "%s/%s: q construct bug: did not find a good construct or produce a new one for: ", c->addr_rem, c->username);
 		rc = INERR_Q_BUG;
 		goto free_pb_ret;
 	}

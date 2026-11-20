@@ -866,6 +866,8 @@ static int incoming_quirks(char *s, int len, char *quirked)
  *	Returns -1 if the packet is pathologically invalid on APRS-IS
  *	and can be discarded, 0 if it is correct for APRS-IS and will be
  *	forwarded, 1 if it was successfully parsed by the APRS parser.
+ *	Returns INCOMING_CLIENT_CLOSED if the client was closed and freed
+ *	while replying to it.
  *
  *	This function also allocates the pbuf structure for the new packet
  *	and forwards it to the dupecheck thread.
@@ -1164,7 +1166,15 @@ int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, 
 			goto free_pb_ret;
 		}
 		
-		rc = incoming_server_message(self, c, pb);
+		/* A reply which could not be written (output buffer full,
+		 * write error) has closed and freed the client. The write
+		 * error codes overlap the INERR_* ones, so tell the caller
+		 * with a code of its own.
+		 */
+		if (incoming_server_message(self, c, pb) < -2)
+			rc = INCOMING_CLIENT_CLOSED;
+		else
+			rc = 0;
 		goto free_pb_ret;
 	}
 	
@@ -1271,6 +1281,8 @@ int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, cha
 
 	/* parse and process the packet */
 	e = incoming_parse(self, c, s, len, NULL);
+	if (e == INCOMING_CLIENT_CLOSED)
+		return e;
 
 	/* only use the received plain metadata for the immediately next packet */
 	is2_plain_metadata_reset(c);
@@ -1330,6 +1342,8 @@ int is2_incoming_handler(struct worker_t *self, struct client_t *c, int l4proto,
 
 	/* parse and process the packet */
 	e = incoming_parse(self, c, (char *)is2_packet->is_packet_data.data, is2_packet->is_packet_data.len, is2_packet);
+	if (e == INCOMING_CLIENT_CLOSED)
+		return e;
 
 in_drop:
 	if (e < 0) {

@@ -2,7 +2,9 @@ package functional
 
 import (
 	"fmt"
+	"net"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -222,6 +224,60 @@ func TestServerMessageParsing(t *testing.T) {
 			t.Errorf("unexpected packet %q, wanted ack10", ack)
 		}
 	})
+
+	s.Stop()
+}
+
+// A client which sends messages to SERVER but never reads the replies gets
+// disconnected when a reply no longer fits in its output buffer. The reply
+// is written while the client's input is being processed, and the server
+// must stop processing it right there: the client is gone.
+func TestServerMessageOutputFull(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	const login = "N5CAL-9"
+	conn, err := net.DialTimeout("tcp", harness.Addr(t, 55580), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer conn.Close()
+	// a small receive buffer, so that the server's output backs up soon
+	conn.(*net.TCPConn).SetReadBuffer(2048)
+
+	// several lines in a write, so that there are more to process in the
+	// server's input buffer after the one which gets the client closed
+	var chunk strings.Builder
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(&chunk, "%s>APRS,TCPIP*::SERVER   :filter?{%d\r\n", login, i)
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	if _, err := conn.Write([]byte("user " + login + " pass -1 vers aprsc-gotest 1.0\r\n")); err != nil {
+		t.Fatalf("failed to send the login: %v", err)
+	}
+
+	closed := false
+	for sent := 0; sent < 500<<20; sent += chunk.Len() {
+		if _, err := conn.Write([]byte(chunk.String())); err != nil {
+			if isclient.IsTimeout(err) {
+				t.Fatalf("the server stopped reading after %d bytes without closing the connection", sent)
+			}
+			closed = true
+			break
+		}
+	}
+	if !closed {
+		t.Fatal("the server did not close a client which does not read its replies")
+	}
+
+	// the server goes on serving the others
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-1")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+	isclient.TxRx(t, tx, rx,
+		"SRC>APRS,qAR,N5CAL-1:>after a full output buffer",
+		"SRC>APRS,qAR,N5CAL-1:>after a full output buffer")
 
 	s.Stop()
 }

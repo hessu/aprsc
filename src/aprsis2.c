@@ -1001,7 +1001,10 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
 		
 		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->is_packet_data.len > 0) {
-			is2_incoming_handler(self, c, c->ai_protocol, p); // always returns 0, ignores erroneus packets
+			/* returns 0 for erroneous packets too, and < 0 only if
+			 * the client was closed and freed */
+			if (is2_incoming_handler(self, c, c->ai_protocol, p) < 0)
+				return -1;
 		}
 	}
 	

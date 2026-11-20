@@ -474,14 +474,19 @@ static char *memcasestr(char *needle, char *haystack, char *haystack_end)
 	char *match_start = NULL;
 	
 	while (hp < haystack_end) {
-		if (toupper(*hp) == toupper(*np)) {
+		if (toupper((unsigned char)*hp) == toupper((unsigned char)*np)) {
 			/* matching... is this the start of a new match? */
 			if (match_start == NULL)
 				match_start = hp;
 			/* increase needle pointer, so we'll check the next char */
 			np++;
 		} else {
-			/* not matching... clear state */
+			/* not matching... clear state. A match may still start
+			 * within the failed one ("ffilter"), so go on from the
+			 * character after its start.
+			 */
+			if (match_start)
+				hp = match_start;
 			match_start = NULL;
 			np = needle;
 		}

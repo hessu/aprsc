@@ -50,6 +50,20 @@ func TestFilterCommand(t *testing.T) {
 		})
 	})
 
+	// the command is found after a partial match of it: "fi" + "filter"
+	t.Run("filter command after a partial match", func(t *testing.T) {
+		rx.FilterCommand(t, "#fifilter p/OH")
+		isclient.RunSteps(t, tx, rx, []isclient.Step{
+			drop("K dropped", "K2SRC>APRS,qAR,"+login+":>should drop5",
+				"OH2SRC>APRS,qAR,"+login+":>should pass5"),
+		})
+		rx.FilterCommand(t, "#ffilter p/N/K")
+		isclient.RunSteps(t, tx, rx, []isclient.Step{
+			drop("OH dropped", "OH2SRC>APRS,qAR,"+login+":>should drop6",
+				"K2SRC>APRS,qAR,"+login+":>should pass6"),
+		})
+	})
+
 	t.Run("filter command with spaces", func(t *testing.T) {
 		rx.FilterCommand(t, "#  fIlTer   p/N/K  ")
 		isclient.RunSteps(t, tx, rx, []isclient.Step{

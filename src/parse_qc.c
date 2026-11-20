@@ -160,11 +160,17 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * Q construct and cut the path before it
 	 */
 	if (q_start && q_start + 4 < path_end) {
-		p = memmem(q_start+4, path_end-q_start-4, serverid, serverid_len);
-		if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
-			/* TODO: The reject log should really log the offending packet */
-			hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
-			return INERR_Q_QPATH_MYCALL; /* drop the packet */
+		/* Look at every occurrence: the first one may be a part of
+		 * another callsign, with SERVERLOGIN itself following it.
+		 */
+		p = q_start + 4;
+		while ((p = memmem(p, path_end - p, serverid, serverid_len))) {
+			if (*(p-1) == ',' && ( p+serverid_len == path_end || *(p+serverid_len) == ',' || *(p+serverid_len) == ':' )) {
+				/* TODO: The reject log should really log the offending packet */
+				hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
+				return INERR_Q_QPATH_MYCALL; /* drop the packet */
+			}
+			p++;
 		}
 	}
 	

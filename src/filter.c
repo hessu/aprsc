@@ -1162,7 +1162,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	}
 	f0.h.type = *filt;
 
-	if (!strchr("abdefgmopqrstuABDEFGMOPQRSTU", *filt)) {
+	/* strchr() would match the NUL of an empty filter */
+	if (!*filt || !strchr("abdefgmopqrstuABDEFGMOPQRSTU", *filt)) {
 		/* Not valid filter code */
 		hlog(LOG_DEBUG, "Bad filter code: %s", filt0);
 		return -1;

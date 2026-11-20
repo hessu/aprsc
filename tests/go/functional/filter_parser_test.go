@@ -1,6 +1,7 @@
 package functional
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hessu/aprsc/tests/go/internal/harness"
@@ -143,6 +144,52 @@ func TestFilterNegative(t *testing.T) {
 			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E# should pass",
 			srccall+">"+dstcall+",OH2RDG*,WIDE,qAS,"+login+":!6028.51N/02505.68E# should pass"),
 	})
+
+	s.Stop()
+}
+
+// activeFilters asks the server for the user filters of the client with
+// "#filter?", and returns the list it replies with.
+func activeFilters(t *testing.T, c *isclient.Plain) string {
+	t.Helper()
+	c.Send(t, "#filter?")
+
+	const prefix = "# filters: "
+	for {
+		l, err := c.ReadLine(isclient.DefaultTimeout)
+		if err != nil {
+			t.Fatalf("%s: no reply to #filter?: %v", c.Callsign, err)
+		}
+		if strings.HasPrefix(l, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(l, prefix))
+		}
+	}
+}
+
+// Malformed filters are rejected by the parser, and the valid ones given
+// with them stay.
+func TestFilterParserRejects(t *testing.T) {
+	harness.Parallel(t)
+	// the "#filter?" query is an aprsc command
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	c := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2")
+
+	for _, tc := range []struct {
+		name, filter, want string
+	}{
+		// a filter with no type letter at all
+		{"empty negative filter", "p/OH - b/N0CALL", "p/OH b/N0CALL"},
+		{"unknown type", "p/OH x/1/2 -x/1", "p/OH"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c.SetFilter(t, tc.filter)
+			if got := activeFilters(t, c); got != tc.want {
+				t.Errorf("filter %q: active filters are %q, want %q", tc.filter, got, tc.want)
+			}
+		})
+	}
 
 	s.Stop()
 }

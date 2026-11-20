@@ -928,9 +928,15 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	}
 	if (refmax == 0) return -1; /* No prefixes ?? */
 
-	if (ff && ff->h.type == f0->h.type) { /* SAME TYPE,
-						 extend previous record! */
+	if (ff && ff->h.type == f0->h.type) /* SAME TYPE, extend previous record! */
 		extend = 1;
+
+	/* numnames is an int16_t. The length of an input line keeps the
+	 * count far below that, but do not depend on it. */
+	if (refmax + (extend ? ff->h.numnames : 0) > INT16_MAX)
+		return -1;
+
+	if (extend) {
 		refcount = ff->h.numnames + refmax;
 		//hlog(LOG_DEBUG, "extending, refcount %d numnames %d refmax %d", refcount, ff->h.numnames, refmax);
 		refbuf   = hrealloc(ff->h.refcallsigns, sizeof(*refbuf) * refcount);

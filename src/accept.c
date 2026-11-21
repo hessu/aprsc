@@ -812,6 +812,9 @@ static void accept_udp_recv(struct listen_t *l)
 			hlog(LOG_DEBUG, "accept thread discarded an oversized UDP packet of %d bytes", i);
 			continue;
 		}
+		
+		/* the packet in the end of the datagram is used as a string */
+		buf[i] = 0;
 
 		addrs = strsockaddr(&addr.sa, addrlen);
 		accept_process_udpsubmit(l, buf, i, addrs);

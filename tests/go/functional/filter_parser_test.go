@@ -41,6 +41,20 @@ func TestParserFilter(t *testing.T) {
 			srccall+">"+dstcall+",OH2RDG*,WIDE:!6258.51N/02505.68E#PHG"+phg+" should drop",
 			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E#PHG"+phg+" should pass"),
 
+		// A sign or a space is not a part of a number in a position. The
+		// source callsign is one with no earlier position, which the
+		// packet would get in place of the one it does not have.
+		drop("uncompressed with a sign in latitude",
+			"OH2SIG>"+dstcall+",OH2RDG*,WIDE:!6028.+1N/02505.68E# should drop",
+			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E# helper 1"),
+		drop("uncompressed with a sign in longitude",
+			"OH2SIG>"+dstcall+",OH2RDG*,WIDE:!6028.51N/+2505.68E# should drop",
+			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E# helper 2"),
+		// position ambiguity: spaces in place of the last digits are fine
+		pass("uncompressed with position ambiguity",
+			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.5 N/02505.6 E# ambiguity",
+			srccall+">"+dstcall+",OH2RDG*,WIDE,qAS,"+login+":!6028.5 N/02505.6 E# ambiguity"),
+
 		pass("compressed",
 			srccall+">"+dstcall+":!I0-X;T_Wv&{-Aigate testing",
 			srccall+">"+dstcall+",qAS,"+login+":!I0-X;T_Wv&{-Aigate testing"),

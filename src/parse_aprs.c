@@ -847,6 +847,21 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	if (posbuf[16] == ' ') posbuf[16] = '5';
 	
 	// fprintf(stderr, "\tafter filling amb: %s\n", posbuf);
+	
+	/* sscanf() would take a sign or leading spaces for a part of
+	 * a number: require digits where the numbers are
+	 * 0123456789012345678
+	 * 3210.70N/13132.15E#
+	 */
+	static const char digitpos[] = { 0, 1, 2, 3, 5, 6, 9, 10, 11, 12, 13, 15, 16 };
+	int i;
+	for (i = 0; i < sizeof(digitpos); i++) {
+		if (!isdigit((unsigned char)posbuf[(int)digitpos[i]])) {
+			DEBUG_LOG("\tnon-digit in a number");
+			return 0;
+		}
+	}
+	
 	/* 3210.70N/13132.15E# */
 	if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	    &lat_deg, &lat_min, &lat_min_frag, &lat_hemi, &sym_table,

@@ -1797,8 +1797,8 @@ int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *
 	if (!v) {
 		/* no answer: the client logs in on plaintext, as it would on
 		 * a server which does not know of IS2 */
-		hlog(LOG_INFO, "%s: IS2 upgrade: client offered versions %.*s, none of which are supported, staying on plaintext",
-			c->addr_rem, (hello.v) ? hello.v_len : 1, (hello.v) ? hello.v : "-");
+		hlog_packet(LOG_INFO, (hello.v) ? hello.v : "-", (hello.v) ? ((hello.v_len > 64) ? 64 : hello.v_len) : 1,
+			"%s: IS2 upgrade: none of the versions the client offered are supported, staying on plaintext: v=", c->addr_rem);
 		return 0;
 	}
 
@@ -2339,8 +2339,8 @@ static int is2_worker_encode_packet(struct worker_t *self, struct pbuf_t *pb, in
 	self->is2_enc_len[variant] = is2_encode_packet_element(self->is2_enc[variant], sizeof(self->is2_enc[variant]), &pb->is2packet);
 #endif
 	if (self->is2_enc_len[variant] < 0) {
-		hlog(LOG_ERR, "worker %d: IS2: encoded packet does not fit in %d bytes: %.*s",
-			self->id, (int)sizeof(self->is2_enc[variant]), pb->packet_len - 2, pb->data);
+		hlog_packet(LOG_ERR, pb->data, pb->packet_len - 2, "worker %d: IS2: encoded packet does not fit in %d bytes: ",
+			self->id, (int)sizeof(self->is2_enc[variant]));
 		self->is2_enc_pb[variant] = NULL;
 		return -1;
 	}

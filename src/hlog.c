@@ -416,7 +416,15 @@ int hlog_packet(int priority, const char *packet, int packetlen, const char *fmt
 	l = vsnprintf(s, LOG_LEN, fmt, args);
 	va_end(args);
 	
-	str_quote(s + l, LOG_LEN - l, packet, packetlen);
+	/* For truncated output vsnprintf() returns the length it would have
+	 * taken, which is past the end of the buffer. No room for the packet
+	 * then, or after a failure.
+	 */
+	if (l < 0)
+		l = 0;
+	if (l < LOG_LEN - 2)
+		str_quote(s + l, LOG_LEN - l, packet, packetlen);
+	s[LOG_LEN-1] = 0;
 	
 	return hlog_write(priority, s);
 }

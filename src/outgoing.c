@@ -142,23 +142,23 @@ void process_outgoing(struct worker_t *self)
 		//__sync_synchronize();
 		/* Some safety checks against bugs and overload conditions */
 		if (pb->is_free) {
-			hlog(LOG_ERR, "worker %d: process_outgoing got pbuf %d marked free, age %ld (now %ld t %ld)\n%.*s",
-				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
+			hlog_packet(LOG_ERR, pb->data, pb->packet_len-2, "worker %d: process_outgoing got pbuf %d marked free, age %ld (now %ld t %ld): ",
+				self->id, pb->seqnum, tick - pb->t, tick, pb->t);
 			abort(); /* this would be pretty bad, so we crash immediately */
 		} else if (pb->t > tick + 2) {
 			/* 2-second offset is normal in case of one thread updating tick earlier than another
 			 * and a little thread scheduling luck
 			 */
-			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d from future with t %ld > tick %ld!\n%.*s",
-				self->id, pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
+			hlog_packet(LOG_ERR, pb->data, pb->packet_len-2, "worker %d: process_outgoing got packet %d from future with t %ld > tick %ld: ",
+				self->id, pb->seqnum, pb->t, tick);
 			self->internal_packet_drops++;
 			if (self->internal_packet_drops > 10)
 				status_error(86400, "packet_drop_future");
 		} else if (tick - pb->t > 5) {
 			/* this is a bit too old, are we stuck? */
 			/* TODO: rate limit error logging - there would be a lot of these */
-			hlog(LOG_ERR, "worker %d: process_outgoing got packet %d aged %ld sec (now %ld t %ld)\n%.*s",
-				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
+			hlog_packet(LOG_ERR, pb->data, pb->packet_len-2, "worker %d: process_outgoing got packet %d aged %ld sec (now %ld t %ld): ",
+				self->id, pb->seqnum, tick - pb->t, tick, pb->t);
 			self->internal_packet_drops++;
 			if (self->internal_packet_drops > 10)
 				status_error(86400, "packet_drop_hang");
@@ -171,15 +171,15 @@ void process_outgoing(struct worker_t *self)
 	
 	while ((pb = *self->pbuf_global_dupe_prevp)) {
 		if (pb->is_free) {
-			hlog(LOG_ERR, "worker %d: process_outgoing got dupe %d marked free, age %ld (now %ld t %ld)\n%.*s",
-				self->id, pb->seqnum, tick - pb->t, tick, pb->t, pb->packet_len-2, pb->data);
+			hlog_packet(LOG_ERR, pb->data, pb->packet_len-2, "worker %d: process_outgoing got dupe %d marked free, age %ld (now %ld t %ld): ",
+				self->id, pb->seqnum, tick - pb->t, tick, pb->t);
 			abort();
 		} else if (pb->t > tick + 2) {
-			hlog(LOG_ERR, "worker: process_outgoing got dupe from future %d with t %ld > tick %ld!\n%.*s",
-				pb->seqnum, pb->t, tick, pb->packet_len-2, pb->data);
+			hlog_packet(LOG_ERR, pb->data, pb->packet_len-2, "worker: process_outgoing got dupe from future %d with t %ld > tick %ld: ",
+				pb->seqnum, pb->t, tick);
 		} else if (tick - pb->t > 5) {
-			hlog(LOG_ERR, "worker: process_outgoing got dupe %d aged %ld sec\n%.*s",
-				pb->seqnum, tick - pb->t, pb->packet_len-2, pb->data);
+			hlog_packet(LOG_ERR, pb->data, pb->packet_len-2, "worker: process_outgoing got dupe %d aged %ld sec: ",
+				pb->seqnum, tick - pb->t);
 		} else {
 			process_outgoing_single(self, pb);
 		}

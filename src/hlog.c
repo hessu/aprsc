@@ -505,6 +505,10 @@ int accesslog(const char *fmt, ...)
 	
 	len = snprintf(wb, LOG_LEN, "[%4.4d/%2.2d/%2.2d %2.2d:%2.2d:%2.2d] %s\n",
 		lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, s);
+	if (len >= LOG_LEN) {
+		len = LOG_LEN-1; // Truncated! Do not write out the NUL byte in the end.
+		wb[LOG_LEN-2] = '\n'; // Do write out a newline which was truncated.
+	}
 	wb[LOG_LEN-1] = 0;
 	
 	rwl_rdlock(&accesslog_lock);

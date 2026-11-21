@@ -306,7 +306,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	/* limit username length */
 	if (strlen(username) > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: Invalid login string, too long 'user' username: '%s'", c->addr_rem, username);
+		hlog_packet(LOG_WARNING, username, CALLSIGNLEN_MAX+1, "%s: Invalid login string, too long 'user' username, starting with: ", c->addr_rem);
 		username[CALLSIGNLEN_MAX] = 0;
 		rc = client_printf(self, c, "# Invalid username format\r\n");
 		goto failed_login;
@@ -335,7 +335,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {
-		hlog(LOG_WARNING, "%s: Invalid login string, invalid 'user': '%s'", c->addr_rem, c->username);
+		hlog_packet(LOG_WARNING, c->username, c->username_len, "%s: Invalid login string, invalid 'user': ", c->addr_rem);
 		rc = client_printf(self, c, "# Invalid username format, not allowed\r\n");
 		goto failed_login;
 	}
@@ -540,6 +540,11 @@ failed_login:
 	/* if we already lost the client, just return */
 	if (rc < -2)
 		return rc;
+	
+	/* the username of a failed login may be anything: do not leave it
+	 * in the client for the log lines to come */
+	c->username[0] = 0;
+	c->username_len = 0;
 	
 	c->failed_cmds++;
 	if (c->failed_cmds >= 3) {

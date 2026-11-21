@@ -827,7 +827,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	
 	/* limit username length */
 	if (strlen(lr->username) > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: IS2: Invalid login request, too long username: '%.20s'", c->addr_rem, lr->username);
+		hlog_packet(LOG_WARNING, lr->username, CALLSIGNLEN_MAX+1, "%s: IS2: Invalid login request, too long username, starting with: ", c->addr_rem);
 		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__INVALID_USERNAME;
 		reason_s = "Invalid username format";
 		goto failed_login;
@@ -861,7 +861,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {
-		hlog(LOG_WARNING, "%s: IS2: Invalid login request, invalid username: '%s'", c->addr_rem, c->username);
+		hlog_packet(LOG_WARNING, c->username, c->username_len, "%s: IS2: Invalid login request, invalid username: ", c->addr_rem);
 		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__INVALID_USERNAME;
 		reason_s = "Invalid username format, not allowed";
 		goto failed_login;
@@ -979,6 +979,11 @@ failed_login:
 	/* if we already lost the client, just return */
 	if (rc < -2)
 		return rc;
+	
+	/* the username of a failed login may be anything: do not leave it
+	 * in the client for the log lines to come */
+	c->username[0] = 0;
+	c->username_len = 0;
 	
 	/* tell the client why, instead of leaving it waiting */
 	rc = is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__FAIL, reason, APRSIS2__VERIFICATION_STATUS__NONE, reason_s);

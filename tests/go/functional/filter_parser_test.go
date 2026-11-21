@@ -55,6 +55,16 @@ func TestParserFilter(t *testing.T) {
 		// latitude: 35.0685 °, longitude: 136.6628333333333 °
 		passSame("mic-e 4", "JN2ESN-14>SUPTQ1,WIDE1-1,qAR,JA2PIT-10:`@CioI}u/`\"4T}LPG Tanker_\""),
 
+		// A !-position may come anywhere within the first 40 characters
+		// of a packet of an unknown type (X1J TNC digipeater bugs).
+		passSame("late position, uncompressed",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !6028.51N/02505.68E# late"),
+		passSame("late position, compressed",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !I0-X;T_Wv&{-A late"),
+		drop("late position out of range",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !6258.51N/02505.68E# late",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !6028.51N/02505.68E# helper"),
+
 		// the P filter passes packets with the prefixes given
 		passSame("prefix OG", "OG7LZB>"+dstcall+",OH2RDG*,WIDE,qAR,"+login+":>should pass, prefix"),
 		passSame("prefix of3", "OF3LZB>"+dstcall+",OH2RDG*,WIDE,qAR,"+login+":>should pass, prefix"),

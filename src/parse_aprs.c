@@ -1311,16 +1311,22 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 	 */
 	pos_start = memchr(body, '!', body_end - body);
 	if ((pos_start) && pos_start - body <= 39) {
+		/* the position starts after the '!' */
+		pos_start++;
 		poschar = *pos_start;
 		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
-		    	if (body_end - pos_start >= 13)
+		    	if (body_end - pos_start >= 13) {
+				pb->packettype |= T_POSITION;
 		    		return parse_aprs_compressed(pb, pos_start, body_end);
+			}
 			return 0;
 		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
 			/* normal uncompressed position */
-			if (body_end - pos_start >= 19)
+			if (body_end - pos_start >= 19) {
+				pb->packettype |= T_POSITION;
 				return parse_aprs_uncompressed(pb, pos_start, body_end);
+			}
 			return 0;
 		}
 	}

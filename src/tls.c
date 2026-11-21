@@ -660,6 +660,7 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	int nid, idx;
 	X509_NAME_ENTRY *entry;
 	ASN1_STRING *edata;
+	int subj_call_len = -1;
 	
 	cert = SSL_get_peer_certificate(c->ssl_con->connection);
 	
@@ -695,7 +696,7 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	if (entry != NULL) {
 		edata = X509_NAME_ENTRY_get_data(entry);
 		if (edata != NULL)
-			ASN1_STRING_to_UTF8((unsigned char **)&subj_call, edata);
+			subj_call_len = ASN1_STRING_to_UTF8((unsigned char **)&subj_call, edata);
 	}
 	
 	/* find CN of subject */
@@ -711,8 +712,18 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 		}
 	}
 	
-	if (!subj_call) {
+	if (!subj_call || subj_call_len < 0) {
 		hlog(LOG_DEBUG, "%s/%s: peer certificate callsign conversion failed: %s", c->addr_rem, c->username, subject);
+		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
+		goto fail;
+	}
+	
+	/* The callsign is compared as a C string. One with a NUL in it
+	 * would be compared up to the NUL only: "N0CALL\0whatever" is
+	 * not a certificate of N0CALL.
+	 */
+	if (strlen(subj_call) != subj_call_len) {
+		hlog(LOG_WARNING, "%s/%s: peer certificate callsign has a NUL byte in it: %s", c->addr_rem, c->username, subject);
 		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
 		goto fail;
 	}

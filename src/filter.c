@@ -1616,10 +1616,12 @@ void filter_free(struct filter_t *f)
 	for ( ; f ; f = fnext ) {
 		fnext = f->h.next;
 		filter_free_callsignset(f);
-		/* If not pointer to internal string, free it.. */
-#ifndef _FOR_VALGRIND_
+		/* If not pointer to internal string, free it.. In a valgrind
+		 * build too: the text of an extended callsign-set filter
+		 * moves out of the filter when it grows. */
 		if (f->h.text != f->textbuf)
 			hfree((void*)(f->h.text));
+#ifndef _FOR_VALGRIND_
 		cellfree(filter_cells, f);
 #else
 		hfree(f);

@@ -282,6 +282,10 @@ static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym
 				return 0;
 			numberid = (d_start[4] - 48) * 10 + (d_start[5] - 48);
 			
+			/* symbol codes are the printable characters ! to ~ */
+			if (numberid < 1 || numberid > 94)
+				return 0;
+			
 			*sym_code = numberid + 32;
 			if (type == 'C')
 				*sym_table = '/';

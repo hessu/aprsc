@@ -351,6 +351,10 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	/* get the HTTP POST body */
 	bufin = evhttp_request_get_input_buffer(r);
 	l = evbuffer_copyout(bufin, post, MAX_HTTP_POST_DATA);
+	if (l < 0) {
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not read request body");
+		return;
+	}
 	
 	/* Just for convenience and safety, null-terminate. Easier to log. */
 	post[MAX_HTTP_POST_DATA] = 0;

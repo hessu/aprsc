@@ -1866,8 +1866,12 @@ static void collect_new_clients(struct worker_t *self)
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
 		hlog(LOG_DEBUG, "collect_new_clients(worker %d): added fd %d to polling list, xfd %p", self->id, c->fd, c->xfd);
 		if (!c->xfd) {
-			/* ouch, out of xfd space */
-			shutdown(c->fd, SHUT_RDWR);
+			/* Ouch, out of xfd space. The client can not be served,
+			 * and has no handlers set up yet: close it here, instead
+			 * of leaving it on the list for the keepalives to find.
+			 */
+			client_close(self, c, ENOMEM);
+			i--; /* don't count it in */
 			continue;
 		}
 		

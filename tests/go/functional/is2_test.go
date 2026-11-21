@@ -1346,6 +1346,72 @@ func TestIS2FilterPort(t *testing.T) {
 	s.Stop()
 }
 
+// The ack and the reply to a message to SERVER go to an IS2 client as IS
+// packets in a frame, not as lines of text, which would break the framing
+// of the connection.
+func TestIS2ServerMessage(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireIS2(t)
+	s := harness.Start(t, "is2-basic")
+
+	const loginTx = "N0GATE"
+	const login = "N1GATE"
+	tx := isclient.Connect(t, harness.Addr(t, 55580), loginTx)
+	c := isclient.ConnectIS2(t, harness.Addr(t, 56580), login, isclient.WithFilter("p/OH"))
+
+	const from = "SERVER>APRS,TCPIP*,qAZ,TESTING::N1GATE   :"
+	serverMessage := func(t *testing.T, text, id, wantReply string) {
+		t.Helper()
+		if err := c.SendLine(fmt.Sprintf("%s>APRS,TCPIP*::%-9.9s:%s{%s", login, "SERVER", text, id)); err != nil {
+			t.Fatalf("failed to send message %q: %v", text, err)
+		}
+
+		ack, err := c.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no ack for message %q: %v", text, err)
+		}
+		if want := from + "ack" + id; aprscToCall(ack) != want {
+			t.Errorf("got ack %q, want %q", ack, want)
+		}
+
+		reply, err := c.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no reply to message %q: %v", text, err)
+		}
+		if got, _, _ := strings.Cut(aprscToCall(reply), "{"); got != from+wantReply {
+			t.Errorf("got reply %q, want %q and a message id", reply, from+wantReply)
+		}
+	}
+
+	serverMessage(t, "filter?", "ab1", "filter p/OH active")
+	serverMessage(t, "filter p/OZ", "ab2", "filter p/OZ active")
+	serverMessage(t, "hello", "ab3", "Unknown command")
+
+	// the connection still works, with the new filter
+	if err := c.Ping(); err != nil {
+		t.Errorf("connection does not work after messages to SERVER: %v", err)
+	}
+	isclient.ExpectDrop(t, tx, c,
+		"OH2SRC>APRS,qAR,"+loginTx+":>should drop",
+		"OZ2SRC>APRS,qAR,"+loginTx+":>should pass")
+
+	s.Stop()
+}
+
+// aprscToCall replaces the destination callsign of a packet, which for one
+// made by the server has its version in it, with APRS.
+func aprscToCall(packet string) string {
+	src, rest, ok := strings.Cut(packet, ">")
+	if !ok {
+		return packet
+	}
+	_, rest, ok = strings.Cut(rest, ",")
+	if !ok {
+		return packet
+	}
+	return src + ">APRS," + rest
+}
+
 // status.json tells that the server supports IS2, and which listeners accept
 // IS2 clients, so that the IS2 capable servers and ports can be found.
 func TestIS2Status(t *testing.T) {

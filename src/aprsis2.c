@@ -2413,24 +2413,17 @@ int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	Append a packet to the IS2 output buffer of a client. The buffer is
- *	flushed first if the packet would not fit in it; otherwise the packet
- *	waits there for the rest of this round's packets, and the worker
- *	flushes the buffer at the end of the round (worker_flush_pending).
+ *	Append an encoded packet element to the IS2 output buffer of a client.
+ *	The buffer is flushed first if the packet would not fit in it;
+ *	otherwise the packet waits there for the rest of this round's packets,
+ *	and the worker flushes the buffer at the end of the round
+ *	(worker_flush_pending).
  *	Returns a value < -2 if the client was destroyed.
  */
 
-static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+static int is2_append_obuf_element(struct worker_t *self, struct client_t *c, const char *enc, int len)
 {
 	int ret;
-	int variant = (is2_received_redacted(c)) ? IS2_ENC_REDACTED : IS2_ENC_FULL;
-	int len;
-
-	if (is2_worker_encode_packet(self, pb, variant) < 0)
-		return 0; // can not be encoded, drop
-	len = self->is2_enc_len[variant];
-
-	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, len);
 
 	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS
 	    || c->is2_obuf_total_len + len > APRSIS2_OBUF_MAX_LENGTH) {
@@ -2439,16 +2432,59 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 			return ret; // destroyed
 	}
 
-	/* copy the serialized packet to the client's own buffer - after this,
-	 * the pbuf is not referred to any more
-	 */
-	memcpy(c->is2_obuf + c->is2_obuf_end, self->is2_enc[variant], len);
+	/* copy the serialized packet to the client's own buffer */
+	memcpy(c->is2_obuf + c->is2_obuf_end, enc, len);
 	c->is2_obuf_end += len;
 	c->is2_obuf_total_len += len;
 	c->is2_obuf_packets++;
 	client_flush_pending_add(self, c);
 
 	return 0;
+}
+
+/*
+ *	Append a packet to the IS2 output buffer of a client. After this,
+ *	the pbuf is not referred to any more.
+ *	Returns a value < -2 if the client was destroyed.
+ */
+
+static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	int variant = (is2_received_redacted(c)) ? IS2_ENC_REDACTED : IS2_ENC_FULL;
+
+	if (is2_worker_encode_packet(self, pb, variant) < 0)
+		return 0; // can not be encoded, drop
+
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, self->is2_enc_len[variant]);
+
+	return is2_append_obuf_element(self, c, self->is2_enc[variant], self->is2_enc_len[variant]);
+}
+
+/*
+ *	Write a packet which the server made itself, such as a reply to
+ *	a message to SERVER, to an IS2 client or an IS2 UDP peer. The data
+ *	is the packet without a CRLF.
+ *	Returns a value < -2 if the client was destroyed.
+ */
+
+int is2_write_packet_data(struct worker_t *self, struct client_t *c, const char *data, int len)
+{
+	char enc[PACKETLEN_MAX + 32];
+	Aprsis2__ISPacket p = APRSIS2__ISPACKET__INIT;
+	int enc_len;
+
+	p.type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
+	p.is_packet_data.data = (uint8_t *)data;
+	p.is_packet_data.len = len;
+
+	enc_len = is2_encode_packet_element(enc, sizeof(enc), &p);
+	if (enc_len < 0) {
+		hlog(LOG_ERR, "%s/%s: IS2: packet of %d bytes made by the server does not fit in %d bytes when encoded",
+			c->addr_rem, c->username, len, (int)sizeof(enc));
+		return -1;
+	}
+
+	return is2_append_obuf_element(self, c, enc, enc_len);
 }
 
 /*

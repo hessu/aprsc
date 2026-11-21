@@ -69,12 +69,12 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 		return -1;
 	
 	if (argc < 2) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, too few arguments: '%s'", addr_rem, log_source, s);
+		hlog_packet(LOG_WARNING, s, strlen(s), "%s: %s: Invalid login string, too few arguments: ", addr_rem, log_source);
 		return -1;
 	}
 	
 	if (strcasecmp(argv[0], "user") != 0) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, no 'user': '%s'", addr_rem, log_source, s);
+		hlog_packet(LOG_WARNING, s, strlen(s), "%s: %s: Invalid login string, no 'user': ", addr_rem, log_source);
 		return -1;
 	}
 	
@@ -82,7 +82,15 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 	username_len = strlen(*username);
 	/* limit username length */
 	if (username_len > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, too long 'user' username: '%s'", addr_rem, log_source, *username);
+		hlog_packet(LOG_WARNING, *username, username_len, "%s: %s: Invalid login string, too long 'user' username: ", addr_rem, log_source);
+		return -1;
+	}
+	
+	/* Make sure the callsign is OK on the APRS-IS. This comes before the
+	 * other checks of the username, so that they can log it as it is.
+	 */
+	if (check_invalid_q_callsign(*username, username_len)) {
+		hlog_packet(LOG_WARNING, *username, username_len, "%s: %s: Invalid login string, invalid 'user': ", addr_rem, log_source);
 		return -1;
 	}
 	
@@ -97,12 +105,6 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 	/* check the username against a dynamic list of disallowed usernames */
 	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, *username, username_len)) {
 		hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed due to config", addr_rem, log_source, *username);
-		return -1;
-	}
-	
-	/* make sure the callsign is OK on the APRS-IS */
-	if (check_invalid_q_callsign(*username, username_len)) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, invalid 'user': '%s'", addr_rem, log_source, *username);
 		return -1;
 	}
 	

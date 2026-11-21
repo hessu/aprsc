@@ -747,7 +747,7 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "UDP submit [%s]: login string: %s", remote_host, login_string);
+	hlog_packet(LOG_DEBUG, login_string, strlen(login_string), "UDP submit [%s]: login string: ", remote_host);
 	hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: packet: ", remote_host);
 	
 	/* process the login string */

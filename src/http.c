@@ -384,7 +384,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "login string: %s", login_string);
+	hlog_packet(LOG_DEBUG, login_string, strlen(login_string), "login string: ");
 	hlog_packet(LOG_DEBUG, packet, packet_len, "packet: ");
 	
 	/* process the login string */

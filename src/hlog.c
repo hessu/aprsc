@@ -339,6 +339,8 @@ static int hlog_write(int priority, const char *s)
 		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			       (log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
+		if (len < 0)
+			len = 0; // Formatting failed: nothing to write, and not a length for write().
 		if (len >= LOG_LEN) {
 			len = LOG_LEN-1; // Truncated! Do not write out the NUL byte in the end.
 			wb[LOG_LEN-2] = '\n'; // Do write out a newline which was truncated.
@@ -505,6 +507,8 @@ int accesslog(const char *fmt, ...)
 	
 	len = snprintf(wb, LOG_LEN, "[%4.4d/%2.2d/%2.2d %2.2d:%2.2d:%2.2d] %s\n",
 		lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, s);
+	if (len < 0)
+		len = 0; // Formatting failed: nothing to write, and not a length for write().
 	if (len >= LOG_LEN) {
 		len = LOG_LEN-1; // Truncated! Do not write out the NUL byte in the end.
 		wb[LOG_LEN-2] = '\n'; // Do write out a newline which was truncated.

@@ -1182,9 +1182,12 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 		goto done;
 	}
 	
+	/* A proto3 string is never NULL: one which is not set is empty. */
+	int has_filter = (par->filter_string && *par->filter_string);
+	
 	hlog(LOG_INFO, "%s/%s: IS2: Parameter set received: request_id %d%s",
 		c->addr_rem, c->username, par->request_id,
-		(par->filter_string) ? " filter_string" : "");
+		(has_filter) ? " filter_string" : "");
 	
 	/* prepare reply message */
 	Aprsis2__IS2Parameter prep = APRSIS2__IS2_PARAMETER__INIT;
@@ -1194,14 +1197,21 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 	rm.type = APRSIS2__IS2_MESSAGE__TYPE__PARAMETER;
 	rm.parameter = &prep;
 	
-	if (par->filter_string && !(c->flags & CLFLAGS_USERFILTEROK)) {
+	if (has_filter && !(c->flags & CLFLAGS_USERFILTEROK)) {
 		/* like the plaintext filter command, user filters are only
 		 * accepted on ports which allow them
 		 */
 		hlog(LOG_INFO, "%s/%s: IS2: PARAMETER_SET: user filters are not allowed on this port",
 			c->addr_rem, c->username);
-	} else if (par->filter_string) {
-		filter_set(c, par->filter_string, strlen(par->filter_string));
+	} else if (has_filter) {
+		/* "default" discards the user filters, like the plaintext
+		 * "filter default" command: an empty string can not, as it is
+		 * what a parameter message without a filter has
+		 */
+		if (strcasecmp(par->filter_string, "default") == 0)
+			filter_reset(c);
+		else
+			filter_set(c, par->filter_string, strlen(par->filter_string));
 		
 		prep.type = APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_APPLIED;
 		prep.filter_string = c->filter_s;

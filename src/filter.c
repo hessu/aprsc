@@ -2614,6 +2614,27 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 }
 
 /*
+ *	Discard the user filters of a client, leaving the default filters
+ *	of the port: what the "filter default" command does.
+ */
+
+void filter_reset(struct client_t *c)
+{
+	struct filter_t *f;
+	
+	f = c->neguserfilters;
+	c->neguserfilters = NULL;
+	filter_free(f);
+
+	f = c->posuserfilters;
+	c->posuserfilters = NULL;
+	filter_free(f);
+	
+	/* the copy of the filters for status display */
+	c->filter_s[0] = 0;
+}
+
+/*
  *	Set filters for a client
  */
 
@@ -2622,16 +2643,9 @@ void filter_set(struct client_t *c, const char *s, const int len)
 	int i, argc;
 	char *b;
 	char *argv[256];
-	struct filter_t *f;
 	
 	/* Discard old ones. */
-	f = c->neguserfilters;
-	filter_free(f);
-	c->neguserfilters = NULL;
-
-	f = c->posuserfilters;
-	c->posuserfilters = NULL;
-	filter_free(f);
+	filter_reset(c);
 	
 	/* make a mutable copy that we can parse and modify safely */
 	b = hmalloc(len+2);
@@ -2719,13 +2733,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, int in_message, c
 	if ( strncasecmp(s, "default", 7) == 0 && len == 7 ) {
 		/* discard any user defined filters that possibly were
 		   injected on this connection.  */
-		f = c->neguserfilters;
-		filter_free(f);
-		c->neguserfilters = NULL;
-
-		f = c->posuserfilters;
-		filter_free(f);
-		c->posuserfilters = NULL;
+		filter_reset(c);
 		// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
 		// FIXME: there is a danger of SEGV-blowing filter processing...
 		return filter_command_reply(self, c, in_message, "User filters reset to default");

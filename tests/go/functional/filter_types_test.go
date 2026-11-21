@@ -127,6 +127,14 @@ func TestFilterTypeSymbol(t *testing.T) {
 			drop("user-defined dropped, item passes",
 				"ST5>APRS,qAR,"+login+":{Q1qwerty",
 				"ST6>APRS,qAR,"+login+":)OBJ1!4903.50N/07201.75WA"),
+			// A '!' later in a packet of an unknown type makes it a position
+			// packet only when a valid position follows it.
+			drop("late ! without a valid position dropped, late position passes",
+				"ST20>APRS,qAR,"+login+":X1J digi !9928.51N/02505.68E# late invalid",
+				"ST21>APRS,qAR,"+login+":X1J digi !6028.51N/02505.68E# late pos"),
+			drop("late ! with text dropped, late compressed position passes",
+				"ST22>APRS,qAR,"+login+":X1J digi !1 is not a position, just some text",
+				"ST23>APRS,qAR,"+login+":X1J digi !I0-X;T_Wv&{-A late pos"),
 			// A NWS object message would be a better drop test, but there is
 			// no example of it.
 			passSame("message passes", "ST7>APRS,qAR,"+login+msg("DSTC", "normal message{ac")),

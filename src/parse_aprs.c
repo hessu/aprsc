@@ -1330,24 +1330,29 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 	 */
 	pos_start = memchr(body, '!', body_end - body);
 	if ((pos_start) && pos_start - body <= 39) {
+		int rc = 0;
+		
 		/* the position starts after the '!' */
 		pos_start++;
 		poschar = *pos_start;
 		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
-		    	if (body_end - pos_start >= 13) {
-				pb->packettype |= T_POSITION;
-		    		return parse_aprs_compressed(pb, pos_start, body_end);
-			}
-			return 0;
+		    	if (body_end - pos_start >= 13)
+				rc = parse_aprs_compressed(pb, pos_start, body_end);
 		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
 			/* normal uncompressed position */
-			if (body_end - pos_start >= 19) {
-				pb->packettype |= T_POSITION;
-				return parse_aprs_uncompressed(pb, pos_start, body_end);
-			}
-			return 0;
+			if (body_end - pos_start >= 19)
+				rc = parse_aprs_uncompressed(pb, pos_start, body_end);
 		}
+		
+		/* The packet is of an unknown type, and a '!' in it may well
+		 * be something else: it is a position packet only if
+		 * a position was found after it.
+		 */
+		if (rc == 1)
+			pb->packettype |= T_POSITION;
+		
+		return rc;
 	}
 	
 	return 0;

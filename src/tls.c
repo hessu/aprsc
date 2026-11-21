@@ -550,6 +550,7 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	struct ssl_connection_t  *sc;
 	
 	sc = hmalloc(sizeof(*sc));
+	memset(sc, 0, sizeof(*sc));
 	sc->connection = SSL_new(ssl->ctx);
 	
 	if (sc->connection == NULL) {

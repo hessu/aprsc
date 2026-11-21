@@ -712,13 +712,23 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 		return 0;
 	}
 	
-	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
-		c->addr_rem, c->username, sig->username, sig->app_name, sig->app_version);
+	/* the name goes in the q construct paths and the logs */
+	int name_len = strlen(sig->username);
+	if (name_len > CALLSIGNLEN_MAX || check_invalid_q_callsign(sig->username, name_len) != 0) {
+		hlog_packet(LOG_ERR, sig->username, (name_len > 32) ? 32 : name_len, "%s: IS2: Uplink's server name is not valid: ", c->addr_rem);
+		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+		return -1;
+	}
 	
 	strncpy(c->app_name, sig->app_name, sizeof(c->app_name));
 	c->app_name[sizeof(c->app_name)-1] = 0;
+	sanitize_ascii_string(c->app_name);
 	strncpy(c->app_version, sig->app_version, sizeof(c->app_version));
 	c->app_version[sizeof(c->app_version)-1] = 0;
+	sanitize_ascii_string(c->app_version);
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
+		c->addr_rem, c->username, sig->username, c->app_name, c->app_version);
 
 	if (strcasecmp(sig->username, serverid) == 0) {
 		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, sig->username);
@@ -731,6 +741,7 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	/* store the remote server's callsign as the "client username" */
 	strncpy(c->username, sig->username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
+	c->username_len = strlen(c->username);
 	
 	/* uplink servers are always "validated" */
 	c->validated = VALIDATED_WEAK;

@@ -41,6 +41,7 @@
 #include "worker.h"
 #include "login.h"
 #include "incoming.h"
+#include "parse_qc.h"
 #include "outgoing.h"
 #include "filter.h"
 #include "tls.h"
@@ -304,11 +305,17 @@ int uplink_logresp_handler(struct worker_t *self, struct client_t *c, int l4prot
 		return -1;
 	}
 	
-	/* todo: validate server callsign with the q valid path algorithm */
+	/* the name goes in the q construct paths and the logs */
+	if (check_invalid_q_callsign(argv[5], strlen(argv[5])) != 0) {
+		hlog_packet(LOG_ERR, argv[5], strlen(argv[5]), "%s: Uplink's server name is not valid: ", c->addr_rem);
+		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+		return -1;
+	}
 	
 	/* store the remote server's callsign as the "client username" */
 	strncpy(c->username, argv[5], sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
+	c->username_len = strlen(c->username);
 	
 	/* uplink servers are always "validated" */
 	c->validated = VALIDATED_WEAK;

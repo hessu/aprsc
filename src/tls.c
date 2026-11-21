@@ -600,6 +600,10 @@ int ssl_cert_callsign_match(const char *subj_call, const char *username)
 	if (subj_call == NULL || username == NULL)
 		return 0;
 	
+	/* an empty callsign would match a username which is only an SSID */
+	if (*subj_call == 0)
+		return 0;
+	
 	while (*username != '-' && *username != 0 && *subj_call != 0) {
 		if (toupper(*username) != toupper(*subj_call))
 			return 0; /* mismatch */

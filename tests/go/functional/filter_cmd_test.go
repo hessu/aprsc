@@ -207,6 +207,29 @@ func TestServerMessageParsing(t *testing.T) {
 		})
 	}
 
+	// A message id is 1 to 5 characters. Something longer after a '{' is
+	// not an id, and is not echoed in an ack, which it would not fit in:
+	// it is left in the message text.
+	t.Run("too long message id", func(t *testing.T) {
+		rx.Send(t, fmt.Sprintf("%s>APRS::%-9.9s:{%s", login, "SERVER", strings.Repeat("x", 465)))
+		reply, err := rx.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no reply: %v", err)
+		}
+		if !replyRe("Unknown command").MatchString(reply) {
+			t.Errorf("unexpected reply %q", reply)
+		}
+
+		rx.Send(t, fmt.Sprintf("%s>APRS::%-9.9s:foobar{123456", login, "SERVER"))
+		reply, err = rx.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no reply: %v", err)
+		}
+		if !replyRe("Unknown command").MatchString(reply) {
+			t.Errorf("unexpected reply %q", reply)
+		}
+	})
+
 	// A message to SERVER inside a 3rd-party packet is not from the local
 	// client, so it is not a command, and it is dropped. The outer header
 	// is crafted so that the outer packet looks like a message too, which

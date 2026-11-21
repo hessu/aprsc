@@ -1377,6 +1377,8 @@ int parse_aprs(struct pbuf_t *pb)
  *	SERVER
  */
 
+#define APRS_MSGID_LEN_MAX 5
+
 int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 {
 	const char *p;
@@ -1406,7 +1408,10 @@ int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 	while (p >= am->body && *p != '{')
 		p--;
 
-	if (p >= am->body) {
+	/* A message id is 1 to 5 characters. Something longer is not taken
+	 * for one: it would be echoed in the ack, which has to fit in a packet.
+	 */
+	if (p >= am->body && (am->body + am->body_len) - (p+1) <= APRS_MSGID_LEN_MAX) {
 		am->msgid = p+1;
 		am->msgid_len = (am->body + am->body_len) - am->msgid;
 		am->body_len = p - am->body;

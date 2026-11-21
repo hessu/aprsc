@@ -1065,7 +1065,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 		hlog(LOG_DEBUG, "client_close: has no portaccount");
 	}
 	
-	if (c->udp_port && c->udpclient->portaccount) {
+	if (c->udp_port && c->udpclient && c->udpclient->portaccount) {
 		inbound_connects_account(2, c->udpclient->portaccount); /* udp client count goes down */
 	}
 

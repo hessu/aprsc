@@ -366,7 +366,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "got post data: %s", post);
+	hlog_packet(LOG_DEBUG, post, l, "got post data: ");
 	
 	packet_len = loginpost_split(post, l, &login_string, &packet);
 	if (packet_len == -1) {
@@ -385,7 +385,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	}
 	
 	hlog(LOG_DEBUG, "login string: %s", login_string);
-	hlog(LOG_DEBUG, "packet: %s", packet);
+	hlog_packet(LOG_DEBUG, packet, packet_len, "packet: ");
 	
 	/* process the login string */
 	validated = http_udp_upload_login(remote_host, login_string, &username, "HTTP POST");
@@ -413,7 +413,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	e = pseudoclient_push_packet(http_worker, http_pseudoclient, username, packet, packet_len);
 
 	if (e < 0) {
-		hlog(LOG_DEBUG, "http incoming packet parse failure code %d: %s", e, packet);
+		hlog_packet(LOG_DEBUG, packet, packet_len, "http incoming packet parse failure code %d: ", e);
 		evhttp_send_error(r, HTTP_BADREQUEST, "Packet parsing failure");
 		return;
 	}

@@ -748,7 +748,7 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	}
 	
 	hlog(LOG_DEBUG, "UDP submit [%s]: login string: %s", remote_host, login_string);
-	hlog(LOG_DEBUG, "UDP submit [%s]: packet: %s", remote_host, packet);
+	hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: packet: ", remote_host);
 	
 	/* process the login string */
 	validated = http_udp_upload_login(remote_host, login_string, &username, "UDP submit");
@@ -779,9 +779,9 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	udp_pseudoclient->portaccount = NULL;
 	
 	if (e < 0)
-		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parse failure code %d: %s", remote_host, e, packet);
+		hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: Incoming packet parse failure code %d: ", remote_host, e);
 	else
-		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parsed, code %d: %s", remote_host, e, packet);
+		hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: Incoming packet parsed, code %d: ", remote_host, e);
 }
 
 /*

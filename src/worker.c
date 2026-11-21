@@ -964,15 +964,24 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 			  	);
 			  	
 	if (c->localaccount.rxdrops) {
-		char s[256] = "";
+		char s[1024] = "";
 		int p = 0;
-		int i;
+		int i, n;
 		
 		for (i = 0; i < INERR_BUCKETS; i++) {
 			if (c->localaccount.rxerrs[i]) {
-				p += snprintf(s+p, 256-p-2, "%s%s %lld",
+				/* When the output is truncated, snprintf() returns the
+				 * length it would have taken: do not add that to p,
+				 * the next round would write past the buffer.
+				 */
+				n = snprintf(s+p, sizeof(s)-p, "%s%s %lld",
 					(p == 0) ? "" : ", ",
 					inerr_labels[i], c->localaccount.rxerrs[i]);
+				if (n < 0 || n >= (int)sizeof(s)-p) {
+					s[p] = 0; /* leave the cut one out */
+					break;
+				}
+				p += n;
 			}
 		}
 		

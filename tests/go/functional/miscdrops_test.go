@@ -1,6 +1,7 @@
 package functional
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,70 @@ func TestMiscDrops(t *testing.T) {
 	if !passed {
 		t.Errorf("the valid packet %q did not come out", pass)
 	}
+
+	s.Stop()
+}
+
+// A client whose packets are dropped for many different reasons: when it
+// disconnects, the server logs a summary of the reasons, which must not get
+// longer than the buffer it is built in.
+func TestManyDropReasons(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	const login = "N5CAL-1"
+	tx := isclient.Connect(t, harness.Addr(t, 55152), login)
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+
+	for _, p := range []string{
+		"SRC>APRS no colon in this packet",
+		"SRC APRS:>no dst",
+		"SR*C>APRS:>invalid srccall",
+		"SRCCALL>APRS:",
+		"SRC>AP*RS:>invalid dstcall",
+		"SRC>APRS,NOGATE:>nogate",
+		"SRC>APRS:}A>B,TCPIP,C*:>3rd party from the Internet",
+		"SRC>APRS:}A>B:>invalid 3rd party",
+		"SRC>APRS:?APRS?",
+		"A>B:x",
+		"SRC>APRS:>" + strings.Repeat("long ", 120),
+		"SRC>APRS,DI*GI:>invalid path call",
+		"SRC>APRS,qAZ,FOO:>qAZ",
+		"SRC>APRS,qAR," + serverCall + ":>my call in path",
+		"SRC>APRS,qAR,FOO,FOO:>call twice",
+		"SRC>APRS,qAR," + login + ",FOO:>login not last",
+		"SRC>APRS,qAU,SRC:>qAU srccall",
+		"SRC>APRS,I:>no viacall",
+		"N0CALL>APRS:>disallowed srccall",
+		"SRC>APRS:DX de FOO",
+		"SRC>APRS::javaMSG  :disallowed message recipient",
+		"SRC>APRS,WIDE1-1,qAC,OTHER:>qAC not TCPIP",
+	} {
+		tx.Send(t, p)
+	}
+
+	// the drops have been processed when this comes through
+	isclient.TxRx(t, tx, rx, "SRC>APRS,qAR,"+login+":>after the drops", "SRC>APRS,qAR,"+login+":>after the drops")
+
+	tx.Close()
+
+	// wait for the server to have closed the client
+	deadline := time.Now().Add(8 * time.Second)
+	for {
+		_, clients := statusWithClients(t, 1)
+		if _, there := clients[login]; !there {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s is still in the status after closing", login)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+
+	// and the server is still there
+	tx2 := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-3")
+	isclient.TxRx(t, tx2, rx, "SRC>APRS,qAR,N5CAL-3:>after the close", "SRC>APRS,qAR,N5CAL-3:>after the close")
 
 	s.Stop()
 }

@@ -1457,7 +1457,8 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 		return;
 	}
 	
-	if (-d < IS2_COREPEER_SEQ_WINDOW) {
+	/* not -d < window: negating the most negative d would overflow */
+	if (d > -IS2_COREPEER_SEQ_WINDOW) {
 		uint64_t bit = (uint64_t)1 << -d;
 		if (!(c->corepeer_is2_seq_mask & bit)) {
 			/* reordered on the wire */
@@ -1508,8 +1509,9 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 	}
 	
 	c->corepeer_is2_late_frames++;
-	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: frame %u arrived %d frames late, after being counted lost",
-		c->addr_rem, c->username, (unsigned)seq, -d);
+	/* not -d: d may be the most negative one here */
+	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: frame %u arrived %u frames late, after being counted lost",
+		c->addr_rem, c->username, (unsigned)seq, (unsigned)(c->corepeer_is2_seq_highest - seq));
 }
 
 /*

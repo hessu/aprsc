@@ -606,7 +606,7 @@ static void http_static_file(struct evhttp_request *r, const char *fname)
 	char *contenttype;
 	char *buf;
 	
-	fd = open(fname, 0, O_RDONLY);
+	fd = open(fname, O_RDONLY);
 	if (fd < 0) {
 		if (errno == ENOENT) {
 			/* don't complain about missing motd.html - it's optional. */

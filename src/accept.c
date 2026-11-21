@@ -726,7 +726,7 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	char *login_string = NULL;
 	char *packet = NULL;
 	char *username = NULL;
-	char validated;
+	int validated;
 	int e;
 	
 	//hlog(LOG_DEBUG, "got udp submit: %.*s", len, buf);

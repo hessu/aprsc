@@ -324,7 +324,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	char *login_string = NULL;
 	char *packet = NULL;
 	char *username = NULL;
-	char validated;
+	int validated;
 	int e;
 	int packet_len;
 	

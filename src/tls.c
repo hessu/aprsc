@@ -951,8 +951,10 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts TLS renegotiation?), calling ssl_write", c->fd);
-		return ssl_write(self, c);
+		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts TLS renegotiation?), calling ssl_writable", c->fd);
+		/* not ssl_write: there may be nothing in the output buffer, and
+		 * SSL_write does not appreciate writing a 0-length buffer */
+		return ssl_writable(self, c);
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;

@@ -171,11 +171,11 @@ static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_fra
 
 static void is2_setup_buffer(char *buf, uint16_t len)
 {
-	uint16_t *len_p = (uint16_t *)&buf[2];
+	uint16_t nlen = htons(len);
 
 	buf[0] = STX;
 	buf[1] = 0; // reserved
-	*len_p = htons(len);
+	memcpy(&buf[2], &nlen, sizeof(nlen)); /* the buffer may not be aligned */
 
 	buf[IS2_HEAD_LEN + len] = ETX;
 }
@@ -1657,8 +1657,10 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 			return -1;
 		}
 
-		uint16_t *ip = (uint16_t *)&this[2];
-		uint16_t clen = ntohs(*ip);
+		/* a frame starts anywhere in the buffer: not aligned */
+		uint16_t nlen;
+		memcpy(&nlen, &this[2], sizeof(nlen));
+		uint16_t clen = ntohs(nlen);
 		
 		if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN || clen > IS2_MAXIMUM_FRAME_CONTENT_LEN) {
 			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Invalid frame content length (%d): ",
@@ -1923,8 +1925,9 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 		return -1;
 	}
 	
-	uint32_t *ip = (uint32_t *)ibuf;
-	uint32_t clen = ntohl(*ip) & 0xffffff;
+	uint32_t nhead;
+	memcpy(&nhead, ibuf, sizeof(nhead));
+	uint32_t clen = ntohl(nhead) & 0xffffff;
 	
 	if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Too short frame content (%d): ",

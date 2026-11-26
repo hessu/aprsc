@@ -108,8 +108,10 @@ static int check_if_validated_client(char *username, int len)
 	
 	DLOG("check_if_validated_client '%.*s': bucket %d", len, username, i);
 	for (cl = clientlist[i]; cl; cl = cl->next) {
-		if (cl->hash == hash && memcmp(username, cl->username, len) == 0
-		  && cl->username_len == len && cl->validated) {
+		/* the length first: len is that of the caller's string, and
+		 * may be more than what cl->username holds */
+		if (cl->hash == hash && cl->username_len == len
+		  && memcmp(username, cl->username, len) == 0 && cl->validated) {
 			DLOG("check_if_validated_client '%.*s' found validated, fd %d", cl->username_len, cl->username, cl->fd);
 		  	return cl->fd;
 		}

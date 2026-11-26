@@ -726,7 +726,7 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	char *login_string = NULL;
 	char *packet = NULL;
 	char *username = NULL;
-	char validated;
+	int validated;
 	int e;
 	
 	//hlog(LOG_DEBUG, "got udp submit: %.*s", len, buf);
@@ -747,8 +747,8 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "UDP submit [%s]: login string: %s", remote_host, login_string);
-	hlog(LOG_DEBUG, "UDP submit [%s]: packet: %s", remote_host, packet);
+	hlog_packet(LOG_DEBUG, login_string, strlen(login_string), "UDP submit [%s]: login string: ", remote_host);
+	hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: packet: ", remote_host);
 	
 	/* process the login string */
 	validated = http_udp_upload_login(remote_host, login_string, &username, "UDP submit");
@@ -779,9 +779,9 @@ static void accept_process_udpsubmit(struct listen_t *l, char *buf, int len, cha
 	udp_pseudoclient->portaccount = NULL;
 	
 	if (e < 0)
-		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parse failure code %d: %s", remote_host, e, packet);
+		hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: Incoming packet parse failure code %d: ", remote_host, e);
 	else
-		hlog(LOG_DEBUG, "UDP submit [%s]: Incoming packet parsed, code %d: %s", remote_host, e, packet);
+		hlog_packet(LOG_DEBUG, packet, packet_len, "UDP submit [%s]: Incoming packet parsed, code %d: ", remote_host, e);
 }
 
 /*
@@ -812,6 +812,9 @@ static void accept_udp_recv(struct listen_t *l)
 			hlog(LOG_DEBUG, "accept thread discarded an oversized UDP packet of %d bytes", i);
 			continue;
 		}
+		
+		/* the packet in the end of the datagram is used as a string */
+		buf[i] = 0;
 
 		addrs = strsockaddr(&addr.sa, addrlen);
 		accept_process_udpsubmit(l, buf, i, addrs);

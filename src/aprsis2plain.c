@@ -146,7 +146,7 @@ static void is2_plain_metadata_key(void *ctx,
  */
 int is2_plain_metadata(struct worker_t *self, struct client_t *c, const char *s, int len)
 {
-	hlog(LOG_DEBUG, "is2-meta: '%.*s'", len, s);
+	hlog_packet(LOG_DEBUG, s, len, "is2-meta: ");
 
 	is2_kv_parse(s, len, is2_plain_metadata_key, c);
 

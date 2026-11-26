@@ -550,6 +550,7 @@ int ssl_create_connection(struct ssl_t *ssl, struct client_t *c, int i_am_client
 	struct ssl_connection_t  *sc;
 	
 	sc = hmalloc(sizeof(*sc));
+	memset(sc, 0, sizeof(*sc));
 	sc->connection = SSL_new(ssl->ctx);
 	
 	if (sc->connection == NULL) {
@@ -597,6 +598,10 @@ void ssl_free_connection(struct client_t *c)
 int ssl_cert_callsign_match(const char *subj_call, const char *username)
 {
 	if (subj_call == NULL || username == NULL)
+		return 0;
+	
+	/* an empty callsign would match a username which is only an SSID */
+	if (*subj_call == 0)
 		return 0;
 	
 	while (*username != '-' && *username != 0 && *subj_call != 0) {
@@ -659,6 +664,7 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	int nid, idx;
 	X509_NAME_ENTRY *entry;
 	ASN1_STRING *edata;
+	int subj_call_len = -1;
 	
 	cert = SSL_get_peer_certificate(c->ssl_con->connection);
 	
@@ -694,7 +700,7 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 	if (entry != NULL) {
 		edata = X509_NAME_ENTRY_get_data(entry);
 		if (edata != NULL)
-			ASN1_STRING_to_UTF8((unsigned char **)&subj_call, edata);
+			subj_call_len = ASN1_STRING_to_UTF8((unsigned char **)&subj_call, edata);
 	}
 	
 	/* find CN of subject */
@@ -710,8 +716,18 @@ int ssl_validate_peer_cert_phase2(struct client_t *c)
 		}
 	}
 	
-	if (!subj_call) {
+	if (!subj_call || subj_call_len < 0) {
 		hlog(LOG_DEBUG, "%s/%s: peer certificate callsign conversion failed: %s", c->addr_rem, c->username, subject);
+		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
+		goto fail;
+	}
+	
+	/* The callsign is compared as a C string. One with a NUL in it
+	 * would be compared up to the NUL only: "N0CALL\0whatever" is
+	 * not a certificate of N0CALL.
+	 */
+	if (strlen(subj_call) != subj_call_len) {
+		hlog(LOG_WARNING, "%s/%s: peer certificate callsign has a NUL byte in it: %s", c->addr_rem, c->username, subject);
 		ret = SSL_VALIDATE_CERT_NO_CALLSIGN;
 		goto fail;
 	}
@@ -935,8 +951,10 @@ int ssl_readable(struct worker_t *self, struct client_t *c)
 	}
 	
 	if (sslerr == SSL_ERROR_WANT_WRITE) {
-		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts TLS renegotiation?), calling ssl_write", c->fd);
-		return ssl_write(self, c);
+		hlog(LOG_INFO, "ssl_readable fd %d: SSL_read wants to write (peer starts TLS renegotiation?), calling ssl_writable", c->fd);
+		/* not ssl_write: there may be nothing in the output buffer, and
+		 * SSL_write does not appreciate writing a 0-length buffer */
+		return ssl_writable(self, c);
 	}
 	
 	c->ssl_con->no_wait_shutdown = 1;

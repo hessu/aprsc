@@ -928,9 +928,15 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 	}
 	if (refmax == 0) return -1; /* No prefixes ?? */
 
-	if (ff && ff->h.type == f0->h.type) { /* SAME TYPE,
-						 extend previous record! */
+	if (ff && ff->h.type == f0->h.type) /* SAME TYPE, extend previous record! */
 		extend = 1;
+
+	/* numnames is an int16_t. The length of an input line keeps the
+	 * count far below that, but do not depend on it. */
+	if (refmax + (extend ? ff->h.numnames : 0) > INT16_MAX)
+		return -1;
+
+	if (extend) {
 		refcount = ff->h.numnames + refmax;
 		//hlog(LOG_DEBUG, "extending, refcount %d numnames %d refmax %d", refcount, ff->h.numnames, refmax);
 		refbuf   = hrealloc(ff->h.refcallsigns, sizeof(*refbuf) * refcount);
@@ -1006,16 +1012,18 @@ static int filter_parse_one_callsignset(struct client_t *c, const char *filt0, s
 		char *s;
 		ff->h.numnames     = refcount;
 		i = strlen(ff->h.text) + strlen(filt0)+2;
-		if (i <= FILT_TEXTBUFSIZE) {
-			/* Fits in our built-in buffer block - like previous..
-			** Append on existing buffer
+		if (ff->h.text == ff->textbuf && i <= FILT_TEXTBUFSIZE) {
+			/* The text is in our built-in buffer block, and
+			** still fits there - append on existing buffer
 			*/
 			s = ff->textbuf + strlen(ff->textbuf);
 			sprintf(s, " %s", filt0);
 		} else {
-			/* It does not fit anymore.. */
+			/* It does not fit anymore, or the text has already
+			** moved out of the built-in buffer. The length above
+			** is that of h.text, so that is what must be copied. */
 			s = hmalloc(i); /* alloc a new one */
-			sprintf(s, "%s %s", ff->textbuf, filt0); /* .. and catenate. */
+			sprintf(s, "%s %s", ff->h.text, filt0); /* .. and catenate. */
 			p = ff->h.text;
 			if (ff->h.text != ff->textbuf) /* possibly free old */
 				hfree((void*)p);
@@ -1108,6 +1116,41 @@ static int filter_parse_one_s(struct client_t *c, const char *filt0, struct filt
 }
 
 
+/*
+ *	Free the callsign-set array for the filter types that allocate one
+ *	(b, d, e, g, o, p, u). For the other types the union holds an inline
+ *	value, not a pointer, so must not be freed.
+ */
+
+static void filter_free_callsignset(struct filter_t *f)
+{
+	switch (f->h.type) {
+	case 'b': case 'B':
+	case 'd': case 'D':
+	case 'e': case 'E':
+	case 'g': case 'G':
+	case 'o': case 'O':
+	case 'p': case 'P':
+	case 'u': case 'U':
+		if (f->h.refcallsigns)
+			hfree(f->h.refcallsigns);
+		f->h.refcallsigns = NULL;
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ *	The radius of a range filter: 0.1 km at minimum. sscanf() parses
+ *	"nan" and "inf" as floats too, and a NaN is not smaller than 0.1.
+ */
+
+static int filter_dist_ok(float dist)
+{
+	return isfinite(dist) && dist >= 0.1;
+}
+
 int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 {
 	struct filter_t *f, f0;
@@ -1154,7 +1197,8 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	}
 	f0.h.type = *filt;
 
-	if (!strchr("abdefgmopqrstuABDEFGMOPQRSTU", *filt)) {
+	/* strchr() would match the NUL of an empty filter */
+	if (!*filt || !strchr("abdefgmopqrstuABDEFGMOPQRSTU", *filt)) {
 		/* Not valid filter code */
 		hlog(LOG_DEBUG, "Bad filter code: %s", filt0);
 		return -1;
@@ -1259,7 +1303,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/*  f/call/dist         Friend's range filter  */
 
 		i = sscanf(filt+1, "/%9[^/]/%f", f0.h.refcallsign.callsign, &f0.h.f_dist);
-		if (i != 2 || f0.h.f_dist < 0.1) {
+		if (i != 2 || !filter_dist_ok(f0.h.f_dist)) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
@@ -1294,7 +1338,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		/*  m/dist            My range filter  */
 
 		i = sscanf(filt+1, "/%f", &f0.h.f_dist);
-		if (i != 1 || f0.h.f_dist < 0.1) {
+		if (i != 1 || !filter_dist_ok(f0.h.f_dist)) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
@@ -1396,7 +1440,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 
 		i = sscanf(filt+1, "/%f/%f/%f",
 			 &f0.h.f_latN, &f0.h.f_lonE, &f0.h.f_dist);
-		if (i != 3 || f0.h.f_dist < 0.1) {
+		if (i != 3 || !filter_dist_ok(f0.h.f_dist)) {
 			hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 			return -1;
 		}
@@ -1490,7 +1534,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		}
 		if (*s == '/' && s[1] != 0) { /* second format */
 			i = sscanf(s, "/%9[^/]/%f%c", f0.h.refcallsign.callsign, &f0.h.f_dist, &dummyc);
-			if ( i != 2 || f0.h.f_dist < 0.1 || /* 0.1 km minimum radius */
+			if ( i != 2 || !filter_dist_ok(f0.h.f_dist) ||
 			     strlen(f0.h.refcallsign.callsign) < CALLSIGNLEN_MIN ) {
 				hlog(LOG_DEBUG, "Bad filter parse: %s", filt0);
 				return -1;
@@ -1522,13 +1566,18 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 		break;
 	}
 
-	if (!c) return 0; /* Just a verification scan, not actual fill in parse */
+	if (!c) {
+		/* Just a verification scan, not actual fill in parse */
+		filter_free_callsignset(&f0);
+		return 0;
+	}
 	
 	/* OK, pre-parsing produced accepted result */
 #ifndef _FOR_VALGRIND_
 	f = cellmalloc(filter_cells);
 	if (!f) {
 		hlog(LOG_ERR, "filter_parse: cellmalloc failed");
+		filter_free_callsignset(&f0);
 		return -1;
 	}
 	*f = f0; /* store pre-parsed values */
@@ -1541,7 +1590,7 @@ int filter_parse(struct client_t *c, const char *filt, int is_user_filter)
 	f = hmalloc(sizeof(*f) + strlen(filt0));
 	*f = f0; /* store pre-parsed values */
 	f->h.text = f->textbuf;
-	strcpy(f->textbuf, filt); /* and copy of filter text */
+	strcpy(f->textbuf, filt0); /* and copy of filter text */
 #endif
 	rwl_wrlock(&filter_cellgauge_rwlock);
 	++ filter_cellgauge;
@@ -1566,28 +1615,13 @@ void filter_free(struct filter_t *f)
 
 	for ( ; f ; f = fnext ) {
 		fnext = f->h.next;
-		/* Free the callsign-set array for the filter types that
-		 * allocate one (b, d, e, g, o, p, u). For the other types the
-		 * union holds an inline value, not a pointer, so must not be
-		 * freed. */
-		switch (f->h.type) {
-		case 'b': case 'B':
-		case 'd': case 'D':
-		case 'e': case 'E':
-		case 'g': case 'G':
-		case 'o': case 'O':
-		case 'p': case 'P':
-		case 'u': case 'U':
-			if (f->h.refcallsigns)
-				hfree(f->h.refcallsigns);
-			break;
-		default:
-			break;
-		}
-		/* If not pointer to internal string, free it.. */
-#ifndef _FOR_VALGRIND_
+		filter_free_callsignset(f);
+		/* If not pointer to internal string, free it.. In a valgrind
+		 * build too: the text of an extended callsign-set filter
+		 * moves out of the filter when it grows. */
 		if (f->h.text != f->textbuf)
 			hfree((void*)(f->h.text));
+#ifndef _FOR_VALGRIND_
 		cellfree(filter_cells, f);
 #else
 		hfree(f);
@@ -2580,6 +2614,27 @@ int filter_process(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
 }
 
 /*
+ *	Discard the user filters of a client, leaving the default filters
+ *	of the port: what the "filter default" command does.
+ */
+
+void filter_reset(struct client_t *c)
+{
+	struct filter_t *f;
+	
+	f = c->neguserfilters;
+	c->neguserfilters = NULL;
+	filter_free(f);
+
+	f = c->posuserfilters;
+	c->posuserfilters = NULL;
+	filter_free(f);
+	
+	/* the copy of the filters for status display */
+	c->filter_s[0] = 0;
+}
+
+/*
  *	Set filters for a client
  */
 
@@ -2588,16 +2643,9 @@ void filter_set(struct client_t *c, const char *s, const int len)
 	int i, argc;
 	char *b;
 	char *argv[256];
-	struct filter_t *f;
 	
 	/* Discard old ones. */
-	f = c->neguserfilters;
-	filter_free(f);
-	c->neguserfilters = NULL;
-
-	f = c->posuserfilters;
-	c->posuserfilters = NULL;
-	filter_free(f);
+	filter_reset(c);
 	
 	/* make a mutable copy that we can parse and modify safely */
 	b = hmalloc(len+2);
@@ -2685,13 +2733,7 @@ int filter_commands(struct worker_t *self, struct client_t *c, int in_message, c
 	if ( strncasecmp(s, "default", 7) == 0 && len == 7 ) {
 		/* discard any user defined filters that possibly were
 		   injected on this connection.  */
-		f = c->neguserfilters;
-		filter_free(f);
-		c->neguserfilters = NULL;
-
-		f = c->posuserfilters;
-		filter_free(f);
-		c->posuserfilters = NULL;
+		filter_reset(c);
 		// FIXME: Sleep a bit ? ... no, that would be a way to create a denial of service attack
 		// FIXME: there is a danger of SEGV-blowing filter processing...
 		return filter_command_reply(self, c, in_message, "User filters reset to default");

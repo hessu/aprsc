@@ -160,11 +160,17 @@ static int q_dropcheck( struct client_t *c, const char *pdata, char *new_q, int 
 	 * Q construct and cut the path before it
 	 */
 	if (q_start && q_start + 4 < path_end) {
-		p = memmem(q_start+4, path_end-q_start-4, serverid, serverid_len);
-		if (p && *(p-1) == ',' && ( *(p+serverid_len) == ',' || p+serverid_len == path_end || *(p+serverid_len) == ':' )) {
-			/* TODO: The reject log should really log the offending packet */
-			hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
-			return INERR_Q_QPATH_MYCALL; /* drop the packet */
+		/* Look at every occurrence: the first one may be a part of
+		 * another callsign, with SERVERLOGIN itself following it.
+		 */
+		p = q_start + 4;
+		while ((p = memmem(p, path_end - p, serverid, serverid_len))) {
+			if (*(p-1) == ',' && ( p+serverid_len == path_end || *(p+serverid_len) == ',' || *(p+serverid_len) == ':' )) {
+				/* TODO: The reject log should really log the offending packet */
+				hlog(LOG_DEBUG, "q: dropping due to my callsign appearing in path");
+				return INERR_Q_QPATH_MYCALL; /* drop the packet */
+			}
+			p++;
 		}
 	}
 	
@@ -422,7 +428,8 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 			}
 			/* Append ,qAU,SERVERLOGIN */
 			/* Add TCPIP* in the end of the path only if it's not there already */
-			if (pathlen > 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
+			/* path_end may have been moved back to the q construct above */
+			if (*path_end - via_start >= 7 && strncmp(*path_end-7, ",TCPIP*", 7) == 0)
 				return snprintf(new_q, new_q_size, ",q%cU,%s", q_protocol_id, serverid);
 			else
 				return snprintf(new_q, new_q_size, ",TCPIP*,q%cU,%s", q_protocol_id, serverid);
@@ -684,8 +691,11 @@ int q_process(struct client_t *c, const char *pdata, char *new_q, int new_q_size
 	
 	/* If we haven't generated a new Q construct, return a pointer to the existing one */
 	if (!new_q_len) {
-		if (q_start == NULL)
-			hlog(LOG_ERR, "q: Did not find or generate a Q construct (from client %s fd %d): %s", c->username, c->fd, pdata);
+		if (q_start == NULL) {
+			/* the packet is not NUL-terminated: log the header */
+			hlog_packet(LOG_ERR, pdata, pathlen, "q: Did not find or generate a Q construct (from client %s fd %d): ", c->username, c->fd);
+			return INERR_Q_BUG;
+		}
 		*new_q_start = q_start + 1;
 	}
 	

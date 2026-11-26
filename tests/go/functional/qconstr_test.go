@@ -150,6 +150,15 @@ func qcFullFeedPhase2(login, second, proto string) []isclient.Step {
 		// If ,SERVERLOGIN is found after the q construct, drop.
 		b.drop("server login after q construct",
 			"SRCCALL>DST,DIGI1*,qAR,"+serverCall+":testing (,SERVERLOGIN)"),
+		// also when a callsign containing SERVERLOGIN comes before it
+		b.drop("server login after a callsign containing it",
+			"SRCCALL>DST,DIGI1*,qAR,"+serverCall+"-1,"+serverCall+":testing (,SERVERLOGIN-1,SERVERLOGIN)"),
+		b.drop("server login after a callsign ending in it",
+			"SRCCALL>DST,DIGI1*,qAR,X"+serverCall+","+serverCall+",OTHER:testing (,XSERVERLOGIN,SERVERLOGIN)"),
+		// a callsign which only contains SERVERLOGIN is not it
+		b.pass("callsign containing the server login passed intact",
+			"SRCCALL>DST,DIGI1*,qAR,"+serverCall+"-1:testing (,SERVERLOGIN-1)",
+			"SRCCALL>DST,DIGI1*,qAR,"+serverCall+"-1:testing (,SERVERLOGIN-1)"),
 		// If ,qAC, is the q construct and the full path before the q
 		// construct is not TCPIP*, drop.
 		b.pass("qAC after TCPIP* passed intact",

@@ -339,6 +339,8 @@ static int hlog_write(int priority, const char *s)
 		len = snprintf(wb, LOG_LEN, "%4d/%02d/%02d %02d:%02d:%02d.%06d %s[%d:%lx] %s: %s\n",
 			       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, (int)tv.tv_usec,
 			       (log_name) ? log_name : "aprsc", (int)getpid(), (unsigned long int)pthread_self(), log_levelnames[priority], s);
+		if (len < 0)
+			len = 0; // Formatting failed: nothing to write, and not a length for write().
 		if (len >= LOG_LEN) {
 			len = LOG_LEN-1; // Truncated! Do not write out the NUL byte in the end.
 			wb[LOG_LEN-2] = '\n'; // Do write out a newline which was truncated.
@@ -416,7 +418,15 @@ int hlog_packet(int priority, const char *packet, int packetlen, const char *fmt
 	l = vsnprintf(s, LOG_LEN, fmt, args);
 	va_end(args);
 	
-	str_quote(s + l, LOG_LEN - l, packet, packetlen);
+	/* For truncated output vsnprintf() returns the length it would have
+	 * taken, which is past the end of the buffer. No room for the packet
+	 * then, or after a failure.
+	 */
+	if (l < 0)
+		l = 0;
+	if (l < LOG_LEN - 2)
+		str_quote(s + l, LOG_LEN - l, packet, packetlen);
+	s[LOG_LEN-1] = 0;
 	
 	return hlog_write(priority, s);
 }
@@ -497,6 +507,12 @@ int accesslog(const char *fmt, ...)
 	
 	len = snprintf(wb, LOG_LEN, "[%4.4d/%2.2d/%2.2d %2.2d:%2.2d:%2.2d] %s\n",
 		lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min, lt.tm_sec, s);
+	if (len < 0)
+		len = 0; // Formatting failed: nothing to write, and not a length for write().
+	if (len >= LOG_LEN) {
+		len = LOG_LEN-1; // Truncated! Do not write out the NUL byte in the end.
+		wb[LOG_LEN-2] = '\n'; // Do write out a newline which was truncated.
+	}
 	wb[LOG_LEN-1] = 0;
 	
 	rwl_rdlock(&accesslog_lock);

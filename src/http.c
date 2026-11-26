@@ -324,7 +324,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	char *login_string = NULL;
 	char *packet = NULL;
 	char *username = NULL;
-	char validated;
+	int validated;
 	int e;
 	int packet_len;
 	
@@ -351,6 +351,10 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	/* get the HTTP POST body */
 	bufin = evhttp_request_get_input_buffer(r);
 	l = evbuffer_copyout(bufin, post, MAX_HTTP_POST_DATA);
+	if (l < 0) {
+		evhttp_send_error(r, HTTP_INTERNAL, "Could not read request body");
+		return;
+	}
 	
 	/* Just for convenience and safety, null-terminate. Easier to log. */
 	post[MAX_HTTP_POST_DATA] = 0;
@@ -362,7 +366,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "got post data: %s", post);
+	hlog_packet(LOG_DEBUG, post, l, "got post data: ");
 	
 	packet_len = loginpost_split(post, l, &login_string, &packet);
 	if (packet_len == -1) {
@@ -380,8 +384,8 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 		return;
 	}
 	
-	hlog(LOG_DEBUG, "login string: %s", login_string);
-	hlog(LOG_DEBUG, "packet: %s", packet);
+	hlog_packet(LOG_DEBUG, login_string, strlen(login_string), "login string: ");
+	hlog_packet(LOG_DEBUG, packet, packet_len, "packet: ");
 	
 	/* process the login string */
 	validated = http_udp_upload_login(remote_host, login_string, &username, "HTTP POST");
@@ -409,7 +413,7 @@ static void http_upload_position(struct evhttp_request *r, const char *remote_ho
 	e = pseudoclient_push_packet(http_worker, http_pseudoclient, username, packet, packet_len);
 
 	if (e < 0) {
-		hlog(LOG_DEBUG, "http incoming packet parse failure code %d: %s", e, packet);
+		hlog_packet(LOG_DEBUG, packet, packet_len, "http incoming packet parse failure code %d: ", e);
 		evhttp_send_error(r, HTTP_BADREQUEST, "Packet parsing failure");
 		return;
 	}
@@ -602,7 +606,7 @@ static void http_static_file(struct evhttp_request *r, const char *fname)
 	char *contenttype;
 	char *buf;
 	
-	fd = open(fname, 0, O_RDONLY);
+	fd = open(fname, O_RDONLY);
 	if (fd < 0) {
 		if (errno == ENOENT) {
 			/* don't complain about missing motd.html - it's optional. */
@@ -1013,8 +1017,7 @@ static void http_srvr_defaults(struct evhttp *srvr)
 static void http_server_free(void)
 {
 	if (ev_timer) {
-		event_del(ev_timer);
-		hfree(ev_timer);
+		event_free(ev_timer);
 		ev_timer = NULL;
 	}
 	

@@ -2,7 +2,9 @@ package functional
 
 import (
 	"fmt"
+	"net"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +47,20 @@ func TestFilterCommand(t *testing.T) {
 				"K2SRC>APRS,qAR,"+login+":>should pass"),
 			drop("OH dropped, N passes", "OH2SRC>APRS,qAR,"+login+":>should drop2",
 				"N2SRC>APRS,qAR,"+login+":>should pass2"),
+		})
+	})
+
+	// the command is found after a partial match of it: "fi" + "filter"
+	t.Run("filter command after a partial match", func(t *testing.T) {
+		rx.FilterCommand(t, "#fifilter p/OH")
+		isclient.RunSteps(t, tx, rx, []isclient.Step{
+			drop("K dropped", "K2SRC>APRS,qAR,"+login+":>should drop5",
+				"OH2SRC>APRS,qAR,"+login+":>should pass5"),
+		})
+		rx.FilterCommand(t, "#ffilter p/N/K")
+		isclient.RunSteps(t, tx, rx, []isclient.Step{
+			drop("OH dropped", "OH2SRC>APRS,qAR,"+login+":>should drop6",
+				"K2SRC>APRS,qAR,"+login+":>should pass6"),
 		})
 	})
 
@@ -191,6 +207,29 @@ func TestServerMessageParsing(t *testing.T) {
 		})
 	}
 
+	// A message id is 1 to 5 characters. Something longer after a '{' is
+	// not an id, and is not echoed in an ack, which it would not fit in:
+	// it is left in the message text.
+	t.Run("too long message id", func(t *testing.T) {
+		rx.Send(t, fmt.Sprintf("%s>APRS::%-9.9s:{%s", login, "SERVER", strings.Repeat("x", 465)))
+		reply, err := rx.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no reply: %v", err)
+		}
+		if !replyRe("Unknown command").MatchString(reply) {
+			t.Errorf("unexpected reply %q", reply)
+		}
+
+		rx.Send(t, fmt.Sprintf("%s>APRS::%-9.9s:foobar{123456", login, "SERVER"))
+		reply, err = rx.ReadPacket(2 * time.Second)
+		if err != nil {
+			t.Fatalf("no reply: %v", err)
+		}
+		if !replyRe("Unknown command").MatchString(reply) {
+			t.Errorf("unexpected reply %q", reply)
+		}
+	})
+
 	// A message to SERVER inside a 3rd-party packet is not from the local
 	// client, so it is not a command, and it is dropped. The outer header
 	// is crafted so that the outer packet looks like a message too, which
@@ -222,6 +261,60 @@ func TestServerMessageParsing(t *testing.T) {
 			t.Errorf("unexpected packet %q, wanted ack10", ack)
 		}
 	})
+
+	s.Stop()
+}
+
+// A client which sends messages to SERVER but never reads the replies gets
+// disconnected when a reply no longer fits in its output buffer. The reply
+// is written while the client's input is being processed, and the server
+// must stop processing it right there: the client is gone.
+func TestServerMessageOutputFull(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	const login = "N5CAL-9"
+	conn, err := net.DialTimeout("tcp", harness.Addr(t, 55580), 5*time.Second)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer conn.Close()
+	// a small receive buffer, so that the server's output backs up soon
+	conn.(*net.TCPConn).SetReadBuffer(2048)
+
+	// several lines in a write, so that there are more to process in the
+	// server's input buffer after the one which gets the client closed
+	var chunk strings.Builder
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(&chunk, "%s>APRS,TCPIP*::SERVER   :filter?{%d\r\n", login, i)
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+	if _, err := conn.Write([]byte("user " + login + " pass -1 vers aprsc-gotest 1.0\r\n")); err != nil {
+		t.Fatalf("failed to send the login: %v", err)
+	}
+
+	closed := false
+	for sent := 0; sent < 500<<20; sent += chunk.Len() {
+		if _, err := conn.Write([]byte(chunk.String())); err != nil {
+			if isclient.IsTimeout(err) {
+				t.Fatalf("the server stopped reading after %d bytes without closing the connection", sent)
+			}
+			closed = true
+			break
+		}
+	}
+	if !closed {
+		t.Fatal("the server did not close a client which does not read its replies")
+	}
+
+	// the server goes on serving the others
+	tx := isclient.Connect(t, harness.Addr(t, 55580), "N5CAL-1")
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2")
+	isclient.TxRx(t, tx, rx,
+		"SRC>APRS,qAR,N5CAL-1:>after a full output buffer",
+		"SRC>APRS,qAR,N5CAL-1:>after a full output buffer")
 
 	s.Stop()
 }

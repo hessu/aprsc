@@ -1,6 +1,7 @@
 package functional
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hessu/aprsc/tests/go/internal/harness"
@@ -40,6 +41,20 @@ func TestParserFilter(t *testing.T) {
 			srccall+">"+dstcall+",OH2RDG*,WIDE:!6258.51N/02505.68E#PHG"+phg+" should drop",
 			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E#PHG"+phg+" should pass"),
 
+		// A sign or a space is not a part of a number in a position. The
+		// source callsign is one with no earlier position, which the
+		// packet would get in place of the one it does not have.
+		drop("uncompressed with a sign in latitude",
+			"OH2SIG>"+dstcall+",OH2RDG*,WIDE:!6028.+1N/02505.68E# should drop",
+			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E# helper 1"),
+		drop("uncompressed with a sign in longitude",
+			"OH2SIG>"+dstcall+",OH2RDG*,WIDE:!6028.51N/+2505.68E# should drop",
+			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E# helper 2"),
+		// position ambiguity: spaces in place of the last digits are fine
+		pass("uncompressed with position ambiguity",
+			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.5 N/02505.6 E# ambiguity",
+			srccall+">"+dstcall+",OH2RDG*,WIDE,qAS,"+login+":!6028.5 N/02505.6 E# ambiguity"),
+
 		pass("compressed",
 			srccall+">"+dstcall+":!I0-X;T_Wv&{-Aigate testing",
 			srccall+">"+dstcall+",qAS,"+login+":!I0-X;T_Wv&{-Aigate testing"),
@@ -53,6 +68,16 @@ func TestParserFilter(t *testing.T) {
 		passSame("mic-e 3", "KL7AN-14>V0RYYX,WIDE1-1,WIDE2-1,qAR,KL7IGZ-1:`O^5l \x1ck/]\"4%}="),
 		// latitude: 35.0685 °, longitude: 136.6628333333333 °
 		passSame("mic-e 4", "JN2ESN-14>SUPTQ1,WIDE1-1,qAR,JA2PIT-10:`@CioI}u/`\"4T}LPG Tanker_\""),
+
+		// A !-position may come anywhere within the first 40 characters
+		// of a packet of an unknown type (X1J TNC digipeater bugs).
+		passSame("late position, uncompressed",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !6028.51N/02505.68E# late"),
+		passSame("late position, compressed",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !I0-X;T_Wv&{-A late"),
+		drop("late position out of range",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !6258.51N/02505.68E# late",
+			"OH2XJ>"+dstcall+",qAR,"+login+":X1J digi !6028.51N/02505.68E# helper"),
 
 		// the P filter passes packets with the prefixes given
 		passSame("prefix OG", "OG7LZB>"+dstcall+",OH2RDG*,WIDE,qAR,"+login+":>should pass, prefix"),
@@ -143,6 +168,58 @@ func TestFilterNegative(t *testing.T) {
 			srccall+">"+dstcall+",OH2RDG*,WIDE:!6028.51N/02505.68E# should pass",
 			srccall+">"+dstcall+",OH2RDG*,WIDE,qAS,"+login+":!6028.51N/02505.68E# should pass"),
 	})
+
+	s.Stop()
+}
+
+// activeFilters asks the server for the user filters of the client with
+// "#filter?", and returns the list it replies with.
+func activeFilters(t *testing.T, c *isclient.Plain) string {
+	t.Helper()
+	c.Send(t, "#filter?")
+
+	const prefix = "# filters: "
+	for {
+		l, err := c.ReadLine(isclient.DefaultTimeout)
+		if err != nil {
+			t.Fatalf("%s: no reply to #filter?: %v", c.Callsign, err)
+		}
+		if strings.HasPrefix(l, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(l, prefix))
+		}
+	}
+}
+
+// Malformed filters are rejected by the parser, and the valid ones given
+// with them stay.
+func TestFilterParserRejects(t *testing.T) {
+	harness.Parallel(t)
+	// the "#filter?" query is an aprsc command
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	c := isclient.Connect(t, harness.Addr(t, 55581), "N5CAL-2")
+
+	for _, tc := range []struct {
+		name, filter, want string
+	}{
+		// a filter with no type letter at all
+		{"empty negative filter", "p/OH - b/N0CALL", "p/OH b/N0CALL"},
+		{"unknown type", "p/OH x/1/2 -x/1", "p/OH"},
+		// sscanf() takes these for numbers
+		{"NaN distance", "r/60/25/nan m/nan p/OH f/N0CALL/nan t/p/N0CALL/nan", "p/OH"},
+		{"infinite distance", "r/60/25/inf m/infinity p/OH f/N0CALL/inf t/p/N0CALL/inf", "p/OH"},
+		{"NaN coordinates", "r/nan/25/10 r/60/nan/10 p/OH a/nan/20/50/30", "p/OH"},
+		{"too small a distance", "r/60/25/0.05 m/0 p/OH m/-5", "p/OH"},
+		{"valid range filters", "r/60/25/10 m/0.5 f/N0CALL/20 t/p/N0CALL/30", "r/60/25/10 m/0.5 f/N0CALL/20 t/p/N0CALL/30"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c.SetFilter(t, tc.filter)
+			if got := activeFilters(t, c); got != tc.want {
+				t.Errorf("filter %q: active filters are %q, want %q", tc.filter, got, tc.want)
+			}
+		})
+	}
 
 	s.Stop()
 }

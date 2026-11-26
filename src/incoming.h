@@ -24,6 +24,12 @@ extern int check_path_calls(const char *via_start, const char *path_end);
 extern void incoming_flush(struct worker_t *self);
 extern int incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, char *s, int len);
 extern int is2_incoming_handler(struct worker_t *self, struct client_t *c, int l4proto, Aprsis2__ISPacket *is2_packet);
+/* Returned by incoming_parse() and the handlers when the client was closed
+ * and freed while its packet was processed: the client must not be touched
+ * any more. Outside the range of the INERR_* drop reasons.
+ */
+#define INCOMING_CLIENT_CLOSED	(INERR_MIN - 1000)
+
 extern int incoming_parse(struct worker_t *self, struct client_t *c, char *s, int len, Aprsis2__ISPacket *is2_packet);
 
 #ifndef _FOR_VALGRIND_

@@ -171,11 +171,11 @@ static void is2_clientaccount_add_rx(struct client_t *c, int l4proto, int rx_fra
 
 static void is2_setup_buffer(char *buf, uint16_t len)
 {
-	uint16_t *len_p = (uint16_t *)&buf[2];
+	uint16_t nlen = htons(len);
 
 	buf[0] = STX;
 	buf[1] = 0; // reserved
-	*len_p = htons(len);
+	memcpy(&buf[2], &nlen, sizeof(nlen)); /* the buffer may not be aligned */
 
 	buf[IS2_HEAD_LEN + len] = ETX;
 }
@@ -712,13 +712,23 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 		return 0;
 	}
 	
-	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
-		c->addr_rem, c->username, sig->username, sig->app_name, sig->app_version);
+	/* the name goes in the q construct paths and the logs */
+	int name_len = strlen(sig->username);
+	if (name_len > CALLSIGNLEN_MAX || check_invalid_q_callsign(sig->username, name_len) != 0) {
+		hlog_packet(LOG_ERR, sig->username, (name_len > 32) ? 32 : name_len, "%s: IS2: Uplink's server name is not valid: ", c->addr_rem);
+		client_close(self, c, CLIERR_UPLINK_LOGIN_PROTO_ERR);
+		return -1;
+	}
 	
 	strncpy(c->app_name, sig->app_name, sizeof(c->app_name));
 	c->app_name[sizeof(c->app_name)-1] = 0;
+	sanitize_ascii_string(c->app_name);
 	strncpy(c->app_version, sig->app_version, sizeof(c->app_version));
 	c->app_version[sizeof(c->app_version)-1] = 0;
+	sanitize_ascii_string(c->app_version);
+	
+	hlog(LOG_INFO, "%s/%s: IS2: Server signature received: username %s app %s version %s",
+		c->addr_rem, c->username, sig->username, c->app_name, c->app_version);
 
 	if (strcasecmp(sig->username, serverid) == 0) {
 		hlog(LOG_ERR, "%s: Uplink's server name is same as ours: '%s'", c->addr_rem, sig->username);
@@ -731,6 +741,7 @@ static int is2_in_server_signature(struct worker_t *self, struct client_t *c, Ap
 	/* store the remote server's callsign as the "client username" */
 	strncpy(c->username, sig->username, sizeof(c->username));
 	c->username[sizeof(c->username)-1] = 0;
+	c->username_len = strlen(c->username);
 	
 	/* uplink servers are always "validated" */
 	c->validated = VALIDATED_WEAK;
@@ -816,7 +827,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	
 	/* limit username length */
 	if (strlen(lr->username) > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: IS2: Invalid login request, too long username: '%.20s'", c->addr_rem, lr->username);
+		hlog_packet(LOG_WARNING, lr->username, CALLSIGNLEN_MAX+1, "%s: IS2: Invalid login request, too long username, starting with: ", c->addr_rem);
 		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__INVALID_USERNAME;
 		reason_s = "Invalid username format";
 		goto failed_login;
@@ -850,7 +861,7 @@ static int is2_in_login_request(struct worker_t *self, struct client_t *c, Aprsi
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {
-		hlog(LOG_WARNING, "%s: IS2: Invalid login request, invalid username: '%s'", c->addr_rem, c->username);
+		hlog_packet(LOG_WARNING, c->username, c->username_len, "%s: IS2: Invalid login request, invalid username: ", c->addr_rem);
 		reason = APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT_REASON__INVALID_USERNAME;
 		reason_s = "Invalid username format, not allowed";
 		goto failed_login;
@@ -969,6 +980,11 @@ failed_login:
 	if (rc < -2)
 		return rc;
 	
+	/* the username of a failed login may be anything: do not leave it
+	 * in the client for the log lines to come */
+	c->username[0] = 0;
+	c->username_len = 0;
+	
 	/* tell the client why, instead of leaving it waiting */
 	rc = is2_out_login_reply(self, c, APRSIS2__IS2_LOGIN_REPLY__LOGIN_RESULT__FAIL, reason, APRSIS2__VERIFICATION_STATUS__NONE, reason_s);
 	if (rc < -2)
@@ -1001,7 +1017,10 @@ static int is2_in_packet(struct worker_t *self, struct client_t *c, Aprsis2__IS2
 		//hlog(LOG_DEBUG, "%s/%s: IS2: packet type %d len %d", c->addr_rem, c->username, p->type, p->is_packet_data.len);
 		
 		if (p->type == APRSIS2__ISPACKET__TYPE__IS_PACKET && p->is_packet_data.len > 0) {
-			is2_incoming_handler(self, c, c->ai_protocol, p); // always returns 0, ignores erroneus packets
+			/* returns 0 for erroneous packets too, and < 0 only if
+			 * the client was closed and freed */
+			if (is2_incoming_handler(self, c, c->ai_protocol, p) < 0)
+				return -1;
 		}
 	}
 	
@@ -1179,9 +1198,12 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 		goto done;
 	}
 	
+	/* A proto3 string is never NULL: one which is not set is empty. */
+	int has_filter = (par->filter_string && *par->filter_string);
+	
 	hlog(LOG_INFO, "%s/%s: IS2: Parameter set received: request_id %d%s",
 		c->addr_rem, c->username, par->request_id,
-		(par->filter_string) ? " filter_string" : "");
+		(has_filter) ? " filter_string" : "");
 	
 	/* prepare reply message */
 	Aprsis2__IS2Parameter prep = APRSIS2__IS2_PARAMETER__INIT;
@@ -1191,14 +1213,21 @@ static int is2_in_parameter(struct worker_t *self, struct client_t *c, Aprsis2__
 	rm.type = APRSIS2__IS2_MESSAGE__TYPE__PARAMETER;
 	rm.parameter = &prep;
 	
-	if (par->filter_string && !(c->flags & CLFLAGS_USERFILTEROK)) {
+	if (has_filter && !(c->flags & CLFLAGS_USERFILTEROK)) {
 		/* like the plaintext filter command, user filters are only
 		 * accepted on ports which allow them
 		 */
 		hlog(LOG_INFO, "%s/%s: IS2: PARAMETER_SET: user filters are not allowed on this port",
 			c->addr_rem, c->username);
-	} else if (par->filter_string) {
-		filter_set(c, par->filter_string, strlen(par->filter_string));
+	} else if (has_filter) {
+		/* "default" discards the user filters, like the plaintext
+		 * "filter default" command: an empty string can not, as it is
+		 * what a parameter message without a filter has
+		 */
+		if (strcasecmp(par->filter_string, "default") == 0)
+			filter_reset(c);
+		else
+			filter_set(c, par->filter_string, strlen(par->filter_string));
 		
 		prep.type = APRSIS2__IS2_PARAMETER__TYPE__PARAMETER_APPLIED;
 		prep.filter_string = c->filter_s;
@@ -1428,7 +1457,8 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 		return;
 	}
 	
-	if (-d < IS2_COREPEER_SEQ_WINDOW) {
+	/* not -d < window: negating the most negative d would overflow */
+	if (d > -IS2_COREPEER_SEQ_WINDOW) {
 		uint64_t bit = (uint64_t)1 << -d;
 		if (!(c->corepeer_is2_seq_mask & bit)) {
 			/* reordered on the wire */
@@ -1479,8 +1509,9 @@ static inline void is2_corepeer_seq_monitor(struct worker_t *self, struct client
 	}
 	
 	c->corepeer_is2_late_frames++;
-	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: frame %u arrived %d frames late, after being counted lost",
-		c->addr_rem, c->username, (unsigned)seq, -d);
+	/* not -d: d may be the most negative one here */
+	hlog(LOG_DEBUG, "%s/%s: IS2 UDP: frame %u arrived %u frames late, after being counted lost",
+		c->addr_rem, c->username, (unsigned)seq, (unsigned)(c->corepeer_is2_seq_highest - seq));
 }
 
 /*
@@ -1626,8 +1657,10 @@ int is2_deframe_input(struct worker_t *self, struct client_t *c, int start_at)
 			return -1;
 		}
 
-		uint16_t *ip = (uint16_t *)&this[2];
-		uint16_t clen = ntohs(*ip);
+		/* a frame starts anywhere in the buffer: not aligned */
+		uint16_t nlen;
+		memcpy(&nlen, &this[2], sizeof(nlen));
+		uint16_t clen = ntohs(nlen);
 		
 		if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN || clen > IS2_MAXIMUM_FRAME_CONTENT_LEN) {
 			hlog_packet(LOG_WARNING, this, left, "%s/%s: IS2: Invalid frame content length (%d): ",
@@ -1766,8 +1799,8 @@ int is2_upgrade_hello_in(struct worker_t *self, struct client_t *c, const char *
 	if (!v) {
 		/* no answer: the client logs in on plaintext, as it would on
 		 * a server which does not know of IS2 */
-		hlog(LOG_INFO, "%s: IS2 upgrade: client offered versions %.*s, none of which are supported, staying on plaintext",
-			c->addr_rem, (hello.v) ? hello.v_len : 1, (hello.v) ? hello.v : "-");
+		hlog_packet(LOG_INFO, (hello.v) ? hello.v : "-", (hello.v) ? ((hello.v_len > 64) ? 64 : hello.v_len) : 1,
+			"%s: IS2 upgrade: none of the versions the client offered are supported, staying on plaintext: v=", c->addr_rem);
 		return 0;
 	}
 
@@ -1892,8 +1925,9 @@ int is2_corepeer_deframe_input(struct worker_t *self, struct client_t *c, char *
 		return -1;
 	}
 	
-	uint32_t *ip = (uint32_t *)ibuf;
-	uint32_t clen = ntohl(*ip) & 0xffffff;
+	uint32_t nhead;
+	memcpy(&nhead, ibuf, sizeof(nhead));
+	uint32_t clen = ntohl(nhead) & 0xffffff;
 	
 	if (clen < IS2_MINIMUM_FRAME_CONTENT_LEN) {
 		hlog_packet(LOG_WARNING, ibuf, len, "%s/%s: IS2 UDP: Too short frame content (%d): ",
@@ -2308,8 +2342,8 @@ static int is2_worker_encode_packet(struct worker_t *self, struct pbuf_t *pb, in
 	self->is2_enc_len[variant] = is2_encode_packet_element(self->is2_enc[variant], sizeof(self->is2_enc[variant]), &pb->is2packet);
 #endif
 	if (self->is2_enc_len[variant] < 0) {
-		hlog(LOG_ERR, "worker %d: IS2: encoded packet does not fit in %d bytes: %.*s",
-			self->id, (int)sizeof(self->is2_enc[variant]), pb->packet_len - 2, pb->data);
+		hlog_packet(LOG_ERR, pb->data, pb->packet_len - 2, "worker %d: IS2: encoded packet does not fit in %d bytes: ",
+			self->id, (int)sizeof(self->is2_enc[variant]));
 		self->is2_enc_pb[variant] = NULL;
 		return -1;
 	}
@@ -2410,24 +2444,17 @@ int is2_obuf_flush_client(struct worker_t *self, struct client_t *c)
 }
 
 /*
- *	Append a packet to the IS2 output buffer of a client. The buffer is
- *	flushed first if the packet would not fit in it; otherwise the packet
- *	waits there for the rest of this round's packets, and the worker
- *	flushes the buffer at the end of the round (worker_flush_pending).
+ *	Append an encoded packet element to the IS2 output buffer of a client.
+ *	The buffer is flushed first if the packet would not fit in it;
+ *	otherwise the packet waits there for the rest of this round's packets,
+ *	and the worker flushes the buffer at the end of the round
+ *	(worker_flush_pending).
  *	Returns a value < -2 if the client was destroyed.
  */
 
-static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+static int is2_append_obuf_element(struct worker_t *self, struct client_t *c, const char *enc, int len)
 {
 	int ret;
-	int variant = (is2_received_redacted(c)) ? IS2_ENC_REDACTED : IS2_ENC_FULL;
-	int len;
-
-	if (is2_worker_encode_packet(self, pb, variant) < 0)
-		return 0; // can not be encoded, drop
-	len = self->is2_enc_len[variant];
-
-	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, len);
 
 	if (c->is2_obuf_packets >= APRSIS2_OBUF_PACKETS
 	    || c->is2_obuf_total_len + len > APRSIS2_OBUF_MAX_LENGTH) {
@@ -2436,16 +2463,59 @@ static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, str
 			return ret; // destroyed
 	}
 
-	/* copy the serialized packet to the client's own buffer - after this,
-	 * the pbuf is not referred to any more
-	 */
-	memcpy(c->is2_obuf + c->is2_obuf_end, self->is2_enc[variant], len);
+	/* copy the serialized packet to the client's own buffer */
+	memcpy(c->is2_obuf + c->is2_obuf_end, enc, len);
 	c->is2_obuf_end += len;
 	c->is2_obuf_total_len += len;
 	c->is2_obuf_packets++;
 	client_flush_pending_add(self, c);
 
 	return 0;
+}
+
+/*
+ *	Append a packet to the IS2 output buffer of a client. After this,
+ *	the pbuf is not referred to any more.
+ *	Returns a value < -2 if the client was destroyed.
+ */
+
+static int is2_append_obuf_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb)
+{
+	int variant = (is2_received_redacted(c)) ? IS2_ENC_REDACTED : IS2_ENC_FULL;
+
+	if (is2_worker_encode_packet(self, pb, variant) < 0)
+		return 0; // can not be encoded, drop
+
+	//hlog(LOG_DEBUG, "%s/%s: IS2: appending IS packet type %d of %d bytes to obuf", c->addr_rem, c->username, pb->is2packet.type, self->is2_enc_len[variant]);
+
+	return is2_append_obuf_element(self, c, self->is2_enc[variant], self->is2_enc_len[variant]);
+}
+
+/*
+ *	Write a packet which the server made itself, such as a reply to
+ *	a message to SERVER, to an IS2 client or an IS2 UDP peer. The data
+ *	is the packet without a CRLF.
+ *	Returns a value < -2 if the client was destroyed.
+ */
+
+int is2_write_packet_data(struct worker_t *self, struct client_t *c, const char *data, int len)
+{
+	char enc[PACKETLEN_MAX + 32];
+	Aprsis2__ISPacket p = APRSIS2__ISPACKET__INIT;
+	int enc_len;
+
+	p.type = APRSIS2__ISPACKET__TYPE__IS_PACKET;
+	p.is_packet_data.data = (uint8_t *)data;
+	p.is_packet_data.len = len;
+
+	enc_len = is2_encode_packet_element(enc, sizeof(enc), &p);
+	if (enc_len < 0) {
+		hlog(LOG_ERR, "%s/%s: IS2: packet of %d bytes made by the server does not fit in %d bytes when encoded",
+			c->addr_rem, c->username, len, (int)sizeof(enc));
+		return -1;
+	}
+
+	return is2_append_obuf_element(self, c, enc, enc_len);
 }
 
 /*

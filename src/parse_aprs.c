@@ -282,6 +282,10 @@ static int get_symbol_from_dstcall(struct pbuf_t *pb, char *sym_table, char *sym
 				return 0;
 			numberid = (d_start[4] - 48) * 10 + (d_start[5] - 48);
 			
+			/* symbol codes are the printable characters ! to ~ */
+			if (numberid < 1 || numberid > 94)
+				return 0;
+			
 			*sym_code = numberid + 32;
 			if (type == 'C')
 				*sym_table = '/';
@@ -843,6 +847,21 @@ static int parse_aprs_uncompressed(struct pbuf_t *pb, const char *body, const ch
 	if (posbuf[16] == ' ') posbuf[16] = '5';
 	
 	// fprintf(stderr, "\tafter filling amb: %s\n", posbuf);
+	
+	/* sscanf() would take a sign or leading spaces for a part of
+	 * a number: require digits where the numbers are
+	 * 0123456789012345678
+	 * 3210.70N/13132.15E#
+	 */
+	static const char digitpos[] = { 0, 1, 2, 3, 5, 6, 9, 10, 11, 12, 13, 15, 16 };
+	int i;
+	for (i = 0; i < sizeof(digitpos); i++) {
+		if (!isdigit((unsigned char)posbuf[(int)digitpos[i]])) {
+			DEBUG_LOG("\tnon-digit in a number");
+			return 0;
+		}
+	}
+	
 	/* 3210.70N/13132.15E# */
 	if (sscanf(posbuf, "%2u%2u.%2u%c%c%3u%2u.%2u%c%c",
 	    &lat_deg, &lat_min, &lat_min_frag, &lat_hemi, &sym_table,
@@ -1311,18 +1330,29 @@ static int parse_aprs_body(struct pbuf_t *pb, const char *info_start)
 	 */
 	pos_start = memchr(body, '!', body_end - body);
 	if ((pos_start) && pos_start - body <= 39) {
+		int rc = 0;
+		
+		/* the position starts after the '!' */
+		pos_start++;
 		poschar = *pos_start;
 		if (valid_sym_table_compressed(poschar)) { /* [\/\\A-Za-j] */
 		    	/* compressed position packet */
 		    	if (body_end - pos_start >= 13)
-		    		return parse_aprs_compressed(pb, pos_start, body_end);
-			return 0;
+				rc = parse_aprs_compressed(pb, pos_start, body_end);
 		} else if (poschar >= 0x30 && poschar <= 0x39) { /* [0-9] */
 			/* normal uncompressed position */
 			if (body_end - pos_start >= 19)
-				return parse_aprs_uncompressed(pb, pos_start, body_end);
-			return 0;
+				rc = parse_aprs_uncompressed(pb, pos_start, body_end);
 		}
+		
+		/* The packet is of an unknown type, and a '!' in it may well
+		 * be something else: it is a position packet only if
+		 * a position was found after it.
+		 */
+		if (rc == 1)
+			pb->packettype |= T_POSITION;
+		
+		return rc;
 	}
 	
 	return 0;
@@ -1371,6 +1401,8 @@ int parse_aprs(struct pbuf_t *pb)
  *	SERVER
  */
 
+#define APRS_MSGID_LEN_MAX 5
+
 int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 {
 	const char *p;
@@ -1400,7 +1432,10 @@ int parse_aprs_message(struct pbuf_t *pb, struct aprs_message_t *am)
 	while (p >= am->body && *p != '{')
 		p--;
 
-	if (p >= am->body) {
+	/* A message id is 1 to 5 characters. Something longer is not taken
+	 * for one: it would be echoed in the ack, which has to fit in a packet.
+	 */
+	if (p >= am->body && (am->body + am->body_len) - (p+1) <= APRS_MSGID_LEN_MAX) {
 		am->msgid = p+1;
 		am->msgid_len = (am->body + am->body_len) - am->msgid;
 		am->body_len = p - am->body;

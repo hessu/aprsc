@@ -964,15 +964,24 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 			  	);
 			  	
 	if (c->localaccount.rxdrops) {
-		char s[256] = "";
+		char s[1024] = "";
 		int p = 0;
-		int i;
+		int i, n;
 		
 		for (i = 0; i < INERR_BUCKETS; i++) {
 			if (c->localaccount.rxerrs[i]) {
-				p += snprintf(s+p, 256-p-2, "%s%s %lld",
+				/* When the output is truncated, snprintf() returns the
+				 * length it would have taken: do not add that to p,
+				 * the next round would write past the buffer.
+				 */
+				n = snprintf(s+p, sizeof(s)-p, "%s%s %lld",
 					(p == 0) ? "" : ", ",
 					inerr_labels[i], c->localaccount.rxerrs[i]);
+				if (n < 0 || n >= (int)sizeof(s)-p) {
+					s[p] = 0; /* leave the cut one out */
+					break;
+				}
+				p += n;
 			}
 		}
 		
@@ -1056,7 +1065,7 @@ void client_close(struct worker_t *self, struct client_t *c, int errnum)
 		hlog(LOG_DEBUG, "client_close: has no portaccount");
 	}
 	
-	if (c->udp_port && c->udpclient->portaccount) {
+	if (c->udp_port && c->udpclient && c->udpclient->portaccount) {
 		inbound_connects_account(2, c->udpclient->portaccount); /* udp client count goes down */
 	}
 
@@ -1857,8 +1866,12 @@ static void collect_new_clients(struct worker_t *self)
 		c->xfd = xpoll_add(&self->xp, c->fd, (void *)c);
 		hlog(LOG_DEBUG, "collect_new_clients(worker %d): added fd %d to polling list, xfd %p", self->id, c->fd, c->xfd);
 		if (!c->xfd) {
-			/* ouch, out of xfd space */
-			shutdown(c->fd, SHUT_RDWR);
+			/* Ouch, out of xfd space. The client can not be served,
+			 * and has no handlers set up yet: close it here, instead
+			 * of leaving it on the list for the keepalives to find.
+			 */
+			client_close(self, c, ENOMEM);
+			i--; /* don't count it in */
 			continue;
 		}
 		

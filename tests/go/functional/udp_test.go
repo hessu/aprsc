@@ -28,6 +28,51 @@ func TestUDPClient(t *testing.T) {
 	s.Stop()
 }
 
+// A login line asking for the UDP feed several times is counted as one
+// client of the UDP listener, and the count goes away when the client does.
+func TestUDPClientRepeatedPort(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	// udpClients polls the status until the UDP listener has the wanted
+	// number of clients, since the status is cached for a second or two,
+	// and returns the number it had last.
+	udpClients := func(want int) int {
+		t.Helper()
+		deadline := time.Now().Add(6 * time.Second)
+		for {
+			got := -1
+			for _, l := range getStatus(t).Listeners {
+				if l["name"] == "Full feed with, UDP" {
+					n, _ := l["clients"].(float64)
+					got = int(n)
+				}
+			}
+			if got == want || time.Now().After(deadline) {
+				return got
+			}
+			time.Sleep(250 * time.Millisecond)
+		}
+	}
+
+	port := harness.Port(t, 51342)
+	c := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-2",
+		isclient.WithVers(fmt.Sprintf("aprsc-gotest 1.0 udp %d udp %d UDP %d", port, port, port)))
+
+	if got := udpClients(1); got != 1 {
+		t.Errorf("UDP listener has %d clients with one logged in, want 1", got)
+	}
+
+	c.Close()
+
+	if got := udpClients(0); got != 0 {
+		t.Errorf("UDP listener has %d clients after the client closed, want 0", got)
+	}
+
+	s.Stop()
+}
+
 // UDP core peers. While at it, check that the basic loop prevention rules
 // work.
 //
@@ -158,6 +203,63 @@ func TestHTTPUpload(t *testing.T) {
 	got, err := rx.ReadPacket(isclient.DefaultTimeout)
 	if err != nil || got != out {
 		t.Errorf("wrong line through HTTP uploading: got %q (%v), want %q", got, err, out)
+	}
+
+	s.Stop()
+}
+
+// A message to SERVER submitted over UDP or HTTP has no connection to reply
+// on: it is dropped, and the server goes on.
+func TestSubmitServerMessage(t *testing.T) {
+	harness.Parallel(t)
+	harness.RequireAprsc(t)
+	s := harness.Start(t, "basic")
+
+	rx := isclient.Connect(t, harness.Addr(t, 55152), "N5CAL-1")
+
+	const header = "user TEST pass 29939 vers submittester 1.0\r\n"
+
+	usock, err := net.Dial("udp", harness.AddrOn(t, "127.0.0.1", 55080))
+	if err != nil {
+		t.Fatalf("failed to set up an UDP client socket: %v", err)
+	}
+	defer usock.Close()
+
+	udp := func(t *testing.T, packet string) {
+		t.Helper()
+		if _, err := usock.Write([]byte(header + packet)); err != nil {
+			t.Fatalf("failed to send a datagram: %v", err)
+		}
+	}
+	post := func(t *testing.T, packet string) {
+		t.Helper()
+		res, err := http.Post("http://"+harness.AddrOn(t, "127.0.0.1", 55080)+"/",
+			"application/octet-stream", strings.NewReader(header+packet+"\r\n"))
+		if err != nil {
+			t.Fatalf("HTTP POST packet upload failed: %v", err)
+		}
+		res.Body.Close()
+	}
+
+	for _, tc := range []struct {
+		name string
+		send func(t *testing.T, packet string)
+		q    string
+	}{
+		{"UDP", udp, "qAU"},
+		{"HTTP", post, "qAC"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, msg := range []string{"filter?", "filter p/OH", "filter?{ab1", "hello"} {
+				tc.send(t, "TEST>APRS,TCPIP*::SERVER   :"+msg)
+			}
+			tc.send(t, "TEST>APRS,TCPIP*:>after server messages "+tc.name)
+			want := "TEST>APRS,TCPIP*," + tc.q + ",TESTING:>after server messages " + tc.name
+			got, err := rx.ReadPacket(isclient.DefaultTimeout)
+			if err != nil || got != want {
+				t.Errorf("got %q (%v), want %q", got, err, want)
+			}
+		})
 	}
 
 	s.Stop()

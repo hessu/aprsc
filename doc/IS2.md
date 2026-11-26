@@ -121,7 +121,10 @@ code and show a message in its own language.
 The filter of a connection is set with a parameter message carrying a
 request id, and the server answers with the value it applied, or a
 failure, with the same id, so a client can match replies to requests
-and need not parse the `# filter ... active` comment line.
+and need not parse the `# filter ... active` comment line.  The filter
+string `default` removes the filter of the connection, as the
+`filter default` command does on a plaintext connection; an empty
+filter string is the same as none, and sets nothing.
 
 ### Keepalives with round-trip times
 

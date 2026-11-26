@@ -69,12 +69,12 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 		return -1;
 	
 	if (argc < 2) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, too few arguments: '%s'", addr_rem, log_source, s);
+		hlog_packet(LOG_WARNING, s, strlen(s), "%s: %s: Invalid login string, too few arguments: ", addr_rem, log_source);
 		return -1;
 	}
 	
 	if (strcasecmp(argv[0], "user") != 0) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, no 'user': '%s'", addr_rem, log_source, s);
+		hlog_packet(LOG_WARNING, s, strlen(s), "%s: %s: Invalid login string, no 'user': ", addr_rem, log_source);
 		return -1;
 	}
 	
@@ -82,7 +82,15 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 	username_len = strlen(*username);
 	/* limit username length */
 	if (username_len > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, too long 'user' username: '%s'", addr_rem, log_source, *username);
+		hlog_packet(LOG_WARNING, *username, username_len, "%s: %s: Invalid login string, too long 'user' username: ", addr_rem, log_source);
+		return -1;
+	}
+	
+	/* Make sure the callsign is OK on the APRS-IS. This comes before the
+	 * other checks of the username, so that they can log it as it is.
+	 */
+	if (check_invalid_q_callsign(*username, username_len)) {
+		hlog_packet(LOG_WARNING, *username, username_len, "%s: %s: Invalid login string, invalid 'user': ", addr_rem, log_source);
 		return -1;
 	}
 	
@@ -97,12 +105,6 @@ int http_udp_upload_login(const char *addr_rem, char *s, char **username, const 
 	/* check the username against a dynamic list of disallowed usernames */
 	if (disallow_login_glob && check_call_glob_match(disallow_login_glob, *username, username_len)) {
 		hlog(LOG_WARNING, "%s: %s: Login by user '%s' not allowed due to config", addr_rem, log_source, *username);
-		return -1;
-	}
-	
-	/* make sure the callsign is OK on the APRS-IS */
-	if (check_invalid_q_callsign(*username, username_len)) {
-		hlog(LOG_WARNING, "%s: %s: Invalid login string, invalid 'user': '%s'", addr_rem, log_source, *username);
 		return -1;
 	}
 	
@@ -203,6 +205,10 @@ int login_setup_udp_feed(struct client_t *c, int port)
 	if (!c->udpclient)
 		return -1;
 	
+	/* A login line can ask for UDP several times: account the client on
+	 * the UDP listener only once, as closing it drops it once. */
+	int accounted = (c->udp_port != 0);
+	
 	c->udp_port = port;
 	c->udpaddr = c->addr;
 	if (c->udpaddr.sa.sa_family == AF_INET) {
@@ -213,7 +219,8 @@ int login_setup_udp_feed(struct client_t *c, int port)
 		c->udpaddrlen = sizeof(c->udpaddr.si6);
 	}
 	
-	inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
+	if (!accounted)
+		inbound_connects_account(3, c->udpclient->portaccount); /* "3" = udp, not listening..  */
 	
 	return 0;
 }
@@ -299,7 +306,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	/* limit username length */
 	if (strlen(username) > CALLSIGNLEN_MAX) {
-		hlog(LOG_WARNING, "%s: Invalid login string, too long 'user' username: '%s'", c->addr_rem, username);
+		hlog_packet(LOG_WARNING, username, CALLSIGNLEN_MAX+1, "%s: Invalid login string, too long 'user' username, starting with: ", c->addr_rem);
 		username[CALLSIGNLEN_MAX] = 0;
 		rc = client_printf(self, c, "# Invalid username format\r\n");
 		goto failed_login;
@@ -328,7 +335,7 @@ int login_handler(struct worker_t *self, struct client_t *c, int l4proto, char *
 	
 	/* make sure the callsign is OK on the APRS-IS */
 	if (check_invalid_q_callsign(c->username, c->username_len)) {
-		hlog(LOG_WARNING, "%s: Invalid login string, invalid 'user': '%s'", c->addr_rem, c->username);
+		hlog_packet(LOG_WARNING, c->username, c->username_len, "%s: Invalid login string, invalid 'user': ", c->addr_rem);
 		rc = client_printf(self, c, "# Invalid username format, not allowed\r\n");
 		goto failed_login;
 	}
@@ -533,6 +540,11 @@ failed_login:
 	/* if we already lost the client, just return */
 	if (rc < -2)
 		return rc;
+	
+	/* the username of a failed login may be anything: do not leave it
+	 * in the client for the log lines to come */
+	c->username[0] = 0;
+	c->username_len = 0;
 	
 	c->failed_cmds++;
 	if (c->failed_cmds >= 3) {

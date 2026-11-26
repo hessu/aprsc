@@ -35,6 +35,7 @@ extern int is2_received_age_check(struct client_t *c, uint64_t received_time);
 extern void is2_received_status(cJSON *totals);
 #endif
 extern int is2_write_packet(struct worker_t *self, struct client_t *c, struct pbuf_t *pb);
+extern int is2_write_packet_data(struct worker_t *self, struct client_t *c, const char *data, int len);
 extern int is2_obuf_flush(struct worker_t *self, struct client_t *c);
 extern int is2_corepeer_obuf_flush(struct worker_t *self, struct client_t *c);
 extern int is2_obuf_flush_client(struct worker_t *self, struct client_t *c);
